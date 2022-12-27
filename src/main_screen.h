@@ -8,5 +8,5 @@
 
 #pragma once
 
-void main_screen();
+lv_obj_t * main_screen();
 void main_screen_set_freq(uint64_t freq);
