@@ -22,6 +22,7 @@ static dialog_t             dialog = {
     .run = false,
     .construct_cb = construct_cb,
     .destruct_cb = destruct_cb,
+    .audio_cb = NULL,
     .key_cb = key_cb
 };
 
@@ -52,7 +53,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_textarea_set_placeholder_text(text, "QTH Grid");
     lv_obj_add_event_cb(text, key_cb, LV_EVENT_KEY, NULL);
 
-    textarea_window_set(params.qth);
+    textarea_window_set(params.qth.x);
 }
 
 static void destruct_cb() {
