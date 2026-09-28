@@ -12,6 +12,9 @@
 #include "dsp.h"
 #include "cfg/settings_manager.h"
 #include <vector>
+#include <thread>
+#include <string>
+#include <cstdio>
 
 extern "C" {
 
@@ -1906,6 +1909,94 @@ uint8_t make_cessb(uint8_t row) {
 
 /* Charger */
 
+/* Bluetooth CAT (btcat) */
+
+#define BTCAT_CTL "/usr/sbin/btcat-ctl"
+
+static lv_obj_t *bt_visible_sw = NULL;
+
+static bool btcat_read(const char *key, bool def) {
+    const char *files[] = { "/etc/default/btcat", "/mnt/btcat.conf" };
+    bool val = def;
+    size_t klen = strlen(key);
+
+    for (auto f : files) {
+        FILE *fp = fopen(f, "r");
+        if (!fp) continue;
+        char line[128];
+        while (fgets(line, sizeof(line), fp)) {
+            if (strncmp(line, key, klen) == 0 && line[klen] == '=') {
+                const char *v = line + klen + 1;
+                if (*v == '"') v++;
+                val = strncmp(v, "yes", 3) == 0;
+            }
+        }
+        fclose(fp);
+    }
+    return val;
+}
+
+static void btcat_run(const char *what, bool on) {
+    std::string cmd = std::string(BTCAT_CTL " ") + what + (on ? " on" : " off") + " >/dev/null 2>&1";
+    std::thread([cmd]() { system(cmd.c_str()); }).detach();
+}
+
+static void bt_power_update_cb(lv_event_t * e) {
+    lv_obj_t *obj = lv_event_get_target(e);
+    bool on = lv_obj_has_state(obj, LV_STATE_CHECKED);
+
+    btcat_run("bt", on);
+    if (bt_visible_sw) {
+        if (on) lv_obj_clear_state(bt_visible_sw, LV_STATE_DISABLED);
+        else    lv_obj_add_state(bt_visible_sw, LV_STATE_DISABLED);
+    }
+}
+
+static void bt_visible_update_cb(lv_event_t * e) {
+    lv_obj_t *obj = lv_event_get_target(e);
+    btcat_run("discoverable", lv_obj_has_state(obj, LV_STATE_CHECKED));
+}
+
+static void bt_visible_delete_cb(lv_event_t * e) {
+    bt_visible_sw = NULL;
+}
+
+static lv_obj_t * bt_switch_cell(uint8_t row, uint8_t col, bool state, lv_event_cb_t cb) {
+    lv_obj_t *obj = lv_obj_create(grid);
+
+    lv_obj_set_size(obj, SMALL_3, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(obj);
+
+    obj = create_switch(obj);
+    lv_obj_set_width(obj, SMALL_3 - 30);
+    if (state) lv_obj_add_state(obj, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(obj, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    return obj;
+}
+
+static uint8_t make_bluetooth(uint8_t row) {
+    lv_obj_t *obj;
+    bool      power = btcat_read("BTCAT_BT", true);
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "Bluetooth");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+    bt_switch_cell(row, 1, power, bt_power_update_cb);
+    row++;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "BT Discoverable");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+    bt_visible_sw = bt_switch_cell(row, 1, btcat_read("BTCAT_DISCOVERABLE", true), bt_visible_update_cb);
+    lv_obj_add_event_cb(bt_visible_sw, bt_visible_delete_cb, LV_EVENT_DELETE, NULL);
+    if (!power) lv_obj_add_state(bt_visible_sw, LV_STATE_DISABLED);
+
+    return row + 1;
+}
+
 uint8_t make_charger(uint8_t row) {
     lv_obj_t *obj;
     uint8_t   col = 0;
@@ -2051,6 +2142,9 @@ static void make_general_page() {
     }
 
     row = make_charger(row);
+    row = make_delimiter(row);
+
+    row = make_bluetooth(row);
     row = make_delimiter(row);
 
     row = make_transverter(row, cfg_sm.p_transverter_0_from, cfg_sm.p_transverter_0_to, cfg_sm.p_transverter_0_shift);
