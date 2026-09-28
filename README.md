@@ -33,7 +33,7 @@ SPP UUID `00001101-0000-1000-8000-00805F9B34FB`. Log files:
 | Protocol | Icom CI-V, radio address `0xA4` |
 | Frame | `FE FE A4 <ctrl> <cmd> [sub] [data] FD`; reply `FB` = OK, `FA` = NG |
 | Baud (USB) | 19200 8N1 (ignored over BT) |
-| Hamlib / flrig / wfview | Xiegu X6100 (or Icom IC-705 with address `A4`) |
+| Hamlib / flrig / wfview | rig model Xiegu X6100 |
 
 On Linux: `rfcomm connect /dev/rfcomm0 <BT-MAC> 1`, then use `/dev/rfcomm0`.
 On Windows/Android the paired device exposes an outgoing COM/SPP port.
