@@ -1,3 +1,31 @@
+# X6100 combo firmware (R1CBU 0.34.2 + 1KO125 + JS8 + Bluetooth CAT)
+
+Unofficial combined build for the Xiegu X6100, merging:
+
+- **R1CBU** 0.34.2 GUI by gdyuldin — the base firmware
+- **1KO125** custom-r1cbu 0.34.2 beta 7 by Hany El Imam — WeFax, NavTex, channel list, broadcast info, **SSTV** decoder
+- **X6100 JS8** beta 3 by randal007 — JS8 app
+- **Bluetooth CAT** (`btcat/`) — the CAT port (CI-V, the same as USB CAT) also exposed over Bluetooth SPP, RFCOMM channel 1
+
+Changes on top of the merge:
+
+- Settings → General: **Bluetooth** and **BT Discoverable** switches (state kept in `/mnt/btcat.conf`)
+- APP menu: page 3 = WeFax, NavTex, SSTV, JS8; page 4 = WiFi
+- Consistent app button bars: page buttons named `(APP n:m)`, Clear/Close in slots 4/5
+- Long-press actions: SSTV, WeFax, NavTex added
+- `tools/apps_ui_harness`: headless screenshots of every app, for look-and-feel checks
+
+### Bluetooth CAT
+
+`btcat` opens the real CAT UART (`/dev/ttyS2`) and bind-mounts a pty over it,
+so the GUI talks to btcat. USB CAT and up to 3 Bluetooth clients share the
+CAT port: one request at a time, replies go back to whoever asked, and
+transceive frames (dst 0x00) go to everyone. Pair with Just Works (no PIN),
+SPP UUID `00001101-0000-1000-8000-00805F9B34FB`. Log files:
+`/tmp/btcat.log`, `/tmp/btcat-setup.log`. CLI: `btcat-ctl bt|discoverable on|off`.
+
+---
+
 # X6100 JS8
 
 **JS8 on the Xiegu X6100, running on the radio itself.** No PC, phone or
