@@ -45,6 +45,7 @@
 #include "dialog_wefax.h"
 #include "dialog_navtex.h"
 #include "dialog_js8.h"
+#include "dialog_sstv.h"
 #include "backlight.h"
 #include "buttons.h"
 #include "recorder.h"
@@ -286,7 +287,7 @@ static void broadcast_overlay_render(void) {
         broadcast_overlay_counter = lv_label_create(broadcast_overlay);
         lv_obj_set_pos(broadcast_overlay_counter, 8, 2);
         lv_obj_set_style_text_color(broadcast_overlay_counter, lv_color_white(), 0);
-        lv_obj_set_style_text_font(broadcast_overlay_counter, &sony_24, 0);
+        lv_obj_set_style_text_font(broadcast_overlay_counter, &sony_28, 0);
 
         /* Station name. */
         broadcast_overlay_name = lv_label_create(broadcast_overlay);
@@ -295,7 +296,7 @@ static void broadcast_overlay_render(void) {
         lv_label_set_long_mode(broadcast_overlay_name, LV_LABEL_LONG_DOT);
         lv_obj_set_style_text_align(broadcast_overlay_name, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_color(broadcast_overlay_name, lv_color_white(), 0);
-        lv_obj_set_style_text_font(broadcast_overlay_name, &sony_32, 0);
+        lv_obj_set_style_text_font(broadcast_overlay_name, &sony_38, 0);
 
         /* Broadcast details, fitted inside the standard 795 x 182 panel. */
         broadcast_overlay_label = lv_label_create(broadcast_overlay);
@@ -304,7 +305,7 @@ static void broadcast_overlay_render(void) {
         lv_label_set_long_mode(broadcast_overlay_label, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_align(broadcast_overlay_label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_color(broadcast_overlay_label, lv_color_white(), 0);
-        lv_obj_set_style_text_font(broadcast_overlay_label, &sony_24, 0);
+        lv_obj_set_style_text_font(broadcast_overlay_label, &sony_28, 0);
     }
 
     if (broadcast_match_count > 0) {
@@ -379,7 +380,7 @@ static void broadcast_overlay_show(void) {
     if (broadcast_overlay_timer) {
         lv_timer_reset(broadcast_overlay_timer);
     } else {
-        broadcast_overlay_timer = lv_timer_create(broadcast_overlay_timer_cb, 3000, NULL);
+        broadcast_overlay_timer = lv_timer_create(broadcast_overlay_timer_cb, 2000, NULL);
         lv_timer_set_repeat_count(broadcast_overlay_timer, 1);
     }
 }
@@ -590,6 +591,11 @@ void main_screen_start_app(press_action_t app_action) {
             voice_say_text_fmt("JS8 window");
             break;
 
+        case ACTION_APP_SSTV:
+            dialog_construct(dialog_sstv, obj);
+            voice_say_text_fmt("SSTV window");
+            break;
+
         default:
             break;
     }
@@ -659,6 +665,7 @@ void main_screen_action(press_action_t action) {
         case ACTION_APP_WEFAX:
         case ACTION_APP_NAVTEX:
         case ACTION_APP_JS8:
+        case ACTION_APP_SSTV:
             main_screen_start_app(action);
             break;
 
@@ -1219,7 +1226,7 @@ static void main_screen_hkey_cb(lv_event_t * e) {
 
 
 case HKEY_VM:
-    if (dialog_wefax->run || dialog_navtex->run) {
+    if (dialog_wefax->run || dialog_navtex->run || dialog_sstv->run || dialog_js8->run) {
         break;
     }
 

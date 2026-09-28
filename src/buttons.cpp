@@ -326,6 +326,7 @@ static button_data_t  btn_wifi   = make_app_btn("WiFi", ACTION_APP_WIFI);
 static button_data_t btn_wefax  = make_app_btn("WeFax", ACTION_APP_WEFAX);
 static button_data_t btn_navtex = make_app_btn("NavTex", ACTION_APP_NAVTEX);
 static button_data_t btn_js8    = make_app_btn("JS8", ACTION_APP_JS8);
+static button_data_t btn_sstv   = make_app_btn("SSTV", ACTION_APP_SSTV);
 
 /* RTTY */
 static button_data_t btn_rtty_p1 = {
@@ -445,9 +446,10 @@ static buttons_page_t page_dfl_1 = {
 };
 
 /* App pages */
-static button_data_t btn_app_p1 = make_page_btn("(APP 1:3)", "Application|page 1");
-static button_data_t btn_app_p2 = make_page_btn("(APP 2:3)", "Application|page 2");
-static button_data_t btn_app_p3 = make_page_btn("(APP 3:3)", "Application|page 3");
+static button_data_t btn_app_p1 = make_page_btn("(APP 1:4)", "Application|page 1");
+static button_data_t btn_app_p2 = make_page_btn("(APP 2:4)", "Application|page 2");
+static button_data_t btn_app_p3 = make_page_btn("(APP 3:4)", "Application|page 3");
+static button_data_t btn_app_p4 = make_page_btn("(APP 4:4)", "Application|page 4");
 
 static buttons_page_t page_app_1 = {
     {&btn_app_p1, &btn_rtty, &btn_ft8, &btn_swr, &btn_gps}
@@ -458,6 +460,9 @@ static buttons_page_t page_app_2 = {
 static buttons_page_t page_app_3 = {
     {&btn_app_p3, &btn_wifi, &btn_wefax, &btn_navtex, &btn_js8}
     /* {&btn_app_p3, &btn_wifi} */
+};
+static buttons_page_t page_app_4 = {
+    {&btn_app_p4, &btn_sstv}
 };
 
 /* RTTY */
@@ -479,6 +484,7 @@ buttons_group_t buttons_group_app = {
     &page_app_1,
     &page_app_2,
     &page_app_3,
+    &page_app_4,
 };
 
 buttons_group_t buttons_group_key = {

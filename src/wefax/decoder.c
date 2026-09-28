@@ -923,13 +923,13 @@ void wefax_decoder_process(
                         (float)decoder->apt_transitions /
                         (float)decoder->apt_window_samples;
 
-                    
+                    /*
                     printf(
                         "WEFAX AUTO: APT %.1f Hz, transitions=%u\n",
                         decoder->apt_frequency,
                         decoder->apt_transitions
                     );
-                    
+                    */
 
                     if (!decoder->apt_fax_confirmed) {
                         /*
