@@ -24,6 +24,69 @@ transceive frames (dst 0x00) go to everyone. Pair with Just Works (no PIN),
 SPP UUID `00001101-0000-1000-8000-00805F9B34FB`. Log files:
 `/tmp/btcat.log`, `/tmp/btcat-setup.log`. CLI: `btcat-ctl bt|discoverable on|off`.
 
+#### Connection
+
+| | |
+|---|---|
+| Transport | Bluetooth SPP, RFCOMM channel 1 (or USB CAT) |
+| Pairing | Just Works, no PIN; device name `X6100` (`BTCAT_ALIAS` in `/etc/default/btcat`) |
+| Protocol | Icom CI-V, radio address `0xA4` |
+| Frame | `FE FE A4 <ctrl> <cmd> [sub] [data] FD`; reply `FB` = OK, `FA` = NG |
+| Baud (USB) | 19200 8N1 (ignored over BT) |
+| Hamlib / flrig / wfview | Xiegu X6100 (or Icom IC-705 with address `A4`) |
+
+On Linux: `rfcomm connect /dev/rfcomm0 <BT-MAC> 1`, then use `/dev/rfcomm0`.
+On Windows/Android the paired device exposes an outgoing COM/SPP port.
+
+#### Supported CI-V commands
+
+| Cmd | Sub | Function | Read | Write |
+|---|---|---|:-:|:-:|
+| `00` | — | Frequency (transceive, sent automatically on every change) | — | ✓ |
+| `03` | — | Read frequency | ✓ | — |
+| `04` | — | Read mode | ✓ | — |
+| `05` | — | Set frequency (5 BCD bytes) | — | ✓ |
+| `06` | — | Set mode (`00` LSB, `01` USB, `02` AM, `03` CW, `05` NFM, `07` CW-R) | — | ✓ |
+| `07` | — / `00` / `01` / `A0` / `B0` | VFO: read current, VFO A, VFO B, A=B, swap A/B | ✓ | ✓ |
+| `0F` | — | Split off/on | ✓ | ✓ |
+| `10` | — | Tuning step (`00` 10 Hz, `01` 100 Hz, `02` 500 Hz, `03` 1 kHz, `04` 5 kHz) | ✓ | ✓ |
+| `11` | — | Attenuator | ✓ | ✓ |
+| `14` | `01` | AF volume (0–255) | ✓ | ✓ |
+| `14` | `02` | RF gain (0–255) | ✓ | ✓ |
+| `14` | `03` | Squelch (0–255) | ✓ | ✓ |
+| `14` | `0A` | TX power (0–255 = 0–10 W) | ✓ | ✓ |
+| `14` | `15` | Monitor level | ✓ | — |
+| `15` | `02` | S-meter | ✓ | — |
+| `15` | `11` | TX power meter | ✓ | — |
+| `15` | `12` | SWR meter | ✓ | — |
+| `15` | `13` | ALC meter | ✓ | — |
+| `16` | `02` | Preamp | ✓ | ✓ |
+| `16` | `22` | Noise blanker | ✓ | ✓ |
+| `16` | `40` | Noise reduction | ✓ | ✓ |
+| `16` | `44` / `46` | Compressor / VOX (always off, write ignored) | ✓ | — |
+| `19` | `00` | Transceiver ID (returns `A4`) | ✓ | — |
+| `1A` | `03` | IF filter width | ✓ | — |
+| `1A` | `06` | Mode + data mode (DIG) + filter group | ✓ | ✓ |
+| `1C` | `00` | PTT (`00` RX, `01` TX) | ✓ | ✓ |
+| `25` | `00` / `01` | Frequency of selected / unselected VFO | ✓ | ✓ |
+| `26` | `00` / `01` | Mode + data mode of selected / unselected VFO | ✓ | ✓ |
+| `27` | `10` `11` `14` `15` `19` | Scope status (stub replies for wfview compatibility, no waterfall data) | ✓ | — |
+
+Anything else returns `FA` (NG).
+
+Example — read frequency: `FE FE A4 E0 03 FD` →
+`FE FE E0 A4 03 00 50 07 14 00 FD` (14.075.000 Hz).
+
+#### Bluetooth control (`btcat-ctl`)
+
+| Command | Effect |
+|---|---|
+| `btcat-ctl bt on\|off` | Bluetooth adapter power (= Settings → General → Bluetooth) |
+| `btcat-ctl discoverable on\|off` | Always visible / only paired devices (= BT Discoverable) |
+| `btcat-ctl status` | Print current settings |
+| `btcat-ctl apply` | Re-apply settings from `/mnt/btcat.conf` |
+| `/etc/init.d/S94btcat start\|stop\|restart` | Start/stop the bridge (set `BTCAT_ENABLE=no` in `/etc/default/btcat` to disable) |
+
 ---
 
 # X6100 JS8
