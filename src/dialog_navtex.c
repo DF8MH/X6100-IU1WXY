@@ -85,7 +85,7 @@ static button_data_t btn_test = {
 };
 
 static buttons_page_t btn_page_1 = {
-    .items = { &btn_page, &btn_close, &btn_clear, NULL, NULL }
+    .items = { &btn_page, NULL, NULL, &btn_clear, &btn_close }
 };
 
 static dialog_t dialog = {

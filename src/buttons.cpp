@@ -458,11 +458,11 @@ static buttons_page_t page_app_2 = {
     {&btn_app_p2, &btn_rec, &btn_qth, &btn_callsign, &btn_settings}
 };
 static buttons_page_t page_app_3 = {
-    {&btn_app_p3, &btn_wifi, &btn_wefax, &btn_navtex, &btn_js8}
+    {&btn_app_p3, &btn_wefax, &btn_navtex, &btn_sstv, &btn_js8}
     /* {&btn_app_p3, &btn_wifi} */
 };
 static buttons_page_t page_app_4 = {
-    {&btn_app_p4, &btn_sstv}
+    {&btn_app_p4, &btn_wifi}
 };
 
 /* RTTY */
