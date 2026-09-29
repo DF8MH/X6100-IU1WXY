@@ -1,0 +1,69 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:800px;background:#11161c;font-family:"DejaVu Sans",sans-serif;color:#e8e8e8;padding-bottom:14px}
+.cap{padding:14px 16px 6px;font-size:15px;color:#9fd;line-height:21px}.cap b{color:#fff}
+.scr{width:800px;height:120px;position:relative;overflow:hidden;background:repeating-linear-gradient(90deg,#0a1a44 0 3px,#0c2250 3px 7px)}
+.row{position:absolute;bottom:0;left:0;right:0;display:flex;gap:3px;padding:2px}
+.b{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative}
+/* today */
+.t .b{height:54px;background:linear-gradient(#4b423c,#2a2420);border:1px solid #8a8a8a;border-radius:7px;font-size:19px;line-height:21px}
+.t .dot{position:absolute;left:6px;top:6px;width:20px;height:20px;border-radius:10px;background:#7a9a6a;border:2px solid #333}
+/* A: Modes style, 48 px, label + value */
+.a .b{height:48px;background:#0b1622;border:1px solid #6a7a8a;border-radius:8px}
+.a .l{font-size:13px;color:#90f0d0;letter-spacing:1px}
+.a .v{font-size:18px;color:#fff;line-height:20px}
+.a .b.pg{background:#16232f}
+.a .b.pg .v{font-size:15px;color:#9ab}
+.a .knob{position:absolute;right:6px;top:5px;font-size:10px;padding:0 4px;border-radius:4px;background:#1f4a24;color:#8f8}
+.a .b.sel{border:2px solid #ffd24a;background:#2a220c}
+.a .b.sel .v{color:#ffd24a}
+/* B: Modes style, 44 px, one line */
+.bb .b{height:44px;background:linear-gradient(#152230,#0b1622);border:1px solid #6a7a8a;border-radius:8px;flex-direction:row;gap:6px;font-size:16px}
+.bb .l{color:#90f0d0;font-size:14px}.bb .v{color:#fff}
+.bb .b.pg{font-size:14px;color:#9ab}
+.bb .knob{width:7px;height:7px;border-radius:4px;background:#6f6;position:absolute;left:7px;top:7px}
+/* C: 54 px, Modes colours, bigger values */
+.c .b{height:54px;background:#0b1622;border:1px solid #99aaaa;border-radius:10px}
+.c .l{font-size:14px;color:#90f0d0}
+.c .v{font-size:22px;color:#fff;line-height:24px}
+.c .b.pg{background:#16232f}.c .b.pg .v{font-size:17px;color:#cde}
+.c .knob{position:absolute;left:0;top:10px;bottom:10px;width:4px;border-radius:0 3px 3px 0;background:#6f6}
+.c .knob.m{background:#5cf}
+</style></head><body>
+<div class="cap"><b>Oggi</b> — 54 px, marrone, font grande; i pallini della manopola coprono il testo ("●Volume").</div>
+<div class="scr t"><div class="row">
+ <div class="b">(VOL 1:2)</div><div class="b"><span class="dot"></span>Volume:<br>39</div><div class="b"><span class="dot"></span>Squelch:<br>2</div><div class="b"><span class="dot"></span>RF gain:<br>65</div><div class="b"><span class="dot"></span>TX power:<br>5.0 W</div>
+</div></div>
+
+<div class="cap"><b>A · stile Modes, 48 px</b> — sfondo blu notte come il menu Modes, nome piccolo in verde acqua sopra e valore grande sotto,
+la manopola assegnata come piccola etichetta "VOL"/"MFK" nell'angolo (non copre il testo). Il tasto pagina è più scuro. Selezionato/attivo: bordo oro.</div>
+<div class="scr a"><div class="row">
+ <div class="b pg"><span class="v">VOL 1/2</span></div>
+ <div class="b sel"><span class="knob">VOL</span><span class="l">VOLUME</span><span class="v">39</span></div>
+ <div class="b"><span class="knob">VOL</span><span class="l">SQUELCH</span><span class="v">2</span></div>
+ <div class="b"><span class="knob">MFK</span><span class="l">RF GAIN</span><span class="v">65</span></div>
+ <div class="b"><span class="l">TX POWER</span><span class="v">5.0 W</span></div>
+</div></div>
+
+<div class="cap"><b>B · stile Modes, 44 px, una riga</b> — il più basso: nome e valore sulla stessa riga, puntino verde per la manopola.
+Più spazio allo schermo, ma testi più piccoli e le etichette lunghe su due righe diventano strette.</div>
+<div class="scr bb"><div class="row">
+ <div class="b pg">VOL 1/2</div>
+ <div class="b"><span class="knob"></span><span class="l">Vol</span><span class="v">39</span></div>
+ <div class="b"><span class="knob"></span><span class="l">Sql</span><span class="v">2</span></div>
+ <div class="b"><span class="l">RF</span><span class="v">65</span></div>
+ <div class="b"><span class="l">PWR</span><span class="v">5.0 W</span></div>
+</div></div>
+
+<div class="cap"><b>C · stile Modes, 54 px (altezza attuale)</b> — come A ma alto come oggi, valori più grandi; la manopola è una barretta colorata
+sul bordo sinistro (verde = VOL, azzurro = MFK).</div>
+<div class="scr c"><div class="row">
+ <div class="b pg"><span class="v">VOL 1/2</span></div>
+ <div class="b"><span class="knob"></span><span class="l">Volume</span><span class="v">39</span></div>
+ <div class="b"><span class="knob"></span><span class="l">Squelch</span><span class="v">2</span></div>
+ <div class="b"><span class="knob m"></span><span class="l">RF gain</span><span class="v">65</span></div>
+ <div class="b"><span class="l">TX power</span><span class="v">5.0 W</span></div>
+</div></div>
+
+<div class="cap">Per i tasti azione senza valore (es. "Close", "Tune", "Freq.") tutte le varianti mostrano solo il nome, centrato, nel colore del valore.</div>
+</body></html>

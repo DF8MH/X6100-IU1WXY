@@ -13,6 +13,7 @@
 #include "cfg/encoder_defaults.h"
 
 #include <stdio.h>
+#include <cstring>
 #include <string>
 #include <vector>
 #include <array>
@@ -33,6 +34,7 @@ extern "C" {
 struct _disp_button_t {
     lv_obj_t      *parent;
     lv_obj_t      *label;
+    lv_obj_t      *value;     /* second line of a "Name:\nvalue" label */
     lv_obj_t      *vol_mark;
     lv_obj_t      *mfk_mark;
     button_data_t *data;  // Link to button data;
@@ -53,6 +55,7 @@ static void button_mem_load_cb(button_data_t *data);
 
 static void encoder_binds_change_cb(Subject *subj, void *user_data);
 static void label_update_cb(Subject *subj, void *user_data);
+static void set_btn_text(disp_btn_t *b, const char *text);
 
 static void button_encoder_hold_update_cb(button_data_t *data);
 static void button_mem_save_cb(button_data_t *data);
@@ -559,8 +562,9 @@ void buttons_init(lv_obj_t *parent) {
         /* Encoder marks */
         lv_obj_t *enc_mark;
 
+        /* Encoder marks: a bar on the left edge, green VOL, blue MFK */
         enc_mark = lv_obj_create(f);
-        lv_obj_set_pos(enc_mark, 5, 5);
+        lv_obj_set_pos(enc_mark, 0, 10);
         lv_obj_clear_flag(enc_mark, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_style(enc_mark, &btn_mark_style, 0);
         lv_obj_add_style(enc_mark, &btn_mark_assigned_style, STATE_ASSIGNED);
@@ -569,7 +573,8 @@ void buttons_init(lv_obj_t *parent) {
 
 
         enc_mark = lv_obj_create(f);
-        lv_obj_set_pos(enc_mark, 5, BTN_HEIGHT - 5 - 24);
+        lv_obj_set_pos(enc_mark, 0, 10);
+        lv_obj_set_style_bg_color(enc_mark, lv_color_hex(0x55ccff), 0);
         lv_obj_clear_flag(enc_mark, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_add_style(enc_mark, &btn_mark_style, 0);
@@ -583,7 +588,14 @@ void buttons_init(lv_obj_t *parent) {
         lv_obj_set_user_data(f, label);
         lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 
+        lv_obj_t *value = lv_label_create(f);
+        lv_obj_set_style_text_font(value, &sony_24, 0);
+        lv_obj_set_style_text_color(value, lv_color_white(), 0);
+        lv_obj_align(value, LV_ALIGN_BOTTOM_MID, 0, -5);
+        lv_obj_add_flag(value, LV_OBJ_FLAG_HIDDEN);
+
         disp_btns[i].label = label;
+        disp_btns[i].value = value;
     }
 
     cfg_sm.p_encoder_bind.subscribe_delayed_and_notify(encoder_binds_change_cb, NULL);
@@ -625,7 +637,7 @@ void buttons_load(uint8_t n, button_data_t *data) {
         data->disp_btn = disp_btns + n;
         disp_btn_refresh(data->disp_btn);
     } else {
-        lv_label_set_text(label, "");
+        set_btn_text(disp_btns + n, "");
     }
 }
 
@@ -1070,10 +1082,46 @@ static void encoder_binds_change_cb(Subject *subj, void *user_data) {
     }
 }
 
+/* "Name:\nvalue" shows a small name over a large value; "(PAGE 1:2)" is a
+ * page button, drawn darker; anything else is an action, centred. */
+static void set_btn_text(disp_btn_t *b, const char *text) {
+    const char *nl = strchr(text, '\n');
+
+    if (nl && nl > text && nl[-1] == ':') {
+        char name[32];
+        snprintf(name, sizeof(name), "%.*s", (int)(nl - text - 1), text);
+        lv_label_set_text(b->label, name);
+        lv_obj_set_style_text_font(b->label, &sony_16, 0);
+        lv_obj_set_style_text_color(b->label, lv_color_hex(0x90f0d0), 0);
+        lv_obj_align(b->label, LV_ALIGN_TOP_MID, 0, 4);
+        lv_label_set_text(b->value, nl + 1);
+        lv_obj_clear_flag(b->value, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_color(b->parent, lv_color_hex(0x0b1622), 0);
+        return;
+    }
+
+    bool page = text[0] == '(';
+    if (page) {
+        char   t[32];
+        size_t n = 0;
+        for (const char *c = text; *c && n < sizeof(t) - 1; c++)
+            if (*c != '(' && *c != ')') t[n++] = *c;
+        t[n] = '\0';
+        lv_label_set_text(b->label, t);
+    } else {
+        lv_label_set_text(b->label, text);
+    }
+    lv_obj_set_style_text_font(b->label, page ? &sony_20 : &sony_22, 0);
+    lv_obj_set_style_text_color(b->label, lv_color_hex(page ? 0xccddee : 0xffffff), 0);
+    lv_obj_center(b->label);
+    lv_obj_add_flag(b->value, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_bg_color(b->parent, lv_color_hex(page ? 0x16232f : 0x0b1622), 0);
+}
+
 static void label_update_cb(Subject *subj, void *user_data) {
     button_data_t *btn_data = (button_data_t*)user_data;
     if (btn_data->disp_btn) {
-        lv_label_set_text(btn_data->disp_btn->label, btn_data->label_fn());
+        set_btn_text(btn_data->disp_btn, btn_data->label_fn());
     } else {
         LV_LOG_WARN("Can't update label: it's NULL");
     }
@@ -1090,18 +1138,16 @@ static void disp_btn_refresh(disp_btn_t *b) {
     /* Label */
 
     if (btn_data->type == BTN_TEXT) {
-        // Copy label
-        lv_label_set_text(b->label, btn_data->label);
+        set_btn_text(b, btn_data->label);
     } else if (btn_data->type == BTN_TEXT_FN) {
-        // Update label with btn_data::label_fn
-        lv_label_set_text(b->label, btn_data->label_fn());
+        set_btn_text(b, btn_data->label_fn());
         if (btn_data->subj) {
             btn_data->observer = btn_data->subj->subscribe_delayed(label_update_cb, btn_data);
         } else {
             lv_obj_set_user_data(b->label, (void *)btn_data->label_fn);
         }
     } else {
-        lv_label_set_text(b->label, "");
+        set_btn_text(b, "");
     }
 
     /* Marked button */
@@ -1172,7 +1218,7 @@ static void disp_btn_refresh(disp_btn_t *b) {
 static void disp_btn_clear(disp_btn_t *btn) {
     lv_obj_t *label = btn->label;
 
-    lv_label_set_text(label, "");
+    set_btn_text(btn, "");
     lv_obj_set_user_data(label, NULL);
     lv_obj_clear_state(btn->parent, LV_STATE_CHECKED);
     lv_obj_clear_state(btn->parent, LV_STATE_DISABLED);

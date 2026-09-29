@@ -186,32 +186,30 @@ void styles_init(themes_t theme) {
     lv_style_init(&btn_style);
     lv_style_set_text_font(&btn_style, &sony_30);
     lv_style_set_text_color(&btn_style, lv_color_white());
-    /* Drawn like the top bar; colours set by the theme */
+    /* Modes style: night blue, light border; active = gold border */
     lv_style_set_bg_opa(&btn_style, LV_OPA_COVER);
-    lv_style_set_bg_grad_dir(&btn_style, LV_GRAD_DIR_VER);
+    lv_style_set_bg_color(&btn_style, lv_color_hex(0x0b1622));
     lv_style_set_border_width(&btn_style, 1);
-    lv_style_set_radius(&btn_style, 7);
+    lv_style_set_border_color(&btn_style, lv_color_hex(0x99aaaa));
+    lv_style_set_radius(&btn_style, 10);
 
     lv_style_init(&btn_active_style);
-    lv_style_set_bg_color(&btn_active_style, lv_color_hex(0x2d5a2d));
-    lv_style_set_bg_grad_color(&btn_active_style, lv_color_hex(0x183818));
-    lv_style_set_border_color(&btn_active_style, lv_color_hex(0x6fbf6f));
+    lv_style_set_bg_color(&btn_active_style, lv_color_hex(0x2a220c));
+    lv_style_set_border_color(&btn_active_style, lv_color_hex(0xffd24a));
+    lv_style_set_border_width(&btn_active_style, 2);
 
     lv_style_init(&btn_disabled_style);
-    lv_style_set_bg_color(&btn_disabled_style, lv_color_hex(0x262626));
-    lv_style_set_bg_grad_color(&btn_disabled_style, lv_color_hex(0x181818));
+    lv_style_set_opa(&btn_disabled_style, LV_OPA_40);
     lv_style_set_text_color(&btn_disabled_style, lv_color_hex(0x101010));
 
     style = &btn_mark_style;
-    lv_style_set_width(style, 24),
-    lv_style_set_height(style, 24),
-    lv_style_set_radius(style, 12);
-    lv_style_set_bg_color(style, lv_color_hex(0x808080));
-    lv_style_set_blend_mode(style, LV_BLEND_MODE_ADDITIVE);
+    lv_style_set_width(style, 4),
+    lv_style_set_height(style, BUTTONS_H - 2 - 20),
+    lv_style_set_radius(style, 2);
+    lv_style_set_bg_color(style, lv_color_hex(0x66ff66));
+    lv_style_set_bg_opa(style, LV_OPA_COVER);
     lv_style_set_outline_width(style, 0);
-    lv_style_set_border_width(style, 2);
-    lv_style_set_border_color(style, lv_color_hex(0x909090));
-    lv_style_set_opa(style, LV_OPA_30);
+    lv_style_set_border_width(style, 0);
 
     style = &btn_mark_assigned_style;
     lv_style_init(style);
@@ -397,9 +395,6 @@ static void setup_theme_legacy() {
     lv_style_set_bg_color(&background_style, bg_color);
 
     /* Buttons */
-    lv_style_set_bg_color(&btn_style, lv_color_hex(0x2a5aa0));
-    lv_style_set_bg_grad_color(&btn_style, lv_color_hex(0x103060));
-    lv_style_set_border_color(&btn_style, lv_color_hex(0x8aa8d8));
 
     lv_style_set_bg_img_src(&msg_style, PATH "images/msg.bin");
     /* Top bar: clock, info, meter, TX info */
@@ -425,9 +420,6 @@ static void setup_theme_simple() {
     lv_style_set_bg_color(&background_style, bg_color);
 
     /* Buttons */
-    lv_style_set_bg_color(&btn_style, lv_color_hex(0x4b423c));
-    lv_style_set_bg_grad_color(&btn_style, lv_color_hex(0x2a2420));
-    lv_style_set_border_color(&btn_style, lv_color_hex(0x8a8a8a));
 
     lv_style_set_bg_img_src(&msg_style, PATH "images/msg_dark.bin");
     /* Top bar: clock, info, meter, TX info */
