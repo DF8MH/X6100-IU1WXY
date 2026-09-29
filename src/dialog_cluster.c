@@ -21,10 +21,8 @@
 #include "params/params.h"
 #include "radio.h"
 #include "styles.h"
-#include "textarea_window.h"
 #include "wifi.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,7 +30,7 @@
 #include <time.h>
 
 #define WIDTH         771
-#define HEADER_H      34
+#define HEADER_H      38
 #define STATUS_H      30
 #define TABLE_Y       (10 + HEADER_H)
 #define TABLE_H       (DIALOG_H - TABLE_Y - STATUS_H - 8)
@@ -40,6 +38,15 @@
 #define NEAR_HZ       3000
 #define NEW_MIN       2
 #define ROW_VFO       (-1)
+
+#define POP_W         480
+#define POP_ROW_H     44
+#define POP_HEAD_H    38
+#define POP_HINT_H    56
+#define POP_MAX_ROWS_H (DIALOG_H - POP_HEAD_H - POP_HINT_H - 24)
+
+#define FONT_MAIN     (&sony_28) /* frequency and call */
+#define FONT_SMALL    (&sony_22) /* spotter, comment, time */
 
 #define COLOR_NEAR_BG 0x3a2f12
 #define COLOR_SEL_BG  0x5a4818
@@ -57,6 +64,8 @@ static void clear_cb(button_data_t *data);
 static void band_all_cb(button_data_t *data);
 static void tune_cb(button_data_t *data);
 static void server_cb(button_data_t *data);
+static bool popup_key(uint32_t key);
+static void use_server(int i);
 
 static buttons_page_t btn_page_1, btn_page_2;
 
@@ -91,6 +100,10 @@ static lv_obj_t   *head_left, *head_mid, *head_right;
 static lv_obj_t   *table;
 static lv_obj_t   *status_left, *status_right;
 static lv_timer_t *timer;
+static lv_obj_t   *popup; /* server list, NULL when closed */
+static cluster_server_t srv[CLUSTER_MAX_SERVERS];
+static lv_obj_t        *srv_rows[CLUSTER_MAX_SERVERS];
+static int              srv_n, srv_sel;
 
 static cluster_spot_t all_spots[CLUSTER_MAX_SPOTS];
 static int            all_count;
@@ -110,7 +123,6 @@ static uint16_t now_min;
 static char     server[128];
 static int      server_port;
 static time_t   conf_mtime;
-static bool     editing;
 static char     client_call[sizeof(params.callsign.x)];
 static bool     wifi_was_up;
 
@@ -337,16 +349,25 @@ static void table_draw_cb(lv_event_t *e) {
     }
 }
 
-static void draw_text(lv_obj_draw_part_dsc_t *dsc, lv_coord_t x1, lv_coord_t x2, lv_color_t color,
-                      lv_text_align_t align, const char *text) {
+static void draw_text(lv_obj_draw_part_dsc_t *dsc, const lv_font_t *font, lv_coord_t x1, lv_coord_t x2,
+                      lv_color_t color, lv_text_align_t align, const char *text) {
     lv_draw_label_dsc_t label = *dsc->label_dsc;
+    label.font                = font;
     label.color               = color;
     label.align               = align;
     lv_area_t area            = *dsc->draw_area;
     area.y1 += lv_obj_get_style_pad_top(table, LV_PART_ITEMS);
     area.x2 = dsc->draw_area->x1 + x2;
     area.x1 = dsc->draw_area->x1 + x1;
-    lv_draw_label(dsc->draw_ctx, &label, &area, text, NULL);
+    /* One line, cut at the field's right edge (no wrapping into the next row). */
+    label.flag |= LV_TEXT_FLAG_EXPAND;
+    const lv_area_t *old_clip = dsc->draw_ctx->clip_area;
+    lv_area_t        clip;
+    if (_lv_area_intersect(&clip, old_clip, &area)) {
+        dsc->draw_ctx->clip_area = &clip;
+        lv_draw_label(dsc->draw_ctx, &label, &area, text, NULL);
+        dsc->draw_ctx->clip_area = old_clip;
+    }
 }
 
 /* The fields are drawn at fixed x positions within the one table column. */
@@ -367,7 +388,7 @@ static void table_draw_end_cb(lv_event_t *e) {
         area.y2        = area.y1 + 1;
         lv_draw_rect(dsc->draw_ctx, &line, &area);
         snprintf(text, sizeof(text), "> %d.%03d.%02d  VFO", vfo / 1000000, (vfo / 1000) % 1000, (vfo % 1000) / 10);
-        draw_text(dsc, 8, WIDTH - 8, lv_color_hex(COLOR_VFO), LV_TEXT_ALIGN_LEFT, text);
+        draw_text(dsc, FONT_MAIN, 8, WIDTH - 8, lv_color_hex(COLOR_VFO), LV_TEXT_ALIGN_LEFT, text);
         return;
     }
 
@@ -377,16 +398,16 @@ static void table_draw_end_cb(lv_event_t *e) {
 
     snprintf(text, sizeof(text), "%d.%03d.%d", s->freq_hz / 1000000, (s->freq_hz / 1000) % 1000,
              (s->freq_hz % 1000) / 100);
-    draw_text(dsc, 0, 110, lv_color_hex(0xd0e0f0), LV_TEXT_ALIGN_RIGHT, text);
-    draw_text(dsc, 124, 270, near ? lv_color_hex(COLOR_NEAR) : lv_color_white(), LV_TEXT_ALIGN_LEFT, s->dx);
+    draw_text(dsc, FONT_MAIN, 0, 122, lv_color_hex(0xd0e0f0), LV_TEXT_ALIGN_RIGHT, text);
+    draw_text(dsc, FONT_MAIN, 136, 290, near ? lv_color_hex(COLOR_NEAR) : lv_color_white(), LV_TEXT_ALIGN_LEFT, s->dx);
     if (age <= NEW_MIN) {
-        lv_coord_t w = lv_txt_get_width(s->dx, strlen(s->dx), dsc->label_dsc->font, 0, 0);
-        draw_text(dsc, 124 + w + 4, 290, lv_color_hex(COLOR_NEW), LV_TEXT_ALIGN_LEFT, "*");
+        lv_coord_t w = lv_txt_get_width(s->dx, strlen(s->dx), FONT_MAIN, 0, 0);
+        draw_text(dsc, FONT_MAIN, 136 + w + 4, 310, lv_color_hex(COLOR_NEW), LV_TEXT_ALIGN_LEFT, "*");
     }
-    draw_text(dsc, 280, 395, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_LEFT, s->spotter);
-    draw_text(dsc, 405, 690, lv_color_hex(0xd0d0d0), LV_TEXT_ALIGN_LEFT, s->comment);
+    draw_text(dsc, FONT_SMALL, 300, 400, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_LEFT, s->spotter);
+    draw_text(dsc, FONT_SMALL, 410, 690, lv_color_hex(0xd0d0d0), LV_TEXT_ALIGN_LEFT, s->comment);
     snprintf(text, sizeof(text), "%02d%02dZ", s->utc_min / 60, s->utc_min % 60);
-    draw_text(dsc, 690, WIDTH - 12, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_RIGHT, text);
+    draw_text(dsc, FONT_SMALL, 690, WIDTH - 12, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_RIGHT, text);
 }
 
 static void tune_to(int idx) {
@@ -423,6 +444,7 @@ static void move_selection(int step) {
 static void key_cb(lv_event_t *e) {
     uint32_t key = *((uint32_t *)lv_event_get_param(e));
 
+    if (popup && popup_key(key)) return;
     switch (key) {
         case LV_KEY_LEFT:
         case LV_KEY_UP:
@@ -456,7 +478,9 @@ static void key_cb(lv_event_t *e) {
 static void dialog_click_cb(lv_event_t *e) {
     (void)e;
     lv_indev_t *indev = lv_indev_get_act();
-    if (indev && lv_indev_get_type(indev) == LV_INDEV_TYPE_ENCODER) tune_to(sel);
+    if (!indev || lv_indev_get_type(indev) != LV_INDEV_TYPE_ENCODER) return;
+    if (popup) use_server(srv_sel);
+    else tune_to(sel);
 }
 
 /* A tap on a row tunes to it. */
@@ -491,17 +515,17 @@ static void construct_cb(lv_obj_t *parent) {
     all_count  = 0;
 
     lv_color_t head_color = lv_color_hex(0x90f0d0);
-    head_left             = make_label(dialog.obj, &sony_20, head_color);
-    lv_obj_set_pos(head_left, 18, 14);
-    lv_obj_set_width(head_left, 300);
-    head_mid = make_label(dialog.obj, &sony_20, head_color);
+    head_left             = make_label(dialog.obj, &sony_22, head_color);
+    lv_obj_set_pos(head_left, 18, 12);
+    lv_obj_set_width(head_left, 350);
+    head_mid = make_label(dialog.obj, &sony_22, head_color);
     lv_obj_set_width(head_mid, 250);
     lv_obj_set_style_text_align(head_mid, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_pos(head_mid, 800 / 2 - 125, 14);
-    head_right = make_label(dialog.obj, &sony_20, head_color);
+    lv_obj_set_pos(head_mid, 800 / 2 - 125 + 40, 12);
+    head_right = make_label(dialog.obj, &sony_22, head_color);
     lv_obj_set_width(head_right, 200);
     lv_obj_set_style_text_align(head_right, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(head_right, 796 - 18 - 200, 14);
+    lv_obj_set_pos(head_right, 796 - 18 - 200, 12);
 
     table = lv_table_create(dialog.obj);
     lv_obj_remove_style(table, NULL, LV_STATE_ANY | LV_PART_MAIN);
@@ -516,21 +540,21 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_border_opa(table, 96, LV_PART_MAIN);
     lv_obj_set_style_pad_ver(table, TABLE_H / 2, LV_PART_MAIN);
     lv_obj_set_style_border_width(table, 0, LV_PART_ITEMS);
-    lv_obj_set_style_text_font(table, &sony_22, LV_PART_ITEMS);
+    lv_obj_set_style_text_font(table, FONT_MAIN, LV_PART_ITEMS);
     lv_obj_set_style_text_color(table, lv_color_white(), LV_PART_ITEMS);
-    lv_obj_set_style_pad_top(table, 4, LV_PART_ITEMS);
-    lv_obj_set_style_pad_bottom(table, 3, LV_PART_ITEMS);
+    lv_obj_set_style_pad_top(table, 6, LV_PART_ITEMS);
+    lv_obj_set_style_pad_bottom(table, 2, LV_PART_ITEMS);
     lv_obj_set_style_pad_left(table, 5, LV_PART_ITEMS);
     lv_obj_set_style_pad_right(table, 0, LV_PART_ITEMS);
     lv_obj_add_event_cb(table, table_draw_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
     lv_obj_add_event_cb(table, table_draw_end_cb, LV_EVENT_DRAW_PART_END, NULL);
     lv_obj_add_event_cb(table, table_click_cb, LV_EVENT_CLICKED, NULL);
 
-    status_left = make_label(dialog.obj, &sony_18, lv_color_hex(COLOR_DIM));
+    status_left = make_label(dialog.obj, &sony_20, lv_color_hex(COLOR_DIM));
     lv_obj_set_pos(status_left, 18, DIALOG_H - STATUS_H - 4);
     lv_obj_set_width(status_left, 440);
     lv_label_set_text(status_left, "MFK: browse - press: tune - VFO: follow");
-    status_right = make_label(dialog.obj, &sony_18, lv_color_hex(COLOR_DIM));
+    status_right = make_label(dialog.obj, &sony_20, lv_color_hex(COLOR_DIM));
     lv_obj_set_width(status_right, 320);
     lv_obj_set_style_text_align(status_right, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(status_right, 796 - 18 - 320, DIALOG_H - STATUS_H - 4);
@@ -549,17 +573,13 @@ static void construct_cb(lv_obj_t *parent) {
 }
 
 static void destruct_cb(void) {
-    if (editing) {
-        textarea_window_close();
-        editing = false;
-    }
     if (timer) {
         lv_timer_del(timer);
         timer = NULL;
     }
     /* The client keeps running: the spots show at once when the app is
      * opened again. */
-    table = NULL;
+    table = popup = NULL;
 }
 
 static void close_cb(button_data_t *data) {
@@ -587,58 +607,163 @@ static void tune_cb(button_data_t *data) {
     tune_to(sel);
 }
 
-static void server_edit_close(void) {
-    textarea_window_close();
-    editing = false;
-    lv_group_add_obj(keyboard_group, dialog.obj);
-    lv_group_focus_obj(dialog.obj);
-    lv_group_set_editing(keyboard_group, true);
+/* Server popup: the saved servers, the MFK chooses and a press uses one. */
+static void show_servers(void) {
+    for (int i = 0; i < srv_n; i++) {
+        bool on = i == srv_sel;
+        lv_obj_set_style_bg_opa(srv_rows[i], on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(srv_rows[i], on ? 2 : 0, 0);
+        lv_obj_t *name = lv_obj_get_child(srv_rows[i], 0);
+        lv_obj_set_style_text_color(name, on ? lv_color_hex(COLOR_NEAR) : lv_color_white(), 0);
+        lv_obj_set_style_text_color(lv_obj_get_child(srv_rows[i], 1), on ? lv_color_hex(COLOR_NEAR) : lv_color_hex(COLOR_DIM), 0);
+        if (on) lv_obj_scroll_to_view(srv_rows[i], LV_ANIM_OFF);
+    }
 }
 
-static bool server_edit_ok(void) {
-    char text[sizeof(server) + 8], host[sizeof(server)];
-    int  port;
-    snprintf(text, sizeof(text), "%s", textarea_window_get());
-    for (char *c = text; *c; c++) *c = (char)tolower((unsigned char)*c);
-
-    if (text[0] == '\0') {
-        snprintf(host, sizeof(host), "%s", CLUSTER_DEFAULT_HOST);
-        port = CLUSTER_DEFAULT_PORT;
-    } else if (!cluster_parse_server(text, host, sizeof(host), &port)) {
-        msg_schedule_text_fmt("Invalid server: use host or host:port");
-        return false;
-    }
-    if (!cluster_config_save(host, port)) {
+static void use_server(int i) {
+    if (i < 0 || i >= srv_n) return;
+    if (!cluster_config_save(srv[i].host, srv[i].port)) {
         msg_schedule_text_fmt("Cannot save %s", CLUSTER_CONF);
-        return false;
+        return;
     }
-    server_edit_close();
     load_server();
     timer_cb(NULL);
+    for (int r = 0; r < srv_n; r++)
+        lv_obj_add_flag(lv_obj_get_child(srv_rows[r], 2), LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(lv_obj_get_child(srv_rows[i], 2), LV_OBJ_FLAG_HIDDEN);
     msg_schedule_text_fmt("Cluster: %s:%d", server, server_port);
-    return true;
 }
 
-static bool server_edit_cancel(void) {
-    server_edit_close();
-    return true;
+static void close_popup(void) {
+    lv_obj_del(popup);
+    popup = NULL;
+}
+
+static bool popup_key(uint32_t key) {
+    switch (key) {
+        case LV_KEY_LEFT:
+        case LV_KEY_UP:
+            if (srv_sel > 0) srv_sel--;
+            show_servers();
+            return true;
+        case LV_KEY_RIGHT:
+        case LV_KEY_DOWN:
+            if (srv_sel < srv_n - 1) srv_sel++;
+            show_servers();
+            return true;
+        case LV_KEY_ENTER:
+            use_server(srv_sel);
+            return true;
+        case LV_KEY_ESC:
+            close_popup();
+            return true;
+        default:
+            return false;
+    }
+}
+
+static void server_row_click_cb(lv_event_t *e) {
+    srv_sel = (int)(intptr_t)lv_event_get_user_data(e);
+    show_servers();
+    use_server(srv_sel);
+}
+
+static void open_popup(void) {
+    srv_n = cluster_servers_load(srv, CLUSTER_MAX_SERVERS);
+
+    popup = lv_obj_create(dialog.obj);
+    lv_obj_remove_style_all(popup);
+    lv_obj_set_size(popup, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_bg_color(popup, lv_color_hex(0x1c2a33), 0);
+    lv_obj_set_style_bg_opa(popup, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(popup, LV_OBJ_FLAG_SCROLLABLE);
+
+    int rows_h = srv_n * POP_ROW_H;
+    if (rows_h > POP_MAX_ROWS_H) rows_h = POP_MAX_ROWS_H;
+    int box_h = POP_HEAD_H + rows_h + POP_HINT_H;
+
+    lv_obj_t *box = lv_obj_create(popup);
+    lv_obj_remove_style_all(box);
+    lv_obj_set_size(box, POP_W, box_h);
+    lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1622), 0);
+    lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(box, lv_color_hex(0x99aaaa), 0);
+    lv_obj_set_style_border_width(box, 2, 0);
+    lv_obj_set_style_radius(box, 10, 0);
+    lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *head = lv_label_create(box);
+    lv_obj_set_style_text_font(head, &sony_20, 0);
+    lv_obj_set_style_text_color(head, lv_color_hex(0x90f0d0), 0);
+    lv_label_set_text(head, "CLUSTER SERVERS");
+    lv_obj_set_pos(head, 22, 9);
+    lv_obj_t *count = lv_label_create(box);
+    lv_obj_set_style_text_font(count, &sony_20, 0);
+    lv_obj_set_style_text_color(count, lv_color_hex(0x90f0d0), 0);
+    lv_label_set_text_fmt(count, "%d", srv_n);
+    lv_obj_align(count, LV_ALIGN_TOP_RIGHT, -22, 9);
+
+    lv_obj_t *list = lv_obj_create(box);
+    lv_obj_remove_style_all(list);
+    lv_obj_set_size(list, POP_W - 4, rows_h);
+    lv_obj_set_pos(list, 0, POP_HEAD_H);
+
+    srv_sel = 0;
+    for (int i = 0; i < srv_n; i++) {
+        bool inuse = strcmp(srv[i].host, server) == 0 && srv[i].port == server_port;
+        if (inuse) srv_sel = i;
+
+        lv_obj_t *row = lv_obj_create(list);
+        srv_rows[i]   = row;
+        lv_obj_remove_style_all(row);
+        lv_obj_set_size(row, POP_W - 4, POP_ROW_H);
+        lv_obj_set_pos(row, 0, i * POP_ROW_H);
+        lv_obj_set_style_bg_color(row, lv_color_hex(COLOR_SEL_BG), 0);
+        lv_obj_set_style_border_color(row, lv_color_white(), 0);
+        lv_obj_set_style_border_side(row, LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM, 0);
+        lv_obj_add_event_cb(row, server_row_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+
+        lv_obj_t *name = lv_label_create(row);
+        lv_obj_set_style_text_font(name, &sony_26, 0);
+        lv_label_set_long_mode(name, LV_LABEL_LONG_CLIP);
+        lv_obj_set_width(name, 220);
+        lv_label_set_text(name, srv[i].name);
+        lv_obj_align(name, LV_ALIGN_LEFT_MID, 22, 0);
+
+        char addr[sizeof(srv[i].host) + 8];
+        snprintf(addr, sizeof(addr), "%s:%d", srv[i].host, srv[i].port);
+        lv_obj_t *a = lv_label_create(row);
+        lv_obj_set_style_text_font(a, &sony_18, 0);
+        lv_label_set_long_mode(a, LV_LABEL_LONG_CLIP);
+        lv_obj_set_width(a, 210);
+        lv_obj_set_style_text_align(a, LV_TEXT_ALIGN_RIGHT, 0);
+        lv_label_set_text(a, addr);
+        lv_obj_align(a, LV_ALIGN_RIGHT_MID, -22, 0);
+
+        lv_obj_t *dot = lv_obj_create(row);
+        lv_obj_remove_style_all(dot);
+        lv_obj_set_size(dot, 10, 10);
+        lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(dot, lv_color_hex(COLOR_NEW), 0);
+        lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+        lv_obj_align(dot, LV_ALIGN_RIGHT_MID, -22 - lv_txt_get_width(addr, strlen(addr), &sony_18, 0, 0) - 14, 0);
+        if (!inuse) lv_obj_add_flag(dot, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    lv_obj_t *hint = lv_label_create(box);
+    lv_obj_set_style_text_font(hint, &sony_16, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(COLOR_DIM), 0);
+    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(hint, POP_W - 44);
+    lv_label_set_text(hint, "MFK: choose - press: use - Server: close - add servers from the web page");
+    lv_obj_set_pos(hint, 22, POP_HEAD_H + rows_h + 8);
+
+    show_servers();
 }
 
 static void server_cb(button_data_t *data) {
     (void)data;
-    if (editing) return;
-    editing = true;
-    /* The text area gets the keys only when the dialog is out of the group. */
-    lv_group_remove_obj(dialog.obj);
-    textarea_window_open_w_label(server_edit_ok, server_edit_cancel, "Server: ");
-    lv_obj_t *text = textarea_window_text();
-    lv_textarea_set_accepted_chars(text, "0123456789.-:"
-                                         "abcdefghijklmnopqrstuvwxyz"
-                                         "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-    lv_textarea_set_max_length(text, sizeof(server) + 6);
-    lv_textarea_set_placeholder_text(text, CLUSTER_DEFAULT_HOST ":23");
-
-    char cur[sizeof(server) + 8];
-    snprintf(cur, sizeof(cur), "%s:%d", server, server_port);
-    textarea_window_set(cur);
+    if (popup) close_popup();
+    else open_popup();
 }

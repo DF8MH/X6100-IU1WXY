@@ -127,20 +127,22 @@ def delete_digital_mode(mode_id, dbcon):
 # DX cluster routes
 #
 # Same file and format as the radio GUI (src/cluster/client.c): "host=..."
-# and "port=..." lines, defaults when missing. The GUI reloads the server
-# when the file's mtime changes.
+# and "port=..." lines are the server in use, "server=name|host|port" lines
+# the saved ones. The GUI reloads the server when the file's mtime changes.
 
 CLUSTER_DEFAULT_HOST = "dxc.ve7cc.net"
 CLUSTER_DEFAULT_PORT = 23
+CLUSTER_MAX_SERVERS = 16
 
 
 def read_cluster_conf():
-    host, port = CLUSTER_DEFAULT_HOST, CLUSTER_DEFAULT_PORT
+    """Returns (host, port, servers): the server in use and [(name, host, port)]."""
+    host, port, servers = CLUSTER_DEFAULT_HOST, CLUSTER_DEFAULT_PORT, []
     try:
         with open(settings.CLUSTER_CONF, errors="replace") as f:
             lines = f.read().splitlines()
     except OSError:
-        return host, port
+        lines = []
     for line in lines:
         if line.startswith("host=") and line[5:]:
             host = line[5:]
@@ -148,16 +150,45 @@ def read_cluster_conf():
             m = re.match(r"\s*[+-]?\d+", line[5:])  # atoi()
             if m and 0 < int(m.group()) < 65536:
                 port = int(m.group())
-    return host, port
+        elif line.startswith("server="):
+            parts = line[7:].split("|")
+            if len(parts) == 3 and parts[0] and parts[1] and parts[2].isdigit() and 0 < int(parts[2]) < 65536:
+                servers.append((parts[0], parts[1], int(parts[2])))
+    if not servers:
+        servers.append(("VE7CC", CLUSTER_DEFAULT_HOST, CLUSTER_DEFAULT_PORT))
+    if (host, port) not in [(h, p) for _, h, p in servers]:
+        servers.append((host, host, port))
+    return host, port, servers
 
 
-def write_cluster_conf(host, port):
+def write_cluster_conf(host, port, servers):
     tmp = settings.CLUSTER_CONF + ".tmp"
     with open(tmp, "w") as f:
         f.write(f"host={host}\nport={port}\n")
+        for name, h, p in servers:
+            f.write(f"server={name}|{h}|{p}\n")
         f.flush()
         os.fsync(f.fileno())
     os.rename(tmp, settings.CLUSTER_CONF)
+
+
+def cluster_state():
+    host, port, servers = read_cluster_conf()
+    return {"host": host, "port": port,
+            "servers": [{"name": n, "host": h, "port": p} for n, h, p in servers]}
+
+
+def cluster_error(status, msg):
+    bottle.response.status = status
+    return {"status": "error", "msg": msg}
+
+
+def cluster_save(host, port, servers):
+    try:
+        write_cluster_conf(host, port, servers)
+    except OSError as e:
+        return cluster_error(500, f"Can't save: {e}")
+    return cluster_state()
 
 
 @app.route('/cluster')
@@ -167,32 +198,51 @@ def cluster():
 
 @app.get('/api/cluster')
 def get_cluster():
-    host, port = read_cluster_conf()
-    return {"host": host, "port": port,
-            "default_host": CLUSTER_DEFAULT_HOST, "default_port": CLUSTER_DEFAULT_PORT}
+    return cluster_state()
 
 
-@app.post('/api/cluster')
-def set_cluster():
+@app.post('/api/cluster/servers')
+def add_cluster_server():
     data = bottle.request.json or {}
+    name = str(data.get("name", "")).strip()
     host = str(data.get("host", "")).strip()
+    if not name or len(name) > 31 or "|" in name or "\r" in name or "\n" in name:
+        return cluster_error(400, "Invalid name: 1-31 characters, no '|'")
     # Hosts the GUI accepts (cluster_parse_server): letters, digits, '.', '-'
     if not re.fullmatch(r"[A-Za-z0-9.-]{1,127}", host):
-        bottle.response.status = 400
-        return {"status": "error", "msg": "Invalid host: use letters, digits, '.' and '-'"}
+        return cluster_error(400, "Invalid host: use letters, digits, '.' and '-'")
     try:
         port = int(str(data.get("port", "")).strip())
     except ValueError:
         port = 0
     if not 0 < port < 65536:
-        bottle.response.status = 400
-        return {"status": "error", "msg": "Invalid port: 1-65535"}
-    try:
-        write_cluster_conf(host, port)
-    except OSError as e:
-        bottle.response.status = 500
-        return {"status": "error", "msg": f"Can't save: {e}"}
-    return {"status": "OK", "host": host, "port": port}
+        return cluster_error(400, "Invalid port: 1-65535")
+    cur_host, cur_port, servers = read_cluster_conf()
+    if len(servers) >= CLUSTER_MAX_SERVERS:
+        return cluster_error(400, f"At most {CLUSTER_MAX_SERVERS} servers")
+    if any(h == host and p == port for _, h, p in servers):
+        return cluster_error(400, "This server is already in the list")
+    return cluster_save(cur_host, cur_port, servers + [(name, host, port)])
+
+
+@app.post('/api/cluster/use/<index:int>')
+def use_cluster_server(index):
+    _, _, servers = read_cluster_conf()
+    if not 0 <= index < len(servers):
+        return cluster_error(404, "No such server")
+    _, host, port = servers[index]
+    return cluster_save(host, port, servers)
+
+
+@app.delete('/api/cluster/servers/<index:int>')
+def delete_cluster_server(index):
+    host, port, servers = read_cluster_conf()
+    if not 0 <= index < len(servers):
+        return cluster_error(404, "No such server")
+    if servers[index][1:] == (host, port):
+        return cluster_error(400, "This server is in use: choose another one first")
+    del servers[index]
+    return cluster_save(host, port, servers)
 
 
 # Main routes

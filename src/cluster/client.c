@@ -89,10 +89,63 @@ void cluster_config_load(char *host, size_t host_size, int *port) {
     fclose(f);
 }
 
+int cluster_servers_load(cluster_server_t *out, int max) {
+    char host[128];
+    int  port, n = 0;
+    cluster_config_load(host, sizeof(host), &port);
+
+    FILE *f = fopen(CLUSTER_CONF, "r");
+    char  line[320];
+    while (f && fgets(line, sizeof(line), f) && n < max) {
+        line[strcspn(line, "\r\n")] = '\0';
+        if (strncmp(line, "server=", 7) != 0) continue;
+        char *bar1 = strchr(line + 7, '|');
+        char *bar2 = bar1 ? strchr(bar1 + 1, '|') : NULL;
+        if (!bar2) continue;
+        *bar1 = *bar2 = '\0';
+        int p         = atoi(bar2 + 1);
+        if (!line[7] || !bar1[1] || p <= 0 || p > 65535) continue;
+        snprintf(out[n].name, sizeof(out[n].name), "%s", line + 7);
+        snprintf(out[n].host, sizeof(out[n].host), "%s", bar1 + 1);
+        out[n].port = p;
+        n++;
+    }
+    if (f) fclose(f);
+
+    if (n == 0 && max > 0) {
+        snprintf(out[0].name, sizeof(out[0].name), "VE7CC");
+        snprintf(out[0].host, sizeof(out[0].host), "%s", CLUSTER_DEFAULT_HOST);
+        out[0].port = CLUSTER_DEFAULT_PORT;
+        n           = 1;
+    }
+    bool listed = false;
+    for (int i = 0; i < n; i++) listed |= strcmp(out[i].host, host) == 0 && out[i].port == port;
+    if (!listed && n < max) {
+        snprintf(out[n].name, sizeof(out[n].name), "%s", host);
+        snprintf(out[n].host, sizeof(out[n].host), "%s", host);
+        out[n].port = port;
+        n++;
+    }
+    return n;
+}
+
+/* Sets the server in use; the saved "server=" lines are kept. */
 bool cluster_config_save(const char *host, int port) {
+    static char servers[CLUSTER_MAX_SERVERS * 320];
+    servers[0] = '\0';
+    FILE *in   = fopen(CLUSTER_CONF, "r");
+    char  line[320];
+    while (in && fgets(line, sizeof(line), in))
+        if (strncmp(line, "server=", 7) == 0 && strlen(servers) + strlen(line) + 2 < sizeof(servers)) {
+            line[strcspn(line, "\r\n")] = '\0';
+            strcat(servers, line);
+            strcat(servers, "\n");
+        }
+    if (in) fclose(in);
+
     FILE *f = fopen(CLUSTER_CONF ".tmp", "w");
     if (!f) return false;
-    fprintf(f, "host=%s\nport=%d\n", host, port);
+    fprintf(f, "host=%s\nport=%d\n%s", host, port, servers);
     bool ok = fflush(f) == 0 && fsync(fileno(f)) == 0;
     ok      = fclose(f) == 0 && ok;
     return ok && rename(CLUSTER_CONF ".tmp", CLUSTER_CONF) == 0;
