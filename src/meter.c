@@ -67,12 +67,12 @@ static void meter_draw_cb(lv_event_t * e) {
     lv_area_t           area;
 
     /* Scale on top, bars below it, the dB value on the right */
-    lv_coord_t x1 = obj->coords.x1 + 16;
+    lv_coord_t x1 = obj->coords.x1 + 10;
     lv_coord_t y1 = obj->coords.y1;
 
     uint8_t     slice_db = 3;
     uint8_t     slices_total = (max_db - min_db) / slice_db + 1;
-    uint8_t     slice_w = 7;
+    uint8_t     slice_w = 6;
     uint8_t     slice_spacing = 2;
 
     /* Rects */
@@ -84,8 +84,8 @@ static void meter_draw_cb(lv_event_t * e) {
     uint32_t count = (meter_db - min_db) / slice_db + 1.5f;
     count = LV_MIN(count, slices_total);
 
-    area.y1 = y1 + 27;
-    area.y2 = y1 + 46;
+    area.y1 = y1 + 33;
+    area.y2 = y1 + 54;
 
     int16_t db = s_items[0].db;
 
@@ -124,10 +124,10 @@ static void meter_draw_cb(lv_event_t * e) {
     lv_draw_label_dsc_init(&label_dsc);
 
     label_dsc.color = lv_color_white();
-    label_dsc.font = &sony_18;
+    label_dsc.font = &sony_22;
 
-    area.y1 = y1 + 7;
-    area.y2 = area.y1 + 18;
+    area.y1 = y1 + 6;
+    area.y2 = area.y1 + 22;
 
     lv_point_t label_size;
 
@@ -167,7 +167,7 @@ lv_obj_t * meter_init(lv_obj_t * parent) {
     subject_subscribe_delayed_and_notify((Subject*)cfg_cur_att, on_bool_value_change, &att);
 
     db_val_label = lv_label_create(obj);
-    lv_obj_set_style_text_font(db_val_label, &sony_26, 0);
+    lv_obj_set_style_text_font(db_val_label, &sony_30, 0);
     lv_obj_align(db_val_label, LV_ALIGN_RIGHT_MID, -8, 0);
     lv_obj_set_style_text_color(db_val_label, lv_color_white(), 0);
     lv_label_set_text(db_val_label, "");

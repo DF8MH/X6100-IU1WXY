@@ -32,15 +32,16 @@ extern "C" {
 
 // Top bar: info, S-meter and clock panels
 
-#define TOP_BAR_HEIGHT  64
+#define TOP_BAR_HEIGHT  76
 #define TOP_BAR_MARGIN  2
+#define CLOCK_W         178
 #define TOP_BAR_BOX_H   (TOP_BAR_HEIGHT - TOP_BAR_MARGIN * 2)
-#define TOP_BAR_METER_X (TOP_BAR_MARGIN + 330 + 3)
-#define TOP_BAR_METER_W (800 - TOP_BAR_METER_X - 3 - 162 - TOP_BAR_MARGIN)
+#define TOP_BAR_METER_X (TOP_BAR_MARGIN + 388 + 3)
+#define TOP_BAR_METER_W (800 - TOP_BAR_METER_X - 3 - CLOCK_W - TOP_BAR_MARGIN)
 
 /* Frequency strip under the top bar, always shown */
 #define FREQ_STRIP_Y    TOP_BAR_HEIGHT
-#define FREQ_STRIP_H    42
+#define FREQ_STRIP_H    50
 
 /* Bottom buttons (buttons.h BTN_HEIGHT) */
 #define BUTTONS_H       54
