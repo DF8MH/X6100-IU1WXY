@@ -317,7 +317,7 @@ void styles_init(themes_t theme) {
     lv_style_set_align(&info_style, LV_ALIGN_TOP_LEFT);
     lv_style_set_x(&info_style, TOP_BAR_MARGIN);
     lv_style_set_y(&info_style, TOP_BAR_MARGIN);
-    lv_style_set_width(&info_style, 388);
+    lv_style_set_width(&info_style, 370);
     lv_style_set_height(&info_style, TOP_BAR_BOX_H);
     lv_style_set_pad_hor(&info_style, 5);
     lv_style_set_pad_ver(&info_style, 0);
