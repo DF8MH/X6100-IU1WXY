@@ -23,6 +23,8 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <execinfo.h>
+#include <signal.h>
 
 #define W 800
 #define H 480
@@ -154,7 +156,15 @@ static void cluster_demo(void) {
     pump(200);
 }
 
+static void crash(int sig) {
+    void *bt[32];
+    int n = backtrace(bt, 32);
+    backtrace_symbols_fd(bt, n, 2);
+    _exit(128 + sig);
+}
+
 int main(int argc, char **argv) {
+    signal(SIGSEGV, crash);
     setvbuf(stdout, NULL, _IOLBF, 0);
     lv_init();
     static lv_color_t buf[W * 60];

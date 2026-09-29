@@ -33,6 +33,8 @@ ParamInt         *cfg_atu_enabled         = nullptr;
 ParamInt         *cfg_auto_level_enabled  = nullptr;
 ParamFloat       *cfg_auto_level_offset   = nullptr;
 ParamInt         *cfg_knob_info           = nullptr;
+ParamInt         *cfg_spectrum_show       = nullptr;
+ParamInt         *cfg_waterfall_ref       = nullptr;
 ParamText        *cfg_encoder_bind        = nullptr;
 ParamInt         *cfg_vox_on              = nullptr;
 ParamInt         *cfg_vox_gain            = nullptr;
@@ -152,6 +154,8 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_auto_level_enabled = &cfg_sm.p_auto_level_enabled;
     cfg_auto_level_offset  = reinterpret_cast<ParamFloat *>(&cfg_sm.p_auto_level_offset);
     cfg_knob_info        = &cfg_sm.p_knob_info;
+    cfg_spectrum_show    = &cfg_sm.p_spectrum_show;
+    cfg_waterfall_ref    = &cfg_sm.p_waterfall_ref;
     cfg_encoder_bind     = &cfg_sm.p_encoder_bind;
     cfg_vox_on           = &cfg_sm.p_vox_en;
     cfg_vox_gain         = &cfg_sm.p_vox_gain;

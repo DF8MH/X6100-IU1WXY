@@ -54,12 +54,14 @@ extern "C" {
 #define SMALL_WIDTH 57
 
 static void make_general_page();
-static void make_ui_page();
+static void make_display_page();
+static void make_audio_page();
 static void make_voice_page();
 static void make_info_page();
 
 static void load_general_page(button_data_t *btn_data);
-static void load_ui_page(button_data_t *btn_data);
+static void load_display_page(button_data_t *btn_data);
+static void load_audio_page(button_data_t *btn_data);
 static void load_voice_page(button_data_t *btn_data);
 static void load_info_page(button_data_t *btn_data);
 
@@ -90,10 +92,16 @@ static button_data_t btn_general = {
     .press = load_general_page,
 };
 
-static button_data_t btn_ui = {
+static button_data_t btn_display = {
     .type  = BTN_TEXT,
-    .label = "Interface",
-    .press = load_ui_page,
+    .label = "Display",
+    .press = load_display_page,
+};
+
+static button_data_t btn_audio = {
+    .type  = BTN_TEXT,
+    .label = "Audio",
+    .press = load_audio_page,
 };
 
 static button_data_t btn_voice = {
@@ -111,7 +119,8 @@ static button_data_t btn_info = {
 buttons_page_t btn_page = {
     {
      &btn_general,
-     &btn_ui,
+     &btn_display,
+     &btn_audio,
      &btn_voice,
      &btn_info,
      }
@@ -136,8 +145,16 @@ static void load_general_page(button_data_t *btn_data) {
     buttons_mark(btn_data, true);
 }
 
-static void load_ui_page(button_data_t *btn_data) {
-    make_ui_page();
+static void load_display_page(button_data_t *btn_data) {
+    make_display_page();
+    for (auto &&btn : btn_page.items) {
+        buttons_mark(btn, false);
+    }
+    buttons_mark(btn_data, true);
+}
+
+static void load_audio_page(button_data_t *btn_data) {
+    make_audio_page();
     for (auto &&btn : btn_page.items) {
         buttons_mark(btn, false);
     }
@@ -1252,6 +1269,57 @@ static uint8_t make_voice_lang(uint8_t row) {
 
 #define AUTO_LEVEL_STEP 0.2f
 
+/* Spectrum above the waterfall on/off; the waterfall takes its place */
+
+static uint8_t make_spectrum_show(uint8_t row) {
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "Spectrum (restart)");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = lv_obj_create(grid);
+    lv_obj_set_size(obj, SMALL_3, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(obj);
+    obj = switch_bool(obj, cfg_sm.p_spectrum_show);
+    lv_obj_set_width(obj, SMALL_3 - 30);
+
+    return row + 1;
+}
+
+/* Waterfall reference level: below 0 the strong signals get brighter */
+
+static void waterfall_ref_update_cb(lv_event_t *e) {
+    lv_obj_t *obj = lv_event_get_target(e);
+    int       val = lv_slider_get_value(obj);
+
+    lv_obj_t *slider_label = (lv_obj_t *)lv_obj_get_user_data(obj);
+    char     *fmt          = (char *)lv_obj_get_user_data(slider_label);
+    lv_label_set_text_fmt(slider_label, fmt, val);
+    cfg_sm.p_waterfall_ref.set(val);
+}
+
+static uint8_t make_waterfall_ref(uint8_t row) {
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "Waterfall ref level");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = lv_obj_create(grid);
+    lv_obj_set_size(obj, SMALL_6, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(obj);
+    slider_with_text(obj, cfg_sm.p_waterfall_ref.get(), -40, 20, 1, SMALL_6 - 120, "%+i dB", waterfall_ref_update_cb);
+
+    return row + 1;
+}
+
 static void auto_level_offset_update_cb(lv_event_t * e) {
     lv_obj_t *obj = lv_event_get_target(e);
     float val = lv_slider_get_value(obj) * AUTO_LEVEL_STEP;
@@ -2100,53 +2168,29 @@ static void make_general_page() {
     row = make_time(row);
     row = make_delimiter(row);
 
-    row = make_backlight(row);
+    row = make_long_action(row);
     row = make_delimiter(row);
 
-    row = make_line_gain(row);
+    row = make_hmic_action(row);
     row = make_delimiter(row);
 
-    row = make_audio_gain(row);
+    row = make_freq_accel(row);
     row = make_delimiter(row);
-
-    row = make_sp_mode(row);
-    row = make_delimiter(row);
-
-    if (base_ver.rev >= 3) {
-        row = make_comp_th_makeup(row);
-        row = make_delimiter(row);
-    }
-
-    row = make_tx_offset(row);
-    row = make_delimiter(row);
-
-    if (base_ver.rev >= 3) {
-        row = make_codec_gain(row);
-        row = make_delimiter(row);
-    }
-
-    if (base_ver.rev >= 8) {
-        row = band_out_gain_correction(row);
-        row = make_delimiter(row);
-        row = make_fm_emphasis(row);
-        row = make_delimiter(row);
-    }
-
-    if (base_ver.rev >= 9) {
-        row = make_tx_filter(row);
-        row = make_delimiter(row);
-    }
-
-    if (base_ver.rev >= 12) {
-        row = make_cessb(row);
-        row = make_delimiter(row);
-    }
 
     row = make_charger(row);
     row = make_delimiter(row);
 
     row = make_bluetooth(row);
     row = make_delimiter(row);
+
+    /* TX calibration */
+    row = make_tx_offset(row);
+    row = make_delimiter(row);
+
+    if (base_ver.rev >= 8) {
+        row = band_out_gain_correction(row);
+        row = make_delimiter(row);
+    }
 
     row = make_transverter(row, cfg_sm.p_transverter_0_from, cfg_sm.p_transverter_0_to, cfg_sm.p_transverter_0_shift);
     row = make_transverter(row, cfg_sm.p_transverter_1_from, cfg_sm.p_transverter_1_to, cfg_sm.p_transverter_1_shift);
@@ -2155,22 +2199,22 @@ static void make_general_page() {
     lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
 }
 
-static void make_ui_page() {
+static void make_display_page() {
     grid_delete();
     grid_create();
     uint8_t row = 0;
 
-    // row = make_delimiter(row);
+    row = make_backlight(row);
+    row = make_delimiter(row);
+
     row = make_clock(row);
     row = make_delimiter(row);
 
-    row = make_long_action(row);
-    row = make_delimiter(row);
-
-    row = make_hmic_action(row);
     row = make_mag(row);
     row = make_delimiter(row);
 
+    row = make_spectrum_show(row);
+    row = make_waterfall_ref(row);
     row = make_auto_offset(row);
     row = make_spectrum_min_max(row);
     row = make_delimiter(row);
@@ -2183,10 +2227,48 @@ static void make_ui_page() {
     row = make_knob_info(row);
     row = make_delimiter(row);
 
-    row = make_freq_accel(row);
+    row = make_theme(row);
+
+    row_dsc[row] = LV_GRID_TEMPLATE_LAST;
+    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
+}
+
+static void make_audio_page() {
+    grid_delete();
+    grid_create();
+    uint8_t row = 0;
+
+    x6100_base_ver_t base_ver = x6100_control_get_base_ver();
+
+    /* RX / speaker */
+    row = make_sp_mode(row);
     row = make_delimiter(row);
 
-    row = make_theme(row);
+    row = make_line_gain(row);
+    row = make_delimiter(row);
+
+    row = make_audio_gain(row);
+    row = make_delimiter(row);
+
+    /* TX audio */
+    if (base_ver.rev >= 3) {
+        row = make_codec_gain(row);
+        row = make_delimiter(row);
+
+        row = make_comp_th_makeup(row);
+        row = make_delimiter(row);
+    }
+    if (base_ver.rev >= 9) {
+        row = make_tx_filter(row);
+        row = make_delimiter(row);
+    }
+    if (base_ver.rev >= 12) {
+        row = make_cessb(row);
+        row = make_delimiter(row);
+    }
+    if (base_ver.rev >= 8) {
+        row = make_fm_emphasis(row);
+    }
 
     row_dsc[row] = LV_GRID_TEMPLATE_LAST;
     lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);

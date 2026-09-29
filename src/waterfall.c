@@ -130,7 +130,11 @@ void waterfall_data(float *data_buf, uint16_t size, bool tx, uint32_t base_freq,
         max = DEFAULT_MAX;
     } else {
         min = grid_min;
-        max = grid_max;
+        /* Reference level: below 0 the top colour is reached sooner */
+        max = grid_max + param_i_get(cfg_waterfall_ref);
+        if (max < min + 10.0f) {
+            max = min + 10.0f;
+        }
     }
     if (base_freq == 0) {
         base_freq = radio_center_freq + mode_lo_offset;

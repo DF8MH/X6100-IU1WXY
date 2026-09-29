@@ -1587,6 +1587,13 @@ lv_obj_t * main_screen() {
 
     spectrum_min_max_reset();
 
+    /* Spectrum off: it shrinks under the top bar, invisible but still the
+     * key target, and the waterfall takes its place. */
+    if (!param_i_get(cfg_spectrum_show)) {
+        spectrum_height = 61;
+        lv_obj_set_style_opa(spectrum, LV_OPA_TRANSP, 0);
+    }
+
     lv_obj_set_y(spectrum, y);
     lv_obj_set_height(spectrum, spectrum_height);
 
