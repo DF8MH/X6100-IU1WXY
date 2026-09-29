@@ -38,5 +38,6 @@ target_link_libraries(apps PRIVATE lvgl)
 set_source_files_properties(${X}/src/info.c PROPERTIES COMPILE_DEFINITIONS "BTCAT_CLIENTS_FILE=\"btcat.clients\"")
 set_source_files_properties(${X}/src/scheduler.cpp PROPERTIES COMPILE_OPTIONS "-include;cstdlib")
 add_executable(apps_ui_harness main.c stubs.c $<TARGET_OBJECTS:apps> ${CMAKE_BINARY_DIR}/stubs_auto.S)
-target_link_options(apps_ui_harness PRIVATE -Wl,--no-demangle)
+# No network from the harness: the cluster client must not log in anywhere
+target_link_options(apps_ui_harness PRIVATE -Wl,--no-demangle -Wl,--wrap=connect)
 target_link_libraries(apps_ui_harness PRIVATE lvgl JS8 js8core ${D}/lib/libliquid.a fftw3f png sndfile m pthread)
