@@ -2,8 +2,9 @@
  *  SPDX-License-Identifier: LGPL-2.1-or-later
  *
  *  DX cluster telnet client: a worker thread that logs in with the
- *  callsign, asks for the latest spots and keeps the spot store updated.
- *  It reconnects on its own until cluster_client_stop().
+ *  callsign, asks for the latest spots and keeps the spot store updated
+ *  (all bands, the last hour). It runs from boot, independent of the app,
+ *  and reconnects on its own, with a backoff, until cluster_client_stop().
  */
 
 #pragma once
@@ -45,6 +46,9 @@ bool cluster_parse_server(const char *text, char *host, size_t host_size, int *p
  * or the callsign changed. */
 void cluster_client_start(const char *host, int port, const char *callsign);
 void cluster_client_stop(void);
+
+/* Retries at once when waiting after a failure (e.g. the WiFi is back). */
+void cluster_client_retry(void);
 
 /* Copies the spots (oldest first) when they changed since *gen; returns
  * the count, or -1 when nothing changed. */

@@ -4,6 +4,8 @@
  *  DX cluster spots: line parser, spot store, band and mode helpers.
  */
 
+#define _GNU_SOURCE /* strcasestr */
+
 #include "spots.h"
 
 #include <ctype.h>
@@ -74,7 +76,12 @@ static bool parse_freq_call(const char **pp, cluster_spot_t *out) {
     if (end == p || khz < 100.0 || khz > 1.0e7) return false;
     p = skip_space(end);
     const char *e = word_end(p);
-    if (e == p) return false;
+    bool digit = false, alpha = false;
+    for (const char *c = p; c < e; c++) {
+        digit |= isdigit((unsigned char)*c) != 0;
+        alpha |= isalpha((unsigned char)*c) != 0;
+    }
+    if (!digit || !alpha) return false; /* not a callsign */
     copy_word(out->dx, sizeof(out->dx), p, (size_t)(e - p));
     out->freq_hz = (int32_t)(khz * 1000.0 + 0.5);
     *pp = e;
@@ -109,17 +116,37 @@ static bool parse_dx_de(const char *p, cluster_spot_t *out) {
     return true;
 }
 
-/* sh/dx row:  14023.5  VP8LP     28-Sep-2026 1238Z  CW 599 up 2    <DL1ABC> */
+/* "30-Sep-2026" or "30-Sep-26" -> days since 1970-01-01, or -1 */
+static int64_t parse_date(const char *p, size_t n) {
+    static const char months[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    char mon[4];
+    int  d, y, used = 0;
+    if (sscanf(p, "%2d-%3[A-Za-z]-%4d%n", &d, mon, &y, &used) != 3 || (size_t)used != n) return -1;
+    const char *m = strcasestr(months, mon);
+    if (y < 100) y += 2000;
+    if (!m || (m - months) % 3 || d < 1 || d > 31 || y < 2000) return -1;
+    int mo = (int)(m - months) / 3 + 1;
+    /* days from civil (H. Hinnant) */
+    y -= mo <= 2;
+    int64_t era = y / 400, yoe = y - era * 400;
+    int64_t doy = (153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    return era * 146097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719468;
+}
+
+/* sh/dx row (DXSpider, CC Cluster, AR-Cluster):
+ *   14023.5  VP8LP       28-Sep-2026 1238Z  CW 599 up 2          <DL1ABC> */
 static bool parse_show_dx(const char *p, cluster_spot_t *out) {
     if (!parse_freq_call(&p, out)) return false;
     p = skip_space(p);
-    const char *e = word_end(p);
-    if (e - p < 8 || !memchr(p, '-', (size_t)(e - p))) return false; /* date */
+    const char *e    = word_end(p);
+    int64_t     days = parse_date(p, (size_t)(e - p));
+    if (days < 0 && (e - p < 5 || !memchr(p, '-', (size_t)(e - p)))) return false; /* other date: no age */
     p = skip_space(e);
     e = word_end(p);
     int utc = parse_hhmmz(p, (size_t)(e - p));
     if (utc < 0) return false;
     out->utc_min = (uint16_t)utc;
+    out->when    = days < 0 ? 0 : days * 86400 + utc * 60;
 
     const char *lt = strrchr(e, '<');
     const char *gt = lt ? strchr(lt, '>') : NULL;
@@ -144,19 +171,31 @@ void cluster_store_clear(cluster_store_t *s) {
     s->count = 0;
 }
 
+/* Spot time a is after b (within 12 hours, across midnight). */
+static bool newer(uint16_t a, uint16_t b) {
+    return a != b && (a + 1440 - b) % 1440 < 720;
+}
+
 void cluster_store_add(cluster_store_t *s, const cluster_spot_t *spot) {
     for (int i = 0; i < s->count; i++) {
         if (strcasecmp(s->spots[i].dx, spot->dx) == 0 && abs(s->spots[i].freq_hz - spot->freq_hz) <= 1000) {
+            if (newer(s->spots[i].utc_min, spot->utc_min)) return;
             memmove(&s->spots[i], &s->spots[i + 1], (size_t)(s->count - i - 1) * sizeof(s->spots[0]));
             s->count--;
             break;
         }
     }
     if (s->count == CLUSTER_MAX_SPOTS) {
+        if (newer(s->spots[0].utc_min, spot->utc_min)) return;
         memmove(&s->spots[0], &s->spots[1], (size_t)(s->count - 1) * sizeof(s->spots[0]));
         s->count--;
     }
-    s->spots[s->count++] = *spot;
+    /* sh/dx lists the newest first: insert by time, not at the end. */
+    int i = s->count;
+    while (i > 0 && newer(s->spots[i - 1].utc_min, spot->utc_min)) i--;
+    memmove(&s->spots[i + 1], &s->spots[i], (size_t)(s->count - i) * sizeof(s->spots[0]));
+    s->spots[i] = *spot;
+    s->count++;
 }
 
 uint16_t cluster_age_min(uint16_t spot_utc_min, uint16_t now_utc_min) {
