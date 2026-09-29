@@ -70,8 +70,8 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_add_style(strip, &freq_strip_style, 0);
     lv_obj_clear_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
 
-    band_label = make_label(strip, LV_ALIGN_LEFT_MID, 14, &sony_20, 0x90f0d0);
-    freq_label = make_label(strip, LV_ALIGN_CENTER, 0, &sony_30, 0xffffff);
+    band_label = make_label(strip, LV_ALIGN_LEFT_MID, 14, &sony_24, 0x90f0d0);
+    freq_label = make_label(strip, LV_ALIGN_CENTER, 0, &sony_36, 0xffffff);
 
     /* Right: [dot] locator, mode */
     lv_obj_t *right = lv_obj_create(strip);
@@ -84,12 +84,12 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
 
     qth_dot = lv_obj_create(right);
     lv_obj_remove_style_all(qth_dot);
-    lv_obj_set_size(qth_dot, 8, 8);
+    lv_obj_set_size(qth_dot, 10, 10);
     lv_obj_set_style_radius(qth_dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(qth_dot, lv_color_hex(COLOR_LIGHT_GREEN), 0);
     lv_obj_set_style_bg_opa(qth_dot, LV_OPA_COVER, 0);
-    qth_label = make_label(right, LV_ALIGN_DEFAULT, 0, &sony_20, 0xffffff);
-    mode_label = make_label(right, LV_ALIGN_DEFAULT, 0, &sony_20, 0xff6666);
+    qth_label = make_label(right, LV_ALIGN_DEFAULT, 0, &sony_24, 0xffffff);
+    mode_label = make_label(right, LV_ALIGN_DEFAULT, 0, &sony_24, 0xff6666);
     lv_obj_set_style_pad_left(mode_label, 16, 0);
 
     subject_subscribe_delayed((Subject *)cfg_fg_freq, update_cb, NULL);

@@ -297,7 +297,7 @@ void styles_init(themes_t theme) {
     lv_style_set_align(&clock_style, LV_ALIGN_TOP_RIGHT);
     lv_style_set_x(&clock_style, -TOP_BAR_MARGIN);
     lv_style_set_y(&clock_style, TOP_BAR_MARGIN);
-    lv_style_set_width(&clock_style, 162);
+    lv_style_set_width(&clock_style, CLOCK_W);
     lv_style_set_height(&clock_style, TOP_BAR_BOX_H);
     lv_style_set_pad_all(&clock_style, 0);
 
@@ -317,7 +317,7 @@ void styles_init(themes_t theme) {
     lv_style_set_align(&info_style, LV_ALIGN_TOP_LEFT);
     lv_style_set_x(&info_style, TOP_BAR_MARGIN);
     lv_style_set_y(&info_style, TOP_BAR_MARGIN);
-    lv_style_set_width(&info_style, 330);
+    lv_style_set_width(&info_style, 370);
     lv_style_set_height(&info_style, TOP_BAR_BOX_H);
     lv_style_set_pad_hor(&info_style, 5);
     lv_style_set_pad_ver(&info_style, 0);
@@ -332,7 +332,7 @@ void styles_init(themes_t theme) {
     lv_style_set_pad_column(&info_row_style, 1);
 
     lv_style_init(&info_item_style);
-    lv_style_set_text_font(&info_item_style, &sony_18);
+    lv_style_set_text_font(&info_item_style, &sony_22);
     lv_style_set_pad_ver(&info_item_style, 1);
     lv_style_set_radius(&info_item_style, 3);
 

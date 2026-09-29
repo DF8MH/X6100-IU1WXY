@@ -99,7 +99,7 @@ lv_obj_t * info_init(lv_obj_t * parent) {
         if (i % 6 == 0) {
             row = lv_obj_create(obj);
             lv_obj_add_style(row, &info_row_style, 0);
-            lv_obj_set_size(row, col_w * 6 - 1, i ? 24 : 30);
+            lv_obj_set_size(row, col_w * 6 - 1, i ? 28 : 38);
             lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
             lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -111,7 +111,7 @@ lv_obj_t * info_init(lv_obj_t * parent) {
             lv_obj_add_style(item, &info_item_style, 0);
             lv_obj_set_style_text_color(item, lv_color_white(), 0);
         } else {
-            lv_obj_set_style_text_font(item, &lv_font_montserrat_18, 0);
+            lv_obj_set_style_text_font(item, &lv_font_montserrat_22, 0);
             lv_obj_set_style_text_color(item, lv_color_hex(COLOR_ICON_OFF), 0);
         }
         items[i] = item;
