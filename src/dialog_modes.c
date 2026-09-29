@@ -17,10 +17,12 @@
 
 #include <stdint.h>
 
-#define BOX_W  300
-#define ROW_H  40
-#define HEAD_H 34
+#define BOX_W  420
+#define ROW_H  44
+#define HEAD_H 38
 #define HINT_H 28
+#define BOX_Y  (TOP_BAR_HEIGHT + 4)
+#define BOX_H  (HEAD_H + MODES_N * ROW_H + HINT_H + 8)
 
 static void construct_cb(lv_obj_t *parent);
 static void destruct_cb(void);
@@ -39,6 +41,9 @@ static const struct {
 };
 
 #define MODES_N ((int)(sizeof(modes) / sizeof(modes[0])))
+
+/* 56 + 338 = 394: stays clear of the buttons (480 - BUTTONS_H = 426). */
+_Static_assert(BOX_Y + BOX_H <= 480 - BUTTONS_H - 8, "Modes menu overlaps the buttons");
 
 static lv_obj_t *rows[MODES_N];
 static int       sel;
@@ -125,8 +130,8 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_t *box = lv_obj_create(parent);
     dialog.obj    = box;
     lv_obj_remove_style_all(box);
-    lv_obj_set_size(box, BOX_W, HEAD_H + MODES_N * ROW_H + HINT_H + 8);
-    lv_obj_set_pos(box, (800 - BOX_W) / 2, 80);
+    lv_obj_set_size(box, BOX_W, BOX_H);
+    lv_obj_set_pos(box, (800 - BOX_W) / 2, BOX_Y);
     lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1622), 0);
     lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(box, lv_color_hex(0x99aaaa), 0);
@@ -138,7 +143,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_text_font(head, &sony_20, 0);
     lv_obj_set_style_text_color(head, lv_color_hex(0x90f0d0), 0);
     lv_label_set_text(head, "DIGITAL MODES");
-    lv_obj_set_pos(head, 16, 7);
+    lv_obj_set_pos(head, 22, 9);
 
     for (int i = 0; i < MODES_N; i++) {
         lv_obj_t *row = lv_obj_create(box);
@@ -153,22 +158,22 @@ static void construct_cb(lv_obj_t *parent) {
         lv_obj_add_event_cb(row, row_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
 
         lv_obj_t *name = lv_label_create(row);
-        lv_obj_set_style_text_font(name, &sony_26, 0);
+        lv_obj_set_style_text_font(name, &sony_28, 0);
         lv_label_set_text(name, modes[i].name);
-        lv_obj_align(name, LV_ALIGN_LEFT_MID, 16, 0);
+        lv_obj_align(name, LV_ALIGN_LEFT_MID, 22, 0);
 
         lv_obj_t *note = lv_label_create(row);
         lv_obj_set_style_text_font(note, &sony_18, 0);
         lv_obj_set_style_text_color(note, lv_color_hex(0x90a0b0), 0);
         lv_label_set_text(note, i == last_used ? "last used" : modes[i].note);
-        lv_obj_align(note, LV_ALIGN_RIGHT_MID, -16, 0);
+        lv_obj_align(note, LV_ALIGN_RIGHT_MID, -22, 0);
     }
 
     lv_obj_t *hint = lv_label_create(box);
     lv_obj_set_style_text_font(hint, &sony_16, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(0x90a0b0), 0);
     lv_label_set_text(hint, "MFK: choose - press: open - Modes: close");
-    lv_obj_set_pos(hint, 16, HEAD_H + MODES_N * ROW_H + 8);
+    lv_obj_set_pos(hint, 22, HEAD_H + MODES_N * ROW_H + 8);
 
     sel = last_used < 0 ? 0 : last_used;
     show_sel();

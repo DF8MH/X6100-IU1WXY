@@ -40,7 +40,6 @@
 #include "dialog_gps.h"
 #include "dialog_qth.h"
 #include "dialog_recorder.h"
-#include "dialog_callsign.h"
 #include "dialog_wifi.h"
 #include "dialog_wefax.h"
 #include "dialog_navtex.h"
@@ -518,6 +517,33 @@ static void low_power_timer_cb(lv_timer_t * timer) {
     radio_poweroff();
 }
 
+/* AGC: Off -> Slow -> Fast -> Auto -> Off (AGC key, MFK "AGC" button) */
+void main_screen_agc_next() {
+    x6100_agc_t agc = cparam_i_get(cfg_cur_agc);
+    switch (agc) {
+        case x6100_agc_off:
+            agc = x6100_agc_slow;
+            break;
+
+        case x6100_agc_slow:
+            agc = x6100_agc_fast;
+            break;
+
+        case x6100_agc_fast:
+            agc = x6100_agc_auto;
+            break;
+
+        case x6100_agc_auto:
+            agc = x6100_agc_off;
+            break;
+    }
+    cparam_i_set(cfg_cur_agc, agc);
+
+    if (params.mag_info.x) {
+        msg_tiny_set_text_fmt("AGC: %s", info_params_agc());
+    }
+}
+
 static void toggle_atu_enabled() {
     bool new_atu_enabled = !param_i_get(cfg_atu_enabled);
     param_i_set(cfg_atu_enabled, new_atu_enabled);
@@ -671,8 +697,7 @@ void main_screen_action(press_action_t action) {
             dialog_construct(dialog_qth, obj);
             break;
 
-        case ACTION_APP_CALLSIGN:
-            dialog_construct(dialog_callsign, obj);
+        case ACTION_APP_CALLSIGN:   /* Settings -> General */
             break;
     }
 }
@@ -823,31 +848,7 @@ static void main_screen_keypad_cb(lv_event_t * e) {
 
         case KEYPAD_AGC:
             if (keypad->state == KEYPAD_RELEASE) {
-                x6100_agc_t agc = cparam_i_get(cfg_cur_agc);
-                switch (agc) {
-                    case x6100_agc_off:
-                        agc = x6100_agc_slow;
-                        break;
-
-                    case x6100_agc_slow:
-                        agc = x6100_agc_fast;
-                        break;
-
-                    case x6100_agc_fast:
-                        agc = x6100_agc_auto;
-                        break;
-
-                    case x6100_agc_auto:
-                        agc = x6100_agc_off;
-                        break;
-                }
-                cparam_i_set(cfg_cur_agc, agc);
-                // radio_change_agc();
-                //
-
-                if (params.mag_info.x) {
-                    msg_tiny_set_text_fmt("AGC: %s", info_params_agc());
-                }
+                main_screen_agc_next();
             } else if (keypad->state == KEYPAD_LONG) {
                 bool new_split = !param_i_get(cfg_band_split);
                 param_i_set(cfg_band_split, new_split);

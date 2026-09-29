@@ -40,10 +40,6 @@ static T update_param(ComputedParameter<T> &param, int32_t diff, T step=1) {
 }
 
 
-void controls_toggle_agc_hang(button_data_t *data) {
-    toggle_param(cfg_sm.p_agc_hang);
-}
-
 void controls_toggle_key_train(button_data_t *data) {
     toggle_param(cfg_sm.p_key_train);
 }
@@ -171,25 +167,6 @@ void controls_encoder_update(cfg_ctrl_t ctrl, int32_t diff, std::string &msg) {
             snprintf(msg.data(), msg.capacity(), "Power: %0.1f W", f);
             break;
 
-        case CTRL_MIC:
-            i = cfg_sm.p_mic.get();
-            // i range should be 0..2
-            i = (i + diff + 3) % 3;
-            cfg_sm.p_mic.set(i);
-            s = params_mic_str_get((x6100_mic_sel_t)i);
-            snprintf(msg.data(), msg.capacity(), "MIC: %s", s);
-            break;
-
-        case CTRL_HMIC:
-            i = update_param(cfg_sm.p_hmic, diff);
-            snprintf(msg.data(), msg.capacity(), "H-MIC gain: %i", i);
-            break;
-
-        case CTRL_IMIC:
-            i = update_param(cfg_sm.p_imic, diff);
-            snprintf(msg.data(), msg.capacity(), "I-MIC gain: %i", i);
-            break;
-
         case CTRL_MONI:
             i = update_param(cfg_sm.p_moni, diff);
             snprintf(msg.data(), msg.capacity(), "Moni level: %i", i);
@@ -221,20 +198,6 @@ void controls_encoder_update(cfg_ctrl_t ctrl, int32_t diff, std::string &msg) {
                 cfg_sm.p_vox_en.set(b);
             }
             snprintf(msg.data(), msg.capacity(), "VOX: %s", (b ? "On" : "Off"));
-            break;
-
-        case CTRL_VOX_GAIN:
-            i = update_param(cfg_sm.p_vox_gain, diff);
-            snprintf(msg.data(), msg.capacity(), "VOX gain: %i", i);
-            break;
-        case CTRL_VOX_AG:
-            i = update_param(cfg_sm.p_vox_ag, diff);
-            snprintf(msg.data(), msg.capacity(), "VOX anti-gain: %i", i);
-            break;
-        case CTRL_VOX_DELAY:
-            i = update_param(cfg_sm.p_vox_delay, diff, 50);
-            snprintf(msg.data(), msg.capacity(), "VOX delay: %i ms", i);
-
             break;
 
         case CTRL_KEY_SPEED:
@@ -374,25 +337,6 @@ void controls_encoder_update(cfg_ctrl_t ctrl, int32_t diff, std::string &msg) {
         case CTRL_NR_LEVEL:
             i = update_param(cfg_sm.p_nr_level, diff, 5);
             snprintf(msg.data(), msg.capacity(), "NR level: %i", i);
-            break;
-
-        case CTRL_AGC_HANG:
-            b = cfg_sm.p_agc_hang.get();
-            if (diff) {
-                b = !b;
-                cfg_sm.p_agc_hang.set(b);
-            }
-            snprintf(msg.data(), msg.capacity(), "AGC hang: %s", (b ? "On" : "Off"));
-            break;
-
-        case CTRL_AGC_KNEE:
-            i = update_param(cfg_sm.p_agc_knee, diff);
-            snprintf(msg.data(), msg.capacity(), "AGC knee: %i dB", i);
-            break;
-
-        case CTRL_AGC_SLOPE:
-            i = update_param(cfg_sm.p_agc_slope, diff);
-            snprintf(msg.data(), msg.capacity(), "AGC slope: %i dB", i);
             break;
 
         case CTRL_CW_DECODER:
