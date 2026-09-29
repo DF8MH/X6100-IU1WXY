@@ -125,7 +125,7 @@ static void bookmarks(const char *name, dialog_t *d, int32_t freq) {
 static void cluster_demo(void) {
     static const struct { const char *call, *spotter, *comment; int khz10, age; } s[] = {
         {"VP8LP", "DL1ABC", "CW 599 up 2", 140235, 3},  {"JA1XYZ", "IK2AAA", "FT8 -12 dB", 140740, 5},
-        {"EA8/G4XX", "F5ZZZ", "SSB 59", 141550, 10},    {"3B8M", "IZ1BBB", "SSB listening up 5", 141930, 1},
+        {"EA8/G4XX", "F5ZZZ", "SSB 59", 141550, 10},    {"3B8M", "IZ1BBB", "SSB listening up 5 to 10 tnx for the new one", 141930, 1},
         {"ZL2ABC", "IU1WXY", "SSB LP 57", 141965, 0},    {"PY2XB", "EA3CCC", "SSB 55", 142050, 12},
         {"K1ABC", "G3DDD", "POTA US-1234", 142430, 14},  {"W1AW", "K2XX", "SSB", 142800, 20},
         {"VK9DX", "JA1YYY", "CW", 70120, 4},             {"4X6ZZ", "OE1AAA", "SSB", 71500, 8},
@@ -166,6 +166,10 @@ static void cluster_demo(void) {
         int n = cluster_client_snapshot(snap, CLUSTER_MAX_SPOTS, &gen);
         printf("cluster: %d spots stored (expected 12)\n", n);
     }
+    FILE *conf = fopen("cluster.conf", "w"); /* CLUSTER_CONF for the harness */
+    fputs("host=dxc.ve7cc.net\nport=23\nserver=VE7CC|dxc.ve7cc.net|23\n"
+          "server=IK5PWJ|dxc.ik5pwj.it|8000\nserver=DX Summit|dxc.dxsummit.fi|8000\n", conf);
+    fclose(conf);
     harness_fg_freq = 14195000;
     dialog_construct(dialog_cluster, lv_scr_act());
     pump(600);
@@ -184,8 +188,12 @@ static void cluster_demo(void) {
     pg->items[1]->press(pg->items[1]);
     pump(100);
     shot("cluster_4.ppm");
+    lv_event_send(dialog_cluster->obj, LV_EVENT_KEY, &key); /* IK5PWJ */
+    pump(100);
+    shot("cluster_4b.ppm");
+    pg->items[1]->press(pg->items[1]); /* Server again closes the list */
+    pump(100);
     /* Tuning: the VFO row stays in the middle, also at the band edge */
-    textarea_window_close();
     harness_fg_freq = 14250000;
     pump(400);
     shot("cluster_5.ppm");

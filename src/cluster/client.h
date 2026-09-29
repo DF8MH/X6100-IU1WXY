@@ -17,7 +17,9 @@
 extern "C" {
 #endif
 
+#ifndef CLUSTER_CONF /* overridden by the tests and the UI harness */
 #define CLUSTER_CONF         "/mnt/cluster.conf"
+#endif
 #define CLUSTER_DEFAULT_HOST "dxc.ve7cc.net"
 #define CLUSTER_DEFAULT_PORT 23
 
@@ -32,7 +34,19 @@ typedef enum {
  * or the defaults. */
 void cluster_config_load(char *host, size_t host_size, int *port);
 
-/* Writes CLUSTER_CONF (atomically: a temporary file, then rename). */
+/* Saved servers: "server=name|host|port" lines (the web page writes them).
+ * Without any, the default one; the one in use is added when not listed. */
+#define CLUSTER_MAX_SERVERS 16
+typedef struct {
+    char name[32];
+    char host[128];
+    int  port;
+} cluster_server_t;
+
+int cluster_servers_load(cluster_server_t *out, int max);
+
+/* Sets the server in use in CLUSTER_CONF, keeping the saved servers
+ * (atomically: a temporary file, then rename). */
 bool cluster_config_save(const char *host, int port);
 
 /* Modification time of CLUSTER_CONF, 0 when missing: the app reloads the
