@@ -28,6 +28,7 @@ void audio_init();
 void audio_mixer_setup(x6100_base_ver_t base_ver);
 int audio_play(int16_t *buf, size_t samples);
 void audio_play_wait();
+void audio_play_flush();
 void audio_set_play_mode(audio_play_mode_t mode);
 
 void audio_gain_db(int16_t *buf, size_t samples, float gain, int16_t *out);

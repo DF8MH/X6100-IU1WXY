@@ -95,7 +95,8 @@ void audio_init() {
     play_stm = pa_stream_new(ctx, "X6100 GUI Play", &spec, NULL);
 
     pa_threaded_mainloop_lock(mloop);
-    res = pa_stream_connect_playback(play_stm, play_device, &attr, PA_STREAM_ADJUST_LATENCY, NULL, NULL);
+    /* DONT_MOVE: a Bluetooth device that connects must not take the radio audio. */
+    res = pa_stream_connect_playback(play_stm, play_device, &attr, PA_STREAM_ADJUST_LATENCY | PA_STREAM_DONT_MOVE, NULL, NULL);
     if (res < 0) {
         LV_LOG_ERROR("pa_stream_connect_playback() failed: %s", pa_strerror(pa_context_errno(ctx)));
     }
@@ -110,7 +111,7 @@ void audio_init() {
 
     pa_threaded_mainloop_lock(mloop);
     pa_stream_set_read_callback(capture_stm, read_callback, NULL);
-    res = pa_stream_connect_record(capture_stm, capture_device, &attr, PA_STREAM_ADJUST_LATENCY);
+    res = pa_stream_connect_record(capture_stm, capture_device, &attr, PA_STREAM_ADJUST_LATENCY | PA_STREAM_DONT_MOVE);
     if (res < 0) {
         LV_LOG_ERROR("pa_stream_connect_record() failed: %s", pa_strerror(pa_context_errno(ctx)));
     }
@@ -167,6 +168,18 @@ int audio_play(int16_t *samples_buf, size_t samples) {
     }
 
     return res;
+}
+
+/* Drops the queued audio, so a stop is immediate. */
+void audio_play_flush() {
+    pa_operation *op;
+
+    pa_threaded_mainloop_lock(mloop);
+    op = pa_stream_flush(play_stm, NULL, NULL);
+    if (op) {
+        pa_operation_unref(op);
+    }
+    pa_threaded_mainloop_unlock(mloop);
 }
 
 void audio_play_wait() {
@@ -334,6 +347,6 @@ static void record_monitor_setup() {
 
     pa_threaded_mainloop_lock(mloop);
     pa_stream_set_read_callback(monitor_stm, monitor_cb, NULL);
-    pa_stream_connect_record(monitor_stm, capture_device, NULL, PA_STREAM_PEAK_DETECT);
+    pa_stream_connect_record(monitor_stm, capture_device, NULL, PA_STREAM_PEAK_DETECT | PA_STREAM_DONT_MOVE);
     pa_threaded_mainloop_unlock(mloop);
 }

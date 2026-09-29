@@ -11,6 +11,7 @@
 #include "radio.h"
 #include "mfk.h"
 #include "events.h"
+#include "freq_list.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -34,6 +35,7 @@ static void audio_cb(unsigned int n, float *samples);
 static void close_cb(button_data_t *data);
 static void clear_cb(button_data_t *data);
 static void test_cb(button_data_t *data);
+static void freq_cb(button_data_t *data);
 static void *test_thread_cb(void *arg);
 static bool start_test(void);
 static void stop_test(void);
@@ -78,6 +80,12 @@ static button_data_t btn_clear = {
     .press = clear_cb
 };
 
+static button_data_t btn_freq = {
+    .type = BTN_TEXT,
+    .label = "Freq.",
+    .press = freq_cb
+};
+
 static button_data_t btn_test = {
     .type = BTN_TEXT,
     .label = "Test",
@@ -85,7 +93,7 @@ static button_data_t btn_test = {
 };
 
 static buttons_page_t btn_page_1 = {
-    .items = { &btn_page, NULL, NULL, &btn_clear, &btn_close }
+    .items = { &btn_page, &btn_freq, NULL, &btn_clear, &btn_close }
 };
 
 static dialog_t dialog = {
@@ -98,6 +106,22 @@ static dialog_t dialog = {
 };
 
 dialog_t *dialog_navtex = &dialog;
+
+/* Official NAVTEX frequencies, plus the HF MSI ones (same SITOR-B mode).
+ * The decoder is centred on 1000 Hz. */
+static const freq_list_item_t navtex_freqs[] = {
+    { .group = "NAVTEX" },
+    { .freq_hz = 518000,   .name = "NAVTEX",    .note = "International, English" },
+    { .freq_hz = 490000,   .name = "NAVTEX",    .note = "National language" },
+    { .freq_hz = 4209500,  .name = "NAVTEX HF", .note = "Tropical areas" },
+    { .group = "HF MSI (NBDP)" },
+    { .freq_hz = 8416500,  .name = "HF MSI" },
+    { .freq_hz = 12579000, .name = "HF MSI" },
+    { .freq_hz = 16806500, .name = "HF MSI" },
+    { .freq_hz = 19680500, .name = "HF MSI" },
+    { .freq_hz = 22376000, .name = "HF MSI" },
+    { .freq_hz = 26100500, .name = "HF MSI" },
+};
 
 bool dialog_navtex_is_active(void)
 {
@@ -447,6 +471,8 @@ static void construct_cb(lv_obj_t *parent)
 
 static void destruct_cb(void)
 {
+    freq_list_close();
+
     /* Stop the WAV worker before destroying decoder/UI objects. */
     if (test_mode || test_thread_valid)
         stop_test();
@@ -570,4 +596,15 @@ static void test_cb(button_data_t *data)
 
     if (!start_test())
         fprintf(stderr, "NAVTEX TEST: unable to start\n");
+}
+
+static void freq_cb(button_data_t *data)
+{
+    (void)data;
+
+    if (freq_list_is_open())
+        freq_list_close();
+    else if (scroll)
+        freq_list_open(lv_obj_get_parent(scroll), "NAVTEX - frequencies", navtex_freqs,
+                       sizeof(navtex_freqs) / sizeof(navtex_freqs[0]), 1000, NULL);
 }

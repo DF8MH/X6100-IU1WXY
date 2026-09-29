@@ -21,9 +21,11 @@
 #include "params/params.h"
 #include "radio.h"
 #include "styles.h"
+#include "textarea_window.h"
 #include "voice.h"
 #include "wifi.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,7 +45,8 @@
 #define COLOR_NEAR_BG 0x3a2f12
 #define COLOR_SEL_BG  0x5a4818
 #define COLOR_NEAR    0xffd24a
-#define COLOR_VFO     0xff5050
+#define COLOR_VFO     0x7cc4ff
+#define COLOR_VFO_BG  0x0a1f3a
 #define COLOR_DIM     0x90a0b0
 #define COLOR_NEW     0x60ff60
 
@@ -54,8 +57,15 @@ static void close_cb(button_data_t *data);
 static void clear_cb(button_data_t *data);
 static void band_all_cb(button_data_t *data);
 static void tune_cb(button_data_t *data);
+static void server_cb(button_data_t *data);
 
-static button_data_t btn_page = {.type = BTN_TEXT, .label = "(CLUSTER\n1:1)", .press = NULL};
+static buttons_page_t btn_page_1, btn_page_2;
+
+static button_data_t btn_page = {
+    .type = BTN_TEXT, .label = "(CLUSTER\n1:2)", .press = button_next_page_cb, .next = &btn_page_2};
+static button_data_t btn_page2 = {
+    .type = BTN_TEXT, .label = "(CLUSTER\n2:2)", .press = button_next_page_cb, .next = &btn_page_1};
+static button_data_t btn_server = {.type = BTN_TEXT, .label = "Server", .press = server_cb};
 static button_data_t btn_band = {.type = BTN_TEXT, .label = "Band /\nAll", .press = band_all_cb};
 static button_data_t btn_tune = {.type = BTN_TEXT, .label = "Tune", .press = tune_cb};
 static button_data_t btn_clear = {.type = BTN_TEXT, .label = "Clear", .press = clear_cb};
@@ -63,6 +73,9 @@ static button_data_t btn_close = {.type = BTN_TEXT, .label = "Close", .press = c
 
 static buttons_page_t btn_page_1 = {
     .items = {&btn_page, &btn_band, &btn_tune, &btn_clear, &btn_close},
+};
+static buttons_page_t btn_page_2 = {
+    .items = {&btn_page2, &btn_server, NULL, NULL, &btn_close},
 };
 
 static dialog_t dialog = {
@@ -97,6 +110,16 @@ static int      last_band = -2;
 static uint16_t now_min;
 static char     server[128];
 static int      server_port;
+static time_t   conf_mtime;
+static bool     editing;
+
+/* Reads the server and (re)starts the client: a running one reconnects
+ * only when the server or the callsign changed. */
+static void load_server(void) {
+    conf_mtime = cluster_config_mtime();
+    cluster_config_load(server, sizeof(server), &server_port);
+    if (params.callsign.x[0]) cluster_client_start(server, server_port, params.callsign.x);
+}
 
 static uint16_t utc_now_min(void) {
     time_t    now = time(NULL);
@@ -133,19 +156,27 @@ static int row_of_spot(int idx) {
     return 0;
 }
 
-/* Keeps the selected row in the middle of the list. */
+/* Top of row r, from the first row. */
+static lv_coord_t row_y(int r) {
+    lv_table_t *t = (lv_table_t *)table;
+    lv_coord_t  y = 0;
+    for (int i = 0; i < r && i < row_count; i++) y += t->row_h[i];
+    return y;
+}
+
+/* Puts row r in the middle of the list. The table is padded by half its
+ * height at both ends, so the first and last rows can be centred too. */
 static void scroll_to_row(int r) {
     lv_table_t *t = (lv_table_t *)table;
-    lv_coord_t  y = 0, total = 0;
-    for (int i = 0; i < row_count; i++) {
-        if (i < r) y += t->row_h[i];
-        total += t->row_h[i];
-    }
-    lv_coord_t h   = lv_obj_get_content_height(table);
-    lv_coord_t top = y + (r < row_count ? t->row_h[r] : 0) / 2 - h / 2;
-    if (top > total - h) top = total - h;
-    if (top < 0) top = 0;
-    lv_obj_scroll_to_y(table, top, LV_ANIM_OFF);
+    lv_obj_scroll_to_y(table, row_y(r) + (r < row_count ? t->row_h[r] : 0) / 2, LV_ANIM_OFF);
+}
+
+/* Scrolls only when row r is not fully visible. */
+static void scroll_to_show_row(int r) {
+    lv_table_t *t   = (lv_table_t *)table;
+    lv_coord_t  pad = lv_obj_get_style_pad_top(table, LV_PART_MAIN);
+    lv_coord_t  top = pad + row_y(r) - lv_obj_get_scroll_y(table);
+    if (top < 0 || top + t->row_h[r] > lv_obj_get_height(table)) scroll_to_row(r);
 }
 
 static void rebuild(void) {
@@ -182,7 +213,8 @@ static void rebuild(void) {
 
     lv_table_set_row_cnt(table, (uint16_t)row_count);
     for (int r = 0; r < row_count; r++) lv_table_set_cell_value(table, (uint16_t)r, 0, " ");
-    scroll_to_row(sel >= 0 ? row_of_spot(sel) : row_of_spot(ROW_VFO));
+    /* Following the VFO, its row stays in the middle and the spots move. */
+    scroll_to_row(follow_vfo || sel < 0 ? row_of_spot(ROW_VFO) : row_of_spot(sel));
     lv_obj_invalidate(table);
 }
 
@@ -253,6 +285,9 @@ static void timer_cb(lv_timer_t *t) {
         changed = true; /* "new" marks age */
     }
 
+    /* The server can be changed from the web configurator too. */
+    if (cluster_config_mtime() != conf_mtime) load_server();
+
     if (changed) rebuild();
     update_header();
     update_status();
@@ -267,7 +302,10 @@ static void table_draw_cb(lv_event_t *e) {
 
     dsc->rect_dsc->bg_opa   = LV_OPA_COVER;
     dsc->rect_dsc->bg_color = lv_color_black();
-    if (rows[r] == ROW_VFO) return;
+    if (rows[r] == ROW_VFO) {
+        dsc->rect_dsc->bg_color = lv_color_hex(COLOR_VFO_BG);
+        return;
+    }
 
     const cluster_spot_t *s = &view[rows[r]];
     if (rows[r] == sel) {
@@ -361,7 +399,7 @@ static void move_selection(int step) {
     else sel += step;
     if (sel < 0) sel = 0;
     if (sel >= view_count) sel = view_count - 1;
-    scroll_to_row(row_of_spot(sel));
+    scroll_to_show_row(row_of_spot(sel));
     lv_obj_invalidate(table);
 }
 
@@ -427,7 +465,6 @@ static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, lv_color_t 
 static void construct_cb(lv_obj_t *parent) {
     dialog.obj = dialog_init(parent);
 
-    cluster_config_load(server, sizeof(server), &server_port);
     now_min    = utc_now_min();
     follow_vfo = true;
     sel        = -1;
@@ -460,6 +497,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_border_width(table, 1, LV_PART_MAIN);
     lv_obj_set_style_border_color(table, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_border_opa(table, 96, LV_PART_MAIN);
+    lv_obj_set_style_pad_ver(table, TABLE_H / 2, LV_PART_MAIN);
     lv_obj_set_style_border_width(table, 0, LV_PART_ITEMS);
     lv_obj_set_style_text_font(table, &sony_22, LV_PART_ITEMS);
     lv_obj_set_style_text_color(table, lv_color_white(), LV_PART_ITEMS);
@@ -487,13 +525,17 @@ static void construct_cb(lv_obj_t *parent) {
     lv_group_focus_obj(dialog.obj);
     lv_group_set_editing(keyboard_group, true);
 
-    if (params.callsign.x[0]) cluster_client_start(server, server_port, params.callsign.x);
+    load_server();
 
     timer_cb(NULL);
     timer = lv_timer_create(timer_cb, TIMER_MS, NULL);
 }
 
 static void destruct_cb(void) {
+    if (editing) {
+        textarea_window_close();
+        editing = false;
+    }
     if (timer) {
         lv_timer_del(timer);
         timer = NULL;
@@ -526,4 +568,60 @@ static void band_all_cb(button_data_t *data) {
 static void tune_cb(button_data_t *data) {
     (void)data;
     tune_to(sel);
+}
+
+static void server_edit_close(void) {
+    textarea_window_close();
+    editing = false;
+    lv_group_add_obj(keyboard_group, dialog.obj);
+    lv_group_focus_obj(dialog.obj);
+    lv_group_set_editing(keyboard_group, true);
+}
+
+static bool server_edit_ok(void) {
+    char text[sizeof(server) + 8], host[sizeof(server)];
+    int  port;
+    snprintf(text, sizeof(text), "%s", textarea_window_get());
+    for (char *c = text; *c; c++) *c = (char)tolower((unsigned char)*c);
+
+    if (text[0] == '\0') {
+        snprintf(host, sizeof(host), "%s", CLUSTER_DEFAULT_HOST);
+        port = CLUSTER_DEFAULT_PORT;
+    } else if (!cluster_parse_server(text, host, sizeof(host), &port)) {
+        msg_schedule_text_fmt("Invalid server: use host or host:port");
+        return false;
+    }
+    if (!cluster_config_save(host, port)) {
+        msg_schedule_text_fmt("Cannot save %s", CLUSTER_CONF);
+        return false;
+    }
+    server_edit_close();
+    load_server();
+    timer_cb(NULL);
+    msg_schedule_text_fmt("Cluster: %s:%d", server, server_port);
+    return true;
+}
+
+static bool server_edit_cancel(void) {
+    server_edit_close();
+    return true;
+}
+
+static void server_cb(button_data_t *data) {
+    (void)data;
+    if (editing) return;
+    editing = true;
+    /* The text area gets the keys only when the dialog is out of the group. */
+    lv_group_remove_obj(dialog.obj);
+    textarea_window_open_w_label(server_edit_ok, server_edit_cancel, "Server: ");
+    lv_obj_t *text = textarea_window_text();
+    lv_textarea_set_accepted_chars(text, "0123456789.-:"
+                                         "abcdefghijklmnopqrstuvwxyz"
+                                         "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    lv_textarea_set_max_length(text, sizeof(server) + 6);
+    lv_textarea_set_placeholder_text(text, CLUSTER_DEFAULT_HOST ":23");
+
+    char cur[sizeof(server) + 8];
+    snprintf(cur, sizeof(cur), "%s:%d", server, server_port);
+    textarea_window_set(cur);
 }

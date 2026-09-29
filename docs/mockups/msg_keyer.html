@@ -1,0 +1,155 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:800px;background:#11161c;font-family:"DejaVu Sans",sans-serif;color:#e8e8e8;padding-bottom:10px}
+.cap{padding:14px 16px 8px;font-size:15px;color:#9fd;line-height:21px}.cap b{color:#fff}
+.scr{width:800px;height:480px;background:#29313b;position:relative;overflow:hidden}
+.panel{position:absolute;top:66px;left:4px;right:4px;height:346px;border:1px solid #9aa;border-radius:10px;background:#1b232c;padding:10px 14px}
+.head{display:flex;justify-content:space-between;font-size:15px;color:#9fd;padding:0 2px 6px}
+.head b{color:#fff}
+.list{position:absolute;left:14px;top:40px;width:470px;height:260px;background:#000;border:1px solid #445}
+.list div{display:flex;justify-content:space-between;padding:6px 12px;font-size:18px}
+.list div span{color:#9ab;font-size:15px}
+.list .sel{background:#5a4818;border-top:2px solid #fff;border-bottom:2px solid #fff;color:#ffd24a}
+.list .sel span{color:#ffd24a}
+.list .empty{color:#667;justify-content:center;padding-top:90px;font-size:16px;text-align:center;line-height:24px}
+.side{position:absolute;left:498px;top:40px;right:14px;height:260px;border:1px solid #445;border-radius:8px;padding:12px;background:#121a22}
+.state{font-size:26px;text-align:center;padding:10px 0;border-radius:8px;margin-bottom:12px;letter-spacing:1px}
+.ready{background:#1f2a35;color:#9fd}.rec{background:#4a1515;color:#ff7070}.play{background:#153a1c;color:#8f8}.air{background:#b01e1e;color:#fff}
+.meter{height:14px;background:#333;border-radius:3px;position:relative;margin:6px 0 2px}
+.meter i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:linear-gradient(90deg,#3c3,#cc3 75%,#c33)}
+.small{font-size:13px;color:#9ab;line-height:19px}
+.big{font-size:22px;text-align:center;margin:4px 0}
+.hint{position:absolute;left:18px;bottom:8px;font-size:13px;color:#8a9}
+.btns{position:absolute;bottom:0;left:0;right:0;height:64px;display:flex;gap:3px;padding:2px}
+.btn{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:19px;line-height:22px;background:linear-gradient(#4b423c,#2a2420);border:1px solid #8a8a8a;border-radius:8px;color:#fff}
+.btn.hot{background:linear-gradient(#8a1f1f,#4a1010);border-color:#f66}
+.btn.on{background:linear-gradient(#8a6a1a,#4b3c14);border-color:#ffd24a;color:#ffd24a}
+.btn.e{opacity:.4}
+.top{position:absolute;top:0;left:0;right:0;height:62px;display:flex;gap:4px;padding:2px}
+.box{background:linear-gradient(#3a3f47,#23272d);border:1px solid #666;border-radius:8px}
+.cw{font-family:"DejaVu Sans Mono";font-size:15px;color:#cde;white-space:normal;line-height:22px}
+table.issues{border-collapse:collapse;margin:4px 16px;font-size:13px;width:768px}table.issues td{border:1px solid #445;padding:4px 8px;line-height:18px;vertical-align:top}
+</style></head><body>
+
+<div class="cap"><b>1 · Voice keyer, pronto</b> — una sola pagina per l'uso normale: registra, ascolta, trasmetti. La lista mostra nome e durata,
+ordinata; il MFK sceglie il messaggio, <b>premere il MFK = ascolto locale</b> (mai trasmissione per sbaglio). Il riquadro a destra dice sempre cosa sta succedendo.</div>
+<div class="scr">
+ <div class="top"><div class="box" style="width:206px"></div><div class="box" style="flex:1"></div><div class="box" style="width:206px"></div></div>
+ <div class="panel">
+  <div class="head"><span>VOICE KEYER · <b>USB</b></span><span>4 messages · /mnt/msg</span></div>
+  <div class="list">
+   <div>CQ contest <span>4.2 s</span></div>
+   <div class="sel">CQ DX IU1WXY <span>6.8 s</span></div>
+   <div>QRZ? <span>1.1 s</span></div>
+   <div>Thanks 73 <span>3.0 s</span></div>
+  </div>
+  <div class="side">
+   <div class="state ready">READY</div>
+   <div class="small">Selected</div><div class="big">CQ DX IU1WXY</div>
+   <div class="small" style="margin-top:14px">Beacon: <b style="color:#fff">off</b><br>TX level: <b style="color:#fff">0 dB</b> (Settings → Audio)</div>
+  </div>
+  <div class="hint">MFK: choose · press MFK: listen · PTT: stop</div>
+ </div>
+ <div class="btns"><div class="btn">(MSG 1:2)</div><div class="btn">● Rec</div><div class="btn">▶ Listen</div><div class="btn hot">TX</div><div class="btn">Close</div></div>
+</div>
+
+<div class="cap"><b>2 · Registrazione</b> — premuto Rec: parte dal microfono (non dall'RX), il livello del mic è nel riquadro, non sull'S-meter.
+Rec diventa <b>Stop</b>. Allo stop il messaggio si chiama "Message 5" e resta selezionato: lo rinomini dopo, se vuoi (senza estensione).</div>
+<div class="scr">
+ <div class="top"><div class="box" style="width:206px"></div><div class="box" style="flex:1"></div><div class="box" style="width:206px"></div></div>
+ <div class="panel">
+  <div class="head"><span>VOICE KEYER · <b>USB</b></span><span>recording…</span></div>
+  <div class="list">
+   <div>CQ contest <span>4.2 s</span></div>
+   <div>CQ DX IU1WXY <span>6.8 s</span></div>
+   <div>QRZ? <span>1.1 s</span></div>
+   <div>Thanks 73 <span>3.0 s</span></div>
+   <div class="sel">Message 5 <span>● 00:03</span></div>
+  </div>
+  <div class="side">
+   <div class="state rec">● REC 00:03</div>
+   <div class="small">Mic level</div>
+   <div class="meter"><i style="width:62%"></i></div>
+   <div class="small">keep peaks out of the red · max 60 s</div>
+  </div>
+  <div class="hint">Stop: save · Close: discard</div>
+ </div>
+ <div class="btns"><div class="btn e">(MSG 1:2)</div><div class="btn on">■ Stop</div><div class="btn e">▶ Listen</div><div class="btn e">TX</div><div class="btn">Close</div></div>
+</div>
+
+<div class="cap"><b>3 · In trasmissione</b> — TX: il riquadro diventa rosso ON AIR con barra di avanzamento; TX diventa <b>Stop</b>, e anche PTT o un altro
+tasto fermano subito (senza trasmettere il buffer residuo). Durante TX niente annunci vocali.</div>
+<div class="scr">
+ <div class="top"><div class="box" style="width:206px"></div><div class="box" style="flex:1"></div><div class="box" style="width:206px"></div></div>
+ <div class="panel">
+  <div class="head"><span>VOICE KEYER · <b>USB</b></span><span>on air</span></div>
+  <div class="list">
+   <div>CQ contest <span>4.2 s</span></div>
+   <div class="sel">CQ DX IU1WXY <span>6.8 s</span></div>
+   <div>QRZ? <span>1.1 s</span></div>
+   <div>Thanks 73 <span>3.0 s</span></div>
+  </div>
+  <div class="side">
+   <div class="state air">ON AIR</div>
+   <div class="big">CQ DX IU1WXY</div>
+   <div class="meter"><i style="width:45%;background:#f66"></i></div>
+   <div class="small">3.1 / 6.8 s · beacon off</div>
+  </div>
+  <div class="hint">TX, PTT or any key: stop</div>
+ </div>
+ <div class="btns"><div class="btn e">(MSG 1:2)</div><div class="btn e">● Rec</div><div class="btn e">▶ Listen</div><div class="btn hot on">■ Stop</div><div class="btn">Close</div></div>
+</div>
+
+<div class="cap"><b>4 · Pagina 2</b> — gestione: Beacon mostra il periodo sul tasto (Off → 10 → 30 → 60 → 120 s; con beacon attivo TX ripete),
+Rename, Delete con conferma (seconda pressione entro 3 s).</div>
+<div class="scr">
+ <div class="top"><div class="box" style="width:206px"></div><div class="box" style="flex:1"></div><div class="box" style="width:206px"></div></div>
+ <div class="panel">
+  <div class="head"><span>VOICE KEYER · <b>USB</b></span><span>4 messages</span></div>
+  <div class="list">
+   <div>CQ contest <span>4.2 s</span></div>
+   <div class="sel">CQ DX IU1WXY <span>6.8 s</span></div>
+   <div>QRZ? <span>1.1 s</span></div>
+   <div>Thanks 73 <span>3.0 s</span></div>
+  </div>
+  <div class="side">
+   <div class="state ready">READY</div>
+   <div class="small">Beacon: <b style="color:#fff">every 30 s</b><br>press TX to start, TX/PTT to stop</div>
+  </div>
+  <div class="hint">Delete: press again to confirm</div>
+ </div>
+ <div class="btns"><div class="btn">(MSG 2:2)</div><div class="btn on">Beacon<br>30 s</div><div class="btn">Rename</div><div class="btn">Delete</div><div class="btn">Close</div></div>
+</div>
+
+<div class="cap"><b>5 · CW keyer</b> (MSG in CW) — stessa struttura: lista dei testi, anteprima a destra con velocità, TX / New / Edit sulla pagina 1;
+Beacon, Delete (con conferma) sulla 2. Se non c'è nessun messaggio la lista lo dice e TX è disattivato (oggi va in crash).</div>
+<div class="scr">
+ <div class="top"><div class="box" style="width:206px"></div><div class="box" style="flex:1"></div><div class="box" style="width:206px"></div></div>
+ <div class="panel">
+  <div class="head"><span>CW KEYER · <b>CW</b> · 22 WPM</span><span>3 messages</span></div>
+  <div class="list">
+   <div class="sel">CQ <span>CQ CQ DE IU1WXY…</span></div>
+   <div>Report <span>TU 5NN JN35</span></div>
+   <div>73 <span>TU 73 GL</span></div>
+  </div>
+  <div class="side">
+   <div class="state ready">READY</div>
+   <div class="small">Text</div>
+   <div class="cw">CQ CQ DE IU1WXY IU1WXY K</div>
+   <div class="small" style="margin-top:10px">22 WPM · about 9 s</div>
+  </div>
+  <div class="hint">MFK: choose · press MFK: edit</div>
+ </div>
+ <div class="btns"><div class="btn">(MSG 1:2)</div><div class="btn hot">TX</div><div class="btn">New</div><div class="btn">Edit</div><div class="btn">Close</div></div>
+</div>
+
+<div class="cap"><b>Bug da correggere insieme</b> (dall'analisi del codice, da confermare sulla radio)</div>
+<table class="issues">
+<tr><td>Annuncio vocale all'apertura: se premi Rec mentre parla, a metà la registrazione passa all'audio RX e l'ascolto locale smette di andare all'altoparlante.</td><td>voice.cpp:133 · main_screen.c:1015</td></tr>
+<tr><td>Flussi audio spostabili dal Bluetooth: TX senza modulazione se si collegano cuffie/tablet.</td><td>audio.c:98, :113 (DONT_MOVE)</td></tr>
+<tr><td>Stop del beacon con pthread_cancel: può lasciare la radio in TX o bloccarla.</td><td>dialog_msg_voice.c:498</td></tr>
+<tr><td>Stop in ritardo: vengono trasmessi ~800 ms di buffer dopo Stop.</td><td>audio.c:172 (drain → flush)</td></tr>
+<tr><td>Lista vuota: Send/Beacon vanno in TX senza audio (voice) o crash (CW).</td><td>dialog_msg_voice.c:200 · dialog_msg_cw.c:278</td></tr>
+<tr><td>Chiudere durante la registrazione lascia l'MP3 troncato; buffer overflow sui nomi file; Rename che perde l'input.</td><td>dialog_msg_voice.c:439, :262, :365</td></tr>
+</table>
+</body></html>

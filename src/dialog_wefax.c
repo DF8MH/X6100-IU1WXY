@@ -4,6 +4,7 @@
 
 #include "main_screen.h"
 #include "dialog_wefax.h"
+#include "freq_list.h"
 #include "wefax/decoder.h"
 #include "mfk.h"
 #include "keyboard.h"
@@ -97,6 +98,9 @@ static void fax_browser_delete_selected(void);
 static void close_cb(button_data_t *data);
 static void cont_cb(button_data_t *data);
 static void auto_cb(button_data_t *data);
+static void rx_mode_cb(button_data_t *data);
+static const char *rx_mode_label_getter(void);
+static void freq_cb(button_data_t *data);
 static void zoom_cb(button_data_t *data);
 static void clear_cb(button_data_t *data);
 
@@ -313,17 +317,19 @@ static button_data_t btn_close = {
     .press = close_cb
 };
 
-static button_data_t btn_cont = {
-    .type = BTN_TEXT,
-    .label = "Cont",
-    .press = cont_cb
+/* Auto and Cont share one button: a press switches between them. */
+static button_data_t btn_rx_mode = {
+    .type = BTN_TEXT_FN,
+    .label_fn = rx_mode_label_getter,
+    .press = rx_mode_cb
 };
 
-static button_data_t btn_auto = {
+static button_data_t btn_freq = {
     .type = BTN_TEXT,
-    .label = "Auto",
-    .press = auto_cb
+    .label = "Freq.",
+    .press = freq_cb
 };
+
 
 static button_data_t btn_clear = {
     .type = BTN_TEXT,
@@ -410,8 +416,8 @@ static button_data_t btn_save_fax = {
 static buttons_page_t btn_page_1 = {
     .items = {
         &btn_fax_page_1,
-        &btn_cont,
-        &btn_auto,
+        &btn_freq,
+        &btn_rx_mode,
         &btn_clear,
         &btn_close
     }
@@ -913,8 +919,28 @@ static bool open_test_wav(void)
 /*
  * Dialog construction.
  */
+static lv_obj_t *app_parent;
+
+/* Weather fax stations with the decoder's format (120 LPM, IOC 576).
+ * The decoder is centred on 1500 Hz. */
+static const freq_list_item_t wefax_freqs[] = {
+    { .group = "DWD (DE)" },
+    { .freq_hz = 3855000,  .name = "DDH3", .note = "night" },
+    { .freq_hz = 7880000,  .name = "DDK3", .note = "day and night" },
+    { .freq_hz = 13882500, .name = "DDK6", .note = "day" },
+    { .group = "Northwood (UK)" },
+    { .freq_hz = 2618500,  .name = "GYA" },
+    { .freq_hz = 4610000,  .name = "GYA" },
+    { .freq_hz = 8040000,  .name = "GYA" },
+    { .freq_hz = 11086500, .name = "GYA" },
+    { .group = "Athens (GR)" },
+    { .freq_hz = 4481000,  .name = "SVJ4" },
+    { .freq_hz = 8105000,  .name = "SVJ4" },
+};
+
 static void construct_cb(lv_obj_t *parent)
 {
+    app_parent = parent;
     zoom_mode = WEFAX_ZOOM_SMALL;
     btn_zoom.label = "View\nSmall";
 
@@ -1103,6 +1129,8 @@ static void construct_cb(lv_obj_t *parent)
  */
 static void destruct_cb(void)
 {
+    freq_list_close();
+
     stop_wav_test();
 
 
@@ -3919,3 +3947,41 @@ static void update_preview_cb(
     rerender_preview();
 }
 
+
+
+static const char *rx_mode_label_getter(void)
+{
+    if (decoder && wefax_decoder_get_mode(decoder) == WEFAX_MODE_CONT) {
+        return "RX\nCont";
+    }
+
+    return "RX\nAuto";
+}
+
+
+/*
+ * Auto waits for APT START; Cont draws at once (tuned in mid-fax).
+ */
+static void rx_mode_cb(button_data_t *data)
+{
+    if (decoder && wefax_decoder_get_mode(decoder) == WEFAX_MODE_AUTO) {
+        cont_cb(data);
+    } else {
+        auto_cb(data);
+    }
+
+    buttons_refresh(&btn_rx_mode);
+}
+
+
+static void freq_cb(button_data_t *data)
+{
+    (void)data;
+
+    if (freq_list_is_open()) {
+        freq_list_close();
+    } else {
+        freq_list_open(app_parent, "WEFAX - stations", wefax_freqs,
+                       sizeof(wefax_freqs) / sizeof(wefax_freqs[0]), WEFAX_CENTER_HZ, NULL);
+    }
+}

@@ -47,6 +47,7 @@
 #include "dialog_js8.h"
 #include "dialog_sstv.h"
 #include "dialog_cluster.h"
+#include "dialog_modes.h"
 #include "backlight.h"
 #include "buttons.h"
 #include "recorder.h"
@@ -537,6 +538,11 @@ static void apps_disable() {
 }
 
 void main_screen_start_app(press_action_t app_action) {
+    /* Modes again closes its menu. */
+    if (app_action == ACTION_APP_MODES && dialog_type_is_run(dialog_modes)) {
+        dialog_destruct();
+        return;
+    }
     apps_disable();
 
     switch (app_action) {
@@ -550,6 +556,11 @@ void main_screen_start_app(press_action_t app_action) {
         case ACTION_APP_SETTINGS:
             dialog_construct(dialog_settings, obj);
             voice_say_text_fmt("Settings window");
+            break;
+
+        case ACTION_APP_MODES:
+            dialog_construct(dialog_modes, obj);
+            voice_say_text_fmt("Modes menu");
             break;
 
         case ACTION_APP_SWRSCAN:
@@ -673,6 +684,7 @@ void main_screen_action(press_action_t action) {
         case ACTION_APP_JS8:
         case ACTION_APP_SSTV:
         case ACTION_APP_CLUSTER:
+        case ACTION_APP_MODES:
             main_screen_start_app(action);
             break;
 

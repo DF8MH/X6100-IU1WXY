@@ -56,6 +56,7 @@ typedef enum {
     ACTION_APP_JS8,     /* appended: these values are stored in settings */
     ACTION_APP_SSTV,    /* appended after JS8 */
     ACTION_APP_CLUSTER, /* appended after SSTV */
+    ACTION_APP_MODES,   /* appended after CLUSTER */
 } press_action_t;
 
 typedef enum {

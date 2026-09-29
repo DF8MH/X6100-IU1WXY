@@ -13,7 +13,9 @@
 #include "dialog_ft8.h"
 #include "dialog_settings.h"
 #include "dialog_cluster.h"
+#include "dialog_modes.h"
 #include "cluster/client.h"
+#include "textarea_window.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -78,6 +80,28 @@ static void app(const char *name, dialog_t *d, int pages) {
 
 extern int32_t harness_fg_freq;
 
+/* The frequency bookmarks of an app: the Freq. button is the 2nd on page 1. */
+static void bookmarks(const char *name, dialog_t *d, int32_t freq) {
+    char p[64];
+    harness_fg_freq = freq;
+    dialog_construct(d, lv_scr_act());
+    pump(300);
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[1]->press(pg->items[1]);
+    pump(100);
+    snprintf(p, sizeof p, "%s_freq.ppm", name);
+    shot(p);
+    uint32_t key = LV_KEY_RIGHT;
+    lv_obj_t *f = lv_group_get_focused(keyboard_group);
+    lv_event_send(f, LV_EVENT_KEY, &key);
+    lv_event_send(f, LV_EVENT_KEY, &key);
+    pump(100);
+    snprintf(p, sizeof p, "%s_freq_2.ppm", name);
+    shot(p);
+    dialog_destruct();
+    pump(200);
+}
+
 /* Cluster app with sample spots, VFO on 20m; then the MFK moves the
  * selection two rows down (the list stops following the VFO). */
 static void cluster_demo(void) {
@@ -107,6 +131,23 @@ static void cluster_demo(void) {
     lv_event_send(dialog_cluster->obj, LV_EVENT_KEY, &key);
     pump(100);
     shot("cluster_2.ppm");
+    /* Page 2, then the Server window */
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[0]->press(pg->items[0]);
+    pump(100);
+    shot("cluster_3.ppm");
+    pg = buttons_get_cur_page();
+    pg->items[1]->press(pg->items[1]);
+    pump(100);
+    shot("cluster_4.ppm");
+    /* Tuning: the VFO row stays in the middle, also at the band edge */
+    textarea_window_close();
+    harness_fg_freq = 14250000;
+    pump(400);
+    shot("cluster_5.ppm");
+    harness_fg_freq = 14005000;
+    pump(400);
+    shot("cluster_6.ppm");
     dialog_destruct();
     pump(200);
 }
@@ -136,7 +177,7 @@ int main(int argc, char **argv) {
     pump(200);
     shot("00_main.ppm");
     buttons_load_page_group(buttons_group_app);
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 3; i++) {
         char n[32];
         snprintf(n, sizeof n, "01_app_%d.ppm", i + 1);
         pump(50);
@@ -144,6 +185,18 @@ int main(int argc, char **argv) {
         buttons_page_t *pg = buttons_get_cur_page();
         pg->items[0]->press(pg->items[0]);
     }
+    /* APP page 1 with the Modes menu open, then the MFK two steps down */
+    buttons_load_page_group(buttons_group_app);
+    dialog_construct(dialog_modes, scr);
+    pump(100);
+    shot("02_modes_1.ppm");
+    uint32_t key = LV_KEY_RIGHT;
+    lv_event_send(dialog_modes->obj, LV_EVENT_KEY, &key);
+    lv_event_send(dialog_modes->obj, LV_EVENT_KEY, &key);
+    pump(100);
+    shot("02_modes_2.ppm");
+    dialog_destruct();
+    pump(100);
     buttons_load_page(&buttons_page_vol_1);
 
     const char *only = argc > 1 ? argv[1] : NULL;
@@ -154,5 +207,9 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < sizeof apps / sizeof apps[0]; i++)
         if (!only || !strcmp(only, apps[i].n)) app(apps[i].n, *apps[i].d, apps[i].pages);
     if (!only || !strcmp(only, "cluster")) cluster_demo();
+    if (!only || !strcmp(only, "bookmarks")) {
+        bookmarks("navtex", dialog_navtex, 517000);
+        bookmarks("wefax", dialog_wefax, 7878500);
+    }
     return 0;
 }
