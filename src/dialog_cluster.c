@@ -111,13 +111,32 @@ static char     server[128];
 static int      server_port;
 static time_t   conf_mtime;
 static bool     editing;
+static char     client_call[sizeof(params.callsign.x)];
+static bool     wifi_was_up;
 
 /* Reads the server and (re)starts the client: a running one reconnects
  * only when the server or the callsign changed. */
 static void load_server(void) {
     conf_mtime = cluster_config_mtime();
     cluster_config_load(server, sizeof(server), &server_port);
-    if (params.callsign.x[0]) cluster_client_start(server, server_port, params.callsign.x);
+    snprintf(client_call, sizeof(client_call), "%s", params.callsign.x);
+    if (client_call[0]) cluster_client_start(server, server_port, client_call);
+    else cluster_client_stop();
+}
+
+/* Keeps the client running with the current server and callsign, also
+ * while the app is closed. */
+static void background_cb(lv_timer_t *t) {
+    (void)t;
+    if (cluster_config_mtime() != conf_mtime || strcmp(client_call, params.callsign.x) != 0) load_server();
+    bool up = wifi_get_status() == WIFI_CONNECTED;
+    if (up && !wifi_was_up) cluster_client_retry();
+    wifi_was_up = up;
+}
+
+void dialog_cluster_start_client(void) {
+    load_server();
+    lv_timer_create(background_cb, 2000, NULL);
 }
 
 static uint16_t utc_now_min(void) {
@@ -538,8 +557,8 @@ static void destruct_cb(void) {
         lv_timer_del(timer);
         timer = NULL;
     }
-    /* The spots are kept: they show at once when the app is opened again. */
-    cluster_client_stop();
+    /* The client keeps running: the spots show at once when the app is
+     * opened again. */
     table = NULL;
 }
 

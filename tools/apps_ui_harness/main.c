@@ -140,6 +140,32 @@ static void cluster_demo(void) {
                  s[i].khz10 % 10, s[i].call, s[i].comment, tm.tm_hour, tm.tm_min);
         cluster_client_feed_line(line);
     }
+    /* sh/dx reply rows at connect: DXSpider and CC Cluster layouts, one
+     * 2 hours old (dropped) and one repeating a live spot (deduped) */
+    static const struct { const char *fmt; int age; } sh[] = {
+        {"%8.1f  %-11s %s %s %-28s<%s>", 25},
+        {"%.1f %s  %s %s  %s  <%s>", 40},
+        {"%8.1f  %-11s %s %s %-28s<%s>", 120},
+        {"%8.1f  %-11s %s %s %-28s<%s>", 30},
+    };
+    static const char *sh_call[] = {"T32AZ", "A45XR", "OLD1AB", "VP8LP"};
+    static const double sh_khz[] = {14080.0, 14260.5, 14100.0, 14023.6};
+    for (unsigned i = 0; i < sizeof sh / sizeof sh[0]; i++) {
+        time_t t = now - sh[i].age * 60;
+        struct tm tm;
+        gmtime_r(&t, &tm);
+        char date[16], hm[8], line[160];
+        strftime(date, sizeof date, "%e-%b-%Y", &tm);
+        strftime(hm, sizeof hm, "%H%MZ", &tm);
+        snprintf(line, sizeof line, sh[i].fmt, sh_khz[i], sh_call[i], date, hm, "RTTY sh/dx", "K2XX");
+        cluster_client_feed_line(line);
+    }
+    {
+        static cluster_spot_t snap[CLUSTER_MAX_SPOTS];
+        uint32_t gen = 0;
+        int n = cluster_client_snapshot(snap, CLUSTER_MAX_SPOTS, &gen);
+        printf("cluster: %d spots stored (expected 12)\n", n);
+    }
     harness_fg_freq = 14195000;
     dialog_construct(dialog_cluster, lv_scr_act());
     pump(600);

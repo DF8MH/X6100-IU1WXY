@@ -24,7 +24,11 @@
 #include <unistd.h>
 
 #define CONNECT_TIMEOUT_MS 10000
-#define RETRY_DELAY_MS     15000
+#define RETRY_MIN_MS       15000
+#define RETRY_MAX_MS       240000 /* backoff doubles up to this */
+#define STABLE_MS          60000  /* a session this long resets the backoff */
+#define IDLE_TIMEOUT_MS    600000 /* nothing received: the link may be dead */
+#define SHOW_DX_COUNT      "50"
 #define LOGIN_FALLBACK_MS  4000
 #define SHOW_DX_DELAY_MS   2000
 #define MAX_AGE_MIN        60
@@ -124,6 +128,7 @@ bool cluster_parse_server(const char *text, char *host, size_t host_size, int *p
 void cluster_client_feed_line(const char *line) {
     cluster_spot_t spot;
     if (!cluster_parse_line(line, &spot)) return;
+    if (spot.when && time(NULL) - spot.when > MAX_AGE_MIN * 60) return; /* old sh/dx row */
     pthread_mutex_lock(&lock);
     cluster_store_add(&store, &spot);
     cluster_store_expire(&store, utc_now_min(), MAX_AGE_MIN);
@@ -169,7 +174,7 @@ cluster_state_t cluster_client_state(char *detail, size_t size) {
 
 /* Sleeps in small steps so that stop requests are served quickly. */
 static void wait_ms(int ms) {
-    for (int t = 0; t < ms && !ABORTED(); t += 100) usleep(100000);
+    for (int t = 0; t < ms && !ABORTED(); t += 500) usleep(500000);
 }
 
 static int open_socket(const char *host, int port_num) {
@@ -251,20 +256,23 @@ static bool looks_like_login_prompt(const char *text) {
     return strcasestr(text, "login") || strcasestr(text, "call") || strcasestr(text, "enter your");
 }
 
-static void session(int fd, const char *call) {
+/* Returns true when the session lasted long enough to reset the backoff. */
+static bool session(int fd, const char *call) {
     char          line[LINE_MAX_LEN];
     size_t        len        = 0;
     bool          logged_in  = false;
     int64_t       started    = now_ms();
     int64_t       login_at   = 0;
     bool          asked_spots = false;
+    bool          spider      = false; /* DXSpider wants "sh/dx 50", the others "sh/dx/50" */
+    int64_t       last_rx     = started;
     unsigned char buf[1024];
 
     set_state(CLUSTER_CONNECTED, "");
 
     while (!ABORTED()) {
         struct pollfd pfd = {fd, POLLIN, 0};
-        int           r   = poll(&pfd, 1, 250);
+        int           r   = poll(&pfd, 1, 1000);
         int64_t       now = now_ms();
 
         if (!logged_in && now - started > LOGIN_FALLBACK_MS) {
@@ -274,9 +282,11 @@ static void session(int fd, const char *call) {
             login_at  = now;
         }
         if (logged_in && !asked_spots && now - login_at > SHOW_DX_DELAY_MS) {
-            send_text(fd, "sh/dx 30\r\n");
+            /* The latest spots at once, not only the new ones from now on. */
+            send_text(fd, spider ? "sh/dx " SHOW_DX_COUNT "\r\n" : "sh/dx/" SHOW_DX_COUNT "\r\n");
             asked_spots = true;
         }
+        if (now - last_rx > IDLE_TIMEOUT_MS) break;
         if (r < 0 && errno != EINTR) break;
         if (r <= 0) continue;
 
@@ -286,13 +296,15 @@ static void session(int fd, const char *call) {
             if (errno == EAGAIN || errno == EINTR) continue;
             break;
         }
-        n = (ssize_t)strip_telnet(buf, (size_t)n);
+        last_rx = now;
+        n       = (ssize_t)strip_telnet(buf, (size_t)n);
 
         for (ssize_t i = 0; i < n; i++) {
             char c = (char)buf[i];
             if (c == '\n' || c == '\r') {
                 if (len > 0) {
                     line[len] = '\0';
+                    if (strcasestr(line, "DXSpider")) spider = true;
                     cluster_client_feed_line(line);
                     len = 0;
                 }
@@ -316,10 +328,12 @@ static void session(int fd, const char *call) {
     }
     close(fd);
     if (!ABORTED()) set_state(CLUSTER_FAILED, "connection closed");
+    return now_ms() - started > STABLE_MS;
 }
 
 static void *thread_cb(void *arg) {
     (void)arg;
+    int delay = RETRY_MIN_MS;
     for (;;) {
         while (!stop_requested) {
             char host[sizeof(host_name)], call[sizeof(login_call)];
@@ -333,8 +347,13 @@ static void *thread_cb(void *arg) {
 
             set_state(CLUSTER_CONNECTING, "");
             int fd = open_socket(host, port);
-            if (fd >= 0) session(fd, call);
-            if (!reconnect_requested) wait_ms(RETRY_DELAY_MS);
+            if (fd >= 0 && session(fd, call)) delay = RETRY_MIN_MS;
+            /* No network: retry calmly, with a longer wait each time. */
+            if (!reconnect_requested) {
+                wait_ms(delay);
+                delay = delay * 2 < RETRY_MAX_MS ? delay * 2 : RETRY_MAX_MS;
+            }
+            if (reconnect_requested) delay = RETRY_MIN_MS;
         }
         /* Restarted while stopping: carry on instead of exiting. */
         pthread_mutex_lock(&lock);
@@ -377,4 +396,10 @@ void cluster_client_start(const char *host, int port, const char *callsign) {
 
 void cluster_client_stop(void) {
     stop_requested = true;
+}
+
+void cluster_client_retry(void) {
+    pthread_mutex_lock(&lock);
+    if (thread_running && state == CLUSTER_FAILED) reconnect_requested = true;
+    pthread_mutex_unlock(&lock);
 }

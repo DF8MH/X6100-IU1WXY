@@ -28,6 +28,17 @@ TEST_CASE("Cluster sh/dx line", "[cluster]") {
     REQUIRE(std::string(s.dx) == "ZL2ABC");
     REQUIRE(std::string(s.spotter) == "IU1WXY");
     REQUIRE(std::string(s.comment) == "SSB LP 57");
+    REQUIRE(s.when == 1790685660); /* 2026-09-29 12:41Z */
+    REQUIRE(cluster_parse_line("DX de DL1ABC:  14023.5  VP8LP  CW  1238Z", &s));
+    REQUIRE(s.when == 0); /* no date in live spots */
+
+    /* DXSpider pads the day; CC Cluster and AR-Cluster rows */
+    REQUIRE(cluster_parse_line("  14074.0  JA1XYZ       1-Oct-2026 0012Z FT8 -12 dB                  <DL1ABC>", &s));
+    REQUIRE(std::string(s.comment) == "FT8 -12 dB");
+    REQUIRE(s.when == 1790813520);
+    REQUIRE(cluster_parse_line(" 7074.0 RA0ABC      30-Sep-26 2359Z  FT8 <JA1YYY-@>", &s));
+    REQUIRE(std::string(s.spotter) == "JA1YYY-@");
+    REQUIRE(s.utc_min == 23 * 60 + 59);
 }
 
 TEST_CASE("Cluster other lines", "[cluster]") {
@@ -36,6 +47,38 @@ TEST_CASE("Cluster other lines", "[cluster]") {
     REQUIRE_FALSE(cluster_parse_line("WWV de VE7CC <18>:   SFI=150, A=5, K=1", &s));
     REQUIRE_FALSE(cluster_parse_line("login: ", &s));
     REQUIRE_FALSE(cluster_parse_line("", &s));
+    REQUIRE_FALSE(cluster_parse_line("30-Sep-2026 1800Z   150   5   1  No Storms", &s));
+    REQUIRE_FALSE(cluster_parse_line("2026 users online", &s));
+}
+
+TEST_CASE("Cluster store keeps the newest, sorted by time", "[cluster]") {
+    static cluster_store_t st;
+    cluster_spot_t         s;
+    cluster_store_clear(&st);
+    /* sh/dx replies come newest first */
+    cluster_parse_line("14030.0  K1AAA   29-Sep-2026 1240Z  CW  <W1AW>", &s);
+    cluster_store_add(&st, &s);
+    cluster_parse_line("14020.0  K2BBB   29-Sep-2026 1230Z  CW  <W1AW>", &s);
+    cluster_store_add(&st, &s);
+    REQUIRE(st.count == 2);
+    REQUIRE(std::string(st.spots[0].dx) == "K2BBB"); /* oldest first */
+    /* an older spot of the same DX does not replace the newer one */
+    cluster_parse_line("14030.5  K1AAA   29-Sep-2026 1200Z  old  <W1AW>", &s);
+    cluster_store_add(&st, &s);
+    REQUIRE(st.count == 2);
+    REQUIRE(std::string(st.spots[1].comment) == "CW");
+
+    /* full: the oldest goes */
+    cluster_store_clear(&st);
+    for (int i = 0; i < CLUSTER_MAX_SPOTS + 1; i++) {
+        s         = {};
+        s.freq_hz = 1800000 + i * 2000;
+        s.utc_min = (uint16_t)(600 + i / 10);
+        snprintf(s.dx, sizeof(s.dx), "K%dA", i);
+        cluster_store_add(&st, &s);
+    }
+    REQUIRE(st.count == CLUSTER_MAX_SPOTS);
+    REQUIRE(std::string(st.spots[0].dx) == "K1A");
 }
 
 TEST_CASE("Cluster store", "[cluster]") {

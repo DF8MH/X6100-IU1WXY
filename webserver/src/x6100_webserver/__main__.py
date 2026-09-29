@@ -1,10 +1,31 @@
 import argparse
+from socketserver import ThreadingMixIn
+from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 
 import bottle
 import bottle.ext.sqlite
 
 from . import apps
 from . import settings
+
+
+class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
+    daemon_threads = True
+
+
+class RequestHandler(WSGIRequestHandler):
+    # Browsers open connections in advance and may never use them: don't
+    # let one of them hold a worker for long.
+    timeout = 10
+
+
+class ThreadedServer(bottle.ServerAdapter):
+    """One thread per connection: bottle's default wsgiref server serves
+    one connection at a time, so an idle browser connection blocked every
+    page for up to a minute."""
+
+    def run(self, handler):
+        make_server(self.host, self.port, handler, ThreadingWSGIServer, RequestHandler).serve_forever()
 
 
 def run():
@@ -21,6 +42,6 @@ def run():
     settings.FILEBROWSER_PATH = args.filebrowser_path
     settings.DB_PATH = args.db
     settings.CLUSTER_CONF = args.cluster_conf
-    apps.app.run(host=args.host, port=args.port, debug=args.debug, reloader=args.debug)
+    apps.app.run(server=ThreadedServer, host=args.host, port=args.port, debug=args.debug, reloader=args.debug)
 
 run()

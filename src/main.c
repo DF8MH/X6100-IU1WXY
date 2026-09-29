@@ -39,6 +39,7 @@
 #include "wifi.h"
 #include "btaudio.h"
 #include "usb_devices.h"
+#include "dialog_cluster.h"
 
 #define DISP_BUF_SIZE (800 * 480 * 4)
 
@@ -121,6 +122,7 @@ int main(void) {
         LV_LOG_ERROR("Can't init QSO log");
     }
     qso_log_import_adif("/mnt/incoming_log.adi");
+    dialog_cluster_start_client();
 
     pthread_t thread;
     pthread_create(&thread, NULL, tick_thread, NULL);

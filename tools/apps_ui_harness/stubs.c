@@ -97,3 +97,12 @@ void split_freq(int32_t freq, uint16_t *mhz, uint16_t *khz, uint16_t *hz) {
     *khz = (freq / 1000) % 1000;
     *hz  = freq % 1000;
 }
+
+/* Linked with --wrap=connect: every outgoing connection is refused */
+#include <errno.h>
+#include <sys/socket.h>
+int __wrap_connect(int fd, const struct sockaddr *addr, socklen_t len) {
+    (void)fd; (void)addr; (void)len;
+    errno = ECONNREFUSED;
+    return -1;
+}
