@@ -23,6 +23,9 @@ void dialog_construct(dialog_t *dialog, lv_obj_t *parent) {
         knobs_display(false);
         waterfall_refresh_period_set(2);
         main_screen_keys_enable(false);
+        if (dialog->restore_radio) {
+            mem_save(MEM_BACKUP_ID);
+        }
         dialog->prev_page = buttons_get_cur_page();
         buttons_unload_page();
         if (dialog->btn_page) {
@@ -48,6 +51,9 @@ void dialog_destruct() {
 
         if (current_dialog->obj) {
             lv_obj_del(current_dialog->obj);
+        }
+        if (current_dialog->restore_radio) {
+            mem_load(MEM_BACKUP_ID);
         }
         buttons_unload_page();
         if (current_dialog->prev_page) {

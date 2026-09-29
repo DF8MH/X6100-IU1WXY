@@ -425,6 +425,7 @@ static dialog_t dialog = {
     .destruct_cb = destruct_cb,
     .audio_cb = audio_cb,
     .key_cb = key_cb,
+    .restore_radio = true,
     .btn_page = &btn_page_1
 };
 

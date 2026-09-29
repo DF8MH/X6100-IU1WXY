@@ -470,6 +470,7 @@ static dialog_t dialog = {
     .destruct_cb  = destruct_cb,
     .audio_cb     = audio_cb,
     .key_cb       = key_cb,
+    .restore_radio = true,
     .rotary_cb    = rotary_cb,
     .btn_page     = &page_1,
 };
@@ -1849,7 +1850,6 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_add_event_cb(dialog.obj, band_cb, EVENT_BAND_UP, NULL);
     lv_obj_add_event_cb(dialog.obj, band_cb, EVENT_BAND_DOWN, NULL);
 
-    mem_save(MEM_BACKUP_ID);
     load_band(0); /* also sets the mode */
     if (params.js8_custom_on.x) {
         if (params.js8_custom_hz.x >= CUSTOM_MIN_HZ && params.js8_custom_hz.x <= CUSTOM_MAX_HZ)
@@ -2090,7 +2090,6 @@ static void destruct_cb(void) {
         radio_set_rx_dsp_off(false);
         filter_saved = false;
     }
-    mem_load(MEM_BACKUP_ID);
 
     main_screen_lock_mode(false);
     main_screen_lock_ab(false);
