@@ -13,6 +13,10 @@
 #include <unistd.h>
 #include "lvgl/lvgl.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // COLORS
 
 #define COLOR_LIGHT_GREEN (0x80FF80)
@@ -109,3 +113,7 @@ extern lv_font_t    sony_60;
 void styles_init(themes_t theme);
 
 void styles_set_theme(themes_t theme);
+
+#ifdef __cplusplus
+}
+#endif
