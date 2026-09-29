@@ -250,6 +250,7 @@ static void topbar(void) {
     lv_obj_set_size(wf, 800, 480);
     lv_obj_set_style_bg_color(wf, lv_color_hex(0x0a1a44), 0);
     lv_obj_set_style_bg_opa(wf, LV_OPA_COVER, 0);
+    freq_scale_lines_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36, 480);
     freq_scale_update(f, 50000, 0xffffff);
     lv_obj_move_background(stack);   /* created first in main_screen.c */
 

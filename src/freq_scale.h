@@ -19,6 +19,9 @@ extern "C" {
 void freq_scale_init(lv_obj_t *parent, lv_coord_t y);
 
 /* Span from center - half_width to center + half_width across the width */
+/* Dashed lines under the reference frequencies, over the waterfall */
+void freq_scale_lines_init(lv_obj_t *parent, lv_coord_t y, lv_coord_t h);
+
 void freq_scale_update(int32_t center, int32_t half_width, uint32_t color);
 
 #ifdef __cplusplus

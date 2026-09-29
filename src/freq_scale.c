@@ -17,6 +17,7 @@
 
 static lv_obj_t *edges[2];
 static lv_obj_t *refs[MAX_REFS];
+static lv_obj_t *lines[MAX_REFS];  /* dashed, down the waterfall */
 
 static lv_obj_t *make_label(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
     lv_obj_t *l = lv_label_create(parent);
@@ -48,6 +49,24 @@ void freq_scale_init(lv_obj_t *parent, lv_coord_t y) {
     }
 }
 
+void freq_scale_lines_init(lv_obj_t *parent, lv_coord_t y, lv_coord_t h) {
+    static lv_point_t pts[2];
+
+    pts[1].y = h;
+    for (int i = 0; i < MAX_REFS; i++) {
+        lines[i] = lv_line_create(parent);
+        lv_line_set_points(lines[i], pts, 2);
+        lv_obj_set_style_line_color(lines[i], lv_color_white(), 0);
+        lv_obj_set_style_line_opa(lines[i], LV_OPA_40, 0);
+        lv_obj_set_style_line_width(lines[i], 1, 0);
+        lv_obj_set_style_line_dash_width(lines[i], 4, 0);
+        lv_obj_set_style_line_dash_gap(lines[i], 4, 0);
+        lv_obj_clear_flag(lines[i], LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_y(lines[i], y);
+        lv_obj_add_flag(lines[i], LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
 void freq_scale_update(int32_t center, int32_t half_width, uint32_t color) {
     static const int32_t mult[] = {1, 2, 5};
     int32_t              left   = center - half_width;
@@ -76,9 +95,16 @@ void freq_scale_update(int32_t center, int32_t half_width, uint32_t color) {
         set_freq(refs[n], f, color);
         lv_obj_set_x(refs[n], x - LABEL_W / 2);
         lv_obj_clear_flag(refs[n], LV_OBJ_FLAG_HIDDEN);
+        if (lines[n]) {
+            lv_obj_set_x(lines[n], x);
+            lv_obj_clear_flag(lines[n], LV_OBJ_FLAG_HIDDEN);
+        }
         n++;
     }
     for (; n < MAX_REFS; n++) {
         lv_obj_add_flag(refs[n], LV_OBJ_FLAG_HIDDEN);
+        if (lines[n]) {
+            lv_obj_add_flag(lines[n], LV_OBJ_FLAG_HIDDEN);
+        }
     }
 }

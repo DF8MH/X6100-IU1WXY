@@ -1542,6 +1542,7 @@ lv_obj_t * main_screen() {
 
     lv_obj_set_y(waterfall, y);
     waterfall_set_height(480 - y);
+    freq_scale_lines_init(obj, y, 480 - y);
 
     knobs_init(obj);
 
