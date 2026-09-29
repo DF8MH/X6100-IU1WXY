@@ -43,6 +43,7 @@ lv_group_t *keyboard_group;
 void scheduler_work(void);
 extern uint32_t EVENT_BAND_DOWN;
 extern uint32_t EVENT_BAND_UP;
+extern uint32_t EVENT_RADIO_TX, EVENT_RADIO_RX;
 
 static void flush_cb(lv_disp_drv_t *drv, const lv_area_t *a, lv_color_t *px) {
     for (int y = a->y1; y <= a->y2; y++)
@@ -219,14 +220,14 @@ static void topbar(void) {
     shot("topbar_2.ppm");
     styles_set_theme(THEME_SIMPLE);
     lv_obj_report_style_change(NULL);
-    lv_obj_clear_flag(tx, LV_OBJ_FLAG_HIDDEN);
+    lv_event_send(tx, EVENT_RADIO_TX, NULL);
     for (int i = 0; i < 60; i++) {
         tx_info_update(5.2f, 1.6f, 7.0f);
         pump(10);
     }
     shot("topbar_3.ppm");
     /* The frequency strip over an app */
-    lv_obj_add_flag(tx, LV_OBJ_FLAG_HIDDEN);
+    lv_event_send(tx, EVENT_RADIO_RX, NULL);
     harness_fg_freq = 14230000;
     freq_strip_init(scr);
     dialog_construct(dialog_sstv, scr);
@@ -329,6 +330,8 @@ int main(int argc, char **argv) {
 
     EVENT_BAND_DOWN = lv_event_register_id();
     EVENT_BAND_UP = lv_event_register_id();
+    EVENT_RADIO_TX = lv_event_register_id();
+    EVENT_RADIO_RX = lv_event_register_id();
     EVENT_RADIO_TX = lv_event_register_id();
     EVENT_RADIO_RX = lv_event_register_id();
     styles_init(THEME_SIMPLE);
