@@ -23,6 +23,7 @@
 static lv_obj_t *strip, *band_label, *freq_label, *mode_label, *qth_dot, *qth_label;
 static char      note[64];
 static int32_t   note_freq;
+static int32_t   tx_offset = -1;
 
 static void update_cb(Subject *subj, void *user_data) {
     (void)subj;
@@ -30,7 +31,7 @@ static void update_cb(Subject *subj, void *user_data) {
     uint16_t mhz, khz, hz;
     int32_t  f = cparam_i_get(cfg_fg_freq);
 
-    split_freq(f, &mhz, &khz, &hz);
+    split_freq(tx_offset >= 0 ? f + tx_offset : f, &mhz, &khz, &hz);
     if (param_i_get(cfg_band_split)) {
         uint16_t mhz2, khz2, hz2;
         split_freq(cparam_i_get(cfg_bg_freq), &mhz2, &khz2, &hz2);
@@ -105,5 +106,10 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
 void freq_strip_set_label(const char *text, int32_t freq_hz) {
     snprintf(note, sizeof(note), "%s", text);
     note_freq = freq_hz;
+    if (strip) update_cb(NULL, NULL);
+}
+
+void freq_strip_set_offset(int32_t offset_hz) {
+    tx_offset = offset_hz;
     if (strip) update_cb(NULL, NULL);
 }

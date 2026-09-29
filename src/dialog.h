@@ -33,6 +33,7 @@ typedef struct {
     buttons_page_t          *btn_page;
     buttons_page_t          *prev_page;
     lv_event_cb_t           key_cb;
+    bool                    restore_radio; /* save freq/mode on open, restore on close */
     bool                    run;
 } dialog_t;
 

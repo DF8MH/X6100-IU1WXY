@@ -24,6 +24,7 @@
 #include "events.h"
 #include "buttons.h"
 #include "main_screen.h"
+#include "freq_strip.h"
 #include "qth/qth.h"
 #include "station.h"
 #include "msg.h"
@@ -200,6 +201,7 @@ static dialog_t dialog = {
     .audio_cb = audio_cb,
     .rotary_cb = rotary_cb,
     .key_cb = key_cb,
+    .restore_radio = true,
 };
 
 dialog_t *dialog_ft8 = &dialog;
@@ -305,11 +307,11 @@ static void destruct_cb() {
     dsp_set_waterfall_enabled(true);
     dsp_set_spectrum_enabled(true);
 
-    mem_load(MEM_BACKUP_ID);
 
     main_screen_lock_mode(false);
     main_screen_lock_ab(false);
     main_screen_lock_freq(false);
+    freq_strip_set_offset(-1);
     main_screen_lock_band(false);
 
     radio_set_pwr(param_f_get(cfg_pwr));
@@ -389,6 +391,7 @@ static void set_freq(uint32_t freq) {
 
     lv_finder_set_value(finder, freq);
     lv_obj_invalidate(finder);
+    freq_strip_set_offset(freq);
 }
 
 static void rotary_cb(int32_t diff) {
@@ -469,6 +472,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_finder_set_width(finder, 50);
     lv_finder_set_value(finder, params.ft8_tx_freq.x);
+    freq_strip_set_offset(params.ft8_tx_freq.x);
 
     lv_obj_set_size(finder, WIDTH, 325);
     lv_obj_set_pos(finder, 0, 0);
@@ -507,7 +511,6 @@ static void construct_cb(lv_obj_t *parent) {
     lv_group_add_obj(keyboard_group, table);
     lv_group_set_editing(keyboard_group, true);
 
-    mem_save(MEM_BACKUP_ID);
     load_band(0);
 
     filter_low = cparam_i_get(cfg_cur_filter_low);

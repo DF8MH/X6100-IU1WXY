@@ -20,6 +20,9 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent);
 /* Shows text instead of the band while the VFO stays on freq_hz. */
 void      freq_strip_set_label(const char *text, int32_t freq_hz);
 
+/* Shows dial + offset_hz (FT8 TX audio offset) as the frequency; offset_hz < 0 = plain dial. */
+void      freq_strip_set_offset(int32_t offset_hz);
+
 #ifdef __cplusplus
 }
 #endif
