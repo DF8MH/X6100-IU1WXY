@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from importlib import resources
+import gzip
 import json
 import os
 import pathlib
@@ -262,7 +263,23 @@ def delete_cluster_server(index):
 
 @app.route('/static/<filepath:path>')
 def server_static(filepath):
-    return bottle.static_file(filepath, root=STATIC_PATH)
+    # The radio's WiFi is slow: send static files gzipped and let the browser keep them
+    response = bottle.static_file(filepath, root=STATIC_PATH)
+    if isinstance(response, bottle.HTTPError) or response.status_code != 200:
+        return response
+    response.set_header('Cache-Control', 'max-age=86400')
+    if 'gzip' in bottle.request.headers.get('Accept-Encoding', ''):
+        if filepath not in _gzip_cache:
+            with open(STATIC_PATH.joinpath(filepath), 'rb') as f:
+                _gzip_cache[filepath] = gzip.compress(f.read())
+        response.body.close()
+        response.body = _gzip_cache[filepath]
+        response.set_header('Content-Encoding', 'gzip')
+        response.set_header('Content-Length', str(len(response.body)))
+    return response
+
+
+_gzip_cache = {}
 
 
 @app.route('/')
