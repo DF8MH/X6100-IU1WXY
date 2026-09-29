@@ -35,7 +35,7 @@
 #define LIST_X       10
 #define LIST_Y       40
 #define LIST_W       470
-#define LIST_H       262
+#define LIST_H       (DIALOG_H - 86)
 #define SIDE_X       494
 #define SIDE_W       290
 
@@ -477,7 +477,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_pos(info_lbl, 12, 196);
 
     hint = label(dialog.obj, &sony_18, COLOR_DIM);
-    lv_obj_set_pos(hint, 16, 348 - 32);
+    lv_obj_set_pos(hint, 16, DIALOG_H - 32);
 
     lv_obj_add_event_cb(dialog.obj, radio_tx_cb, EVENT_RADIO_TX, NULL);
     lv_group_add_obj(keyboard_group, dialog.obj);

@@ -20,7 +20,7 @@
 #define WIDTH      771
 #define HEADER_Y   12
 #define TABLE_Y    44
-#define TABLE_H    262
+#define TABLE_H    (DIALOG_H - 86)
 #define COLOR_HEAD 0x90f0d0
 #define COLOR_GRP  0x90f0d0
 #define COLOR_DIM  0x90a0b0
@@ -167,7 +167,7 @@ void freq_list_open(lv_obj_t *parent, const char *title, const freq_list_item_t 
     lv_obj_set_style_text_font(hint, &sony_18, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(COLOR_DIM), 0);
     lv_label_set_text(hint, "MFK: choose - press: tune");
-    lv_obj_set_pos(hint, 18, 348 - 30);
+    lv_obj_set_pos(hint, 18, DIALOG_H - 30);
 
     table = lv_table_create(panel);
     lv_obj_remove_style(table, NULL, LV_STATE_ANY | LV_PART_MAIN);

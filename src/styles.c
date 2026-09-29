@@ -262,11 +262,13 @@ void styles_init(themes_t theme) {
     lv_style_set_text_color(&dialog_style, lv_color_white());
     lv_style_set_text_font(&dialog_style, &sony_36);
     lv_style_set_width(&dialog_style, 796);
-    lv_style_set_height(&dialog_style, 348);
+    lv_style_set_height(&dialog_style, DIALOG_H);
     lv_style_set_x(&dialog_style, 800 / 2 - (796 / 2));
-    lv_style_set_y(&dialog_style, 66);
-    lv_style_set_radius(&dialog_style, 0);
-    lv_style_set_bg_img_opa(&dialog_style, LV_OPA_COVER);
+    lv_style_set_y(&dialog_style, DIALOG_Y);
+    lv_style_set_radius(&dialog_style, 7);
+    lv_style_set_bg_opa(&dialog_style, LV_OPA_COVER);
+    lv_style_set_bg_grad_dir(&dialog_style, LV_GRAD_DIR_VER);
+    lv_style_set_border_width(&dialog_style, 1);
     lv_style_set_pad_ver(&dialog_style, 0);
     lv_style_set_pad_hor(&dialog_style, 0);
 
@@ -390,7 +392,10 @@ static void setup_theme_legacy() {
 
     lv_style_set_bg_img_src(&panel_style, PATH "images/panel.bin");
     lv_style_set_bg_img_src(&msg_tiny_style, PATH "images/msg_tiny.bin");
-    lv_style_set_bg_img_src(&dialog_style, PATH "images/dialog.bin");
+    /* Dialogs: drawn like the top bar, so any height fits */
+    lv_style_set_bg_color(&dialog_style, lv_color_hex(0x2a5aa0));
+    lv_style_set_bg_grad_color(&dialog_style, lv_color_hex(0x103060));
+    lv_style_set_border_color(&dialog_style, lv_color_hex(0x8aa8d8));
 
     lv_obj_invalidate(lv_scr_act());
 }
@@ -410,7 +415,10 @@ static void setup_theme_simple() {
 
     lv_style_set_bg_img_src(&panel_style, PATH "images/panel_dark.bin");
     lv_style_set_bg_img_src(&msg_tiny_style, PATH "images/msg_tiny_dark.bin");
-    lv_style_set_bg_img_src(&dialog_style, PATH "images/dialog_dark.bin");
+    /* Dialogs: drawn like the top bar, so any height fits */
+    lv_style_set_bg_color(&dialog_style, lv_color_hex(0x49636f));
+    lv_style_set_bg_grad_color(&dialog_style, lv_color_hex(0x2c3a45));
+    lv_style_set_border_color(&dialog_style, lv_color_hex(0xe0e4e8));
 
     lv_obj_invalidate(lv_scr_act());
 }

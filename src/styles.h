@@ -34,6 +34,10 @@
 #define TOP_BAR_METER_X (TOP_BAR_MARGIN + 330 + 3)
 #define TOP_BAR_METER_W (800 - TOP_BAR_METER_X - 3 - 162 - TOP_BAR_MARGIN)
 
+/* App dialogs: from under the top bar down to the buttons */
+#define DIALOG_Y        (TOP_BAR_HEIGHT + TOP_BAR_MARGIN)
+#define DIALOG_H        (414 - DIALOG_Y)
+
 // Pallete
 
 extern const uint32_t *wf_palette;

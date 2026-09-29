@@ -36,7 +36,7 @@
 #define HEADER_H      34
 #define STATUS_H      30
 #define TABLE_Y       (10 + HEADER_H)
-#define TABLE_H       (348 - TABLE_Y - STATUS_H - 8)
+#define TABLE_H       (DIALOG_H - TABLE_Y - STATUS_H - 8)
 #define TIMER_MS      250
 #define NEAR_HZ       3000
 #define NEW_MIN       2
@@ -510,13 +510,13 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_add_event_cb(table, table_click_cb, LV_EVENT_CLICKED, NULL);
 
     status_left = make_label(dialog.obj, &sony_18, lv_color_hex(COLOR_DIM));
-    lv_obj_set_pos(status_left, 18, 348 - STATUS_H - 4);
+    lv_obj_set_pos(status_left, 18, DIALOG_H - STATUS_H - 4);
     lv_obj_set_width(status_left, 440);
     lv_label_set_text(status_left, "MFK: browse - press: tune - VFO: follow");
     status_right = make_label(dialog.obj, &sony_18, lv_color_hex(COLOR_DIM));
     lv_obj_set_width(status_right, 320);
     lv_obj_set_style_text_align(status_right, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(status_right, 796 - 18 - 320, 348 - STATUS_H - 4);
+    lv_obj_set_pos(status_right, 796 - 18 - 320, DIALOG_H - STATUS_H - 4);
 
     /* The MFK drives the list: the dialog itself takes the keys. */
     lv_group_add_obj(keyboard_group, dialog.obj);
