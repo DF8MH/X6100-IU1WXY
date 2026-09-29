@@ -1,0 +1,97 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:800px;background:#11161c;font-family:"DejaVu Sans",sans-serif;color:#e8e8e8;padding-bottom:10px}
+.cap{padding:14px 16px 8px;font-size:15px;color:#9fd;line-height:21px}.cap b{color:#fff}
+.scr{width:800px;height:480px;position:relative;overflow:hidden;background:#29313b}
+.bar{position:absolute;top:0;left:0;right:0;height:64px;display:flex;gap:3px;padding:2px;background:#000}
+.box{background:linear-gradient(#3a3f47,#23272d);border:1px solid #777;border-radius:8px}
+.strip{position:absolute;top:64px;left:2px;right:2px;height:42px;border-radius:8px;background:linear-gradient(#1c2a38,#101a24);border:1px solid #4a6a8a;display:flex;align-items:center;padding:0 16px;font-size:20px;color:#9fd}
+.strip .f{font-size:30px;color:#fff;margin:0 auto}
+.dlg{position:absolute;top:108px;left:2px;right:2px;bottom:58px;border-radius:7px;border:1px solid #e0e4e8;background:linear-gradient(#49636f,#2c3a45);padding:6px 10px}
+.head{display:flex;justify-content:space-between;font-size:17px;color:#9fd;padding:0 4px 4px}
+.head b{color:#fff}
+.list{position:relative;height:222px;background:#000;border:1px solid #445;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:21px;position:absolute;left:0;right:0}
+td{padding:0 6px;height:30px;white-space:nowrap}
+td.f{width:120px;text-align:right;color:#fff}
+td.c{width:150px;font-weight:bold}
+td.s{width:110px;color:#9ab;font-size:18px}
+td.m{color:#ccc;font-size:18px;overflow:hidden;max-width:250px}
+td.t{width:70px;text-align:right;color:#9ab;font-size:18px}
+tr.near td{background:#3a2f12}tr.near td.c{color:#ffd24a}
+tr.vfo td{color:#7cc4ff;background:#0a1f3a;border-top:2px solid #4da3ff;height:28px}
+tr.sel td{border-top:2px solid #fff;border-bottom:2px solid #fff;background:#4b3c14}
+.status{display:flex;justify-content:space-between;font-size:15px;color:#8a9;padding:4px 4px 0}
+.btns{position:absolute;bottom:0;left:0;right:0;height:54px;display:flex;gap:2px;padding:1px}
+.b{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0b1622;border:1px solid #99aaaa;border-radius:10px;font-size:19px}
+.b.pg{background:#16232f;color:#cde;font-size:17px}
+.b.on{border:2px solid #ffd24a;background:#2a220c;color:#ffd24a}
+.pop{position:absolute;left:150px;top:118px;width:500px;background:#0b1622;border:2px solid #99aaaa;border-radius:12px;padding:8px 0}
+.pop h3{font-size:18px;color:#90f0d0;font-weight:normal;padding:2px 20px 8px;border-bottom:1px solid #345;display:flex;justify-content:space-between}
+.pop .i{font-size:22px;padding:4px 20px;height:44px;display:flex;justify-content:space-between;align-items:center}
+.pop .i span{font-size:16px;color:#8a9}
+.pop .sel{background:#5a4818;border-top:2px solid #fff;border-bottom:2px solid #fff;color:#ffd24a}.pop .sel span{color:#ffd24a}
+.pop .hint{font-size:14px;color:#8a9;padding:8px 20px 2px;border-top:1px solid #345;margin-top:4px}
+.web{width:800px;background:#0b1320;padding:18px 24px;font-family:system-ui,sans-serif;color:#dfe7ef}
+.web .top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #26344a;padding-bottom:12px;margin-bottom:16px}
+.web .top b{font-size:18px}.web nav span{margin-left:14px;font-size:14px;color:#9fb0c4}.web nav .a{background:#f5a623;color:#111;padding:4px 10px;border-radius:6px}
+.web h2{font-size:22px;margin-bottom:4px}.web p{color:#9fb0c4;font-size:14px;margin-bottom:14px}
+.card{background:#111c2c;border:1px solid #26344a;border-radius:12px;padding:14px 16px}
+.web table{position:static;font-size:15px}.web td,.web th{padding:8px 6px;border-bottom:1px solid #1e2a3c;text-align:left;height:auto}
+.web th{color:#9fb0c4;font-weight:normal;font-size:13px}
+.pill{background:#1f4a24;color:#8f8;border-radius:10px;padding:1px 8px;font-size:12px}
+.btn{display:inline-block;border:1px solid #3a4a60;border-radius:7px;padding:5px 12px;font-size:13px;margin-left:6px;color:#dfe7ef}
+.btn.p{background:#f5a623;color:#111;border-color:#f5a623}
+.in{display:inline-block;border:1px solid #3a4a60;border-radius:7px;padding:6px 10px;font-size:14px;color:#9fb0c4;background:#0b1320;margin-right:8px}
+</style></head><body>
+<div class="cap"><b>1 · Cluster con caratteri più grandi</b> (con le barre nuove da 64 + 42 px) — righe da 30 px, nominativo in grassetto 21,
+frequenza 21, spotter/commento/ora 18. Intestazione e stato più grandi. Si vedono circa 7 spot invece di 9.</div>
+<div class="scr">
+ <div class="bar"><div class="box" style="width:330px"></div><div class="box" style="flex:1"></div><div class="box" style="width:162px"></div></div>
+ <div class="strip"><span>20m</span><span class="f">14.195.000</span><span style="color:#fff;margin-right:16px;font-size:18px">JN35ab</span><span style="color:#f66">USB</span></div>
+ <div class="dlg">
+  <div class="head"><span>CLUSTER <b>dxc.ve7cc.net</b></span><span><b>42</b> spots · 01:40Z</span></div>
+  <div class="list"><table style="top:3px">
+   <tr><td class="f">14.155.0</td><td class="c">EA8/G4XX</td><td class="s">F5ZZZ</td><td class="m">SSB 59</td><td class="t">0138Z</td></tr>
+   <tr class="near"><td class="f">14.193.0</td><td class="c">3B8M</td><td class="s">IZ1BBB</td><td class="m">SSB listening up 5</td><td class="t">0139Z</td></tr>
+   <tr class="vfo"><td class="f">14.195.00</td><td colspan="4">&lt; VFO</td></tr>
+   <tr class="near sel"><td class="f">14.196.5</td><td class="c">ZL2ABC</td><td class="s">IU1WXY</td><td class="m">SSB LP 57</td><td class="t">0140Z</td></tr>
+   <tr><td class="f">14.205.0</td><td class="c">PY2XB</td><td class="s">EA3CCC</td><td class="m">SSB 55</td><td class="t">0131Z</td></tr>
+   <tr><td class="f">14.243.0</td><td class="c">K1ABC</td><td class="s">G3DDD</td><td class="m">POTA US-1234</td><td class="t">0127Z</td></tr>
+   <tr><td class="f">14.280.0</td><td class="c">W1AW</td><td class="s">K2XX</td><td class="m">SSB</td><td class="t">0122Z</td></tr>
+  </table></div>
+  <div class="status"><span>MFK: browse · press: tune</span><span style="color:#6f6">connected</span></div>
+ </div>
+ <div class="btns"><div class="b pg">CLUSTER 1:2</div><div class="b">Band / All</div><div class="b">Tune</div><div class="b">Clear</div><div class="b">Close</div></div>
+</div>
+
+<div class="cap"><b>2 · Tasto Server (CLUSTER 2:2)</b> — apre la lista dei server salvati; il MFK sceglie, premendo si usa quello
+(la radio si ricollega). Quello in uso ha il pallino verde. I server si aggiungono/tolgono dalla pagina web.</div>
+<div class="scr">
+ <div class="bar"><div class="box" style="width:330px"></div><div class="box" style="flex:1"></div><div class="box" style="width:162px"></div></div>
+ <div class="strip"><span>20m</span><span class="f">14.195.000</span><span style="color:#fff;margin-right:16px;font-size:18px">JN35ab</span><span style="color:#f66">USB</span></div>
+ <div class="dlg" style="filter:brightness(.5)"></div>
+ <div class="pop">
+  <h3><span>CLUSTER SERVERS</span><span>3</span></h3>
+  <div class="i">VE7CC <span>● dxc.ve7cc.net:23</span></div>
+  <div class="i sel">IK5PWJ <span>dxc.ik5pwj.it:8000</span></div>
+  <div class="i">DX Summit <span>dxc.dxsummit.fi:8000</span></div>
+  <div class="hint">MFK: choose · press: use · Server: close · add servers from the web page</div>
+ </div>
+ <div class="btns"><div class="b pg">CLUSTER 2:2</div><div class="b on">Server</div><div class="b"></div><div class="b"></div><div class="b">Close</div></div>
+</div>
+
+<div class="cap"><b>3 · Pagina web → Cluster</b> — elenco dei server con nome, host e porta; "Use" sceglie quello in uso, "Delete" lo toglie,
+in basso il modulo per aggiungerne uno. Tutto salvato in /mnt/cluster.conf (compatibile con l'attuale).</div>
+<div class="web">
+ <div class="top"><span><b>X6100</b> <span style="color:#9fb0c4;font-size:13px">IU1WXY · configurator</span></span><nav><span>General</span><span>Bands</span><span>Digital modes</span><span class="a">Cluster</span><span>Files</span><span>Time</span></nav></div>
+ <h2>DX Cluster</h2><p>Servers the radio can use. The one in use is marked; the radio reconnects when you change it.</p>
+ <div class="card"><table>
+  <tr><th>Name</th><th>Host</th><th>Port</th><th></th></tr>
+  <tr><td>VE7CC <span class="pill">in use</span></td><td>dxc.ve7cc.net</td><td>23</td><td style="text-align:right"><span class="btn">Delete</span></td></tr>
+  <tr><td>IK5PWJ</td><td>dxc.ik5pwj.it</td><td>8000</td><td style="text-align:right"><span class="btn">Use</span><span class="btn">Delete</span></td></tr>
+  <tr><td>DX Summit</td><td>dxc.dxsummit.fi</td><td>8000</td><td style="text-align:right"><span class="btn">Use</span><span class="btn">Delete</span></td></tr>
+ </table>
+ <div style="margin-top:14px"><span class="in">Name</span><span class="in" style="width:220px">Host</span><span class="in" style="width:70px">Port</span><span class="btn p">Add server</span></div></div>
+</div>
+</body></html>

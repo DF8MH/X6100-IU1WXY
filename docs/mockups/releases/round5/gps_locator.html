@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:800px;background:#11161c;font-family:"DejaVu Sans",sans-serif;color:#e8e8e8;padding-bottom:10px}
+.cap{padding:14px 16px 8px;font-size:15px;color:#9fd;line-height:21px}.cap b{color:#fff}
+.scr{width:800px;height:300px;position:relative;overflow:hidden;background:#000}
+.bar{position:absolute;top:0;left:0;right:0;height:52px;display:flex;gap:3px;padding:2px;background:#000}
+.box{background:linear-gradient(#3a3f47,#23272d);border:1px solid #777;border-radius:7px;color:#fff}
+.info{width:330px;padding:3px 8px;font-size:15px}
+.info .r{display:grid;grid-template-columns:repeat(6,1fr);text-align:center;height:24px;align-items:center}
+.meter{flex:1;font-size:13px;padding:3px 10px;letter-spacing:1px}
+.clock{width:162px;text-align:center;font-size:24px;line-height:28px}
+.clock div{font-size:12px;color:#bbb;line-height:15px}
+.spec{position:absolute;top:52px;left:0;right:0;height:108px;background:#000}
+.fr{position:absolute;top:160px;left:0;right:0;height:36px;background:#1d2630;font-size:22px;display:flex;justify-content:space-between;padding:4px 30px}
+.wf{position:absolute;top:196px;left:0;right:0;bottom:0;background:repeating-linear-gradient(90deg,#0a1a44 0 3px,#0c2250 3px 7px)}
+.badge{position:absolute;top:58px;right:8px;background:#0b1622cc;border:1px solid #4a6a8a;border-radius:7px;padding:3px 10px;font-size:17px;color:#fff;letter-spacing:1px}
+.badge i{color:#8f8;font-style:normal;font-size:13px;margin-right:6px}
+.strip{position:absolute;top:52px;left:2px;right:2px;height:30px;border-radius:7px;background:linear-gradient(#1c2a38,#101a24);border:1px solid #4a6a8a;display:flex;align-items:center;padding:0 14px;font-size:14px;color:#9fd}
+.strip .f{font-size:20px;color:#fff;margin:0 auto}
+.dlg{position:absolute;top:84px;left:2px;right:2px;bottom:0;border-radius:7px;border:1px solid #e0e4e8;background:linear-gradient(#49636f,#2c3a45)}
+</style></head><body>
+<div class="cap"><b>A · riquadro in alto a destra</b> — sulla schermata principale, sopra lo spettro sotto l'orologio: puntino verde (fix GPS) e locatore.
+Nelle app compare invece nella riga di frequenza, a destra prima del modo (vedi C). Sparisce se il GPS non ha fix.</div>
+<div class="scr">
+ <div class="bar"><div class="box info"><div class="r"><span>VFO-A</span><span style="color:#f66">USB</span><span>AUTO</span><span>PRE</span><span style="color:#666">ATT</span><span>ATU</span></div></div>
+ <div class="box meter">S1 3 5 7 9 +20 +40</div><div class="box clock">01:22<span style="font-size:15px">:05</span><div>▭ 7.8v · ⏻ 12.0v</div></div></div>
+ <div class="spec"></div><div class="fr"><span>7.077</span><span>7.127.000</span><span>7.177</span></div><div class="wf"></div>
+ <div class="badge"><i>●</i>JN35ab</div>
+</div>
+<div class="cap"><b>B · nel riquadro dell'orologio</b> — terza informazione sotto ora e tensioni: sempre nello stesso posto, anche nelle app,
+ma il riquadro è piccolo e le scritte diventano minute.</div>
+<div class="scr">
+ <div class="bar"><div class="box info"><div class="r"><span>VFO-A</span><span style="color:#f66">USB</span><span>AUTO</span><span>PRE</span><span style="color:#666">ATT</span><span>ATU</span></div></div>
+ <div class="box meter">S1 3 5 7 9 +20 +40</div><div class="box clock" style="line-height:20px;font-size:20px;padding-top:1px">01:22<span style="font-size:13px">:05</span><div style="line-height:13px">7.8v · 12.0v</div><div style="line-height:13px;color:#8f8">JN35ab</div></div></div>
+ <div class="spec"></div><div class="fr"><span>7.077</span><span>7.127.000</span><span>7.177</span></div><div class="wf"></div>
+</div>
+<div class="cap"><b>C · nelle app, con la variante A</b> — nella riga di frequenza, a destra, prima del modo.</div>
+<div class="scr" style="height:140px">
+ <div class="bar"><div class="box info"><div class="r"><span>VFO-A</span><span style="color:#f66">USB-D</span><span>AUTO</span><span>PRE</span><span style="color:#666">ATT</span><span>ATU</span></div></div>
+ <div class="box meter">S1 3 5 7 9 +20 +40</div><div class="box clock">01:22<span style="font-size:15px">:05</span><div>▭ 7.8v · ⏻ 12.0v</div></div></div>
+ <div class="strip"><span>FT8 40m</span><span class="f">7.074.000</span><span style="color:#fff;margin-right:14px"><span style="color:#8f8;font-size:12px">●</span> JN35ab</span><span style="color:#f66">USB-D</span></div>
+ <div class="dlg"></div>
+</div>
+</body></html>

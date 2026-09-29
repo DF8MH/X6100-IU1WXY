@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:800px;background:#11161c;font-family:"DejaVu Sans",sans-serif;color:#e8e8e8;padding-bottom:10px}
+.cap{padding:14px 16px 8px;font-size:15px;color:#9fd;line-height:21px}.cap b{color:#fff}
+.scr{width:800px;height:480px;position:relative;overflow:hidden;background:#000}
+.bar{position:absolute;top:0;left:0;right:0;display:flex;gap:3px;padding:2px;background:#000}
+.box{background:linear-gradient(#3a3f47,#23272d);border:1px solid #777;border-radius:8px;color:#fff}
+.info .r{display:grid;grid-template-columns:repeat(6,1fr);text-align:center;align-items:center}
+.meter{flex:1;position:relative;padding:4px 10px}
+.scale{display:flex;justify-content:space-between;letter-spacing:1px;width:210px}
+.bars{position:absolute;left:10px;height:16px;width:212px;display:flex;gap:2px}
+.bars i{flex:1;background:#8c8c8c}.bars i.off{background:#333}
+.dbm{position:absolute;right:10px;color:#ddd}
+.clock{width:162px;text-align:center}
+.strip{position:absolute;left:2px;right:2px;border-radius:8px;background:linear-gradient(#1c2a38,#101a24);border:1px solid #4a6a8a;display:flex;align-items:center;padding:0 16px;color:#9fd}
+.strip .f{color:#fff;margin:0 auto;letter-spacing:1px}
+.wf{position:absolute;left:0;right:0;bottom:54px;background:repeating-linear-gradient(90deg,#0a1a44 0 3px,#0c2250 3px 7px)}
+.btns{position:absolute;bottom:0;left:0;right:0;height:54px;display:flex;gap:2px;padding:1px}
+.b{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0b1622;border:1px solid #99aaaa;border-radius:10px;position:relative;font-size:19px}
+.b.pg{background:#16232f;color:#cde;font-size:17px}
+.b .l{font-size:14px;color:#90f0d0}.b .v{font-size:22px;color:#fff}
+.k{position:absolute;left:0;top:10px;bottom:10px;width:4px;border-radius:0 3px 3px 0;background:#6f6}
+.lbl{position:absolute;right:8px;font-size:12px;color:#ff0;background:#000a;padding:1px 5px;border:1px dashed #ff0}
+</style></head><body>
+<div class="cap"><b>Oggi</b> — barra 52 px, riga di frequenza 30 px (solo nelle app), spettro spento.</div>
+<div class="scr">
+ <div class="bar" style="height:52px">
+  <div class="box info" style="width:330px;padding:3px 8px"><div class="r" style="height:24px;font-size:15px"><span>VFO-A</span><span style="color:#f66">USB</span><span>AUTO</span><span>PRE</span><span style="color:#666">ATT</span><span>ATU</span></div><div class="r" style="height:20px;font-size:13px;color:#cde"><span>≋</span><span style="color:#5cf">ᛒ</span><span style="color:#5cf">♫</span><span>⌨</span><span style="color:#8f8">➤</span><span style="color:#666">◉</span></div></div>
+  <div class="box meter"><div class="scale" style="font-size:12px"><span>S1</span><span>3</span><span>5</span><span>7</span><span>9</span><span>+20</span><span>+40</span></div><div class="bars" style="top:22px"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div><div class="dbm" style="top:12px;font-size:17px">-82.2</div></div>
+  <div class="box clock" style="padding-top:2px;font-size:25px;line-height:28px">01:32<span style="font-size:16px">:05</span><div style="font-size:12px;color:#bbb;line-height:15px">▭ 7.8v · ⏻ 12.0v</div></div>
+ </div>
+ <div class="strip" style="top:52px;height:30px;font-size:14px"><span>40m</span><span class="f" style="font-size:21px">7.127.000</span><span style="color:#f66">USB</span></div>
+ <div style="position:absolute;top:84px;left:0;right:0;height:36px;background:#1d2630;font-size:22px;display:flex;justify-content:space-between;padding:4px 30px"><span>7.077</span><span>7.127.000</span><span>7.177</span></div>
+ <div class="wf" style="top:120px"></div>
+ <div class="btns"><div class="b pg">VOL 1:2</div><div class="b"><span class="k"></span><span class="l">Volume</span><span class="v">39</span></div><div class="b"><span class="l">Squelch</span><span class="v">2</span></div><div class="b"><span class="l">RF gain</span><span class="v">65</span></div><div class="b"><span class="l">TX power</span><span class="v">5.0 W</span></div></div>
+</div>
+
+<div class="cap"><b>Proposta</b> — barra alta <b>64 px</b> (caratteri: stati 19, icone 18, ora 32, tensioni 16, S-meter scala 15 e valore 22)
+e riga di frequenza <b>42 px</b> sempre visibile, anche sulla schermata principale (frequenza 30, banda e modo 20, locatore GPS 18).
+Il waterfall resta alto 240 px (oggi 252 con spettro spento, 222 con spettro acceso).</div>
+<div class="scr">
+ <div class="bar" style="height:64px">
+  <div class="box info" style="width:330px;padding:4px 8px"><div class="r" style="height:30px;font-size:19px"><span>VFO-A</span><span style="color:#f66">USB</span><span>AUTO</span><span>PRE</span><span style="color:#666">ATT</span><span>ATU</span></div><div class="r" style="height:24px;font-size:18px;color:#cde"><span>≋</span><span style="color:#5cf">ᛒ</span><span style="color:#5cf">♫</span><span>⌨</span><span style="color:#8f8">➤</span><span style="color:#666">◉</span></div></div>
+  <div class="box meter"><div class="scale" style="font-size:15px"><span>S1</span><span>3</span><span>5</span><span>7</span><span>9</span><span>+20</span><span>+40</span></div><div class="bars" style="top:30px;height:20px"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div><div class="dbm" style="top:16px;font-size:22px">-82.2</div></div>
+  <div class="box clock" style="padding-top:2px;font-size:32px;line-height:36px">01:32<span style="font-size:19px">:05</span><div style="font-size:16px;color:#bbb;line-height:20px">▭ 7.8v · ⏻ 12.0v</div></div>
+ </div>
+ <div class="strip" style="top:64px;height:42px;font-size:20px"><span>40m</span><span class="f" style="font-size:30px">7.127.000</span><span style="color:#fff;margin-right:16px;font-size:18px"><span style="color:#8f8;font-size:14px">●</span> JN35ab</span><span style="color:#f66">USB</span></div>
+ <div style="position:absolute;top:108px;left:0;right:0;height:36px;background:#1d2630;font-size:22px;display:flex;justify-content:space-between;padding:4px 30px"><span>7.077</span><span style="color:#9ab">(riga delle frequenze del waterfall)</span><span>7.177</span></div>
+ <div class="wf" style="top:144px"></div>
+ <div class="lbl" style="top:150px">waterfall 240 px</div>
+ <div class="btns"><div class="b pg">VOL 1:2</div><div class="b"><span class="k"></span><span class="l">Volume</span><span class="v">39</span></div><div class="b"><span class="l">Squelch</span><span class="v">2</span></div><div class="b"><span class="l">RF gain</span><span class="v">65</span></div><div class="b"><span class="l">TX power</span><span class="v">5.0 W</span></div></div>
+</div>
+<div class="cap">Con la riga di frequenza sempre visibile, la riga delle frequenze del waterfall (7.077 · 7.127.000 · 7.177) potrebbe mostrare solo i bordi
+della banda visualizzata, senza ripetere la frequenza centrale: da decidere.</div>
+</body></html>
