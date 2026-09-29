@@ -19,8 +19,6 @@
 #include "styles.h"
 #include "util.h"
 
-#define NUM_PWR_ITEMS 6
-#define NUM_VSWR_ITEMS 5
 #define UPDATE_UI_MS 40
 
 static const float min_pwr = 0.0f;
@@ -45,47 +43,33 @@ static lv_obj_t     *vswr_label;
 static lv_grad_dsc_t grad;
 
 
-typedef struct {
-    char *label;
-    float val;
-} item_t;
-
-static item_t pwr_items[NUM_PWR_ITEMS] = {
-    {.label = "PWR", .val = 0.0f },
-    {.label = "2",   .val = 2.0f },
-    {.label = "4",   .val = 4.0f },
-    {.label = "6",   .val = 6.0f },
-    {.label = "8",   .val = 8.0f },
-    {.label = "10",  .val = 10.0f}
-};
-
-static item_t vswr_items[NUM_VSWR_ITEMS] = {
-    {.label = "SWR", .val = 1.0f},
-    {.label = "2",   .val = 2.0f},
-    {.label = "3",   .val = 3.0f},
-    {.label = "4",   .val = 4.0f},
-    {.label = ">5",  .val = 5.0f}
-};
-
 static void on_cur_mode_change(Subject *subj, void *user_data);
 
-/* One row of the TX meter: scale on top, bars below it (like the S-meter). */
-static void draw_row(lv_draw_ctx_t *draw_ctx, lv_coord_t x1, lv_coord_t y1, const item_t *items, uint8_t num_items,
+/* One compact row of the TX meter: name, bars; the value is a label on the
+ * right. Two rows fit in the top bar height, so nothing below is covered. */
+static void draw_row(lv_draw_ctx_t *draw_ctx, lv_coord_t x1, lv_coord_t y1, const char *name,
                      float min, float max, float step, float val, bool swr) {
     lv_draw_rect_dsc_t  rect_dsc;
     lv_draw_label_dsc_t label_dsc;
     lv_area_t           area;
-    lv_point_t          label_size;
-    uint8_t             slice_w = 5;
+    uint8_t             slice_w = 3;
     uint8_t             slices_total = (max - min) / step + 0.5f;
 
     uint32_t count = (LV_MAX(val, min) - min + step) / step;
     count = LV_MIN(count, slices_total);
 
-    lv_draw_rect_dsc_init(&rect_dsc);
+    lv_draw_label_dsc_init(&label_dsc);
+    label_dsc.color = lv_color_white();
+    label_dsc.font  = &sony_16;
+    area.x1 = x1;
+    area.x2 = x1 + 40;
+    area.y1 = y1;
+    area.y2 = y1 + 18;
+    lv_draw_label(draw_ctx, &label_dsc, &area, name, NULL);
 
-    area.y1 = y1 + 22;
-    area.y2 = y1 + 36;
+    lv_draw_rect_dsc_init(&rect_dsc);
+    area.y1 = y1 + 4;
+    area.y2 = y1 + 13;
 
     for (uint16_t i = 0; i < slices_total; i++) {
         float v = min + i * step;
@@ -101,28 +85,10 @@ static void draw_row(lv_draw_ctx_t *draw_ctx, lv_coord_t x1, lv_coord_t y1, cons
         } else {
             rect_dsc.bg_color = lv_color_hex(0xAA0000);
         }
-        area.x1 = x1 + i * slice_w;
+        area.x1 = x1 + 40 + i * slice_w;
         area.x2 = area.x1 + slice_w - 2;
 
         lv_draw_rect(draw_ctx, &rect_dsc, &area);
-    }
-
-    lv_draw_label_dsc_init(&label_dsc);
-
-    label_dsc.color = lv_color_white();
-    label_dsc.font  = &sony_16;
-
-    area.y1 = y1 + 3;
-    area.y2 = area.y1 + 18;
-
-    for (uint8_t i = 0; i < num_items; i++) {
-        lv_txt_get_size(&label_size, items[i].label, label_dsc.font, 0, 0, LV_COORD_MAX, 0);
-
-        area.x1 = x1 + slice_w * (uint8_t)((items[i].val - min) / step + 0.5f) - label_size.x / 2;
-        area.x1 = LV_MAX(area.x1, x1 - 4);
-        area.x2 = area.x1 + label_size.x;
-
-        lv_draw_label(draw_ctx, &label_dsc, &area, items[i].label, NULL);
     }
 }
 
@@ -130,11 +96,11 @@ static void tx_info_draw_cb(lv_event_t *e) {
     lv_obj_t      *obj      = lv_event_get_target(e);
     lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
 
-    lv_coord_t x1 = obj->coords.x1 + 16;
+    lv_coord_t x1 = obj->coords.x1 + 10;
     lv_coord_t y1 = obj->coords.y1;
 
-    draw_row(draw_ctx, x1, y1, pwr_items, NUM_PWR_ITEMS, min_pwr, max_pwr, 0.25f, pwr, false);
-    draw_row(draw_ctx, x1, y1 + TOP_BAR_BOX_H, vswr_items, NUM_VSWR_ITEMS, min_swr, max_swr, 0.1f, vswr, true);
+    draw_row(draw_ctx, x1, y1 + 2, "PWR", min_pwr, max_pwr, 0.25f, pwr, false);
+    draw_row(draw_ctx, x1, y1 + 21, "SWR", min_swr, max_swr, 0.1f, vswr, true);
 }
 
 static void tx_cb(lv_event_t *e) {
@@ -157,7 +123,7 @@ static void update_tx_info(void *arg) {
     }
 
     lv_label_set_text_fmt(vswr_label, "%.2f", vswr);
-    lv_label_set_text_fmt(pwr_label, "%.2fW\nALC %.1f", pwr, alc);
+    lv_label_set_text_fmt(pwr_label, "%.1fW  ALC %.1f", pwr, alc);
 
     lv_obj_invalidate(obj);
 }
@@ -227,14 +193,14 @@ lv_obj_t *tx_info_init(lv_obj_t *parent) {
     pwr_label = lv_label_create(obj);
     lv_obj_set_style_text_font(pwr_label, &sony_16, 0);
     lv_obj_set_style_text_align(pwr_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_align(pwr_label, LV_ALIGN_TOP_RIGHT, -8, 3);
+    lv_obj_align(pwr_label, LV_ALIGN_TOP_RIGHT, -8, 2);
     lv_obj_set_style_text_color(pwr_label, lv_color_white(), 0);
     lv_label_set_text(pwr_label, "");
 
     // swr indicator
     vswr_label = lv_label_create(obj);
-    lv_obj_set_style_text_font(vswr_label, &sony_20, 0);
-    lv_obj_align(vswr_label, LV_ALIGN_BOTTOM_RIGHT, -8, -10);
+    lv_obj_set_style_text_font(vswr_label, &sony_16, 0);
+    lv_obj_align(vswr_label, LV_ALIGN_TOP_RIGHT, -8, 21);
     lv_obj_set_style_text_color(vswr_label, lv_color_white(), 0);
     lv_label_set_text(vswr_label, "");
 

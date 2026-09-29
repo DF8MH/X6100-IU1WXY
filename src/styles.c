@@ -347,7 +347,7 @@ void styles_init(themes_t theme) {
     lv_style_set_x(&tx_info_style, TOP_BAR_METER_X);
     lv_style_set_y(&tx_info_style, TOP_BAR_MARGIN);
     lv_style_set_width(&tx_info_style, TOP_BAR_METER_W);
-    lv_style_set_height(&tx_info_style, TOP_BAR_BOX_H * 2);
+    lv_style_set_height(&tx_info_style, TOP_BAR_BOX_H);
     lv_style_set_pad_all(&tx_info_style, 0);
 
     lv_style_init(&cw_tune_style);
