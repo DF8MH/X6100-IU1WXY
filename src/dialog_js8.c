@@ -1429,7 +1429,7 @@ static void update_tx_bar(void) {
         break;
     default:
         snprintf(line, sizeof(line), "TX %4u Hz %s   ready%s%s", offset, js8_speed_name(cur_speed()),
-                 params.callsign.x[0] ? "" : "  (set your callsign: APP > Callsign)",
+                 params.callsign.x[0] ? "" : "  (set your callsign: Settings > General)",
                  sel_call[0] ? "      selected: " : "");
         if (sel_call[0]) strncat(line, sel_call, sizeof(line) - strlen(line) - 1);
         if (auto_cq) strncat(line, "      auto CQ", sizeof(line) - strlen(line) - 1);
@@ -1664,7 +1664,7 @@ static bool compose_cancel_cb(void) {
 static void compose_open(const char *prefill) {
     if (composing) return;
     if (!params.callsign.x[0]) {
-        msg_update_text_fmt("Set your callsign first: APP > Callsign");
+        msg_update_text_fmt("Set your callsign first: Settings > General");
         return;
     }
     composing = true;
@@ -2488,7 +2488,7 @@ static void query_item_cb(lv_event_t *e) {
 
     char text[64];
     if (!js8_query_text(q, call, snr, station_qth(), text, sizeof(text))) {
-        msg_update_text_fmt(q == JS8_Q_MY_GRID ? "Set your grid first: APP > QTH" : "Nothing to send");
+        msg_update_text_fmt(q == JS8_Q_MY_GRID ? "Set your grid first: Settings > General" : "Nothing to send");
         return;
     }
     apply_hold(freq);
@@ -3200,7 +3200,7 @@ static bool aprs_grid(char grid[8], double *lat, double *lon) {
     char g[8];
     snprintf(g, sizeof(g), "%.6s", station_qth());
     if (strlen(g) < 4) {
-        msg_update_text_fmt("Set your grid first: APP > QTH");
+        msg_update_text_fmt("Set your grid first: Settings > General");
         return false;
     }
     if (grid) memcpy(grid, g, sizeof(g));
@@ -3381,7 +3381,7 @@ static void aprs_cb(button_data_t *btn) {
     if (popup_guard()) return;
     if (query_list || texts_list || composing) return;
     if (!params.callsign.x[0]) {
-        msg_update_text_fmt("Set your callsign first: APP > Callsign");
+        msg_update_text_fmt("Set your callsign first: Settings > General");
         return;
     }
     lv_group_remove_obj(table);
@@ -3941,7 +3941,7 @@ static void log_cb(button_data_t *btn) {
     if (popup_guard()) return;
     if (composing) return;
     if (!params.callsign.x[0]) {
-        msg_update_text_fmt("Set your callsign first: APP > Callsign");
+        msg_update_text_fmt("Set your callsign first: Settings > General");
         return;
     }
     /* A QSO that just ended, else the selected station. */

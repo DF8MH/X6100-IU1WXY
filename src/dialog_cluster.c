@@ -263,7 +263,7 @@ static void update_status(void) {
     cluster_state_t st = cluster_client_state(detail, sizeof(detail));
 
     if (!params.callsign.x[0]) {
-        lv_label_set_text(status_right, "#ff6060 Set your callsign: APP > Callsign#");
+        lv_label_set_text(status_right, "#ff6060 Set your callsign: Settings > General#");
         return;
     }
     if (wifi_get_status() != WIFI_CONNECTED) {
