@@ -25,6 +25,7 @@ typedef struct {
     char     spotter[CLUSTER_CALL_LEN];
     char     comment[CLUSTER_COMMENT_LEN];
     uint16_t utc_min;   /* minutes after 00:00Z, from the spot's HHMMZ */
+    int64_t  when;      /* UTC seconds when the line has a date (sh/dx rows), else 0 */
 } cluster_spot_t;
 
 typedef struct {
@@ -45,8 +46,8 @@ typedef enum {
  * Returns false for anything else (prompts, announcements, WWV...). */
 bool cluster_parse_line(const char *line, cluster_spot_t *out);
 
-/* Adds a spot. The same DX within 1 kHz replaces the older spot (moved to
- * the newest position); when full the oldest spot is dropped. */
+/* Adds a spot, keeping the store sorted by time (oldest first). The same DX
+ * within 1 kHz keeps only the newest spot; when full the oldest is dropped. */
 void cluster_store_add(cluster_store_t *s, const cluster_spot_t *spot);
 
 /* Drops spots older than max_age_min, by their UTC time. */
