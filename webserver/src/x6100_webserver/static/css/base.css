@@ -1,0 +1,36 @@
+.action {
+    cursor: pointer;
+}
+
+.freq_cell {
+    text-align: right;
+}
+
+#bands {
+    min-width: 100%;
+}
+
+#bands .action-cell {
+    text-align: center;
+}
+
+#bands input:not([type="checkbox"]),select {
+    min-width: 5em;
+    width: 100%;
+}
+
+th.hdr {
+    width: 12%;
+}
+
+th.hdr.freq {
+    width: 14%;
+}
+
+th.hdr.name {
+    width: 30%;
+}
+
+#digital_modes {
+    min-width: 100%;
+}
