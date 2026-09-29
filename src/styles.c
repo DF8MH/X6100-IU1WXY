@@ -332,7 +332,7 @@ void styles_init(themes_t theme) {
     lv_style_set_pad_column(&info_row_style, 1);
 
     lv_style_init(&info_item_style);
-    lv_style_set_text_font(&info_item_style, &sony_20);
+    lv_style_set_text_font(&info_item_style, &sony_18);
     lv_style_set_pad_ver(&info_item_style, 1);
     lv_style_set_radius(&info_item_style, 3);
 
