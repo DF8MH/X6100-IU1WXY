@@ -44,7 +44,6 @@ typedef struct button_data_t {
     };
     void (*press)(struct button_data_t *);
     void (*hold)(struct button_data_t *);
-    const char *voice;
     // next/prev page
     struct buttons_page_t *next;
     struct buttons_page_t *prev;

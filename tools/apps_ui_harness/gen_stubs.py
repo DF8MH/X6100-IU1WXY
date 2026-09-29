@@ -20,7 +20,7 @@ old = set(re.findall(r"^\.globl (\S+)$", existing, re.M))
 with open(f"{build}/stubs_auto.S", "a") as f:
     for s in syms:
         if s in old: continue
-        isdata = kind.get(s, "f") == "d" and not re.match(r"(controls_|radio_|voice_|vol_|mfk_|dialog_|on_|btn_)", s)
+        isdata = kind.get(s, "f") == "d" and not re.match(r"(controls_|radio_|vol_|mfk_|dialog_|on_|btn_)", s)
         if not isdata:
             f.write(f'.text\n.globl {s}\n.type {s},@function\n{s}:\n  xor %eax,%eax\n  pxor %xmm0,%xmm0\n  ret\n')
         else:

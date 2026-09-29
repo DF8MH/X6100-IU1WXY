@@ -86,5 +86,3 @@ void lpf(float *x, float current, float beta, float initial) { *x = current; }
 /* GPS with a fix */
 int gps_status(void) { return 1; /* GPS_STATUS_WORKING */ }
 bool gps_last_fix(double *lat, double *lon, int *age_s) { *lat = 45.0; *lon = 7.6; *age_s = 1; return true; }
-struct { const char *name, *label, *welcome; } voice_item[4] = {
-    {"lyubov", "Lyubov (En)"}, {"slt", "SLT (En)"}, {"alan", "Alan (En)"}, {"evgeniy-eng", "Evgeniy (En)"}};

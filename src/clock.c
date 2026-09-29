@@ -10,7 +10,6 @@
 
 #include "styles.h"
 #include "backlight.h"
-#include "voice.h"
 #include "msg.h"
 
 #include <time.h>
@@ -152,11 +151,6 @@ void clock_set_tx_timeout(uint8_t sec) {
     params_lock();
     params.clock_tx_timeout = sec;
     params_unlock(&params.dirty.clock_tx_timeout);
-}
-
-void clock_say_bat_info() {
-    voice_sure();
-    voice_say_float("Battery voltage|", v_bat);
 }
 
 static void check_time_sync_cb(lv_timer_t * t) {

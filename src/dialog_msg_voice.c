@@ -34,7 +34,6 @@
 #include "textarea_window.h"
 #include "msg.h"
 #include "radio.h"
-#include "voice.h"
 
 #define BUF_SIZE     1024
 #define MAX_ITEMS    64
@@ -392,14 +391,13 @@ static void relabel(button_data_t *b, const char **last) {
 }
 
 static void update_buttons(void) {
-    bool speaking = voice_is_speaking();
     bool empty    = count == 0;
     bool rec      = state == MSG_VOICE_RECORD;
     bool idle     = state == MSG_VOICE_OFF;
 
-    set_btn(&btn_rec, !(rec || (idle && !speaking)));
-    set_btn(&btn_listen, !(listening() || (idle && !speaking && !empty)));
-    set_btn(&btn_tx, !(sending() || (idle && !speaking && !empty)));
+    set_btn(&btn_rec, !(rec || idle));
+    set_btn(&btn_listen, !(listening() || (idle && !empty)));
+    set_btn(&btn_tx, !(sending() || (idle && !empty)));
     set_btn(&btn_close, rec);
     set_btn(&btn_close2, rec);
     set_btn(&btn_beacon, !idle);
@@ -460,7 +458,7 @@ static void update_status(void) {
         lv_label_set_text(info_lbl, "Playing on the speaker only");
         lv_label_set_text(hint, "Listen: stop");
     } else {
-        set_state(voice_is_speaking() ? "WAIT" : "READY", 0x1f2a35, 0x90f0d0);
+        set_state("READY", 0x1f2a35, 0x90f0d0);
         lv_bar_set_value(bar, 0, LV_ANIM_OFF);
         if (beacon_on)
             lv_label_set_text_fmt(info_lbl, "Beacon: every %i s\nTX starts it", params.voice_msg_period);
@@ -566,21 +564,21 @@ static void radio_tx_cb(lv_event_t *e) {
 static void rec_cb(button_data_t *btn) {
     (void)btn;
     if (state == MSG_VOICE_RECORD) stop_rec();
-    else if (state == MSG_VOICE_OFF && !voice_is_speaking()) start_rec();
+    else if (state == MSG_VOICE_OFF) start_rec();
     timer_cb(NULL);
 }
 
 static void listen_cb(button_data_t *btn) {
     (void)btn;
     if (listening()) stop_play();
-    else if (!voice_is_speaking()) start_play(false);
+    else start_play(false);
     timer_cb(NULL);
 }
 
 static void tx_btn_cb(button_data_t *btn) {
     (void)btn;
     if (sending()) stop_play();
-    else if (!voice_is_speaking()) start_play(true);
+    else start_play(true);
     timer_cb(NULL);
 }
 

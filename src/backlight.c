@@ -16,7 +16,6 @@
 #include "lvgl/lvgl.h"
 #include "backlight.h"
 #include "util.h"
-#include "voice.h"
 
 static int          power;
 static int          brightness;
@@ -98,7 +97,6 @@ void backlight_switch() {
         x6100_gpio_set(x6100_pin_light, 0);
 
         on = false;
-        voice_say_text_fmt("Display off");
         lv_disp_enable_invalidation(lv_disp_get_default(), false);
     } else {
         lv_disp_enable_invalidation(lv_disp_get_default(), true);
@@ -106,7 +104,6 @@ void backlight_switch() {
         set_brightness(params.brightness_normal);
         x6100_gpio_set(x6100_pin_light, params.brightness_buttons == BUTTONS_DARK ? 0 : 1);
 
-        voice_say_text_fmt("Display on");
         on = true;
     }
 }

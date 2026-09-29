@@ -5,7 +5,6 @@
 #include "dialog_channels.h"
 #include "channels.h"
 #include "keyboard.h"
-#include "voice.h"
 #include "textarea_window.h"
 #include "cfg/cfg_api.h"
 #include "styles.h"
@@ -788,11 +787,6 @@ static void add_cb(button_data_t *data) {
 
 
     if (!channels_add_current()) {
-
-        voice_say_text_fmt(
-            "Unable to add channel"
-        );
-
         return;
     }
 
@@ -827,11 +821,6 @@ static void add_cb(button_data_t *data) {
         table,
         LV_COORD_MAX,
         LV_ANIM_OFF
-    );
-
-
-    voice_say_text_fmt(
-        "Channel added"
     );
 }
 
@@ -879,11 +868,6 @@ static void delete_cb(button_data_t *data) {
 
 
     if (!channels_delete((uint16_t)row)) {
-
-        voice_say_text_fmt(
-            "Unable to delete channel"
-        );
-
         return;
     }
 
@@ -922,10 +906,6 @@ static void delete_cb(button_data_t *data) {
         true
     );
 }
-
-    voice_say_text_fmt(
-        "Channel deleted"
-    );
 }
 
 
@@ -1080,11 +1060,6 @@ static void drag_cb(button_data_t *data) {
         4,
         &btn_drop
     );
-
-
-    voice_say_text_fmt(
-        "Drag channel"
-    );
 }
 
 
@@ -1129,11 +1104,6 @@ static void drop_cb(button_data_t *data) {
 
         build_table();
 
-
-        voice_say_text_fmt(
-            "Unable to save channel order"
-        );
-
         return;
     }
 
@@ -1154,11 +1124,6 @@ static void drop_cb(button_data_t *data) {
     buttons_load(
         4,
         &btn_drag
-    );
-
-
-    voice_say_text_fmt(
-        "Channel moved"
     );
 }
 
@@ -1241,11 +1206,6 @@ static bool edit_ok_cb(void) {
     if (!channels_set_name(
             (uint16_t)edit_row,
             name)) {
-
-        voice_say_text_fmt(
-            "Unable to save channel"
-        );
-
         return false;
     }
 
@@ -1265,11 +1225,6 @@ static bool edit_ok_cb(void) {
     lv_async_call(
         rebuild_after_edit,
         NULL
-    );
-
-
-    voice_say_text_fmt(
-        "Channel saved"
     );
 
 
@@ -1481,22 +1436,6 @@ static bool recall_row(int16_t row, bool close_dialog) {
     );
 
 
-    /* Voice confirmation */
-    if (channel->name[0] != '\0') {
-
-        voice_say_text_fmt(
-            "Channel %s",
-            channel->name
-        );
-
-    } else {
-
-        voice_say_text_fmt(
-            "Channel"
-        );
-    }
-
-
     if (close_dialog) {
         dialog_destruct();
     }
@@ -1593,9 +1532,6 @@ bool dialog_channels_recall_relative(int8_t direction) {
 
 
     if (count <= 0) {
-        voice_say_text_fmt(
-            "No channels"
-        );
         return false;
     }
 

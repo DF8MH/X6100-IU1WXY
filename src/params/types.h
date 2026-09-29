@@ -26,21 +26,18 @@
 
 typedef struct {
     char        *name;
-    char        *voice;
     bool        x;
     bool        dirty;
 } params_bool_t;
 
 typedef struct {
     char        *name;
-    char        *voice;
     float       x;
     bool        dirty;
 } params_float_t;
 
 typedef struct {
     char        *name;
-    char        *voice;
     uint8_t     x;
     uint8_t     min;
     uint8_t     max;
@@ -49,42 +46,36 @@ typedef struct {
 
 typedef struct {
     char        *name;
-    char        *voice;
     int8_t      x;
     bool        dirty;
 } params_int8_t;
 
 typedef struct {
     char        *name;
-    char        *voice;
     uint16_t    x;
     bool        dirty;
 } params_uint16_t;
 
 typedef struct {
     char        *name;
-    char        *voice;
     int16_t     x;
     bool        dirty;
 } params_int16_t;
 
 typedef struct {
     char        *name;
-    char        *voice;
     int32_t     x;
     bool        dirty;
 } params_int32_t;
 
 typedef struct {
     char        *name;
-    char        *voice;
     uint64_t    x;
     bool        dirty;
 } params_uint64_t;
 
 typedef struct {
     char        *name;
-    char        *voice;
     char        x[16];
     uint8_t     max_len;
     bool        dirty;

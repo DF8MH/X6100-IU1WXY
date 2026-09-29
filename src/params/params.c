@@ -41,12 +41,12 @@ params_t params = {
     .spectrum_peak          = { .x = true,  .name = "spectrum_peak"},
     .spectrum_peak_hold     = { .x = 5,  .min=1, .max=10, .name = "spectrum_peak_hold"},
     .spectrum_peak_speed    = { .x = 5,  .min=1, .max=30, .name = "spectrum_peak_speed"},
-    .waterfall_smooth_scroll= { .x = false,  .name = "waterfall_smooth_scroll",  .voice = "Waterfall smooth scroll"},
-    .waterfall_center_line  = { .x = true,  .name = "waterfall_center_line",    .voice = "Waterfall center line"},
-    .waterfall_zoom         = { .x = true,  .name = "waterfall_zoom",           .voice = "Waterfall zoom"},
-    .mag_freq               = { .x = false,  .name = "mag_freq",                 .voice = "Magnification of frequency" },
-    .mag_info               = { .x = true,  .name = "mag_info",                 .voice = "Magnification of info" },
-    .mag_alc                = { .x = true,  .name = "mag_alc",                  .voice = "Magnification of A L C" },
+    .waterfall_smooth_scroll= { .x = false,  .name = "waterfall_smooth_scroll" },
+    .waterfall_center_line  = { .x = true,  .name = "waterfall_center_line" },
+    .waterfall_zoom         = { .x = true,  .name = "waterfall_zoom" },
+    .mag_freq               = { .x = false,  .name = "mag_freq" },
+    .mag_info               = { .x = true,  .name = "mag_info" },
+    .mag_alc                = { .x = true,  .name = "mag_alc" },
     .clock_view             = CLOCK_TIME_POWER,
     .clock_time_timeout     = 5,
     .clock_power_timeout    = 3,
@@ -57,8 +57,8 @@ params_t params = {
     .bias_final             = 650,
     .line_in                = 10,
     .line_out               = 10,
-    .spmode                 = { .x = false,             .name = "spmode",           .voice = "Speaker mode" },
-    .freq_accel             = { .x = FREQ_ACCEL_LITE,   .name = "freq_accel",       .voice = "Frequency acceleration" },
+    .spmode                 = { .x = false,             .name = "spmode" },
+    .freq_accel             = { .x = FREQ_ACCEL_LITE,   .name = "freq_accel" },
 
     .cw_encoder_period      = 10,
     .voice_msg_period       = 10,
@@ -94,8 +94,8 @@ params_t params = {
     .long_app               = ACTION_APP_RECORDER,
     .long_key               = ACTION_NONE,
     .long_msg               = ACTION_RECORDER,
-    .long_dfn               = ACTION_VOICE_MODE,
-    .long_dfl               = ACTION_BAT_INFO,
+    .long_dfn               = ACTION_NONE,
+    .long_dfl               = ACTION_NONE,
 
     .press_f1               = ACTION_STEP_UP,
     .press_f2               = ACTION_NONE,
@@ -104,12 +104,6 @@ params_t params = {
 
     .play_gain_db_f         = { .x = 0.0f, .name = "play_gain_db_f"},
     .rec_gain_db_f          = { .x = 0.0f, .name = "rec_gain_db_f"},
-
-    .voice_mode             = { .x = VOICE_LCD,                                 .name = "voice_mode" },
-    .voice_lang             = { .x = 0,   .min = 0,  .max = (VOICES_NUM - 1),   .name = "voice_lang" },
-    .voice_rate             = { .x = 100, .min = 50, .max = 150,                .name = "voice_rate",     .voice = "Voice rate" },
-    .voice_pitch            = { .x = 100, .min = 50, .max = 150,                .name = "voice_pitch",    .voice = "Voice pitch" },
-    .voice_volume           = { .x = 100, .min = 50, .max = 150,                .name = "voice_volume",   .voice = "Voice volume" },
 
     .qth                    = { .x = "",  .max_len = 6, .name = "qth" },
     .callsign               = { .x = "",  .max_len = 12, .name = "callsign" },
@@ -282,11 +276,6 @@ static bool params_load() {
         if (params_load_float(&params.ft8_output_gain_offset, name, f)) continue;
         if (params_load_str(&params.ft8_cq_modifier, name, t)) continue;
 
-        if (params_load_uint8(&params.voice_mode, name, i)) continue;
-        if (params_load_uint8(&params.voice_lang, name, i)) continue;
-        if (params_load_uint8(&params.voice_rate, name, i)) continue;
-        if (params_load_uint8(&params.voice_pitch, name, i)) continue;
-        if (params_load_uint8(&params.voice_volume, name, i)) continue;
         if (params_load_uint8(&params.freq_accel, name, i)) continue;
 
         if (params_load_uint16(&params.ft8_tx_freq, name, i)) continue;
@@ -380,11 +369,6 @@ static void params_save() {
     params_save_float(&params.play_gain_db_f);
     params_save_float(&params.rec_gain_db_f);
 
-    params_save_uint8(&params.voice_mode);
-    params_save_uint8(&params.voice_lang);
-    params_save_uint8(&params.voice_rate);
-    params_save_uint8(&params.voice_pitch);
-    params_save_uint8(&params.voice_volume);
     params_save_uint8(&params.freq_accel);
 
     params_save_uint16(&params.ft8_tx_freq);
@@ -545,30 +529,18 @@ void params_bool_set(params_bool_t *var, bool x) {
     params_lock();
     var->x = x;
     params_unlock(&var->dirty);
-
-    if (var->voice) {
-        voice_say_bool(var->voice, var->x);
-    }
 }
 
 void params_uint8_set(params_uint8_t *var, uint8_t x) {
     params_lock();
     var->x = x;
     params_unlock(&var->dirty);
-
-    if (var->voice) {
-        voice_say_int(var->voice, var->x);
-    }
 }
 
 void params_uint16_set(params_uint16_t *var, uint16_t x) {
     params_lock();
     var->x = x;
     params_unlock(&var->dirty);
-
-    if (var->voice) {
-        voice_say_int(var->voice, var->x);
-    }
 }
 
 void params_int32_set(params_int32_t *var, int32_t x) {
@@ -581,10 +553,6 @@ void params_float_set(params_float_t *var, float x) {
     params_lock();
     var->x = x;
     params_unlock(&var->dirty);
-
-    if (var->voice) {
-        voice_say_int(var->voice, var->x);
-    }
 }
 
 void params_str_set(params_str_t *var, const char *x) {

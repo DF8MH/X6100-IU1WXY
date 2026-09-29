@@ -31,7 +31,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     broadcast_db.c
     cJSON.c
     textarea_window.c cw_encoder.c buttons.cpp vol.cpp recorder.c
-    voice.cpp cw_tune_ui.c adif.c qso_log.c scheduler.cpp
+    cw_tune_ui.c adif.c qso_log.c scheduler.cpp
     dialog_wifi.c wifi.cpp btaudio.cpp controls.cpp usb_devices.cpp
     knobs.cpp
 )
@@ -46,7 +46,6 @@ add_subdirectory(cluster)
 add_subdirectory(cfg)
 
 include_directories(utf8)
-include_directories(${CMAKE_SYSROOT}/usr/include/RHVoice/)
 include_directories(${CMAKE_SYSROOT}/usr/include/ft8lib/)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -67,7 +66,6 @@ Threads::Threads
 lvgl lvgl::drivers
 aether_x6100_control
 liquid
-RHVoice RHVoice_core RHVoice_audio
 ft8
 )
 

@@ -25,7 +25,6 @@ extern "C" {
     #include "msg.h"
     #include "panel.h"
     #include "params/params.h"
-    #include "voice.h"
     #include "pubsub_ids.h"
 }
 
@@ -152,9 +151,9 @@ static button_data_t make_action_btn(const char *name, press_action_t ctrl) {
     return button_data_t{.type = BTN_TEXT, .label = name, .press = button_action_cb, .hold = nullptr, .ctrl = ctrl};
 }
 
-static button_data_t make_page_btn(const char *name, const char *voice) {
+static button_data_t make_page_btn(const char *name) {
     return button_data_t{
-        .type = BTN_TEXT, .label = name, .press = button_next_page_cb, .hold = button_prev_page_cb, .voice = voice};
+        .type = BTN_TEXT, .label = name, .press = button_next_page_cb, .hold = button_prev_page_cb};
 }
 
 /* VOL */
@@ -360,8 +359,8 @@ static button_data_t btn_rtty_reverse = {
 
 
 /* VOL pages */
-static button_data_t btn_vol_p1 = make_page_btn("(VOL 1:2)", "Volume|page 1");
-static button_data_t btn_vol_p2 = make_page_btn("(VOL 2:2)", "Volume|page 2");
+static button_data_t btn_vol_p1 = make_page_btn("(VOL 1:2)");
+static button_data_t btn_vol_p2 = make_page_btn("(VOL 2:2)");
 
 buttons_page_t buttons_page_vol_1 = {
     {&btn_vol_p1, &btn_vol, &btn_sql, &btn_rfg, &btn_tx_pwr}
@@ -371,10 +370,10 @@ static buttons_page_t page_vol_2 = {
 };
 
 /* MFK pages */
-static button_data_t btn_mfk_p1 = make_page_btn("(MFK 1:4)", "MFK|page 1");
-static button_data_t btn_mfk_p2 = make_page_btn("(MFK 2:4)", "MFK|page 2");
-static button_data_t btn_mfk_p3 = make_page_btn("(MFK 3:4)", "MFK|page 3");
-static button_data_t btn_mfk_p4 = make_page_btn("(MFK 4:4)", "MFK|page 4");
+static button_data_t btn_mfk_p1 = make_page_btn("(MFK 1:4)");
+static button_data_t btn_mfk_p2 = make_page_btn("(MFK 2:4)");
+static button_data_t btn_mfk_p3 = make_page_btn("(MFK 3:4)");
+static button_data_t btn_mfk_p4 = make_page_btn("(MFK 4:4)");
 
 static buttons_page_t page_mfk_1 = {
     {&btn_mfk_p1, &btn_rit, &btn_xit, &btn_zoom, &btn_ant}
@@ -391,8 +390,8 @@ static buttons_page_t page_mfk_4 = {
 
 /* MEM pages */
 
-static button_data_t btn_mem_p1 = make_page_btn("(MEM 1:2)", "Memory|page 1");
-static button_data_t btn_mem_p2 = make_page_btn("(MEM 2:2)", "Memory|page 2");
+static button_data_t btn_mem_p1 = make_page_btn("(MEM 1:2)");
+static button_data_t btn_mem_p2 = make_page_btn("(MEM 2:2)");
 
 static buttons_page_t page_mem_1 = {
     {&btn_mem_p1, &btn_mem_1, &btn_mem_2, &btn_mem_3, &btn_mem_4}
@@ -402,10 +401,10 @@ static buttons_page_t page_mem_2 = {
 };
 
 /* KEY pages */
-static button_data_t btn_key_p1 = make_page_btn("(KEY 1:2)", "Key|page 1");
-static button_data_t btn_key_p2 = make_page_btn("(KEY 2:2)", "Key|page 2");
-static button_data_t btn_cw_p1  = make_page_btn("(CW 1:2)", "CW|page 1");
-static button_data_t btn_cw_p2  = make_page_btn("(CW 2:2)", "CW|page 2");
+static button_data_t btn_key_p1 = make_page_btn("(KEY 1:2)");
+static button_data_t btn_key_p2 = make_page_btn("(KEY 2:2)");
+static button_data_t btn_cw_p1  = make_page_btn("(CW 1:2)");
+static button_data_t btn_cw_p2  = make_page_btn("(CW 2:2)");
 
 static buttons_page_t page_key_1 = {
     {&btn_key_p1, &btn_key_speed, &btn_key_volume, &btn_key_train, &btn_key_tone}
@@ -421,9 +420,9 @@ static buttons_page_t page_cw_decoder_2 = {
 };
 
 /* DFN pages */
-static button_data_t btn_dfn_p1 = make_page_btn("(DFN 1:3)", "DNF page");
-static button_data_t btn_dfn_p2 = make_page_btn("(DFN 2:3)", "NB page");
-static button_data_t btn_dfn_p3 = make_page_btn("(DFN 3:3)", "NR page");
+static button_data_t btn_dfn_p1 = make_page_btn("(DFN 1:3)");
+static button_data_t btn_dfn_p2 = make_page_btn("(DFN 2:3)");
+static button_data_t btn_dfn_p3 = make_page_btn("(DFN 3:3)");
 
 static buttons_page_t page_dfn_1 = {
     {&btn_dfn_p1, &btn_dnf, &btn_dnf_center, &btn_dnf_width, &btn_dnf_auto}
@@ -441,8 +440,8 @@ static buttons_page_t page_dfl_1 = {
 };
 
 /* App pages */
-static button_data_t btn_app_p1 = make_page_btn("(APP 1:2)", "Application|page 1");
-static button_data_t btn_app_p2 = make_page_btn("(APP 2:2)", "Application|page 2");
+static button_data_t btn_app_p1 = make_page_btn("(APP 1:2)");
+static button_data_t btn_app_p2 = make_page_btn("(APP 2:2)");
 
 /* The digital mode apps are in the Modes menu. */
 static buttons_page_t page_app_1 = {
@@ -641,9 +640,6 @@ void buttons_load_page(buttons_page_t *page) {
     for (uint8_t i = 0; i < BUTTONS; i++) {
         buttons_load(i, page->items[i]);
     }
-    if (page->items[0]->voice) {
-        voice_say_text_fmt("%s", page->items[0]->voice);
-    }
 }
 
 void buttons_unload_page() {
@@ -712,17 +708,14 @@ static void button_encoder_hold_update_cb(button_data_t *data) {
         switch (binds[ctrl]) {
             case ENCODER_BIND_NONE:
                 msg_update_text_fmt("Added to VOL encoder");
-                voice_say_text_fmt("Added to volume encoder");
                 binds[ctrl] = ENCODER_BIND_VOL;
                 break;
             case ENCODER_BIND_VOL:
                 msg_update_text_fmt("Moved to MFK encoder");
-                voice_say_text_fmt("Moved to MFK encoder");
                 binds[ctrl] = ENCODER_BIND_MFK;
                 break;
             case ENCODER_BIND_MFK:
                 msg_update_text_fmt("Removed from MFK encoder");
-                voice_say_text_fmt("Removed from MFK encoder");
                 binds[ctrl] = ENCODER_BIND_NONE;
                 break;
             default:
@@ -738,12 +731,10 @@ static void button_encoder_hold_update_cb(button_data_t *data) {
 
 static void button_mem_load_cb(button_data_t *data) {
     mem_load(data->ctrl);
-    voice_say_text_fmt("Memory %i loaded", data->ctrl);
 }
 
 static void button_mem_save_cb(button_data_t *data) {
     mem_save(data->ctrl);
-    voice_say_text_fmt("Memory %i stored", data->ctrl);
 }
 
 void buttons_press(uint8_t n, bool hold) {

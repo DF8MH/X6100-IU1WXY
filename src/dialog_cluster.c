@@ -22,7 +22,6 @@
 #include "radio.h"
 #include "styles.h"
 #include "textarea_window.h"
-#include "voice.h"
 #include "wifi.h"
 
 #include <ctype.h>
@@ -389,7 +388,6 @@ static void tune_to(int idx) {
     follow_vfo = true;
     msg_update_text_fmt("%s %d.%03d.%d", s->dx, s->freq_hz / 1000000, (s->freq_hz / 1000) % 1000,
                         (s->freq_hz % 1000) / 100);
-    voice_say_text_fmt("%s", s->dx);
 }
 
 static void move_selection(int step) {

@@ -12,7 +12,6 @@
 #include <stdbool.h>
 
 #include <ft8lib/constants.h>
-#include "../voice.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,8 +36,8 @@ typedef enum {
     ACTION_MUTE,
     ACTION_STEP_UP,
     ACTION_STEP_DOWN,
-    ACTION_VOICE_MODE,
-    ACTION_BAT_INFO,
+    ACTION_VOICE_MODE,  /* unused (voice guidance removed), kept: values are stored in settings */
+    ACTION_BAT_INFO,    /* unused (spoken battery info removed) */
     ACTION_NR_TOGGLE,
     ACTION_NB_TOGGLE,
 
@@ -168,14 +167,6 @@ typedef struct {
 
     params_float_t      play_gain_db_f;
     params_float_t      rec_gain_db_f;
-
-    /* Voice */
-
-    params_uint8_t      voice_mode;
-    params_uint8_t      voice_lang;
-    params_uint8_t      voice_rate;
-    params_uint8_t      voice_pitch;
-    params_uint8_t      voice_volume;
 
     params_str_t        qth;
     params_str_t        callsign;

@@ -399,8 +399,6 @@ x6100_vfo_t radio_toggle_vfo() {
     x6100_vfo_t new_vfo = (param_i_get(cfg_band_current_vfo) == X6100_VFO_A) ? X6100_VFO_B : X6100_VFO_A;
 
     param_i_set(cfg_band_current_vfo, new_vfo);
-    // TODO: move to another file
-    voice_say_text_fmt("V F O %s", (new_vfo == X6100_VFO_A) ? "A" : "B");
 
     return new_vfo;
 }

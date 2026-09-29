@@ -9,7 +9,6 @@
 
 #include "util.hpp"
 #include "cw.h"
-#include "voice.h"
 #include "util.h"
 #include "knobs.h"
 #include "dsp.h"
@@ -62,7 +61,6 @@ void mfk_change_ctrl(int16_t dir) {
     }
     mfk_ctrl = controls_encoder_get_next(ENCODER_BIND_MFK, mfk_ctrl, dir);
     knobs_set_mfk_param(mfk_ctrl);
-    control_name_say(mfk_ctrl);
     mfk_update(0);
 }
 
@@ -71,6 +69,5 @@ void mfk_set_ctrl(cfg_ctrl_t ctrl) {
     mfk_state = MFK_STATE_EDIT;
     knobs_set_mfk_state(true);
     knobs_set_mfk_param(mfk_ctrl);
-    control_name_say(ctrl);
     mfk_update(0);
 }

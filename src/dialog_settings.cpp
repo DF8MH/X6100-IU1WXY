@@ -8,7 +8,6 @@
 
 #include "dialog_settings.h"
 
-#include "voice.h"
 #include "dsp.h"
 #include "wifi.h"
 #include "btaudio.h"
@@ -62,14 +61,12 @@ static void make_general_page();
 static void make_display_page();
 static void make_audio_page();
 static void make_wireless_page();
-static void make_voice_page();
 static void make_info_page();
 
 static void load_general_page(button_data_t *btn_data);
 static void load_display_page(button_data_t *btn_data);
 static void load_audio_page(button_data_t *btn_data);
 static void load_wireless_page(button_data_t *btn_data);
-static void load_voice_page(button_data_t *btn_data);
 static void load_info_page(button_data_t *btn_data);
 
 static void construct_cb(lv_obj_t *parent);
@@ -129,12 +126,6 @@ static button_data_t btn_wireless = {
     .press = load_wireless_page,
 };
 
-static button_data_t btn_voice = {
-    .type  = BTN_TEXT,
-    .label = "Voice",
-    .press = load_voice_page,
-};
-
 static button_data_t btn_info = {
     .type  = BTN_TEXT,
     .label = "Info",
@@ -154,7 +145,6 @@ buttons_page_t btn_page = {
 static buttons_page_t btn_page_2 = {
     {
      &btn_p2,
-     &btn_voice,
      &btn_info,
      }
 };
@@ -196,11 +186,6 @@ static void load_audio_page(button_data_t *btn_data) {
 
 static void load_wireless_page(button_data_t *btn_data) {
     make_wireless_page();
-    mark_tab(btn_data);
-}
-
-static void load_voice_page(button_data_t *btn_data) {
-    make_voice_page();
     mark_tab(btn_data);
 }
 
@@ -769,8 +754,6 @@ static action_items_t long_action_items[] = {
     { .label = " Screenshot ", .action = ACTION_SCREENSHOT },
     { .label = " Recorder on/off ", .action = ACTION_RECORDER },
     { .label = " Mute ", .action = ACTION_MUTE },
-    { .label = " Voice mode ", .action = ACTION_VOICE_MODE },
-    { .label = " Battery info ", .action = ACTION_BAT_INFO },
     { .label = " APP RTTY ", .action = ACTION_APP_RTTY },
     { .label = " APP FT8 ", .action = ACTION_APP_FT8 },
     { .label = " APP JS8 ", .action = ACTION_APP_JS8 },
@@ -905,8 +888,6 @@ static action_items_t hmic_action_items[] = {
     { .label = " Mute ", .action = ACTION_MUTE },
     { .label = " Step up ", .action = ACTION_STEP_UP },
     { .label = " Step down ", .action = ACTION_STEP_DOWN },
-    { .label = " Voice mode ", .action = ACTION_VOICE_MODE },
-    { .label = " Battery info ", .action = ACTION_BAT_INFO },
     { .label = " NR toggle ", .action = ACTION_NR_TOGGLE },
     { .label = " NB toggle ", .action = ACTION_NB_TOGGLE },
     { .label = NULL, .action = ACTION_NONE }
@@ -1118,80 +1099,6 @@ static uint8_t make_transverter(uint8_t row, ParamInt &from, ParamInt &to, Param
 
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);   col += 2;
     lv_obj_add_event_cb(obj, transverter_update_cb, LV_EVENT_VALUE_CHANGED, &shift);
-
-    return row + 1;
-}
-
-/* Voice */
-
-static uint8_t make_voice(uint8_t row) {
-    lv_obj_t    *obj;
-    uint8_t     col = 0;
-
-    obj = lv_label_create(grid);
-
-    lv_label_set_text(obj, "Voice mode");
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col++, 1, LV_GRID_ALIGN_CENTER, row, 1);
-
-    obj = dropdown_uint8(grid, &params.voice_mode, " Off \n When LCD off \n Always");
-
-    lv_obj_set_size(obj, SMALL_6, 56);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
-    lv_obj_center(obj);
-
-    /* * */
-
-    row++;
-    obj = lv_label_create(grid);
-
-    lv_label_set_text(obj, "Voice rate, pitch, volume");
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
-
-    obj = spinbox_uint8(grid, &params.voice_rate);
-
-    lv_spinbox_set_digit_format(obj, 3, 0);
-    lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, 56);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);   col += 2;
-
-    obj = spinbox_uint8(grid, &params.voice_pitch);
-
-    lv_spinbox_set_digit_format(obj, 3, 0);
-    lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, 56);
-
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);   col += 2;
-
-    obj = spinbox_uint8(grid, &params.voice_volume);
-
-    lv_spinbox_set_digit_format(obj, 3, 0);
-    lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, 56);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);   col += 2;
-
-    return row + 1;
-}
-
-static uint8_t make_voice_lang(uint8_t row) {
-    lv_obj_t    *obj;
-    uint8_t     col = 0;
-
-    obj = lv_label_create(grid);
-
-    lv_label_set_text(obj, "Voice type");
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col++, 1, LV_GRID_ALIGN_CENTER, row, 1);
-
-    std::string options = "";
-    for (auto &&item : voice_item) {
-        options += " " + std::string(item.label) + " \n";
-    }
-    options[options.size() - 1] = '\0';
-
-    obj = dropdown_uint8(grid, &params.voice_lang, options.c_str());
-
-    lv_obj_set_size(obj, SMALL_6, 56);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
-    lv_obj_center(obj);
 
     return row + 1;
 }
@@ -3114,18 +3021,6 @@ static void make_wireless_page() {
     wifi_update();
     bt_update_view();
     bt_refresh();
-}
-
-static void make_voice_page() {
-    grid_delete();
-    grid_create();
-    uint8_t row = 0;
-
-    row = make_voice(row);
-    row = make_voice_lang(row);
-
-    row_dsc[row] = LV_GRID_TEMPLATE_LAST;
-    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
 }
 
 static void make_info_page() {

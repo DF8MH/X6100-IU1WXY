@@ -11,7 +11,6 @@
 #include "util.h"
 #include "knobs.h"
 #include "controls.h"
-#include "voice.h"
 
 extern "C" {
     #include "msg.h"
@@ -48,7 +47,6 @@ void vol_change_ctrl(int16_t dir) {
     }
     vol_ctrl = controls_encoder_get_next(ENCODER_BIND_VOL, vol_ctrl, dir);
     knobs_set_vol_param(vol_ctrl);
-    control_name_say(vol_ctrl);
     vol_update(0);
 }
 
@@ -57,6 +55,5 @@ void vol_set_ctrl(cfg_ctrl_t ctrl) {
     vol->state = VOL_STATE_EDIT;
     knobs_set_vol_param(vol_ctrl);
     knobs_set_vol_state(true);
-    control_name_say(ctrl);
     vol_update(0);
 }

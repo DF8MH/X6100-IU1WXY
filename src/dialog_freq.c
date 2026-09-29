@@ -77,7 +77,6 @@ static void enter_freq() {
     const char* str = lv_textarea_get_text(text);
 
     if (strlen(str) == 0) {
-        voice_say_text_fmt("Frequency window has been closed");
         return;
     }
 
@@ -85,10 +84,8 @@ static void enter_freq() {
 
     if (radio_check_freq(f)) {
         main_screen_set_freq(f);
-        voice_say_text_fmt("Frequency has been set %s", str);
     } else {
         msg_update_text_fmt("Incorrect freq");
-        voice_say_text_fmt("Incorrect frequency");
     }
 }
 
@@ -96,20 +93,7 @@ static void key_cb(lv_event_t * e) {
     uint32_t key = *((uint32_t *)lv_event_get_param(e));
 
     switch (key) {
-        case '0' ... '9':
-            voice_delay_say_text_fmt("%c", (char) key);
-            break;
-
-        case '.':
-            voice_delay_say_text_fmt("point");
-            break;
-
-        case LV_KEY_BACKSPACE:
-            voice_delay_say_text_fmt("backspace");
-            break;
-
         case LV_KEY_ESC:
-            voice_say_text_fmt("Frequency window has been closed");
             dialog_destruct(&dialog);
             break;
 

@@ -51,7 +51,6 @@
 #include "backlight.h"
 #include "buttons.h"
 #include "recorder.h"
-#include "voice.h"
 #include "pubsub_ids.h"
 #include "cfg/cfg_api.h"
 #include "cfg/memory.h"
@@ -521,13 +520,11 @@ static void low_power_timer_cb(lv_timer_t * timer) {
 static void toggle_atu_enabled() {
     bool new_atu_enabled = !param_i_get(cfg_atu_enabled);
     param_i_set(cfg_atu_enabled, new_atu_enabled);
-    voice_say_text_fmt("Auto tuner %s", new_atu_enabled ? "On" : "Off");
 }
 
 static void next_freq_step(bool up) {
     uint16_t new_step = cfg_mode_change_freq_step(up);
     msg_update_text_fmt("Freq step: %i Hz", new_step);
-    voice_say_text_fmt("Frequency step %i herz", new_step);
 }
 
 static void apps_disable() {
@@ -550,67 +547,54 @@ void main_screen_start_app(press_action_t app_action) {
             buttons_load_page(&buttons_page_rtty);
             rtty_set_state(RTTY_RX);
             panel_update_visibility(true);
-            voice_say_text_fmt("Teletype window");
             break;
 
         case ACTION_APP_SETTINGS:
             dialog_construct(dialog_settings, obj);
-            voice_say_text_fmt("Settings window");
             break;
 
         case ACTION_APP_MODES:
             dialog_construct(dialog_modes, obj);
-            voice_say_text_fmt("Modes menu");
             break;
 
         case ACTION_APP_SWRSCAN:
             dialog_construct(dialog_swrscan, obj);
-            voice_say_text_fmt("SWR scan window");
             break;
 
         case ACTION_APP_FT8:
             dialog_construct(dialog_ft8, obj);
-            voice_say_text_fmt("FT8 window");
             break;
 
         case ACTION_APP_GPS:
             dialog_construct(dialog_gps, obj);
-            voice_say_text_fmt("GPS window");
             break;
 
         case ACTION_APP_RECORDER:
             dialog_construct(dialog_recorder, obj);
-            voice_say_text_fmt("Audio recorder window");
             break;
 
         case ACTION_APP_WIFI:
             dialog_construct(dialog_wifi, obj);
-            voice_say_text_fmt("Wi-Fi window");
             break;
 
         case ACTION_APP_WEFAX:
             dialog_construct(dialog_wefax, obj);
-            voice_say_text_fmt("WeFax window");
             break;
 
         case ACTION_APP_NAVTEX:
             dialog_construct(dialog_navtex, obj);
-            voice_say_text_fmt("NAVTEX window");
             break;
 
         case ACTION_APP_JS8:
             dialog_construct(dialog_js8, obj);
-            voice_say_text_fmt("JS8 window");
             break;
 
         case ACTION_APP_SSTV:
             dialog_construct(dialog_sstv, obj);
-            voice_say_text_fmt("SSTV window");
             break;
 
         case ACTION_APP_CLUSTER:
             dialog_construct(dialog_cluster, obj);
-            voice_say_text_fmt("Cluster window");
             break;
 
         default:
@@ -631,9 +615,7 @@ void main_screen_action(press_action_t action) {
         case ACTION_RECORDER:
             if (recorder_is_on()) {
                 recorder_set_on(false);
-                voice_say_text_fmt("Audio recorder off");
             } else {
-                voice_say_text_fmt("Audio recorder on");
                 recorder_set_on(true);
             }
             break;
@@ -642,12 +624,8 @@ void main_screen_action(press_action_t action) {
             radio_change_mute();
             break;
 
-        case ACTION_VOICE_MODE:
-            voice_change_mode();
-            break;
-
+        case ACTION_VOICE_MODE:     /* removed, may still be stored in settings */
         case ACTION_BAT_INFO:
-            clock_say_bat_info();
             break;
 
         case ACTION_STEP_UP:
@@ -690,12 +668,10 @@ void main_screen_action(press_action_t action) {
 
         case ACTION_APP_QTH:
             dialog_construct(dialog_qth, obj);
-            voice_say_text_fmt("QTH window");
             break;
 
         case ACTION_APP_CALLSIGN:
             dialog_construct(dialog_callsign, obj);
-            voice_say_text_fmt("Callsign window");
             break;
     }
 }
@@ -775,23 +751,6 @@ static void change_mode(keypad_key_t key, keypad_state_t state) {
             return;
     }
 
-    // Define mode->text struct
-    typedef struct {
-        x6100_mode_t    mode;
-        const char*     msg;
-    } mode_text_t;
-
-    mode_text_t modes_text[] = {
-        {.mode=x6100_mode_nfm, .msg="N F M modulation"},
-        {.mode=x6100_mode_am, .msg="A M modulation"},
-        {.mode=x6100_mode_cwr, .msg="CWR modulation"},
-        {.mode=x6100_mode_cw, .msg="CW modulation"},
-        {.mode=x6100_mode_lsb_dig, .msg="LSB digital modulation"},
-        {.mode=x6100_mode_lsb, .msg="LSB modulation"},
-        {.mode=x6100_mode_usb_dig, .msg="USB digital modulation"},
-        {.mode=x6100_mode_usb, .msg="USB modulation"},
-    };
-
     // find next mode
     x6100_mode_t    next_mode;
     switch (key) {
@@ -808,12 +767,6 @@ static void change_mode(keypad_key_t key, keypad_state_t state) {
             break;
     }
 
-    for (size_t i = 0; i < sizeof(modes_text)/sizeof(modes_text[0]); i++) {
-        if (modes_text[i].mode == next_mode) {
-            voice_say_text_fmt(modes_text[i].msg);
-            break;
-        }
-    }
     cparam_i_set(cfg_cur_mode, next_mode);
 }
 
@@ -827,7 +780,6 @@ static void main_screen_keypad_cb(lv_event_t * e) {
             if (keypad->state == KEYPAD_RELEASE) {
                 pre = !pre;
                 cparam_i_set(cfg_cur_pre, pre);
-                voice_say_text_fmt("Preamplifier %s", pre ? "On" : "Off");
 
                 if (params.mag_info.x) {
                     msg_tiny_set_text_fmt("Pre: %s", pre ? "On" : "Off");
@@ -835,7 +787,6 @@ static void main_screen_keypad_cb(lv_event_t * e) {
             } else if (keypad->state == KEYPAD_LONG) {
                 att = !att;
                 cparam_i_set(cfg_cur_att, att);
-                voice_say_text_fmt("Attenuator %s", att ? "On" : "Off");
 
                 if (params.mag_info.x) {
                     msg_tiny_set_text_fmt("Att: %s", att ? "On" : "Off");
@@ -875,22 +826,18 @@ static void main_screen_keypad_cb(lv_event_t * e) {
                 switch (agc) {
                     case x6100_agc_off:
                         agc = x6100_agc_slow;
-                        voice_say_text_fmt("Auto gain slow mode");
                         break;
 
                     case x6100_agc_slow:
                         agc = x6100_agc_fast;
-                        voice_say_text_fmt("Auto gain fast mode");
                         break;
 
                     case x6100_agc_fast:
                         agc = x6100_agc_auto;
-                        voice_say_text_fmt("Auto gain auto mode");
                         break;
 
                     case x6100_agc_auto:
                         agc = x6100_agc_off;
-                        voice_say_text_fmt("Auto gain off");
                         break;
                 }
                 cparam_i_set(cfg_cur_agc, agc);
@@ -903,7 +850,6 @@ static void main_screen_keypad_cb(lv_event_t * e) {
             } else if (keypad->state == KEYPAD_LONG) {
                 bool new_split = !param_i_get(cfg_band_split);
                 param_i_set(cfg_band_split, new_split);
-                voice_say_text_fmt("Split %s", new_split ? "On" : "Off");
 
                 spectrum_clear();
 
@@ -1011,7 +957,6 @@ static void main_screen_keypad_cb(lv_event_t * e) {
 
                         panel_hide();
                         dialog_construct(dialog_msg_cw, obj);
-                        voice_say_text_fmt("CW messages window");
                         break;
 
                     case x6100_mode_lsb:
@@ -1024,7 +969,6 @@ static void main_screen_keypad_cb(lv_event_t * e) {
 
                         panel_hide();
                         dialog_construct(dialog_msg_voice, obj);
-                        voice_say_text_fmt("Voice messages window");
                         break;
 
                     default:
@@ -1049,7 +993,6 @@ static void main_screen_keypad_cb(lv_event_t * e) {
             if (keypad->state == KEYPAD_RELEASE) {
                 apps_disable();
                 buttons_load_page_group(buttons_group_dfl);
-                voice_say_text_fmt("DFL parameters");
             } else if (keypad->state == KEYPAD_LONG) {
                 main_screen_action(params.long_dfl);
             }
@@ -1070,7 +1013,6 @@ static void main_screen_keypad_cb(lv_event_t * e) {
                     cfg_band_vfo_copy();
                     // radio_vfo_set();
                     msg_update_text_fmt("Clone VFO %s", cur_vfo == X6100_VFO_A ? "A->B" : "B->A");
-                    voice_say_text_fmt("V F O cloned %s", cur_vfo == X6100_VFO_A ? "from A to B" : "from B to A");
                 }
             }
             break;
@@ -1079,7 +1021,6 @@ static void main_screen_keypad_cb(lv_event_t * e) {
             if (keypad->state == KEYPAD_RELEASE) {
                 backlight_switch();
             } else if (keypad->state == KEYPAD_LONG) {
-                voice_say_text_fmt("Power off");
                 msg_update_text_fmt("Power off");
                 radio_poweroff();
             }
@@ -1088,7 +1029,6 @@ static void main_screen_keypad_cb(lv_event_t * e) {
         case KEYPAD_LOCK:
             if (keypad->state == KEYPAD_RELEASE) {
                 subject_i_set(freq_lock, !subject_i_get(freq_lock));
-                voice_say_text_fmt("Frequency %s", subject_i_get(freq_lock) ? "locked" : "unlocked");
             } else if (keypad->state == KEYPAD_LONG) {
                 radio_bb_reset();
                 exit(1);
@@ -1127,7 +1067,6 @@ static void main_screen_keypad_cb(lv_event_t * e) {
         case KEYPAD_VM:
             if ((keypad->state == KEYPAD_RELEASE) && !dialog_is_run()) {
                 buttons_load_page_group(buttons_group_vm);
-                voice_say_text_fmt("VM parameters");
             }
             break;
 
@@ -1151,17 +1090,14 @@ static void main_screen_hkey_cb(lv_event_t * e) {
         case HKEY_9:
             if (hkey->state == HKEY_RELEASE) {
                 mem_load(hkey->key - HKEY_1 + 1);
-                voice_say_text_fmt("Memory %i loaded", hkey->key - HKEY_1 + 1);
             } else if (hkey->state == HKEY_LONG) {
                 mem_save(hkey->key - HKEY_1 + 1);
-                voice_say_text_fmt("Memory %i stored", hkey->key - HKEY_1 + 1);
             }
             break;
 
         case HKEY_SPCH:
             if (hkey->state == HKEY_RELEASE) {
                 subject_i_set(freq_lock, !subject_i_get(freq_lock));
-                voice_say_text_fmt("Frequency %s", subject_i_get(freq_lock) ? "locked" : "unlocked");
             }
             break;
 
@@ -1367,8 +1303,6 @@ static void freq_shift(int16_t diff) {
     int32_t df = diff * param_i_get(cfg_mode_freq_step) * freq_accel(abs(diff));
     freq = align_int(freq + df, abs(df));
     cparam_i_set(cfg_fg_freq, freq);
-
-    voice_say_freq(freq);
 }
 
 static void main_screen_rotary_cb(lv_event_t * e) {
@@ -1458,13 +1392,11 @@ static void spectrum_key_cb(lv_event_t * e) {
                     case VOL_STATE_EDIT:
                         vol->state = VOL_STATE_SELECT;
                         knobs_set_vol_state(false);
-                        voice_say_text_fmt("Selection mode");
                         break;
 
                     case VOL_STATE_SELECT:
                         vol->state = VOL_STATE_EDIT;
                         knobs_set_vol_state(true);
-                        voice_say_text_fmt("Edit mode");
                         break;
                 }
                 vol_update(0);
@@ -1497,7 +1429,6 @@ static void spectrum_key_cb(lv_event_t * e) {
         case HKEY_FINP:
         case 'f':
             if (!subject_i_get(freq_lock)) {
-                voice_say_text_fmt("Enter frequency");
                 dialog_construct(dialog_freq, obj);
             }
             break;
@@ -1511,13 +1442,11 @@ static void spectrum_pressed_cb(lv_event_t * e) {
     switch (mfk_state) {
         case MFK_STATE_EDIT:
             mfk_state = MFK_STATE_SELECT;
-            voice_say_text_fmt("Selection mode");
             knobs_set_mfk_state(false);
             break;
 
         case MFK_STATE_SELECT:
             mfk_state = MFK_STATE_EDIT;
-            voice_say_text_fmt("Edit mode");
             knobs_set_mfk_state(true);
             break;
     }

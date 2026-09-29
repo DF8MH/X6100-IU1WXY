@@ -76,6 +76,17 @@ jobs:
         echo "BR2_PACKAGE_BOOST=y" >> AetherX6100Buildroot/br2_external/configs/X6100_defconfig
         grep "^X6100_GUI_DEPENDENCIES" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
 
+    # The GUI has no voice guidance (text-to-speech): drop RHVoice and its
+    # voices from the image. RHVoice was the only package pulling in
+    # PulseAudio, which the GUI still needs, so the GUI selects it instead.
+    - name: Drop RHVoice
+      run: |
+        sed -i "/^X6100_GUI_DEPENDENCIES/s/\brhvoice\b/pulseaudio/" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
+        sed -i "s/select BR2_PACKAGE_RHVOICE$/select BR2_PACKAGE_PULSEAUDIO/" AetherX6100Buildroot/br2_external/package/x6100-gui/Config.in
+        sed -i "/^BR2_PACKAGE_RHVOICE/d" AetherX6100Buildroot/br2_external/configs/X6100_defconfig
+        grep "^X6100_GUI_DEPENDENCIES" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
+        ! grep -in "rhvoice" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk AetherX6100Buildroot/br2_external/package/x6100-gui/Config.in AetherX6100Buildroot/br2_external/configs/X6100_defconfig
+
     # Boot logo: the kernel's framebuffer logo shown at power on (800x480,
     # reduced to 224 colours by buildroot).
     - name: Custom boot logo
