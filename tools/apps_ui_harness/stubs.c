@@ -13,14 +13,16 @@ __attribute__((constructor)) static void init_ptrs(void) {
                    &cfg_ft8_show_all, &cfg_wefax_align, &cfg_wefax_tilt};
     for (unsigned i = 0; i < sizeof pp / sizeof pp[0]; i++) *pp[i] = dummies[i];
 }
+int32_t harness_fg_freq = 14074000;
 int32_t cparam_i_get(const void *p) {
     if (p == cfg_cur_filter_low) return 100;
     if (p == cfg_cur_filter_high) return 2900;
-    if (p == cfg_fg_freq) return 14074000;
+    if (p == cfg_fg_freq) return harness_fg_freq;
     if (p == cfg_cur_mode) return 7; /* USB-D */
     return 1;
 }
-void cparam_i_set(void *p, int32_t v) {}
+void cparam_i_set(void *p, int32_t v) { if (p == cfg_fg_freq) harness_fg_freq = v; }
+int wifi_get_status(void) { return 4; /* WIFI_CONNECTED */ }
 int32_t param_i_get(const void *p) {
     if (p == cfg_tx_filter_low) return 160;
     if (p == cfg_tx_filter_high) return 3000;

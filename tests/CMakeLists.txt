@@ -25,3 +25,8 @@ target_link_libraries(test_js8 PRIVATE JS8 JS8TestSignal js8core Catch2::Catch2W
 add_test(NAME test_js8 COMMAND $<TARGET_FILE:test_js8> --colour-mode=ansi )
 
 add_subdirectory(cfg)
+
+add_subdirectory(../src/cluster ${CMAKE_BINARY_DIR}/src/cluster)
+add_executable(test_cluster test_cluster.cpp)
+target_link_libraries(test_cluster PRIVATE CLUSTER Catch2::Catch2WithMain)
+add_test(NAME test_cluster COMMAND $<TARGET_FILE:test_cluster> --colour-mode=ansi )

@@ -18,6 +18,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     dialog_js8.c
     tx_player.c
     dialog_sstv.c
+    dialog_cluster.c
     sstv/decoder.c
     sstv/encoder.c
     wefax/decoder.c
@@ -39,6 +40,7 @@ add_subdirectory(js8)
 add_subdirectory(widgets)
 add_subdirectory(params)
 add_subdirectory(qth)
+add_subdirectory(cluster)
 add_subdirectory(cfg)
 
 include_directories(utf8)
@@ -56,7 +58,7 @@ pkg_check_modules(deps REQUIRED IMPORTED_TARGET
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
 PkgConfig::deps
-FT8 QTH
+FT8 QTH CLUSTER
 JS8
 cfg
 Threads::Threads

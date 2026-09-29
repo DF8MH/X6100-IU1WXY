@@ -1,4 +1,4 @@
-# Headless host render of the app dialogs (FT8, JS8, SSTV, WeFax, NavTex)
+# Headless host render of the app dialogs (FT8, JS8, SSTV, WeFax, NavTex, Cluster)
 # with the real button bar, for look-and-feel comparison. Unresolved
 # firmware symbols are auto-stubbed by gen_stubs.py (see README.md).
 cmake_minimum_required(VERSION 3.23)
@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD 20)
 add_compile_definitions(LV_DRAW_NEON=0)
 add_compile_options(-g -O1 -fno-omit-frame-pointer -w)
 include_directories(${X} ${X}/src ${X}/src/qth ${X}/third-party/rapidxml ${X}/third-party/utf8)
-include_directories(SYSTEM ${D}/include /usr/include/glib-2.0 /usr/lib/x86_64-linux-gnu/glib-2.0/include)
+include_directories(SYSTEM ${D}/src ${D}/include /usr/include/glib-2.0 /usr/lib/x86_64-linux-gnu/glib-2.0/include /usr/include/libnm)
 add_subdirectory(${D}/src/lvgl lvgl)
 add_subdirectory(${X}/third-party/js8core js8core)
 add_subdirectory(${X}/src/js8 js8)
@@ -28,6 +28,7 @@ add_library(apps OBJECT
     ${X}/src/dialog_navtex.c ${X}/src/navtex/decoder.cpp ${X}/src/navtex/navtex_rx.cpp ${X}/src/navtex/fftfilt.cxx
     ${X}/src/dialog_ft8.c ${X}/src/ft8/table_view.c ${X}/src/ft8/utils.c ${X}/src/ft8/qso.cpp
     ${X}/src/dialog_settings.cpp
+    ${X}/src/dialog_cluster.c ${X}/src/cluster/spots.c ${X}/src/cluster/client.c
     ${CMAKE_BINARY_DIR}/styles_host.c ${FONTS})
 target_link_libraries(apps PRIVATE lvgl)
 set_source_files_properties(${X}/src/scheduler.cpp PROPERTIES COMPILE_OPTIONS "-include;cstdlib")

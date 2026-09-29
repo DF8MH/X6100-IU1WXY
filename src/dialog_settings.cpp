@@ -827,6 +827,7 @@ static action_items_t long_action_items[] = {
     { .label = " APP FT8 ", .action = ACTION_APP_FT8 },
     { .label = " APP JS8 ", .action = ACTION_APP_JS8 },
     { .label = " APP SSTV ", .action = ACTION_APP_SSTV },
+    { .label = " APP Cluster ", .action = ACTION_APP_CLUSTER },
     { .label = " APP WeFax ", .action = ACTION_APP_WEFAX },
     { .label = " APP NavTex ", .action = ACTION_APP_NAVTEX },
     { .label = " APP SWR Scan ", .action = ACTION_APP_SWRSCAN },

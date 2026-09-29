@@ -46,6 +46,7 @@
 #include "dialog_navtex.h"
 #include "dialog_js8.h"
 #include "dialog_sstv.h"
+#include "dialog_cluster.h"
 #include "backlight.h"
 #include "buttons.h"
 #include "recorder.h"
@@ -596,6 +597,11 @@ void main_screen_start_app(press_action_t app_action) {
             voice_say_text_fmt("SSTV window");
             break;
 
+        case ACTION_APP_CLUSTER:
+            dialog_construct(dialog_cluster, obj);
+            voice_say_text_fmt("Cluster window");
+            break;
+
         default:
             break;
     }
@@ -666,6 +672,7 @@ void main_screen_action(press_action_t action) {
         case ACTION_APP_NAVTEX:
         case ACTION_APP_JS8:
         case ACTION_APP_SSTV:
+        case ACTION_APP_CLUSTER:
             main_screen_start_app(action);
             break;
 

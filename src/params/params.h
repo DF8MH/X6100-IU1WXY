@@ -55,6 +55,7 @@ typedef enum {
     ACTION_APP_NAVTEX,
     ACTION_APP_JS8,     /* appended: these values are stored in settings */
     ACTION_APP_SSTV,    /* appended after JS8 */
+    ACTION_APP_CLUSTER, /* appended after SSTV */
 } press_action_t;
 
 typedef enum {

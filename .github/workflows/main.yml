@@ -68,6 +68,12 @@ jobs:
         echo "BR2_PACKAGE_BOOST=y" >> AetherX6100Buildroot/br2_external/configs/X6100_defconfig
         grep "^X6100_GUI_DEPENDENCIES" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
 
+    # Boot logo: the kernel's framebuffer logo shown at power on (800x480,
+    # reduced to 224 colours by buildroot).
+    - name: Custom boot logo
+      run: |
+        cp x6100_gui/boot/logo.png AetherX6100Buildroot/br2_external/board/X6100/linux/logo.png
+
     # Ccache
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp

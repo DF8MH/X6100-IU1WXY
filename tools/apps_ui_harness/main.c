@@ -12,6 +12,8 @@
 #include "dialog_navtex.h"
 #include "dialog_ft8.h"
 #include "dialog_settings.h"
+#include "dialog_cluster.h"
+#include "cluster/client.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,6 +76,41 @@ static void app(const char *name, dialog_t *d, int pages) {
     pump(200);
 }
 
+extern int32_t harness_fg_freq;
+
+/* Cluster app with sample spots, VFO on 20m; then the MFK moves the
+ * selection two rows down (the list stops following the VFO). */
+static void cluster_demo(void) {
+    static const struct { const char *call, *spotter, *comment; int khz10, age; } s[] = {
+        {"VP8LP", "DL1ABC", "CW 599 up 2", 140235, 3},  {"JA1XYZ", "IK2AAA", "FT8 -12 dB", 140740, 5},
+        {"EA8/G4XX", "F5ZZZ", "SSB 59", 141550, 10},    {"3B8M", "IZ1BBB", "SSB listening up 5", 141930, 1},
+        {"ZL2ABC", "IU1WXY", "SSB LP 57", 141965, 0},    {"PY2XB", "EA3CCC", "SSB 55", 142050, 12},
+        {"K1ABC", "G3DDD", "POTA US-1234", 142430, 14},  {"W1AW", "K2XX", "SSB", 142800, 20},
+        {"VK9DX", "JA1YYY", "CW", 70120, 4},             {"4X6ZZ", "OE1AAA", "SSB", 71500, 8},
+    };
+    time_t now = time(NULL);
+    for (unsigned i = 0; i < sizeof s / sizeof s[0]; i++) {
+        time_t t = now - s[i].age * 60;
+        struct tm tm;
+        gmtime_r(&t, &tm);
+        char line[160];
+        snprintf(line, sizeof line, "DX de %s:  %d.%d  %s  %s  %02d%02dZ", s[i].spotter, s[i].khz10 / 10,
+                 s[i].khz10 % 10, s[i].call, s[i].comment, tm.tm_hour, tm.tm_min);
+        cluster_client_feed_line(line);
+    }
+    harness_fg_freq = 14195000;
+    dialog_construct(dialog_cluster, lv_scr_act());
+    pump(600);
+    shot("cluster_1.ppm");
+    uint32_t key = LV_KEY_RIGHT;
+    lv_event_send(dialog_cluster->obj, LV_EVENT_KEY, &key);
+    lv_event_send(dialog_cluster->obj, LV_EVENT_KEY, &key);
+    pump(100);
+    shot("cluster_2.ppm");
+    dialog_destruct();
+    pump(200);
+}
+
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IOLBF, 0);
     lv_init();
@@ -116,5 +153,6 @@ int main(int argc, char **argv) {
     };
     for (unsigned i = 0; i < sizeof apps / sizeof apps[0]; i++)
         if (!only || !strcmp(only, apps[i].n)) app(apps[i].n, *apps[i].d, apps[i].pages);
+    if (!only || !strcmp(only, "cluster")) cluster_demo();
     return 0;
 }

@@ -6,14 +6,46 @@ Unofficial combined build for the Xiegu X6100, merging:
 - **1KO125** custom-r1cbu 0.34.2 beta 7 by Hany El Imam — WeFax, NavTex, channel list, broadcast info, **SSTV** decoder
 - **X6100 JS8** beta 3 by randal007 — JS8 app
 - **Bluetooth CAT** (`btcat/`) — the CAT port (CI-V, the same as USB CAT) also exposed over Bluetooth SPP, RFCOMM channel 1
+- **DX Cluster** app — spots from a telnet DX cluster over WiFi, listed around the VFO frequency
 
 Changes on top of the merge:
 
 - Settings → General: **Bluetooth** and **BT Discoverable** switches (state kept in `/mnt/btcat.conf`)
-- APP menu: page 3 = WeFax, NavTex, SSTV, JS8; page 4 = WiFi
+- APP menu: page 3 = WeFax, NavTex, SSTV, JS8; page 4 = WiFi, Cluster
+- Boot logo: IU1WXY (`boot/logo.png`, 800×480, copied over the buildroot logo by the image workflow)
 - Consistent app button bars: page buttons named `(APP n:m)`, Clear/Close in slots 4/5
-- Long-press actions: SSTV, WeFax, NavTex added
+- Long-press actions: SSTV, WeFax, NavTex, Cluster added
 - `tools/apps_ui_harness`: headless screenshots of every app, for look-and-feel checks
+
+### DX Cluster
+
+![Cluster app](docs/screenshots/cluster.png)
+
+APP → page 4 → **Cluster**. Needs WiFi (APP → page 4 → WiFi) and your
+callsign (APP → Callsign), used to log in to the cluster.
+
+- Spots of the **current band**, by frequency. A red line marks the VFO;
+  spots within ±3 kHz of it are yellow, spots less than 2 minutes old have a
+  green `*`. Spots older than 60 minutes are dropped.
+- **Tuning the VFO** keeps the list centred on it, the nearest spot selected.
+- **MFK** turns browse the list; an **MFK press**, **Tune** or a tap on a row
+  tunes to the spot. The mode comes from the comment (CW, FT8, SSB, ...) or
+  else from the band plan: CW, USB-D on the FT8/FT4 frequencies, LSB below
+  10 MHz, USB above.
+- **Band / All**: the current band only, or all bands (always all when the
+  VFO is outside the amateur bands).
+- **Clear** empties the list. The spots are kept when the app is closed;
+  the connection is closed with it.
+
+On connect the app sends the callsign, then `sh/dx 30` for the latest spots,
+and reconnects on its own after an error. Server: `dxc.ve7cc.net` port 23.
+To use another one, create `/mnt/cluster.conf` on the SD card's DATA
+partition:
+
+```
+host=dxc.nc7j.com
+port=7373
+```
 
 ### Bluetooth CAT
 
