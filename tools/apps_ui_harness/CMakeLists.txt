@@ -29,6 +29,7 @@ add_library(apps OBJECT
     ${X}/src/dialog_ft8.c ${X}/src/ft8/table_view.c ${X}/src/ft8/utils.c ${X}/src/ft8/qso.cpp
     ${X}/src/dialog_settings.cpp
     ${X}/src/dialog_cluster.c ${X}/src/cluster/spots.c ${X}/src/cluster/client.c ${X}/src/freq_list.c ${X}/src/dialog_modes.c
+    ${X}/src/dialog_msg_voice.c ${X}/src/dialog_msg_cw.c ${X}/src/cw_encoder.c
     ${CMAKE_BINARY_DIR}/styles_host.c ${FONTS})
 target_link_libraries(apps PRIVATE lvgl)
 set_source_files_properties(${X}/src/scheduler.cpp PROPERTIES COMPILE_OPTIONS "-include;cstdlib")

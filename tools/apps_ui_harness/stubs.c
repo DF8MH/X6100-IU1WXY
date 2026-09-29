@@ -37,3 +37,4 @@ void msg_update_text_fmt(const char *fmt, ...) { va_list ap; va_start(ap, fmt); 
 void msg_schedule_text_fmt(const char *fmt, ...) { va_list ap; va_start(ap, fmt); v("msg", fmt, ap); va_end(ap); }
 const char *x6100_control_get_fw_version_str(void) { return "1.1.9"; }
 const char *util_canonize_callsign(const char *c, bool s) { return c; }
+const char *info_params_mode_label_get(void) { return "USB"; }

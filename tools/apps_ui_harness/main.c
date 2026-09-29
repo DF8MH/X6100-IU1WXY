@@ -14,6 +14,8 @@
 #include "dialog_settings.h"
 #include "dialog_cluster.h"
 #include "dialog_modes.h"
+#include "dialog_msg_voice.h"
+#include "dialog_msg_cw.h"
 #include "cluster/client.h"
 #include "textarea_window.h"
 #include <stdio.h>
@@ -207,6 +209,22 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < sizeof apps / sizeof apps[0]; i++)
         if (!only || !strcmp(only, apps[i].n)) app(apps[i].n, *apps[i].d, apps[i].pages);
     if (!only || !strcmp(only, "cluster")) cluster_demo();
+    if (!only || !strcmp(only, "msg")) {
+        dialog_construct(dialog_msg_voice, lv_scr_act());
+        pump(300);
+        shot("msg_voice_1.ppm");
+        buttons_page_t *pg = buttons_get_cur_page();
+        pg->items[0]->press(pg->items[0]);
+        pump(200);
+        shot("msg_voice_2.ppm");
+        dialog_destruct();
+        pump(200);
+        dialog_construct(dialog_msg_cw, lv_scr_act());
+        pump(300);
+        shot("msg_cw_1.ppm");
+        dialog_destruct();
+        pump(200);
+    }
     if (!only || !strcmp(only, "bookmarks")) {
         bookmarks("navtex", dialog_navtex, 517000);
         bookmarks("wefax", dialog_wefax, 7878500);

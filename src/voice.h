@@ -33,6 +33,7 @@ typedef enum {
 extern voice_item_t voice_item[VOICES_NUM];
 
 void voice_sure();
+bool voice_is_speaking();
 void voice_change_mode();
 
 void voice_say_text_fmt(const char * fmt, ...);

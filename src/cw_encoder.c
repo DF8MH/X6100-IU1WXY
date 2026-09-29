@@ -11,8 +11,6 @@
 #include "params/params.h"
 #include "cfg/cfg_api.h"
 #include "radio.h"
-#include "msg.h"
-#include "buttons.h"
 
 #include "lvgl/lvgl.h"
 #include <unistd.h>
@@ -24,6 +22,7 @@
 
 static cw_encoder_state_t   state = CW_ENCODER_IDLE;
 static pthread_t            thread;
+static bool                 thread_started;
 
 static char                 *current_msg = NULL;
 static char                 *current_char = NULL;
@@ -46,22 +45,32 @@ static uint8_t get_morse(char *str, char **morse) {
     return 0;
 }
 
-static void send_morse(char *str, time_t dit_nsec, time_t dah_nsec) {
-    struct timespec t;
-    t.tv_sec = 0;
-    while (*str) {
+static volatile bool stop_req;
+static volatile int  pause_left;
+
+/* Sleeps nsec, in short steps so a stop is quick. False when stopped. */
+static bool wait_nsec(long nsec) {
+    struct timespec t = {0, 0};
+    while (nsec > 0 && !stop_req) {
+        t.tv_nsec = nsec > 50000000L ? 50000000L : nsec;
+        nanosleep(&t, NULL);
+        nsec -= t.tv_nsec;
+    }
+    return !stop_req;
+}
+
+static void send_morse(char *str, long dit_nsec, long dah_nsec) {
+    while (*str && !stop_req) {
         switch (*str) {
             case '.':
-                t.tv_nsec = dit_nsec;
                 radio_set_morse_key(true);
-                nanosleep(&t, NULL);
+                wait_nsec(dit_nsec);
                 radio_set_morse_key(false);
                 break;
 
             case '-':
-                t.tv_nsec = dah_nsec;
                 radio_set_morse_key(true);
-                nanosleep(&t, NULL);
+                wait_nsec(dah_nsec);
                 radio_set_morse_key(false);
                 break;
 
@@ -69,34 +78,25 @@ static void send_morse(char *str, time_t dit_nsec, time_t dah_nsec) {
                 break;
         }
         str++;
-        t.tv_nsec = dit_nsec;
-        nanosleep(&t, NULL);
+        wait_nsec(dit_nsec);
     }
-    t.tv_nsec = dah_nsec - dit_nsec;
-    nanosleep(&t, NULL);
+    wait_nsec(dah_nsec - dit_nsec);
 }
 
+/* Keys the text (again after a pause, as a beacon) until done or stopped.
+ * Stopping is by flag: the key is always released by this thread. */
 static void * endecode_thread(void *arg) {
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    long dit_nsec         = 20000000L / (param_i_get(cfg_key_speed)) * 60;
+    long dah_nsec         = dit_nsec * param_f_get(cfg_key_ratio);
+    long world_space_nsec = dit_nsec * 7;
 
-
-    time_t dit_nsec = 20000000L / (param_i_get(cfg_key_speed)) * 60;
-    time_t dah_nsec = dit_nsec * param_f_get(cfg_key_ratio);
-    time_t world_space_nsec = dit_nsec * 7;
-
-    struct timespec t;
-
-    t.tv_sec = 0;
-
-    while (true) {
+    while (!stop_req) {
         char    *morse;
         uint8_t len;
 
         if (*current_char == ' ') {
             current_char++;
-            t.tv_nsec = world_space_nsec - dah_nsec;
-            nanosleep(&t, NULL);
+            wait_nsec(world_space_nsec - dah_nsec);
         } else {
             len = get_morse(current_char, &morse);
             if (len) {
@@ -104,34 +104,32 @@ static void * endecode_thread(void *arg) {
                 current_char += len;
             } else {
                 current_char++;
-                t.tv_nsec = world_space_nsec - dah_nsec;
-                nanosleep(&t, NULL);
+                wait_nsec(world_space_nsec - dah_nsec);
             }
         }
         if (*current_char == 0) {
             if (state == CW_ENCODER_SEND) {
-                state = CW_ENCODER_IDLE;
-
-                buttons_unload_page();
-                buttons_load_page(&buttons_page_msg_cw_1);
                 break;
-            } else {
-                state = CW_ENCODER_BEACON_IDLE;
-                msg_update_text_fmt("Beacon pause: %i s", params.cw_encoder_period);
-                sleep(params.cw_encoder_period);
-
-                state = CW_ENCODER_BEACON;
-                current_char = current_msg;
             }
+            state = CW_ENCODER_BEACON_IDLE;
+            for (int t = params.cw_encoder_period * 10; t > 0 && !stop_req; t--) {
+                pause_left = (t + 9) / 10;
+                usleep(100000);
+            }
+            state        = CW_ENCODER_BEACON;
+            current_char = current_msg;
         }
     }
+    radio_set_morse_key(false);
+    state = CW_ENCODER_IDLE;
+    return NULL;
 }
 
 void cw_encoder_stop() {
-    if (state != CW_ENCODER_IDLE) {
-        pthread_cancel(thread);
+    if (thread_started) {
+        stop_req = true;
         pthread_join(thread, NULL);
-
+        thread_started = false;
         radio_set_morse_key(false);
         state = CW_ENCODER_IDLE;
     }
@@ -140,6 +138,9 @@ void cw_encoder_stop() {
 void cw_encoder_send(const char *text, bool beacon) {
     cw_encoder_stop();
 
+    if (!text || !*text) {
+        return;
+    }
     if (current_msg) {
         free(current_msg);
     }
@@ -147,16 +148,23 @@ void cw_encoder_send(const char *text, bool beacon) {
     current_msg = strdup(text);
     current_char = current_msg;
     state = beacon ? CW_ENCODER_BEACON : CW_ENCODER_SEND;
+    stop_req = false;
 
-    int rc;
     pthread_attr_t attr;
     struct sched_param param;
-    rc = pthread_attr_init (&attr);
-    rc = pthread_attr_getschedparam (&attr, &param);
+    pthread_attr_init(&attr);
+    pthread_attr_getschedparam(&attr, &param);
     param.sched_priority += 5;
-    rc = pthread_attr_setschedparam (&attr, &param);
+    pthread_attr_setschedparam(&attr, &param);
 
-    pthread_create(&thread, &attr, endecode_thread, NULL);
+    thread_started = pthread_create(&thread, &attr, endecode_thread, NULL) == 0;
+    if (!thread_started) {
+        state = CW_ENCODER_IDLE;
+    }
+}
+
+int cw_encoder_pause_left() {
+    return pause_left;
 }
 
 cw_encoder_state_t cw_encoder_state() {

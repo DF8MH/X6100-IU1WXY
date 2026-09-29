@@ -22,3 +22,6 @@ void cw_encoder_send(const char *text, bool beacon);
 void cw_encoder_stop();
 
 cw_encoder_state_t cw_encoder_state();
+
+/* Seconds left in a beacon pause */
+int cw_encoder_pause_left();

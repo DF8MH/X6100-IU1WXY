@@ -4,15 +4,19 @@
  *  Xiegu X6100 LVGL GUI
  *
  *  Copyright (c) 2022-2023 Belousov Oleg aka R1CBU
+ *
+ *  Voice keyer: record messages from the mic, listen to them, send them
+ *  on air once or as a beacon. One page for the usual work (Rec, Listen,
+ *  TX), a second one to manage the messages (Beacon, Rename, Delete).
  */
 
 #include <time.h>
-#include <sys/time.h>
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <strings.h>
 #include <unistd.h>
-#include <math.h>
 #include <sndfile.h>
 #include <dirent.h>
 #include <pthread.h>
@@ -25,612 +29,780 @@
 #include "styles.h"
 #include "params/params.h"
 #include "events.h"
-#include "util.h"
-#include "panel.h"
+#include "info.h"
 #include "keyboard.h"
 #include "textarea_window.h"
 #include "msg.h"
-#include "meter.h"
-#include "scheduler.h"
+#include "radio.h"
+#include "voice.h"
 
-#define BUF_SIZE 1024
+#define BUF_SIZE     1024
+#define MAX_ITEMS    64
+#define NAME_LEN     40
+#define REC_MAX_S    60
+#define TIMER_MS     100
+#define CONFIRM_MS   3000
+#define LEAD_IN_US   100000
 
-typedef enum {
-    VOICE_BEACON_OFF = 0,
-    VOICE_BEACON_PLAY,
-    VOICE_BEACON_IDLE,
-} voice_beacon_t;
+#define LIST_X       10
+#define LIST_Y       40
+#define LIST_W       470
+#define LIST_H       262
+#define SIDE_X       494
+#define SIDE_W       290
 
-static msg_voice_state_t    state = MSG_VOICE_OFF;
-static voice_beacon_t       beacon = VOICE_BEACON_OFF;
-static char                 *path = "/mnt/msg";
+#define COLOR_HEAD   0x90f0d0
+#define COLOR_DIM    0x90a0b0
+#define COLOR_SEL_BG 0x5a4818
+#define COLOR_SEL    0xffd24a
 
-static lv_obj_t             *table;
-static int16_t              table_rows = 0;
-static SNDFILE              *file = NULL;
+typedef struct {
+    char  name[NAME_LEN + 1];
+    float secs;
+} item_t;
 
-static char                 *prev_filename;
-static pthread_t            thread;
-static int16_t              samples_buf[BUF_SIZE];
+static const char *path = "/mnt/msg";
+
+static item_t  items[MAX_ITEMS];
+static int     count;
+static int     sel;
+
+static volatile msg_voice_state_t state = MSG_VOICE_OFF;
+
+/* Recording, written by the audio thread */
+static pthread_mutex_t rec_mutex = PTHREAD_MUTEX_INITIALIZER;
+static SNDFILE        *rec_file;
+static char            rec_name[NAME_LEN + 1];
+static volatile long   rec_frames;
+static volatile int    rec_peak;
+
+/* Playback worker: listen locally, or send on air (once or as a beacon) */
+static pthread_t     worker;
+static bool          worker_started;
+static volatile bool worker_done;
+static volatile bool stop_req;
+static volatile bool on_air;
+static volatile bool pausing;
+static volatile long play_pos, play_total;
+static volatile int  pause_left;
+static bool          job_tx;
+static bool          beacon_on;
+static char          play_path[128];
+static int16_t       samples_buf[BUF_SIZE];
+
+static uint32_t delete_armed;
+
+static lv_obj_t   *list, *head_right, *state_lbl, *name_lbl, *bar, *info_lbl, *hint;
+static lv_timer_t *timer;
+static bool        renaming;
 
 static void construct_cb(lv_obj_t *parent);
 static void destruct_cb();
-static void key_cb(lv_event_t * e);
-static void rec_stop_cb(button_data_t *btn_data);
-static void play_stop_cb(button_data_t *btn_data);
-static void send_stop_cb(button_data_t *btn_data);
-static void beacon_stop_cb(button_data_t *btn_data);
-static void refresh_buttons_on_done(void *page);
+static void rec_cb(button_data_t *btn);
+static void listen_cb(button_data_t *btn);
+static void tx_btn_cb(button_data_t *btn);
+static void close_cb(button_data_t *btn);
+static void beacon_cb(button_data_t *btn);
+static void rename_cb(button_data_t *btn);
+static void delete_cb(button_data_t *btn);
+static const char *rec_label(void);
+static const char *listen_label(void);
+static const char *tx_label(void);
+static const char *beacon_label(void);
 
-static void dialog_msg_voice_send_cb(button_data_t *btn_data);
-static void dialog_msg_voice_beacon_cb(button_data_t *btn_data);
-static void dialog_msg_voice_period_cb(button_data_t *btn_data);
+static button_data_t btn_p1 = {.type = BTN_TEXT, .label = "(MSG 1:2)", .press = button_next_page_cb};
+static button_data_t btn_rec = {.type = BTN_TEXT_FN, .label_fn = rec_label, .press = rec_cb};
+static button_data_t btn_listen = {.type = BTN_TEXT_FN, .label_fn = listen_label, .press = listen_cb};
+static button_data_t btn_tx = {.type = BTN_TEXT_FN, .label_fn = tx_label, .press = tx_btn_cb};
+static button_data_t btn_close = {.type = BTN_TEXT, .label = "Close", .press = close_cb};
 
-static void dialog_msg_voice_rec_cb(button_data_t *btn_data);
-static void dialog_msg_voice_play_cb(button_data_t *btn_data);
-static void dialog_msg_voice_rename_cb(button_data_t *btn_data);
-static void dialog_msg_voice_delete_cb(button_data_t *btn_data);
+static button_data_t btn_p2 = {.type = BTN_TEXT, .label = "(MSG 2:2)", .press = button_next_page_cb};
+static button_data_t btn_beacon = {.type = BTN_TEXT_FN, .label_fn = beacon_label, .press = beacon_cb};
+static button_data_t btn_rename = {.type = BTN_TEXT, .label = "Rename", .press = rename_cb};
+static button_data_t btn_delete = {.type = BTN_TEXT, .label = "Delete", .press = delete_cb};
+static button_data_t btn_close2 = {.type = BTN_TEXT, .label = "Close", .press = close_cb};
 
-static button_data_t btn_rec_stop = {
-    .type  = BTN_TEXT,
-    .label = "Rec\nStop",
-    .press = rec_stop_cb,
-};
-static button_data_t btn_play_stop = {
-    .type  = BTN_TEXT,
-    .label = "Play\nStop",
-    .press = play_stop_cb,
-};
-static button_data_t btn_send_stop = {
-    .type  = BTN_TEXT,
-    .label = "Send\nStop",
-    .press = send_stop_cb,
-};
-static button_data_t btn_beacon_stop = {
-    .type  = BTN_TEXT,
-    .label = "Beacon\nStop",
-    .press = beacon_stop_cb,
-};
+static buttons_page_t page_1 = {{&btn_p1, &btn_rec, &btn_listen, &btn_tx, &btn_close}};
+static buttons_page_t page_2 = {{&btn_p2, &btn_beacon, &btn_rename, &btn_delete, &btn_close2}};
 
-/* Msg Voice */
-
-static button_data_t btn_msg_p1 = {
-    .type  = BTN_TEXT,
-    .label = "(MSG 1:2)",
-    .press = button_next_page_cb,
-};
-static button_data_t btn_send = {
-    .type  = BTN_TEXT,
-    .label = "Send",
-    .press = dialog_msg_voice_send_cb,
-};
-static button_data_t btn_beacon = {
-    .type  = BTN_TEXT,
-    .label = "Beacon",
-    .press = dialog_msg_voice_beacon_cb,
-};
-static button_data_t btn_beacon_period = {
-    .type  = BTN_TEXT,
-    .label = "Beacon\nPeriod",
-    .press = dialog_msg_voice_period_cb,
-};
-
-static buttons_page_t page_msg_voice_1 = {
-    {
-     &btn_msg_p1,
-     &btn_send,
-     &btn_beacon,
-     &btn_beacon_period,
-     }
-};
-static button_data_t btn_msg_p2 = {
-    .type  = BTN_TEXT,
-    .label = "(MSG 2:2)",
-    .press = button_next_page_cb,
-};
-static button_data_t btn_rec = {
-    .type  = BTN_TEXT,
-    .label = "Rec",
-    .press = dialog_msg_voice_rec_cb,
-};
-static button_data_t btn_rename = {
-    .type  = BTN_TEXT,
-    .label = "Rename",
-    .press = dialog_msg_voice_rename_cb,
-};
-static button_data_t btn_delete = {
-    .type  = BTN_TEXT,
-    .label = "Delete",
-    .press = dialog_msg_voice_delete_cb,
-};
-static button_data_t btn_play = {
-    .type  = BTN_TEXT,
-    .label = "Play",
-    .press = dialog_msg_voice_play_cb,
-};
-
-static buttons_page_t page_msg_voice_2 = {
-    {
-     &btn_msg_p2,
-     &btn_rec,
-     &btn_rename,
-     &btn_delete,
-     &btn_play,
-     }
-};
-
-static buttons_group_t group_msg_voice = {
-    &page_msg_voice_1,
-    &page_msg_voice_2,
-};
-
-static dialog_t             dialog = {
-    .run = false,
+static dialog_t dialog = {
+    .run          = false,
     .construct_cb = construct_cb,
-    .destruct_cb = destruct_cb,
-    .btn_page = &page_msg_voice_1,
-    .audio_cb = NULL,
-    .key_cb = NULL
+    .destruct_cb  = destruct_cb,
+    .btn_page     = &page_1,
+    .audio_cb     = NULL,
+    .key_cb       = NULL,
 };
 
-dialog_t                    *dialog_msg_voice = &dialog;
+dialog_t *dialog_msg_voice = &dialog;
 
-static void load_table() {
-    table_rows = 0;
+/* Messages */
 
-    DIR             *dp;
-    struct dirent   *ep;
+static int cmp_item(const void *a, const void *b) {
+    return strcasecmp(((const item_t *)a)->name, ((const item_t *)b)->name);
+}
 
-    dp = opendir(path);
+static void file_path(char *dst, size_t size, const char *name) {
+    snprintf(dst, size, "%s/%s.mp3", path, name);
+}
 
-    if (dp != NULL) {
-        while ((ep = readdir(dp)) != NULL) {
-            if (strcmp(ep->d_name, ".") == 0 || strcmp(ep->d_name, "..") == 0) {
-                continue;
-            }
+static float file_secs(const char *name) {
+    char    p[128];
+    SF_INFO info;
+    memset(&info, 0, sizeof(info));
+    file_path(p, sizeof(p), name);
+    SNDFILE *f = sf_open(p, SFM_READ, &info);
+    if (!f) return 0;
+    sf_close(f);
+    return info.samplerate > 0 ? (float)info.frames / info.samplerate : 0;
+}
 
-            lv_table_set_cell_value(table, table_rows++, 0, ep->d_name);
+static void show_list(void) {
+    char text[16];
+    lv_table_set_row_cnt(list, count > 0 ? count : 1);
+    if (count == 0) {
+        lv_table_set_cell_value(list, 0, 0, "No messages yet: press Rec");
+        lv_table_set_cell_value(list, 0, 1, "");
+    }
+    for (int i = 0; i < count; i++) {
+        lv_table_set_cell_value(list, i, 0, items[i].name);
+        snprintf(text, sizeof(text), "%.1f s", items[i].secs);
+        lv_table_set_cell_value(list, i, 1, text);
+    }
+    lv_label_set_text_fmt(head_right, "%i message%s", count, count == 1 ? "" : "s");
+    lv_obj_invalidate(list);
+}
+
+/* Reads /mnt/msg; select names that entry afterwards when given. */
+static void load_items(const char *select) {
+    DIR           *dp = opendir(path);
+    struct dirent *ep;
+
+    count = 0;
+    if (dp) {
+        while ((ep = readdir(dp)) != NULL && count < MAX_ITEMS) {
+            size_t n = strlen(ep->d_name);
+            if (n < 5 || n - 4 > NAME_LEN || strcasecmp(ep->d_name + n - 4, ".mp3") != 0) continue;
+            memcpy(items[count].name, ep->d_name, n - 4);
+            items[count].name[n - 4] = '\0';
+            items[count].secs        = file_secs(items[count].name);
+            count++;
         }
-
         closedir(dp);
     }
-    if (table_rows > 0) {
-        lv_table_set_row_cnt(table, table_rows);
-    } else {
-        lv_table_set_cell_value(table, table_rows++, 0, "");
-        lv_table_set_row_cnt(table, 1);
-    }
+    qsort(items, count, sizeof(items[0]), cmp_item);
+
+    if (select)
+        for (int i = 0; i < count; i++)
+            if (strcmp(items[i].name, select) == 0) sel = i;
+    if (sel >= count) sel = count - 1;
+    if (sel < 0) sel = 0;
+    show_list();
 }
 
-static bool create_file() {
-    SF_INFO sfinfo;
-
-    memset(&sfinfo, 0, sizeof(sfinfo));
-
-    sfinfo.samplerate = AUDIO_CAPTURE_RATE;
-    sfinfo.channels = 1;
-    sfinfo.format = SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_III;
-
-    char        filename[64];
-    time_t      now = time(NULL);
-    struct tm   *t = localtime(&now);
-
-    snprintf(filename, sizeof(filename),
-        "%s/MSG_%04i%02i%02i_%02i%02i%02i.mp3",
-        path, t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec
-    );
-
-    file = sf_open(filename, SFM_WRITE, &sfinfo);
-
-    if (file == NULL) {
-        const char* err = sf_strerror(NULL);
-        LV_LOG_ERROR("Problem with create file: %s", err);
-        return false;
-    }
-
-    return true;
+static const char *sel_name(void) {
+    return count > 0 ? items[sel].name : NULL;
 }
 
-static void close_file() {
-    sf_close(file);
+/* Playback worker */
+
+static void play_file(void) {
+    SF_INFO info;
+    memset(&info, 0, sizeof(info));
+    SNDFILE *f = sf_open(play_path, SFM_READ, &info);
+    if (!f) return;
+
+    play_total = info.frames;
+    play_pos   = 0;
+    while (!stop_req) {
+        int n = (int)sf_read_short(f, samples_buf, BUF_SIZE);
+        if (n <= 0) break;
+        audio_play(samples_buf, n);
+        play_pos += n;
+    }
+    sf_close(f);
+
+    /* Stop: drop the queued audio instead of sending it. */
+    if (stop_req) audio_play_flush();
+    else audio_play_wait();
 }
 
-static const char* get_item() {
-    if (table_rows == 0) {
-        return NULL;
-    }
-
-    int16_t     row = 0;
-    int16_t     col = 0;
-
-    lv_table_get_selected_cell(table, &row, &col);
-
-    if (row == LV_TABLE_CELL_NONE) {
-        return NULL;
-    }
-
-    return lv_table_get_cell_value(table, row, col);
-}
-
-static void play_item() {
-    const char *item = get_item();
-
-    if (!item) {
-        return;
-    }
-
-    char filename[64];
-
-    strcpy(filename, path);
-    strcat(filename, "/");
-    strcat(filename, item);
-
-    SF_INFO sfinfo;
-
-    memset(&sfinfo, 0, sizeof(sfinfo));
-
-    SNDFILE *file = sf_open(filename, SFM_READ, &sfinfo);
-
-    if (!file) {
-        return;
-    }
-
-    state = MSG_VOICE_PLAY;
-    while (state == MSG_VOICE_PLAY) {
-        int res = sf_read_short(file, samples_buf, BUF_SIZE);
-
-        if (res > 0) {
-            audio_play(samples_buf, res);
-        } else {
-            state = MSG_VOICE_OFF;
-        }
-    }
-
-    sf_close(file);
-    audio_play_wait();
-}
-
-static void * play_thread(void *arg) {
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-    audio_set_play_mode(AUDIO_PLAY_ON);
-    play_item();
-    audio_set_play_mode(AUDIO_PLAY_OFF);
-
-    void *page_ptr = &page_msg_voice_2;
-    scheduler_put(refresh_buttons_on_done, &page_ptr, sizeof(&page_ptr));
-}
-
-static void * send_thread(void *arg) {
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-    msg_update_text_fmt("Sending message");
-
-    radio_set_modem(true);
-    play_item();
-    radio_set_modem(false);
-
-    void *page_ptr = &page_msg_voice_1;
-    scheduler_put(refresh_buttons_on_done, &page_ptr, sizeof(&page_ptr));
-}
-
-static void * beacon_thread(void *arg) {
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
+static void *worker_cb(void *arg) {
+    (void)arg;
     while (true) {
-        switch (beacon) {
-            case VOICE_BEACON_OFF:
-                void *page_ptr = &page_msg_voice_1;
-                scheduler_put(refresh_buttons_on_done, &page_ptr, sizeof(&page_ptr));
-                return NULL;
-
-            case VOICE_BEACON_PLAY:
-                msg_update_text_fmt("Sending message");
-                radio_set_modem(true);
-                play_item();
-                radio_set_modem(false);
-                break;
-
-            case VOICE_BEACON_IDLE:
-                msg_update_text_fmt("Beacon pause: %i s", params.voice_msg_period);
-                sleep(params.voice_msg_period);
-                break;
+        if (job_tx) {
+            on_air = true;
+            radio_set_modem(true);
+            usleep(LEAD_IN_US);
+            play_file();
+            radio_set_modem(false);
+            on_air = false;
+        } else {
+            audio_set_play_mode(AUDIO_PLAY_ON);
+            play_file();
+            audio_set_play_mode(AUDIO_PLAY_OFF);
         }
+        if (!job_tx || !beacon_on || stop_req) break;
 
-        switch (beacon) {
-            case VOICE_BEACON_PLAY:
-                beacon = VOICE_BEACON_IDLE;
-                break;
-
-            case VOICE_BEACON_IDLE:
-                beacon = VOICE_BEACON_PLAY;
-                break;
+        pausing = true;
+        for (int t = params.voice_msg_period * 10; t > 0 && !stop_req; t--) {
+            pause_left = (t + 9) / 10;
+            usleep(100000);
         }
+        pausing = false;
+        if (stop_req) break;
     }
+    worker_done = true;
     return NULL;
 }
 
-static bool textarea_window_close_cb() {
-    lv_group_add_obj(keyboard_group, table);
-    lv_group_set_editing(keyboard_group, true);
-
-    free(prev_filename);
-    prev_filename = NULL;
-    return true;
+static void start_play(bool tx) {
+    if (state != MSG_VOICE_OFF || !sel_name()) return;
+    file_path(play_path, sizeof(play_path), sel_name());
+    job_tx         = tx;
+    stop_req       = false;
+    worker_done    = false;
+    play_pos       = 0;
+    play_total     = 0;
+    state          = MSG_VOICE_PLAY;
+    worker_started = pthread_create(&worker, NULL, worker_cb, NULL) == 0;
+    if (!worker_started) state = MSG_VOICE_OFF;
 }
 
-static bool textarea_window_edit_ok_cb() {
-    const char *new_filename = textarea_window_get();
-
-    if (strcmp(prev_filename, new_filename) != 0) {
-        char prev[64];
-        char new[64];
-
-        snprintf(prev, sizeof(prev), "%s/%s", path, prev_filename);
-        snprintf(new, sizeof(new), "%s/%s", path, new_filename);
-
-        if (rename(prev, new) == 0) {
-            load_table();
-            textarea_window_close_cb();
-        }
-    } else {
-        free(prev_filename);
-        prev_filename = NULL;
-    }
-    return true;
+static void stop_play(void) {
+    stop_req = true;
 }
 
-static void tx_cb(lv_event_t * e) {
-    if (beacon == VOICE_BEACON_IDLE) {
-        pthread_cancel(thread);
-        pthread_join(thread, NULL);
-        beacon = VOICE_BEACON_OFF;
+/* Joins a finished worker; the UI timer and the dialog end call it. */
+static void reap_worker(bool wait) {
+    if (!worker_started) return;
+    if (!wait && !worker_done) return;
+    stop_req = wait || stop_req;
+    pthread_join(worker, NULL);
+    worker_started = false;
+    state          = MSG_VOICE_OFF;
+}
 
-        buttons_unload_page();
-        buttons_load_page(&page_msg_voice_1);
+/* Recording */
+
+static void next_rec_name(char *dst) {
+    char p[128];
+    for (int n = count + 1;; n++) {
+        snprintf(dst, NAME_LEN + 1, "Message %i", n);
+        file_path(p, sizeof(p), dst);
+        if (access(p, F_OK) != 0) return;
     }
 }
 
-static void construct_cb(lv_obj_t *parent) {
-    dialog.obj = dialog_init(parent);
+static void start_rec(void) {
+    char    p[128];
+    SF_INFO info;
 
-    page_msg_voice_1.items[0]->next = &page_msg_voice_2;
-    page_msg_voice_1.items[0]->prev = &page_msg_voice_2;
-    page_msg_voice_2.items[0]->next = &page_msg_voice_1;
-    page_msg_voice_2.items[0]->prev = &page_msg_voice_1;
+    next_rec_name(rec_name);
+    file_path(p, sizeof(p), rec_name);
+    memset(&info, 0, sizeof(info));
+    info.samplerate = AUDIO_CAPTURE_RATE;
+    info.channels   = 1;
+    info.format     = SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_III;
 
-    lv_obj_add_event_cb(dialog.obj, tx_cb, EVENT_RADIO_TX, NULL);
-
-    table = lv_table_create(dialog.obj);
-
-    lv_obj_remove_style(table, NULL, LV_STATE_ANY | LV_PART_MAIN);
-
-    lv_obj_set_size(table, 775, 325);
-
-    lv_table_set_col_cnt(table, 1);
-    lv_table_set_col_width(table, 0, 770);
-
-    lv_obj_set_style_border_width(table, 0, LV_PART_ITEMS);
-
-    lv_obj_set_style_bg_opa(table, LV_OPA_TRANSP, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(table, lv_color_white(), LV_PART_ITEMS);
-    lv_obj_set_style_pad_top(table, 5, LV_PART_ITEMS);
-    lv_obj_set_style_pad_bottom(table, 5, LV_PART_ITEMS);
-    lv_obj_set_style_pad_left(table, 0, LV_PART_ITEMS);
-    lv_obj_set_style_pad_right(table, 0, LV_PART_ITEMS);
-
-    lv_obj_set_style_text_color(table, lv_color_black(), LV_PART_ITEMS | LV_STATE_EDITED);
-    lv_obj_set_style_bg_color(table, lv_color_white(), LV_PART_ITEMS | LV_STATE_EDITED);
-    lv_obj_set_style_bg_opa(table, 128, LV_PART_ITEMS | LV_STATE_EDITED);
-
-    lv_obj_add_event_cb(table, key_cb, LV_EVENT_KEY, NULL);
-    lv_group_add_obj(keyboard_group, table);
-    lv_group_set_editing(keyboard_group, true);
-
-    lv_obj_center(table);
-
-    mkdir(path, 0755);
-    load_table();
+    SNDFILE *f = sf_open(p, SFM_WRITE, &info);
+    if (!f) {
+        msg_update_text_fmt("Cannot create %s", p);
+        return;
+    }
+    audio_set_play_mode(AUDIO_PLAY_VOICE_REC);
+    pthread_mutex_lock(&rec_mutex);
+    rec_file   = f;
+    rec_frames = 0;
+    rec_peak   = 0;
+    state      = MSG_VOICE_RECORD;
+    pthread_mutex_unlock(&rec_mutex);
 }
 
-static void destruct_cb() {
+static void stop_rec(void) {
+    pthread_mutex_lock(&rec_mutex);
+    state = MSG_VOICE_OFF;
+    if (rec_file) sf_close(rec_file);
+    rec_file = NULL;
+    pthread_mutex_unlock(&rec_mutex);
     audio_set_play_mode(AUDIO_PLAY_OFF);
+    load_items(rec_name);
+}
 
-    if (beacon == VOICE_BEACON_IDLE) {
-        pthread_cancel(thread);
-        pthread_join(thread, NULL);
+/* Called from the audio thread while recording */
+void dialog_msg_voice_put_audio_samples(size_t nsamples, int16_t *samples) {
+    int peak = 0;
+    for (size_t i = 0; i < nsamples; i++) {
+        int x = abs(samples[i]);
+        if (x > peak) peak = x;
     }
-
-    beacon = VOICE_BEACON_OFF;
-    state = MSG_VOICE_OFF;
-    textarea_window_close();
-}
-
-static void key_cb(lv_event_t * e) {
-    uint32_t key = *((uint32_t *)lv_event_get_param(e));
-
-    switch (key) {
-        case LV_KEY_ESC:
-            dialog_destruct(&dialog);
-            break;
-
-        case KEY_VOL_LEFT_EDIT:
-        case KEY_VOL_LEFT_SELECT:
-            radio_change_vol(-1);
-            break;
-
-        case KEY_VOL_RIGHT_EDIT:
-        case KEY_VOL_RIGHT_SELECT:
-            radio_change_vol(1);
-            break;
+    pthread_mutex_lock(&rec_mutex);
+    if (state == MSG_VOICE_RECORD && rec_file) {
+        sf_write_short(rec_file, samples, nsamples);
+        rec_frames += nsamples;
+        rec_peak = peak;
     }
-}
-
-void dialog_msg_voice_send_cb(button_data_t *btn_data) {
-    if (state == MSG_VOICE_OFF) {
-        pthread_create(&thread, NULL, send_thread, NULL);
-
-        buttons_unload_page();
-        buttons_load(1, &btn_send_stop);
-    }
-}
-
-static void send_stop_cb(button_data_t *btn_datae) {
-    state = MSG_VOICE_OFF;
-}
-
-void dialog_msg_voice_beacon_cb(button_data_t *btn_data) {
-    if (state == MSG_VOICE_OFF) {
-        if (get_item()) {
-            beacon = VOICE_BEACON_PLAY;
-            pthread_create(&thread, NULL, beacon_thread, NULL);
-
-            buttons_unload_page();
-            buttons_load(2, &btn_beacon_stop);
-        }
-    }
-}
-
-static void beacon_stop_cb(button_data_t *btn_data) {
-    switch (state) {
-        case MSG_VOICE_OFF:
-            pthread_cancel(thread);
-            pthread_join(thread, NULL);
-            beacon = VOICE_BEACON_OFF;
-
-            buttons_unload_page();
-            buttons_load_page(&page_msg_voice_1);
-            break;
-
-        case MSG_VOICE_PLAY:
-            beacon = VOICE_BEACON_OFF;
-            state = MSG_VOICE_OFF;
-            break;
-
-        default:
-            break;
-    }
-}
-
-void dialog_msg_voice_period_cb(button_data_t *btn_data) {
-    params_lock();
-
-    switch (params.voice_msg_period) {
-        case 10:
-            params.voice_msg_period = 30;
-            break;
-
-        case 30:
-            params.voice_msg_period = 60;
-            break;
-
-        case 60:
-            params.voice_msg_period = 120;
-            break;
-
-        case 120:
-            params.voice_msg_period = 10;
-            break;
-    }
-
-    params_unlock(&params.dirty.voice_msg_period);
-    msg_update_text_fmt("Beacon period: %i s", params.voice_msg_period);
-}
-
-void dialog_msg_voice_rec_cb(button_data_t *btn_data) {
-    if (state == MSG_VOICE_OFF) {
-        if (create_file()) {
-            audio_set_play_mode(AUDIO_PLAY_VOICE_REC);
-            state = MSG_VOICE_RECORD;
-
-            buttons_unload_page();
-            buttons_load(1, &btn_rec_stop);
-        }
-    }
-}
-
-static void rec_stop_cb(button_data_t *btn_data) {
-    buttons_unload_page();
-    buttons_load_page(&page_msg_voice_2);
-
-    audio_set_play_mode(AUDIO_PLAY_OFF);
-    state = MSG_VOICE_OFF;
-    close_file();
-    load_table();
-}
-
-void dialog_msg_voice_play_cb(button_data_t *btn_data) {
-    if (state == MSG_VOICE_OFF) {
-        pthread_create(&thread, NULL, play_thread, NULL);
-
-        buttons_unload_page();
-        buttons_load(4, &btn_play_stop);
-    }
-}
-
-void play_stop_cb(button_data_t *btn_data) {
-    state = MSG_VOICE_OFF;
-}
-
-void dialog_msg_voice_rename_cb(button_data_t *btn_data) {
-    prev_filename = strdup(get_item());
-
-    if (prev_filename) {
-        lv_group_remove_obj(table);
-        textarea_window_open(textarea_window_edit_ok_cb, textarea_window_close_cb);
-        textarea_window_set(prev_filename);
-    }
-}
-
-void dialog_msg_voice_delete_cb(button_data_t *btn_data) {
-    const char *name = get_item();
-
-    if (name) {
-        char filename[64];
-
-        strcpy(filename, path);
-        strcat(filename, "/");
-        strcat(filename, name);
-
-        unlink(filename);
-        load_table();
-    }
+    pthread_mutex_unlock(&rec_mutex);
 }
 
 msg_voice_state_t dialog_msg_voice_get_state() {
     return state;
 }
 
-void dialog_msg_voice_put_audio_samples(size_t nsamples, int16_t *samples) {
-    int16_t peak = 0;
+/* Buttons */
 
-    for (uint16_t i = 0; i < nsamples; i++) {
-        int16_t x = abs(samples[i]);
-
-        if (x > peak) {
-            peak = x;
-        }
-    }
-
-    peak = S1 + (peak / 32768.0) * (S9_40 - S1);
-    meter_update(peak, 0.25f);
-    sf_write_short(file, samples, nsamples);
+static bool listening(void) {
+    return state == MSG_VOICE_PLAY && !job_tx;
 }
 
+static bool sending(void) {
+    return state == MSG_VOICE_PLAY && job_tx;
+}
 
-/**
- * Helper function to refresh buttons from threads to prevent LVGL errors
- */
-static void refresh_buttons_on_done(void *page) {
-    if (!page) {
+static const char *rec_label(void) {
+    return state == MSG_VOICE_RECORD ? "Stop" : "Rec";
+}
+
+static const char *listen_label(void) {
+    return listening() ? "Stop" : "Listen";
+}
+
+static const char *tx_label(void) {
+    return sending() ? "Stop" : "TX";
+}
+
+static const char *beacon_label(void) {
+    static char buf[24];
+    if (!beacon_on) return "Beacon\nOff";
+    snprintf(buf, sizeof(buf), "Beacon\n%i s", params.voice_msg_period);
+    return buf;
+}
+
+static void set_btn(button_data_t *b, bool disabled) {
+    if (b->disabled != disabled) buttons_disabled(b, disabled);
+}
+
+/* Redraws a button whose label getter changed its text. */
+static void relabel(button_data_t *b, const char **last) {
+    const char *now = b->label_fn();
+    if (now != *last) {
+        *last = now;
+        if (b->disp_btn) buttons_refresh(b);
+    }
+}
+
+static void update_buttons(void) {
+    bool speaking = voice_is_speaking();
+    bool empty    = count == 0;
+    bool rec      = state == MSG_VOICE_RECORD;
+    bool idle     = state == MSG_VOICE_OFF;
+
+    set_btn(&btn_rec, !(rec || (idle && !speaking)));
+    set_btn(&btn_listen, !(listening() || (idle && !speaking && !empty)));
+    set_btn(&btn_tx, !(sending() || (idle && !speaking && !empty)));
+    set_btn(&btn_close, rec);
+    set_btn(&btn_close2, rec);
+    set_btn(&btn_beacon, !idle);
+    set_btn(&btn_rename, !idle || empty);
+    set_btn(&btn_delete, !idle || empty);
+    set_btn(&btn_p1, !idle);
+    set_btn(&btn_p2, !idle);
+
+    static const char *rec_l, *listen_l, *tx_l;
+    relabel(&btn_rec, &rec_l);
+    relabel(&btn_listen, &listen_l);
+    relabel(&btn_tx, &tx_l);
+}
+
+/* Status panel */
+
+static void set_state(const char *text, uint32_t bg, uint32_t fg) {
+    lv_label_set_text(state_lbl, text);
+    lv_obj_set_style_bg_color(state_lbl, lv_color_hex(bg), 0);
+    lv_obj_set_style_text_color(state_lbl, lv_color_hex(fg), 0);
+}
+
+static void update_status(void) {
+    const char *name = sel_name();
+
+    if (state == MSG_VOICE_RECORD) {
+        long s = rec_frames / AUDIO_CAPTURE_RATE;
+        char text[32];
+        snprintf(text, sizeof(text), "REC %02li:%02li", s / 60, s % 60);
+        set_state(text, 0x4a1515, 0xff7070);
+        lv_label_set_text(name_lbl, rec_name);
+        lv_bar_set_value(bar, rec_peak * 100 / 32768, LV_ANIM_OFF);
+        lv_obj_set_style_bg_color(bar, lv_color_hex(rec_peak > 26000 ? 0xcc3333 : 0x33cc33), LV_PART_INDICATOR);
+        lv_label_set_text_fmt(info_lbl, "Mic level: keep out of the red\nMax %i s", REC_MAX_S);
+        lv_label_set_text(hint, "Stop: save the message");
         return;
     }
 
-    if (dialog.run) {
-        buttons_unload_page();
-        buttons_load_page(*(buttons_page_t**)page);
+    lv_label_set_text(name_lbl, name ? name : "-");
+    lv_obj_set_style_bg_color(bar, lv_color_hex(0xff6666), LV_PART_INDICATOR);
+    int pct = play_total > 0 ? (int)(play_pos * 100 / play_total) : 0;
+
+    if (sending()) {
+        if (pausing) {
+            char text[32];
+            snprintf(text, sizeof(text), "BEACON %i s", pause_left);
+            set_state(text, 0x1f2a35, 0xffd24a);
+        } else {
+            set_state("ON AIR", 0xb01e1e, 0xffffff);
+        }
+        lv_bar_set_value(bar, pausing ? 0 : pct, LV_ANIM_OFF);
+        lv_label_set_text(info_lbl, beacon_on ? "Beacon: repeats until Stop" : "Beacon: off");
+        lv_label_set_text(hint, "TX or PTT: stop");
+    } else if (listening()) {
+        set_state("LISTEN", 0x153a1c, 0x88ff88);
+        lv_obj_set_style_bg_color(bar, lv_color_hex(0x66cc66), LV_PART_INDICATOR);
+        lv_bar_set_value(bar, pct, LV_ANIM_OFF);
+        lv_label_set_text(info_lbl, "Playing on the speaker only");
+        lv_label_set_text(hint, "Listen: stop");
+    } else {
+        set_state(voice_is_speaking() ? "WAIT" : "READY", 0x1f2a35, 0x90f0d0);
+        lv_bar_set_value(bar, 0, LV_ANIM_OFF);
+        if (beacon_on)
+            lv_label_set_text_fmt(info_lbl, "Beacon: every %i s\nTX starts it", params.voice_msg_period);
+        else
+            lv_label_set_text(info_lbl, "Beacon: off (page 2)");
+        lv_label_set_text(hint, count ? "MFK: choose - press MFK: listen" : "Rec: record the first message");
     }
+}
+
+static void timer_cb(lv_timer_t *t) {
+    (void)t;
+    reap_worker(false);
+    if (state == MSG_VOICE_RECORD && rec_frames >= (long)REC_MAX_S * AUDIO_CAPTURE_RATE) stop_rec();
+    if (delete_armed && lv_tick_elaps(delete_armed) > CONFIRM_MS) delete_armed = 0;
+    update_status();
+    update_buttons();
+}
+
+/* List drawing: selected row highlighted */
+
+static void list_draw_cb(lv_event_t *e) {
+    lv_obj_draw_part_dsc_t *dsc = lv_event_get_draw_part_dsc(e);
+    if (dsc->part != LV_PART_ITEMS) return;
+    uint32_t r = dsc->id / 2, c = dsc->id % 2;
+
+    dsc->rect_dsc->bg_opa   = LV_OPA_COVER;
+    dsc->rect_dsc->bg_color = lv_color_black();
+    if (c == 1) dsc->label_dsc->color = lv_color_hex(COLOR_DIM);
+    if (count == 0) {
+        dsc->label_dsc->color = lv_color_hex(COLOR_DIM);
+        return;
+    }
+    if ((int)r == sel) {
+        dsc->rect_dsc->bg_color     = lv_color_hex(COLOR_SEL_BG);
+        dsc->rect_dsc->border_color = lv_color_white();
+        dsc->rect_dsc->border_width = 2;
+        dsc->rect_dsc->border_opa   = LV_OPA_COVER;
+        dsc->rect_dsc->border_side  = LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM;
+        dsc->label_dsc->color       = lv_color_hex(COLOR_SEL);
+    }
+}
+
+static void move_sel(int step) {
+    if (state != MSG_VOICE_OFF || count == 0) return;
+    sel += step;
+    if (sel < 0) sel = 0;
+    if (sel >= count) sel = count - 1;
+
+    lv_table_t *t = (lv_table_t *)list;
+    lv_coord_t  y = 0;
+    for (int i = 0; i < sel; i++) y += t->row_h[i];
+    lv_obj_scroll_to_y(list, y + t->row_h[sel] / 2 - LIST_H / 2, LV_ANIM_OFF);
+    lv_obj_invalidate(list);
+    delete_armed = 0;
+}
+
+/* Keys */
+
+static void key_cb(lv_event_t *e) {
+    switch (*((uint32_t *)lv_event_get_param(e))) {
+        case LV_KEY_LEFT:
+        case LV_KEY_UP:
+            move_sel(-1);
+            break;
+        case LV_KEY_RIGHT:
+        case LV_KEY_DOWN:
+            move_sel(1);
+            break;
+        case LV_KEY_ENTER:
+            listen_cb(NULL);
+            break;
+        case LV_KEY_ESC:
+            if (state != MSG_VOICE_RECORD) dialog_destruct();
+            break;
+        case KEY_VOL_LEFT_EDIT:
+        case KEY_VOL_LEFT_SELECT:
+            radio_change_vol(-1);
+            break;
+        case KEY_VOL_RIGHT_EDIT:
+        case KEY_VOL_RIGHT_SELECT:
+            radio_change_vol(1);
+            break;
+        default:
+            break;
+    }
+}
+
+/* MFK press: the encoder sends a click, not ENTER. */
+static void click_cb(lv_event_t *e) {
+    (void)e;
+    lv_indev_t *indev = lv_indev_get_act();
+    if (indev && lv_indev_get_type(indev) == LV_INDEV_TYPE_ENCODER) listen_cb(NULL);
+}
+
+/* PTT stops a beacon (and anything playing); our own keying is ignored. */
+static void radio_tx_cb(lv_event_t *e) {
+    (void)e;
+    if (state == MSG_VOICE_PLAY && !on_air) stop_play();
+}
+
+/* Button actions */
+
+static void rec_cb(button_data_t *btn) {
+    (void)btn;
+    if (state == MSG_VOICE_RECORD) stop_rec();
+    else if (state == MSG_VOICE_OFF && !voice_is_speaking()) start_rec();
+    timer_cb(NULL);
+}
+
+static void listen_cb(button_data_t *btn) {
+    (void)btn;
+    if (listening()) stop_play();
+    else if (!voice_is_speaking()) start_play(false);
+    timer_cb(NULL);
+}
+
+static void tx_btn_cb(button_data_t *btn) {
+    (void)btn;
+    if (sending()) stop_play();
+    else if (!voice_is_speaking()) start_play(true);
+    timer_cb(NULL);
+}
+
+static void close_cb(button_data_t *btn) {
+    (void)btn;
+    if (state != MSG_VOICE_RECORD) dialog_destruct();
+}
+
+static void beacon_cb(button_data_t *btn) {
+    (void)btn;
+    if (state != MSG_VOICE_OFF) return;
+
+    /* Off -> 10 -> 30 -> 60 -> 120 s -> Off */
+    params_lock();
+    if (!beacon_on) {
+        beacon_on               = true;
+        params.voice_msg_period = 10;
+    } else if (params.voice_msg_period < 30) {
+        params.voice_msg_period = 30;
+    } else if (params.voice_msg_period < 60) {
+        params.voice_msg_period = 60;
+    } else if (params.voice_msg_period < 120) {
+        params.voice_msg_period = 120;
+    } else {
+        beacon_on = false;
+    }
+    params_unlock(&params.dirty.voice_msg_period);
+    buttons_refresh(&btn_beacon);
+    timer_cb(NULL);
+}
+
+static void delete_cb(button_data_t *btn) {
+    (void)btn;
+    const char *name = sel_name();
+    if (state != MSG_VOICE_OFF || !name) return;
+
+    if (!delete_armed) {
+        delete_armed = lv_tick_get();
+        msg_update_text_fmt("Press Delete again to delete \"%s\"", name);
+        return;
+    }
+    char p[128];
+    file_path(p, sizeof(p), name);
+    unlink(p);
+    delete_armed = 0;
+    msg_update_text_fmt("Deleted \"%s\"", name);
+    load_items(NULL);
+    timer_cb(NULL);
+}
+
+static void rename_end(void) {
+    textarea_window_close();
+    renaming = false;
+    lv_group_add_obj(keyboard_group, dialog.obj);
+    lv_group_focus_obj(dialog.obj);
+    lv_group_set_editing(keyboard_group, true);
+}
+
+static bool rename_ok(void) {
+    char name[NAME_LEN + 1], from[128], to[128];
+    snprintf(name, sizeof(name), "%s", textarea_window_get());
+
+    /* No leading or trailing spaces */
+    char *s = name;
+    while (*s == ' ') s++;
+    size_t n = strlen(s);
+    while (n > 0 && s[n - 1] == ' ') s[--n] = '\0';
+    if (n == 0) {
+        msg_update_text_fmt("Empty name");
+        return false;
+    }
+
+    file_path(from, sizeof(from), items[sel].name);
+    file_path(to, sizeof(to), s);
+    if (strcmp(from, to) != 0) {
+        if (access(to, F_OK) == 0) {
+            msg_update_text_fmt("\"%s\" already exists", s);
+            return false;
+        }
+        if (rename(from, to) != 0) {
+            msg_update_text_fmt("Cannot rename");
+            return false;
+        }
+    }
+    char keep[NAME_LEN + 1];
+    snprintf(keep, sizeof(keep), "%s", s);
+    rename_end();
+    load_items(keep);
+    return true;
+}
+
+static bool rename_cancel(void) {
+    rename_end();
+    return true;
+}
+
+static void rename_cb(button_data_t *btn) {
+    (void)btn;
+    if (state != MSG_VOICE_OFF || !sel_name() || renaming) return;
+
+    renaming = true;
+    /* The text area gets the keys only when the dialog is out of the group. */
+    lv_group_remove_obj(dialog.obj);
+    textarea_window_open_w_label(rename_ok, rename_cancel, "Name: ");
+    lv_obj_t *text = textarea_window_text();
+    lv_textarea_set_accepted_chars(text, "0123456789 -_?!.'"
+                                         "abcdefghijklmnopqrstuvwxyz"
+                                         "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    lv_textarea_set_max_length(text, NAME_LEN);
+    textarea_window_set(items[sel].name);
+}
+
+/* Dialog */
+
+static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, uint32_t color) {
+    lv_obj_t *l = lv_label_create(parent);
+    lv_obj_set_style_text_font(l, font, 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(color), 0);
+    return l;
+}
+
+static void construct_cb(lv_obj_t *parent) {
+    dialog.obj = dialog_init(parent);
+
+    btn_p1.next = btn_p1.prev = &page_2;
+    btn_p2.next = btn_p2.prev = &page_1;
+
+    lv_obj_t *head = label(dialog.obj, &sony_20, COLOR_HEAD);
+    lv_label_set_recolor(head, true);
+    lv_label_set_text_fmt(head, "VOICE KEYER - #ffffff %s#", info_params_mode_label_get());
+    lv_obj_set_pos(head, 16, 10);
+    head_right = label(dialog.obj, &sony_20, COLOR_HEAD);
+    lv_obj_set_width(head_right, 250);
+    lv_obj_set_style_text_align(head_right, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(head_right, 796 - 16 - 250, 10);
+
+    list = lv_table_create(dialog.obj);
+    lv_obj_remove_style(list, NULL, LV_STATE_ANY | LV_PART_MAIN);
+    lv_obj_set_size(list, LIST_W, LIST_H);
+    lv_obj_set_pos(list, LIST_X, LIST_Y);
+    lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(list, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_border_width(list, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(list, lv_color_hex(0x445566), LV_PART_MAIN);
+    lv_obj_set_style_border_width(list, 0, LV_PART_ITEMS);
+    lv_obj_set_style_text_font(list, &sony_22, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(list, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_pad_ver(list, 5, LV_PART_ITEMS);
+    lv_obj_set_style_pad_hor(list, 10, LV_PART_ITEMS);
+    lv_table_set_col_cnt(list, 2);
+    lv_table_set_col_width(list, 0, LIST_W - 2 - 110);
+    lv_table_set_col_width(list, 1, 110);
+    lv_obj_add_event_cb(list, list_draw_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
+
+    lv_obj_t *side = lv_obj_create(dialog.obj);
+    lv_obj_remove_style_all(side);
+    lv_obj_set_size(side, SIDE_W, LIST_H);
+    lv_obj_set_pos(side, SIDE_X, LIST_Y);
+    lv_obj_set_style_bg_color(side, lv_color_hex(0x121a22), 0);
+    lv_obj_set_style_bg_opa(side, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(side, lv_color_hex(0x445566), 0);
+    lv_obj_set_style_border_width(side, 1, 0);
+    lv_obj_set_style_radius(side, 8, 0);
+    lv_obj_clear_flag(side, LV_OBJ_FLAG_SCROLLABLE);
+
+    state_lbl = label(side, &sony_28, 0x90f0d0);
+    lv_obj_set_size(state_lbl, SIDE_W - 24, 48);
+    lv_obj_set_pos(state_lbl, 12, 12);
+    lv_obj_set_style_bg_opa(state_lbl, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(state_lbl, 8, 0);
+    lv_obj_set_style_text_align(state_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_pad_top(state_lbl, 8, 0);
+
+    name_lbl = label(side, &sony_22, 0xffffff);
+    lv_obj_set_width(name_lbl, SIDE_W - 24);
+    lv_obj_set_style_text_align(name_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(name_lbl, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(name_lbl, 12, 76);
+
+    bar = lv_bar_create(side);
+    lv_obj_set_size(bar, SIDE_W - 24, 14);
+    lv_obj_set_pos(bar, 12, 116);
+    lv_bar_set_range(bar, 0, 100);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(0x333333), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(bar, 3, LV_PART_MAIN);
+    lv_obj_set_style_radius(bar, 3, LV_PART_INDICATOR);
+
+    info_lbl = label(side, &sony_18, COLOR_DIM);
+    lv_obj_set_width(info_lbl, SIDE_W - 24);
+    lv_obj_set_pos(info_lbl, 12, 146);
+
+    hint = label(dialog.obj, &sony_18, COLOR_DIM);
+    lv_obj_set_pos(hint, 16, 348 - 32);
+
+    lv_obj_add_event_cb(dialog.obj, radio_tx_cb, EVENT_RADIO_TX, NULL);
+    lv_group_add_obj(keyboard_group, dialog.obj);
+    lv_obj_add_event_cb(dialog.obj, key_cb, LV_EVENT_KEY, NULL);
+    lv_obj_add_event_cb(dialog.obj, click_cb, LV_EVENT_CLICKED, NULL);
+    lv_group_focus_obj(dialog.obj);
+    lv_group_set_editing(keyboard_group, true);
+
+    mkdir(path, 0755);
+    sel = 0;
+    load_items(NULL);
+    timer = lv_timer_create(timer_cb, TIMER_MS, NULL);
+    timer_cb(NULL);
+}
+
+static void destruct_cb() {
+    /* Leaving any other way (another app, MSG again) never loses a
+     * recording or leaves the radio keyed. */
+    if (state == MSG_VOICE_RECORD) stop_rec();
+    reap_worker(true);
+    if (renaming) {
+        textarea_window_close();
+        renaming = false;
+    }
+    if (timer) {
+        lv_timer_del(timer);
+        timer = NULL;
+    }
+    lv_group_remove_obj(dialog.obj);
+    delete_armed = 0;
 }

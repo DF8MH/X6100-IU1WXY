@@ -19,6 +19,7 @@ extern "C" {
 #include "params/params.h"
 #include "backlight.h"
 #include "recorder.h"
+#include "dialog_msg_voice.h"
 #include "msg.h"
 }
 
@@ -140,6 +141,10 @@ static void * say_thread(void *arg) {
     return NULL;
 }
 
+bool voice_is_speaking() {
+    return run;
+}
+
 void voice_sure() {
     sure = true;
 }
@@ -169,7 +174,8 @@ void voice_change_mode() {
 }
 
 bool voice_enable() {
-    if (run || recorder_is_on()) {
+    /* No announcement over a voice message being recorded or played. */
+    if (run || recorder_is_on() || dialog_msg_voice_get_state() != MSG_VOICE_OFF) {
         return false;
     }
 
