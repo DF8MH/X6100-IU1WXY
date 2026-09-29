@@ -123,6 +123,23 @@ lv_color_t  bg_color;
 static void setup_theme_legacy();
 static void setup_theme_simple();
 
+/* Drawn box of the top bar panels: vertical gradient, thin border. */
+static void top_bar_box(uint32_t top, uint32_t bottom, uint32_t border) {
+    lv_style_t *styles[] = { &clock_style, &info_style, &meter_style, &tx_info_style };
+
+    for (int i = 0; i < 4; i++) {
+        lv_style_t *s = styles[i];
+
+        lv_style_set_bg_opa(s, LV_OPA_COVER);
+        lv_style_set_bg_color(s, lv_color_hex(top));
+        lv_style_set_bg_grad_color(s, lv_color_hex(bottom));
+        lv_style_set_bg_grad_dir(s, LV_GRAD_DIR_VER);
+        lv_style_set_border_width(s, 1);
+        lv_style_set_border_color(s, lv_color_hex(border));
+        lv_style_set_radius(s, 7);
+    }
+}
+
 void styles_init(themes_t theme) {
     /* * */
     lv_style_t *style;
@@ -274,8 +291,11 @@ void styles_init(themes_t theme) {
     lv_style_init(&clock_style);
     lv_style_set_text_color(&clock_style, lv_color_white());
     lv_style_set_align(&clock_style, LV_ALIGN_TOP_RIGHT);
-    lv_style_set_radius(&clock_style, 0);
-    lv_style_set_bg_img_opa(&clock_style, LV_OPA_COVER);
+    lv_style_set_x(&clock_style, -TOP_BAR_MARGIN);
+    lv_style_set_y(&clock_style, TOP_BAR_MARGIN);
+    lv_style_set_width(&clock_style, 162);
+    lv_style_set_height(&clock_style, TOP_BAR_BOX_H);
+    lv_style_set_pad_all(&clock_style, 0);
 
     /* Knobs */
     lv_style_init(&knobs_style);
@@ -291,43 +311,44 @@ void styles_init(themes_t theme) {
     /* Left info */
     lv_style_init(&info_style);
     lv_style_set_align(&info_style, LV_ALIGN_TOP_LEFT);
-    lv_style_set_pad_hor(&info_style, 8);
-    lv_style_set_pad_ver(&info_style, 6);
+    lv_style_set_x(&info_style, TOP_BAR_MARGIN);
+    lv_style_set_y(&info_style, TOP_BAR_MARGIN);
+    lv_style_set_width(&info_style, 330);
+    lv_style_set_height(&info_style, TOP_BAR_BOX_H);
+    lv_style_set_pad_hor(&info_style, 5);
+    lv_style_set_pad_ver(&info_style, 0);
     lv_style_set_pad_row(&info_style, 0);
-    lv_style_set_radius(&info_style, 0);
-    lv_style_set_bg_img_opa(&info_style, LV_OPA_COVER);
-    lv_style_set_border_width(&info_style, 0);
-    lv_style_set_bg_opa(&info_style, LV_OPA_0);
 
     lv_style_init(&info_row_style);
     lv_style_set_align(&info_row_style, LV_ALIGN_CENTER);
     lv_style_set_radius(&info_row_style, 0);
     lv_style_set_border_width(&info_row_style, 0);
     lv_style_set_bg_opa(&info_row_style, LV_OPA_0);
-    lv_style_set_pad_hor(&info_row_style, 2);
-    lv_style_set_pad_ver(&info_row_style, 0);
-    lv_style_set_pad_column(&info_row_style, 2);
+    lv_style_set_pad_all(&info_row_style, 0);
+    lv_style_set_pad_column(&info_row_style, 4);
 
     lv_style_init(&info_item_style);
-    lv_style_set_text_font(&info_item_style, &sony_20);
-    lv_style_set_pad_ver(&info_item_style, 3);
-    lv_style_set_radius(&info_item_style, 0);
+    lv_style_set_text_font(&info_item_style, &sony_18);
+    lv_style_set_pad_ver(&info_item_style, 1);
+    lv_style_set_radius(&info_item_style, 3);
 
     /* Meter */
     lv_style_init(&meter_style);
-    lv_style_set_radius(&meter_style, 0);
-    lv_style_set_align(&meter_style, LV_ALIGN_TOP_MID);
-    lv_style_set_border_width(&meter_style, 0);
-    lv_style_set_bg_img_opa(&meter_style, LV_OPA_COVER);
-    lv_style_set_bg_opa(&meter_style, LV_OPA_0);
+    lv_style_set_align(&meter_style, LV_ALIGN_TOP_LEFT);
+    lv_style_set_x(&meter_style, TOP_BAR_METER_X);
+    lv_style_set_y(&meter_style, TOP_BAR_MARGIN);
+    lv_style_set_width(&meter_style, TOP_BAR_METER_W);
+    lv_style_set_height(&meter_style, TOP_BAR_BOX_H);
+    lv_style_set_pad_all(&meter_style, 0);
 
-    /* TX info */
+    /* TX info: over the meter, twice as high (PWR and SWR rows) */
     lv_style_init(&tx_info_style);
-    lv_style_set_radius(&tx_info_style, 0);
-    lv_style_set_align(&tx_info_style, LV_ALIGN_TOP_MID);
-    lv_style_set_border_width(&tx_info_style, 0);
-    lv_style_set_bg_img_opa(&tx_info_style, LV_OPA_COVER);
-    lv_style_set_bg_opa(&tx_info_style, LV_OPA_0);
+    lv_style_set_align(&tx_info_style, LV_ALIGN_TOP_LEFT);
+    lv_style_set_x(&tx_info_style, TOP_BAR_METER_X);
+    lv_style_set_y(&tx_info_style, TOP_BAR_MARGIN);
+    lv_style_set_width(&tx_info_style, TOP_BAR_METER_W);
+    lv_style_set_height(&tx_info_style, TOP_BAR_BOX_H * 2);
+    lv_style_set_pad_all(&tx_info_style, 0);
 
     lv_style_init(&cw_tune_style);
     lv_style_set_radius(&cw_tune_style, 5);
@@ -350,6 +371,8 @@ void styles_set_theme(themes_t theme) {
             setup_theme_simple();
             break;
     }
+    /* LVGL caches gradients by size, not colors: drop the old ones */
+    lv_gradient_set_cache_size(LV_GRAD_CACHE_DEF_SIZE);
 }
 
 static void setup_theme_legacy() {
@@ -362,26 +385,12 @@ static void setup_theme_legacy() {
     lv_style_set_bg_img_src(&btn_style, PATH "images/btn.bin");
 
     lv_style_set_bg_img_src(&msg_style, PATH "images/msg.bin");
-    /* Clock */
-    lv_style_set_bg_img_src(&clock_style, PATH "images/top_short.bin");
-    lv_style_set_width(&clock_style, 206);
-    lv_style_set_height(&clock_style, 61);
-    /* Info */
-    lv_style_set_bg_img_src(&info_style, PATH "images/top_short.bin");
-    lv_style_set_width(&info_style, 206);
-    lv_style_set_height(&info_style, 61);
-    /* Meter */
-    lv_style_set_bg_img_src(&meter_style, PATH "images/top_long.bin");
-    lv_style_set_width(&meter_style, 377);
-    lv_style_set_height(&meter_style, 61);
+    /* Top bar: clock, info, meter, TX info */
+    top_bar_box(0x2a5aa0, 0x103060, 0x8aa8d8);
 
     lv_style_set_bg_img_src(&panel_style, PATH "images/panel.bin");
     lv_style_set_bg_img_src(&msg_tiny_style, PATH "images/msg_tiny.bin");
     lv_style_set_bg_img_src(&dialog_style, PATH "images/dialog.bin");
-    /* TX info */
-    lv_style_set_bg_img_src(&tx_info_style, PATH "images/top_big.bin");
-    lv_style_set_width(&tx_info_style, 377);
-    lv_style_set_height(&tx_info_style, 123);
 
     lv_obj_invalidate(lv_scr_act());
 }
@@ -396,26 +405,12 @@ static void setup_theme_simple() {
     lv_style_set_bg_img_src(&btn_style, PATH "images/btn_dark.bin");
 
     lv_style_set_bg_img_src(&msg_style, PATH "images/msg_dark.bin");
-    /* Clock */
-    lv_style_set_bg_img_src(&clock_style, PATH "images/top_short_dark.bin");
-    lv_style_set_width(&clock_style, 209);
-    lv_style_set_height(&clock_style, 61);
-    /* Info */
-    lv_style_set_bg_img_src(&info_style, PATH "images/top_short_dark.bin");
-    lv_style_set_width(&info_style, 209);
-    lv_style_set_height(&info_style, 61);
-    /* Meter */
-    lv_style_set_bg_img_src(&meter_style, PATH "images/top_long_dark.bin");
-    lv_style_set_width(&meter_style, 380);
-    lv_style_set_height(&meter_style, 61);
+    /* Top bar: clock, info, meter, TX info */
+    top_bar_box(0x3a3f47, 0x23272d, 0x777777);
 
     lv_style_set_bg_img_src(&panel_style, PATH "images/panel_dark.bin");
     lv_style_set_bg_img_src(&msg_tiny_style, PATH "images/msg_tiny_dark.bin");
     lv_style_set_bg_img_src(&dialog_style, PATH "images/dialog_dark.bin");
-    /* TX info */
-    lv_style_set_bg_img_src(&tx_info_style, PATH "images/top_big_dark.bin");
-    lv_style_set_width(&tx_info_style, 380);
-    lv_style_set_height(&tx_info_style, 123);
 
     lv_obj_invalidate(lv_scr_act());
 }

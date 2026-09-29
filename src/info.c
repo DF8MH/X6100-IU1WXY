@@ -13,6 +13,24 @@
 #include "params/params.h"
 #include "pubsub_ids.h"
 #include "wifi.h"
+#include "gps.h"
+#include "scheduler.h"
+#include "cluster/client.h"
+
+#include <pthread.h>
+#include <stdio.h>
+#include <unistd.h>
+
+/* Written by btcat: the number of connected Bluetooth CAT clients. */
+#ifndef BTCAT_CLIENTS_FILE
+#define BTCAT_CLIENTS_FILE "/tmp/btcat.clients"
+#endif
+
+#define STATUS_POLL_S   3
+
+#define COLOR_ICON_OFF  0x151515
+#define COLOR_ICON_IDLE 0x909090
+#define COLOR_ICON_BT   0x55CCFF
 
 typedef enum {
     INFO_VFO = 0,
@@ -21,15 +39,36 @@ typedef enum {
     INFO_PRE,
     INFO_ATT,
     INFO_ATU,
-    INFO_WIFI
+    INFO_WIFI,
+    INFO_BT,
+    INFO_HEADPHONES,
+    INFO_CAT,
+    INFO_GPS,
+    INFO_CLUSTER,
+    INFO_NUM
 } info_items_t;
 
+typedef enum {
+    STATUS_OFF = 0,
+    STATUS_IDLE,
+    STATUS_ON
+} status_t;
+
+typedef struct {
+    status_t bt;
+    status_t headphones;
+    status_t cat;
+    status_t gps;
+    status_t cluster;
+} info_status_t;
+
 static lv_obj_t     *obj;
-static lv_obj_t     *items[7];
+static lv_obj_t     *items[INFO_NUM];
 
 static SubjectInt *mode_lock;
 
 static void wifi_state_change_cb(void *s, lv_msg_t *m);
+static void *status_thread(void *arg);
 
 static void vfo_label_update(Subject *subj, void * user_data);
 static void mode_label_update(Subject *subj, void * user_data);
@@ -47,47 +86,46 @@ lv_obj_t * info_init(lv_obj_t * parent) {
     lv_obj_add_style(obj, &info_style, 0);
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(obj, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t *row1 = lv_obj_create(obj);
-    lv_obj_add_style(row1, &info_row_style, 0);
-    lv_obj_set_size(row1, 190, 24);
-    lv_obj_align(row1, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_clear_flag(row1, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_flex_flow(row1, LV_FLEX_FLOW_ROW);
+    /* Two rows on the same 6 column grid: radio state, then status icons */
+    lv_coord_t col_w = lv_obj_get_style_width(obj, 0) - 2 * lv_obj_get_style_border_width(obj, 0)
+        - lv_obj_get_style_pad_left(obj, 0) - lv_obj_get_style_pad_right(obj, 0);
+    col_w /= 6;
 
-    uint8_t i = 0;
-    for (; i < 3; i++) {
-        lv_obj_t *item = lv_label_create(row1);
-        lv_obj_set_flex_grow(item, 1);
+    lv_obj_t *row;
+
+    for (uint8_t i = 0; i < INFO_NUM; i++) {
+        if (i % 6 == 0) {
+            row = lv_obj_create(obj);
+            lv_obj_add_style(row, &info_row_style, 0);
+            lv_obj_set_size(row, col_w * 6 - 4, i ? 18 : 22);
+            lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+            lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        }
+        lv_obj_t *item = lv_label_create(row);
+        lv_obj_set_width(item, col_w - 4);
+        lv_obj_set_style_text_align(item, LV_TEXT_ALIGN_CENTER, 0);
+        if (i < INFO_WIFI) {
+            lv_obj_add_style(item, &info_item_style, 0);
+            lv_obj_set_style_text_color(item, lv_color_white(), 0);
+        } else {
+            lv_obj_set_style_text_font(item, &lv_font_montserrat_14, 0);
+            lv_obj_set_style_text_color(item, lv_color_hex(COLOR_ICON_OFF), 0);
+        }
         items[i] = item;
-    }
-
-    lv_obj_t *row2 = lv_obj_create(obj);
-    lv_obj_add_style(row2, &info_row_style, 0);
-    lv_obj_set_size(row2, 190, 24);
-    lv_obj_align(row2, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_clear_flag(row2, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_flex_flow(row2, LV_FLEX_FLOW_ROW);
-
-    for (; i < sizeof(items) / sizeof(*items); i++) {
-        lv_obj_t *item = lv_label_create(row2);
-        lv_obj_set_flex_grow(item, 3);
-        items[i] = item;
-    }
-
-    lv_obj_set_flex_grow(items[INFO_WIFI], 2);
-
-    for (i = 0; i < sizeof(items) / sizeof(*items); i++)
-    {
-        lv_obj_add_style(items[i], &info_item_style, 0);
-        lv_obj_set_style_text_align(items[i], LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_color(items[i], lv_color_white(), 0);
     }
 
     lv_label_set_text(items[INFO_PRE], "PRE");
     lv_label_set_text(items[INFO_ATT], "ATT");
-    lv_label_set_text(items[INFO_WIFI], LV_SYMBOL_WIFI " ");
-    lv_obj_set_style_text_color(items[INFO_WIFI], lv_color_hex(0x909090), 0);
+    lv_label_set_text(items[INFO_WIFI], LV_SYMBOL_WIFI);
+    lv_label_set_text(items[INFO_BT], LV_SYMBOL_BLUETOOTH);
+    lv_label_set_text(items[INFO_HEADPHONES], LV_SYMBOL_AUDIO);
+    lv_label_set_text(items[INFO_CAT], LV_SYMBOL_KEYBOARD);
+    lv_label_set_text(items[INFO_GPS], LV_SYMBOL_GPS);
+    lv_label_set_text(items[INFO_CLUSTER], LV_SYMBOL_EYE_OPEN);
+    lv_obj_set_style_text_color(items[INFO_WIFI], lv_color_hex(COLOR_ICON_IDLE), 0);
 
     subject_subscribe_delayed((Subject*)cfg_band_current_vfo, vfo_label_update, NULL);
     subject_subscribe_delayed_and_notify((Subject*)cfg_band_split, vfo_label_update, NULL);
@@ -106,6 +144,10 @@ lv_obj_t * info_init(lv_obj_t * parent) {
     subject_subscribe_delayed_and_notify((Subject*)cfg_cur_pre, pre_label_update, NULL);
 
     lv_msg_subscribe(MSG_WIFI_STATE_CHANGED, wifi_state_change_cb, NULL);
+
+    pthread_t thread;
+    pthread_create(&thread, NULL, status_thread, NULL);
+    pthread_detach(thread);
 
     return obj;
 }
@@ -212,10 +254,88 @@ static void wifi_state_change_cb(void *s, lv_msg_t *m) {
         color = lv_color_black();
         break;
     default:
-        color = lv_color_hex(0x909090);
+        color = lv_color_hex(COLOR_ICON_IDLE);
         break;
     }
     lv_obj_set_style_text_color(items[INFO_WIFI], color, 0);
+}
+
+static void set_icon(info_items_t item, status_t st, uint32_t on_color) {
+    uint32_t color = st == STATUS_ON ? on_color : st == STATUS_IDLE ? COLOR_ICON_IDLE : COLOR_ICON_OFF;
+    lv_obj_set_style_text_color(items[item], lv_color_hex(color), 0);
+}
+
+static void status_update(void *arg) {
+    info_status_t *st = arg;
+
+    set_icon(INFO_BT, st->bt, COLOR_ICON_BT);
+    set_icon(INFO_HEADPHONES, st->headphones, COLOR_ICON_BT);
+    set_icon(INFO_CAT, st->cat, 0xFFFFFF);
+    set_icon(INFO_GPS, st->gps, COLOR_LIGHT_GREEN);
+    set_icon(INFO_CLUSTER, st->cluster, COLOR_LIGHT_GREEN);
+}
+
+/* Bluetooth: adapter up, any device connected, an A2DP headset among them.
+ * The tools are skipped while the adapter is down. */
+static void poll_bluetooth(info_status_t *st) {
+    int up = 0, con = 0, a2dp = 0;
+    FILE *f = popen("up=$(hciconfig hci0 2>/dev/null | grep -c 'UP RUNNING'); echo $up; "
+                    "[ \"$up\" = 1 ] && { hcitool con 2>/dev/null | grep -c ACL; "
+                    "pactl list sinks short 2>/dev/null | grep -c bluez_sink; }", "r");
+
+    if (f) {
+        if (fscanf(f, "%d %d %d", &up, &con, &a2dp) < 3) {
+            con = a2dp = 0;
+        }
+        pclose(f);
+    }
+    st->bt = !up ? STATUS_OFF : con ? STATUS_ON : STATUS_IDLE;
+    st->headphones = up && a2dp ? STATUS_ON : STATUS_OFF;
+
+    /* The file exists while btcat runs */
+    int clients = 0;
+    f = fopen(BTCAT_CLIENTS_FILE, "r");
+    if (f) {
+        if (fscanf(f, "%d", &clients) != 1) {
+            clients = 0;
+        }
+        fclose(f);
+        st->cat = clients > 0 ? STATUS_ON : up ? STATUS_IDLE : STATUS_OFF;
+    } else {
+        st->cat = STATUS_OFF;
+    }
+}
+
+static void *status_thread(void *arg) {
+    info_status_t st;
+    double lat, lon;
+    int age;
+
+    while (true) {
+        poll_bluetooth(&st);
+
+        if (gps_last_fix(&lat, &lon, &age) && age < 10) {
+            st.gps = STATUS_ON;
+        } else {
+            st.gps = gps_status() == GPS_STATUS_WORKING ? STATUS_IDLE : STATUS_OFF;
+        }
+
+        switch (cluster_client_state(NULL, 0)) {
+            case CLUSTER_CONNECTED:
+                st.cluster = STATUS_ON;
+                break;
+            case CLUSTER_STOPPED:
+                st.cluster = STATUS_OFF;
+                break;
+            default:
+                st.cluster = STATUS_IDLE;
+                break;
+        }
+
+        scheduler_put(status_update, &st, sizeof(st));
+        sleep(STATUS_POLL_S);
+    }
+    return NULL;
 }
 
 

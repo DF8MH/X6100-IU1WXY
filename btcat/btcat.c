@@ -40,6 +40,7 @@ static const char *UART_PATH = UART_DEFAULT;
 #define MAX_EP     4            /* 0 = USB, 1..3 = BT clients */
 #define BUF_SZ     2048
 #define REQ_TMO_MS 300
+#define CLIENTS_FILE "/tmp/btcat.clients"
 
 typedef struct {
     int     fd;
@@ -82,13 +83,23 @@ static void write_all(int fd, const uint8_t *p, size_t n) {
     }
 }
 
+/* number of BT clients, for the GUI status icon */
+static void write_clients(void) {
+    int n = 0;
+    for (int i = 1; i < MAX_EP; i++) if (ep[i].fd >= 0) n++;
+    FILE *f = fopen(CLIENTS_FILE, "w");
+    if (f) { fprintf(f, "%d\n", n); fclose(f); }
+}
+
 static void ep_close(int i) {
-    if (ep[i].is_bt && ep[i].fd >= 0) {
+    int was_bt = ep[i].is_bt && ep[i].fd >= 0;
+    if (was_bt) {
         close(ep[i].fd);
         fprintf(stderr, "btcat: BT client %d disconnected\n", i);
     }
     ep[i].fd = -1; ep[i].len = 0;
     if (pending == i) pending = -1;
+    if (was_bt) write_clients();
 }
 
 /* extract one CI-V frame (FE FE ... FD) from buffer; returns length or 0 */
@@ -192,6 +203,7 @@ int main(void) {
     signal(SIGPIPE, SIG_IGN);
     for (int i = 0; i < MAX_EP; i++) { ep[i].fd = -1; ep[i].len = 0; }
     if (setup_pty() < 0) return 1;
+    write_clients();
 
     long rf_retry = 0;
     for (;;) {
@@ -224,6 +236,7 @@ int main(void) {
                     else {
                         ep[slot].fd = c; ep[slot].is_bt = 1; ep[slot].len = 0;
                         fprintf(stderr, "btcat: BT client %d connected\n", slot);
+                        write_clients();
                     }
                 } else if (errno != EAGAIN) {
                     close(rf_fd); rf_fd = -1; rf_retry = now_ms() + 5000;

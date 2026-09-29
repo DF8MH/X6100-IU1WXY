@@ -6,7 +6,7 @@ build = sys.argv[1]
 log = open(f"{build}/link.log").read()
 syms = sorted(set(re.findall(r"undefined reference to `([^']+)'", log)))
 kind = {}
-for o in glob.glob(f"{build}/CMakeFiles/apps.dir/**/*.o", recursive=True) + glob.glob(f"{build}/CMakeFiles/apps_ui_harness.dir/*.o"):
+for o in glob.glob(f"{build}/CMakeFiles/apps.dir/**/*.o", recursive=True, include_hidden=True) + glob.glob(f"{build}/CMakeFiles/apps_ui_harness.dir/*.o"):
     out = subprocess.run(["readelf", "-rW", o], capture_output=True, text=True).stdout
     for line in out.splitlines():
         p = line.split()

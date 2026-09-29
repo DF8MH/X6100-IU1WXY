@@ -5,12 +5,13 @@
 #include <stdbool.h>
 extern void *cfg_cur_filter_low, *cfg_cur_filter_high, *cfg_fg_freq, *cfg_cur_mode, *cfg_pwr;
 extern void *cfg_tx_filter_low, *cfg_tx_filter_high, *cfg_ft8_auto, *cfg_ft8_hold_freq, *cfg_ft8_max_repeats,
-            *cfg_ft8_protocol, *cfg_ft8_show_all, *cfg_wefax_align, *cfg_wefax_tilt;
+            *cfg_ft8_protocol, *cfg_ft8_show_all, *cfg_wefax_align, *cfg_wefax_tilt,
+            *cfg_cur_agc, *cfg_cur_att;
 static char dummies[16][64];
 __attribute__((constructor)) static void init_ptrs(void) {
     void **pp[] = {&cfg_cur_filter_low, &cfg_cur_filter_high, &cfg_fg_freq, &cfg_cur_mode, &cfg_pwr, &cfg_tx_filter_low,
                    &cfg_tx_filter_high, &cfg_ft8_auto, &cfg_ft8_hold_freq, &cfg_ft8_max_repeats, &cfg_ft8_protocol,
-                   &cfg_ft8_show_all, &cfg_wefax_align, &cfg_wefax_tilt};
+                   &cfg_ft8_show_all, &cfg_wefax_align, &cfg_wefax_tilt, &cfg_cur_agc, &cfg_cur_att};
     for (unsigned i = 0; i < sizeof pp / sizeof pp[0]; i++) *pp[i] = dummies[i];
 }
 int32_t harness_fg_freq = 14074000;
@@ -19,6 +20,8 @@ int32_t cparam_i_get(const void *p) {
     if (p == cfg_cur_filter_high) return 2900;
     if (p == cfg_fg_freq) return harness_fg_freq;
     if (p == cfg_cur_mode) return 7; /* USB-D */
+    if (p == cfg_cur_agc) return 3; /* AUTO */
+    if (p == cfg_cur_att) return 0;
     return 1;
 }
 void cparam_i_set(void *p, int32_t v) { if (p == cfg_fg_freq) harness_fg_freq = v; }
@@ -37,4 +40,14 @@ void msg_update_text_fmt(const char *fmt, ...) { va_list ap; va_start(ap, fmt); 
 void msg_schedule_text_fmt(const char *fmt, ...) { va_list ap; va_start(ap, fmt); v("msg", fmt, ap); va_end(ap); }
 const char *x6100_control_get_fw_version_str(void) { return "1.1.9"; }
 const char *util_canonize_callsign(const char *c, bool s) { return c; }
-const char *info_params_mode_label_get(void) { return "USB"; }
+/* Top bar: subscriptions notify at once (only in the topbar mode) */
+typedef void (*observer_cb)(void *subj, void *user_data);
+bool harness_notify;
+void *subject_subscribe_delayed_and_notify(void *subj, observer_cb fn, void *user_data) {
+    if (harness_notify) fn(subj, user_data);
+    return NULL;
+}
+void lpf(float *x, float current, float beta, float initial) { *x = current; }
+/* GPS with a fix */
+int gps_status(void) { return 1; /* GPS_STATUS_WORKING */ }
+bool gps_last_fix(double *lat, double *lon, int *age_s) { *lat = 45.0; *lon = 7.6; *age_s = 1; return true; }

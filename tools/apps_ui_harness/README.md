@@ -13,5 +13,9 @@ for layout (filter edges, dial) are in `stubs.c`.
 ../js8_ui_harness/fetch_deps.sh      # deps are shared (symlink)
 mkdir -p build && echo > build/stubs_auto.S && cd build && cmake .. && \
   (make apps_ui_harness 2>link.log || (python3 ../gen_stubs.py . && make apps_ui_harness))
-mkdir -p out && cd out && ../apps_ui_harness [ft8|js8|sstv|wefax|navtex|cluster]
+mkdir -p out && cd out && ../apps_ui_harness [ft8|js8|sstv|wefax|navtex|cluster|topbar]
 ```
+
+`topbar` renders the main screen top bar (info, S-meter, clock) in both
+themes and the TX meter (`topbar_1..3.ppm`); the Bluetooth tools it polls are
+faked by scripts written to `out/fakebin`.

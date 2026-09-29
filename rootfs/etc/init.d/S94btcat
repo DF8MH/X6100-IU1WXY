@@ -28,7 +28,7 @@ start() {
 stop() {
 	printf 'Stopping btcat: '
 	start-stop-daemon -K -q -p "$PIDFILE"
-	rm -f "$PIDFILE"
+	rm -f "$PIDFILE" /tmp/btcat.clients
 	killall bt-agent 2>/dev/null
 	umount -l /dev/ttyS2 2>/dev/null
 	echo "OK"

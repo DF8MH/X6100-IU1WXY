@@ -18,12 +18,18 @@
 #include "dialog_msg_cw.h"
 #include "cluster/client.h"
 #include "textarea_window.h"
+#include "info.h"
+#include "meter.h"
+#include "clock.h"
+#include "tx_info.h"
+#include "pubsub_ids.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <execinfo.h>
+#include <sys/stat.h>
 #include <signal.h>
 
 #define W 800
@@ -156,6 +162,70 @@ static void cluster_demo(void) {
     pump(200);
 }
 
+/* Fake Bluetooth tools in PATH: adapter up, a device and an A2DP sink. */
+static void fake_bt_tools(void) {
+    static const char *tools[][2] = {
+        {"hciconfig", "echo '\tUP RUNNING PSCAN'"},
+        {"hcitool", "printf 'Connections:\n\t> ACL 11:22:33:44:55:66 handle 1\n'"},
+        {"pactl", "printf '1\tbluez_sink.11_22_33_44_55_66.a2dp_sink\n'"},
+    };
+    char path[256], cwd[200];
+    mkdir("fakebin", 0755);
+    for (unsigned i = 0; i < sizeof tools / sizeof tools[0]; i++) {
+        snprintf(path, sizeof path, "fakebin/%s", tools[i][0]);
+        FILE *f = fopen(path, "w");
+        fprintf(f, "#!/bin/sh\n%s\n", tools[i][1]);
+        fclose(f);
+        chmod(path, 0755);
+    }
+    snprintf(path, sizeof path, "%s/fakebin:%s", getcwd(cwd, sizeof cwd), getenv("PATH"));
+    setenv("PATH", path, 1);
+}
+
+/* The top bar (info, S-meter, clock) over a black spectrum, both themes,
+ * then the TX meter. */
+static void topbar(void) {
+    lv_obj_t *scr = lv_scr_act();
+    lv_obj_t *spectrum = lv_obj_create(scr);
+    lv_obj_remove_style_all(spectrum);
+    lv_obj_set_size(spectrum, 800, 160);
+    lv_obj_set_style_bg_color(spectrum, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(spectrum, LV_OPA_COVER, 0);
+
+    extern bool harness_notify;
+    harness_notify = true;
+    fake_bt_tools();
+    FILE *f = fopen("btcat.clients", "w");
+    fprintf(f, "1\n");
+    fclose(f);
+    cluster_client_start("127.0.0.1", 1, "IU1WXY"); /* connecting: idle icon */
+
+    clock_update_power(12.0f, 7.8f, 80, false);
+    clock_init(scr);
+    info_init(scr);
+    lv_msg_send(MSG_WIFI_STATE_CHANGED, NULL);
+    meter_init(scr);
+    lv_obj_t *tx = tx_info_init(scr);
+    for (int i = 0; i < 20; i++) {
+        meter_update(-78.2f, 0.5f);
+        pump(10);
+    }
+    pump(300);
+    shot("topbar_1.ppm");
+    styles_set_theme(THEME_LEGACY);
+    lv_obj_report_style_change(NULL);
+    pump(100);
+    shot("topbar_2.ppm");
+    styles_set_theme(THEME_SIMPLE);
+    lv_obj_report_style_change(NULL);
+    lv_obj_clear_flag(tx, LV_OBJ_FLAG_HIDDEN);
+    for (int i = 0; i < 60; i++) {
+        tx_info_update(5.2f, 1.6f, 7.0f);
+        pump(10);
+    }
+    shot("topbar_3.ppm");
+}
+
 static void crash(int sig) {
     void *bt[32];
     int n = backtrace(bt, 32);
@@ -177,6 +247,8 @@ int main(int argc, char **argv) {
 
     EVENT_BAND_DOWN = lv_event_register_id();
     EVENT_BAND_UP = lv_event_register_id();
+    EVENT_RADIO_TX = lv_event_register_id();
+    EVENT_RADIO_RX = lv_event_register_id();
     styles_init(THEME_SIMPLE);
     lv_obj_t *scr = lv_scr_act();
     lv_obj_add_style(scr, &background_style, 0);
@@ -212,6 +284,11 @@ int main(int argc, char **argv) {
     buttons_load_page(&buttons_page_vol_1);
 
     const char *only = argc > 1 ? argv[1] : NULL;
+    if (only && !strcmp(only, "topbar")) {
+        buttons_load_page(&buttons_page_vol_1);
+        topbar();
+        return 0;
+    }
     struct { const char *n; dialog_t **d; int pages; } apps[] = {
         {"ft8", &dialog_ft8, 3}, {"js8", &dialog_js8, 6}, {"sstv", &dialog_sstv, 3},
         {"wefax", &dialog_wefax, 3}, {"navtex", &dialog_navtex, 3},

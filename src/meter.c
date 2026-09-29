@@ -66,16 +66,14 @@ static void meter_draw_cb(lv_event_t * e) {
     lv_draw_label_dsc_t label_dsc;
     lv_area_t           area;
 
-    lv_coord_t x1 = obj->coords.x1 + 7;
-    lv_coord_t y1 = obj->coords.y1 + 17;
-
-    lv_coord_t w = lv_obj_get_width(obj) - 80;
-    // lv_coord_t h = lv_obj_get_height(obj) - 1;
+    /* Scale on top, bars below it, the dB value on the right */
+    lv_coord_t x1 = obj->coords.x1 + 16;
+    lv_coord_t y1 = obj->coords.y1;
 
     uint8_t     slice_db = 3;
     uint8_t     slices_total = (max_db - min_db) / slice_db + 1;
-    uint8_t     slice_w = w / slices_total;
-    uint8_t     slice_spacing = slice_w * 2 / 10;
+    uint8_t     slice_w = 7;
+    uint8_t     slice_spacing = 2;
 
     /* Rects */
 
@@ -86,13 +84,16 @@ static void meter_draw_cb(lv_event_t * e) {
     uint32_t count = (meter_db - min_db) / slice_db + 1.5f;
     count = LV_MIN(count, slices_total);
 
-    area.y1 = y1 - 5;
-    area.y2 = y1 + 32;
+    area.y1 = y1 + 22;
+    area.y2 = y1 + 36;
 
     int16_t db = s_items[0].db;
 
-    for (uint16_t i = 0; i < count; i++) {
-        if (db <= noise_level) {
+    for (uint16_t i = 0; i < slices_total; i++) {
+        if (i >= count) {
+            rect_dsc.bg_color = lv_color_hex(0x000000);
+            rect_dsc.bg_opa = LV_OPA_40;
+        } else if (db <= noise_level) {
             rect_dsc.bg_color = lv_color_hex(0x777777);
         } else if (db <= -73) {
             rect_dsc.bg_color = lv_color_hex(0xAAAAAA);
@@ -101,8 +102,8 @@ static void meter_draw_cb(lv_event_t * e) {
         } else {
             rect_dsc.bg_color = lv_color_hex(0xAA0000);
         }
-        area.x1 = x1 + 30 + i * slice_w - slice_w / 2 + slice_spacing / 2;
-        area.x2 = area.x1 + slice_w - slice_spacing;
+        area.x1 = x1 + i * slice_w;
+        area.x2 = area.x1 + slice_w - slice_spacing - 1;
 
         lv_draw_rect(draw_ctx, &rect_dsc, &area);
 
@@ -111,8 +112,8 @@ static void meter_draw_cb(lv_event_t * e) {
 
     /* Peak */
     if (meter_peak > meter_db + 1.5f * slice_db) {
-        area.x1 = x1 + 30 - slice_w / 2 + slice_w * (uint8_t)((meter_peak - min_db) / slice_db + 0.5f) + slice_spacing / 2;
-        area.x2 = area.x1 + slice_w - slice_spacing;
+        area.x1 = x1 + slice_w * (uint8_t)((meter_peak - min_db) / slice_db + 0.5f);
+        area.x2 = area.x1 + slice_w - slice_spacing - 1;
         rect_dsc.bg_opa = LV_OPA_50;
         rect_dsc.bg_color = lv_color_hex(0xAAAAAA);
         lv_draw_rect(draw_ctx, &rect_dsc, &area);
@@ -123,11 +124,9 @@ static void meter_draw_cb(lv_event_t * e) {
     lv_draw_label_dsc_init(&label_dsc);
 
     label_dsc.color = lv_color_white();
-    label_dsc.font = &sony_22;
+    label_dsc.font = &sony_16;
 
-    area.x1 = x1;
-    area.x2 = x1 + 20;
-    area.y1 = y1 + 5;
+    area.y1 = y1 + 3;
     area.y2 = area.y1 + 18;
 
     lv_point_t label_size;
@@ -138,7 +137,7 @@ static void meter_draw_cb(lv_event_t * e) {
 
         lv_txt_get_size(&label_size, label, label_dsc.font, 0, 0, LV_COORD_MAX, 0);
 
-        area.x1 = x1 + 30 + slice_w * ((db  - min_db) / slice_db) - label_size.x / 2;
+        area.x1 = x1 + slice_w * ((db  - min_db) / slice_db) + (slice_w - slice_spacing) / 2 - label_size.x / 2;
         area.x2 = area.x1 + label_size.x;
 
         lv_draw_label(draw_ctx, &label_dsc, &area, label, NULL);
@@ -169,7 +168,7 @@ lv_obj_t * meter_init(lv_obj_t * parent) {
 
     db_val_label = lv_label_create(obj);
     lv_obj_set_style_text_font(db_val_label, &sony_20, 0);
-    lv_obj_align(db_val_label, LV_ALIGN_BOTTOM_RIGHT, 12, 16);
+    lv_obj_align(db_val_label, LV_ALIGN_RIGHT_MID, -8, 0);
     lv_obj_set_style_text_color(db_val_label, lv_color_white(), 0);
     lv_label_set_text(db_val_label, "");
     return obj;

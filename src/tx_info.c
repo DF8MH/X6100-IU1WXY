@@ -40,7 +40,6 @@ static uint64_t prev_ui_update = 0;
 static x6100_mode_t cur_mode;
 
 static lv_obj_t     *obj;
-static lv_obj_t     *alc_label;
 static lv_obj_t     *pwr_label;
 static lv_obj_t     *vswr_label;
 static lv_grad_dsc_t grad;
@@ -70,126 +69,72 @@ static item_t vswr_items[NUM_VSWR_ITEMS] = {
 
 static void on_cur_mode_change(Subject *subj, void *user_data);
 
-static void tx_info_draw_cb(lv_event_t *e) {
-    lv_obj_t           *obj      = lv_event_get_target(e);
-    lv_draw_ctx_t      *draw_ctx = lv_event_get_draw_ctx(e);
+/* One row of the TX meter: scale on top, bars below it (like the S-meter). */
+static void draw_row(lv_draw_ctx_t *draw_ctx, lv_coord_t x1, lv_coord_t y1, const item_t *items, uint8_t num_items,
+                     float min, float max, float step, float val, bool swr) {
     lv_draw_rect_dsc_t  rect_dsc;
     lv_draw_label_dsc_t label_dsc;
     lv_area_t           area;
     lv_point_t          label_size;
-    uint32_t            count;
-    uint8_t             slices_total;
-    uint8_t             slice_spacing = 2;
+    uint8_t             slice_w = 5;
+    uint8_t             slices_total = (max - min) / step + 0.5f;
 
-    lv_coord_t x1 = obj->coords.x1 + 7;
-    lv_coord_t y1 = obj->coords.y1 + 17;
-
-    lv_coord_t w = lv_obj_get_width(obj) - 60;
-    lv_coord_t h = lv_obj_get_height(obj) - 1;
-
-    /* PWR rects */
-
-    lv_draw_rect_dsc_init(&rect_dsc);
-
-    rect_dsc.bg_opa = LV_OPA_80;
-
-    float slice_pwr_step    = 0.25f;
-    slices_total            = (max_pwr - min_pwr) / slice_pwr_step;
-    uint8_t slice_pwr_width = w / slices_total;
-
-    count = (pwr - min_pwr + slice_pwr_step) / slice_pwr_step;
+    uint32_t count = (LV_MAX(val, min) - min + step) / step;
     count = LV_MIN(count, slices_total);
 
-    area.y1 = y1 - 5;
-    area.y2 = y1 + 32;
-
-    rect_dsc.bg_color = lv_color_hex(0xAAAAAA);
-
-    for (uint16_t i = 0; i < count; i++) {
-
-        area.x1 = x1 + 30 + i * slice_pwr_width - slice_pwr_width / 2 + slice_spacing / 2;
-        area.x2 = area.x1 + slice_pwr_width - slice_spacing;
-
-        lv_draw_rect(draw_ctx, &rect_dsc, &area);
-    }
-
-    /* SWR rects */
-
     lv_draw_rect_dsc_init(&rect_dsc);
 
-    rect_dsc.bg_opa = LV_OPA_80;
+    area.y1 = y1 + 22;
+    area.y2 = y1 + 36;
 
-    float slice_swr_step    = 0.1f;
-    slices_total            = (max_swr - min_swr) / slice_swr_step;
-    uint8_t slice_swr_width = w / slices_total;
+    for (uint16_t i = 0; i < slices_total; i++) {
+        float v = min + i * step;
 
-    count = (vswr - min_swr + slice_swr_step) / slice_swr_step;
-
-    area.y1 = y1 - 5 + 54;
-    area.y2 = y1 + 32 + 54;
-
-    float swr_val = vswr_items[0].val;
-
-    for (uint16_t i = 0; i < count; i++) {
-        if (swr_val <= 2.0f) {
+        rect_dsc.bg_opa = LV_OPA_80;
+        if (i >= count) {
+            rect_dsc.bg_color = lv_color_hex(0x000000);
+            rect_dsc.bg_opa = LV_OPA_40;
+        } else if (!swr || v <= 2.0f) {
             rect_dsc.bg_color = lv_color_hex(0xAAAAAA);
-        } else if (swr_val <= 3.0f) {
+        } else if (v <= 3.0f) {
             rect_dsc.bg_color = lv_color_hex(0xAAAA00);
         } else {
             rect_dsc.bg_color = lv_color_hex(0xAA0000);
         }
-
-        area.x1 = x1 + 30 + i * slice_swr_width - slice_swr_width / 2 + slice_spacing / 2;
-        area.x2 = area.x1 + slice_swr_width - slice_spacing;
+        area.x1 = x1 + i * slice_w;
+        area.x2 = area.x1 + slice_w - 2;
 
         lv_draw_rect(draw_ctx, &rect_dsc, &area);
-        swr_val += slice_swr_step;
     }
-
-    /* PWR Labels */
 
     lv_draw_label_dsc_init(&label_dsc);
 
     label_dsc.color = lv_color_white();
-    label_dsc.font  = &sony_22;
+    label_dsc.font  = &sony_16;
 
-    area.x1 = x1;
-    area.x2 = x1 + 20;
-
-    area.y1 = y1 + 5;
+    area.y1 = y1 + 3;
     area.y2 = area.y1 + 18;
 
-    for (uint8_t i = 0; i < NUM_PWR_ITEMS; i++) {
-        char *label = pwr_items[i].label;
-        float val   = pwr_items[i].val;
+    for (uint8_t i = 0; i < num_items; i++) {
+        lv_txt_get_size(&label_size, items[i].label, label_dsc.font, 0, 0, LV_COORD_MAX, 0);
 
-        lv_txt_get_size(&label_size, label, label_dsc.font, 0, 0, LV_COORD_MAX, 0);
-
-        area.x1 = x1 + 30 + slice_pwr_width * ((val - min_pwr) / slice_pwr_step) - label_size.x / 2;
+        area.x1 = x1 + slice_w * (uint8_t)((items[i].val - min) / step + 0.5f) - label_size.x / 2;
+        area.x1 = LV_MAX(area.x1, x1 - 4);
         area.x2 = area.x1 + label_size.x;
 
-        lv_draw_label(draw_ctx, &label_dsc, &area, label, NULL);
+        lv_draw_label(draw_ctx, &label_dsc, &area, items[i].label, NULL);
     }
+}
 
-    /* SWR Labels */
+static void tx_info_draw_cb(lv_event_t *e) {
+    lv_obj_t      *obj      = lv_event_get_target(e);
+    lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
 
-    area.x1 = x1;
-    area.x2 = x1 + 20;
+    lv_coord_t x1 = obj->coords.x1 + 16;
+    lv_coord_t y1 = obj->coords.y1;
 
-    area.y1 = y1 + 60;
-    area.y2 = y1 + 32 + 60;
-
-    for (uint8_t i = 0; i < NUM_VSWR_ITEMS; i++) {
-        char *label = vswr_items[i].label;
-        float val   = vswr_items[i].val;
-
-        lv_txt_get_size(&label_size, label, label_dsc.font, 0, 0, LV_COORD_MAX, 0);
-
-        area.x1 = x1 + 30 + slice_swr_width * ((val - min_swr) / slice_swr_step) - label_size.x / 2;
-        area.x2 = area.x1 + label_size.x;
-
-        lv_draw_label(draw_ctx, &label_dsc, &area, label, NULL);
-    }
+    draw_row(draw_ctx, x1, y1, pwr_items, NUM_PWR_ITEMS, min_pwr, max_pwr, 0.25f, pwr, false);
+    draw_row(draw_ctx, x1, y1 + TOP_BAR_BOX_H, vswr_items, NUM_VSWR_ITEMS, min_swr, max_swr, 0.1f, vswr, true);
 }
 
 static void tx_cb(lv_event_t *e) {
@@ -211,13 +156,10 @@ static void update_tx_info(void *arg) {
         return;
     }
 
-    lv_label_set_text_fmt(vswr_label, "SWR: %.2f  ALC: %.1f", vswr, alc);
-    lv_label_set_text_fmt(pwr_label, "%.2fW", pwr);
+    lv_label_set_text_fmt(vswr_label, "%.2f", vswr);
+    lv_label_set_text_fmt(pwr_label, "%.2fW\nALC %.1f", pwr, alc);
 
     lv_obj_invalidate(obj);
-
-    lv_obj_add_flag(alc_label, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(vswr_label, LV_OBJ_FLAG_HIDDEN);
 }
 
 
@@ -281,24 +223,18 @@ lv_obj_t *tx_info_init(lv_obj_t *parent) {
     grad.stops[2].frac = 128 + 10;
     grad.stops[3].frac = 255;
 
-    // Small alc indicator
-    alc_label = lv_label_create(obj);
-    lv_obj_set_style_text_font(alc_label, &sony_20, 0);
-    lv_obj_align(alc_label, LV_ALIGN_BOTTOM_RIGHT, 12, 16);
-    lv_obj_set_style_text_color(alc_label, lv_color_white(), 0);
-    lv_label_set_text(alc_label, "");
-
-    // pwr indicator
+    // pwr and alc indicator
     pwr_label = lv_label_create(obj);
-    lv_obj_set_style_text_font(pwr_label, &sony_20, 0);
-    lv_obj_align(pwr_label, LV_ALIGN_BOTTOM_RIGHT, 12, -46);
+    lv_obj_set_style_text_font(pwr_label, &sony_16, 0);
+    lv_obj_set_style_text_align(pwr_label, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_align(pwr_label, LV_ALIGN_TOP_RIGHT, -8, 3);
     lv_obj_set_style_text_color(pwr_label, lv_color_white(), 0);
     lv_label_set_text(pwr_label, "");
 
     // swr indicator
     vswr_label = lv_label_create(obj);
     lv_obj_set_style_text_font(vswr_label, &sony_20, 0);
-    lv_obj_align(vswr_label, LV_ALIGN_BOTTOM_RIGHT, 12, 16);
+    lv_obj_align(vswr_label, LV_ALIGN_BOTTOM_RIGHT, -8, -10);
     lv_obj_set_style_text_color(vswr_label, lv_color_white(), 0);
     lv_label_set_text(vswr_label, "");
 

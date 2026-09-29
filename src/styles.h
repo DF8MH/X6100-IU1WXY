@@ -26,6 +26,14 @@
 #define SYMBOL_NORTH_WEST_ARROW "\xE2\x86\x96"
 #define SYMBOL_SOUTH_WEST_ARROW "\xE2\x86\x99"
 
+// Top bar: info, S-meter and clock panels
+
+#define TOP_BAR_HEIGHT  46
+#define TOP_BAR_MARGIN  2
+#define TOP_BAR_BOX_H   (TOP_BAR_HEIGHT - TOP_BAR_MARGIN * 2)
+#define TOP_BAR_METER_X (TOP_BAR_MARGIN + 330 + 3)
+#define TOP_BAR_METER_W (800 - TOP_BAR_METER_X - 3 - 162 - TOP_BAR_MARGIN)
+
 // Pallete
 
 extern const uint32_t *wf_palette;
