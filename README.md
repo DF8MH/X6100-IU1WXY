@@ -10,8 +10,8 @@ Unofficial combined build for the Xiegu X6100, merging:
 
 Changes on top of the merge:
 
-- Settings → General: **Bluetooth** and **BT Discoverable** switches (state kept in `/mnt/btcat.conf`)
-- APP menu: page 3 = WeFax, NavTex, SSTV, JS8; page 4 = WiFi, Cluster
+- Settings → **Wireless** (Settings has two button pages, like APP): WiFi (was the WiFi app), **Bluetooth** and **Discoverable (CAT)** switches (state kept in `/mnt/btcat.conf`), paired devices, Bluetooth headphones for the RX audio ([below](#bluetooth-headphones))
+- APP menu: page 1 = Modes, Cluster, SWR Scan, GPS; page 2 = Recorder, QTH, Callsign, Settings
 - Boot logo: IU1WXY (`boot/logo.png`, 800×480, copied over the buildroot logo by the image workflow)
 - Consistent app button bars: page buttons named `(APP n:m)`, Clear/Close in slots 4/5
 - Long-press actions: SSTV, WeFax, NavTex, Cluster added
@@ -21,7 +21,7 @@ Changes on top of the merge:
 
 ![Cluster app](docs/screenshots/cluster.png)
 
-APP → page 4 → **Cluster**. Needs WiFi (APP → page 4 → WiFi) and your
+APP → page 4 → **Cluster**. Needs WiFi (Settings → Wireless) and your
 callsign (APP → Callsign), used to log in to the cluster.
 
 - Spots of the **current band**, by frequency. A red line marks the VFO;
@@ -113,11 +113,36 @@ Example — read frequency: `FE FE A4 E0 03 FD` →
 
 | Command | Effect |
 |---|---|
-| `btcat-ctl bt on\|off` | Bluetooth adapter power (= Settings → General → Bluetooth) |
-| `btcat-ctl discoverable on\|off` | Always visible / only paired devices (= BT Discoverable) |
+| `btcat-ctl bt on\|off` | Bluetooth adapter power (= Settings → Wireless → Bluetooth) |
+| `btcat-ctl discoverable on\|off` | Always visible / only paired devices (= Discoverable (CAT)) |
 | `btcat-ctl status` | Print current settings |
 | `btcat-ctl apply` | Re-apply settings from `/mnt/btcat.conf` |
 | `/etc/init.d/S94btcat start\|stop\|restart` | Start/stop the bridge (set `BTCAT_ENABLE=no` in `/etc/default/btcat` to disable) |
+
+### Bluetooth headphones
+
+Settings → Wireless → **Scan headphones** (15 s, put the headphones in
+pairing mode first); an MFK press on a device marked *new* pairs, trusts and
+connects it. An MFK press on a paired device: Connect/Disconnect,
+**Connect at startup**, Remove. With headphones connected:
+
+- **RX to headphones**: a PulseAudio loopback from the radio RX audio
+  (`alsa_input.platform-sound.stereo-fallback`) to the headphones, 30 ms.
+- **Headphone volume**: the headphones sink volume.
+- **Mute speaker**: AF volume 0 while the headphones are connected, back
+  to the previous value when they disconnect (the AF volume does not change
+  the RX audio sent to the headphones).
+
+Only A2DP is used: HFP/HSP (SCO) gives no audio on this radio and drops the
+WiFi, so PulseAudio has no headset backend (`/etc/pulse/system.pa.d/btaudio.pa`).
+The same file stops PulseAudio from looping a phone/tablet that connects for
+CAT (it also connects as an A2DP source) into the radio TX audio.
+
+`btaudio-ctl list|scan|pair|connect|disconnect|remove MAC`,
+`autoconnect MAC on|off`, `rx on|off`, `volume N`; settings in
+`/mnt/btaudio.conf`. `btcat-setup` starts `btaudio-ctl boot` (a monitor that
+keeps the headphones on A2DP with the loopback up, and connects the
+"Connect at startup" devices).
 
 ---
 

@@ -31,6 +31,8 @@ add_library(apps OBJECT
     ${X}/src/dialog_cluster.c ${X}/src/cluster/spots.c ${X}/src/cluster/client.c ${X}/src/freq_list.c ${X}/src/dialog_modes.c
     ${X}/src/dialog_msg_voice.c ${X}/src/dialog_msg_cw.c ${X}/src/cw_encoder.c
     ${X}/src/info.c ${X}/src/meter.c ${X}/src/clock.c ${X}/src/tx_info.c
+    ${X}/src/cfg/settings_manager.cpp ${X}/src/cfg/pending_writes.cpp ${X}/src/cfg/storage_policy.cpp
+    ${X}/src/cfg/subject.cpp ${CMAKE_CURRENT_SOURCE_DIR}/cfg_host.cpp
     ${CMAKE_BINARY_DIR}/styles_host.c ${FONTS})
 target_link_libraries(apps PRIVATE lvgl)
 set_source_files_properties(${X}/src/info.c PROPERTIES COMPILE_DEFINITIONS "BTCAT_CLIENTS_FILE=\"btcat.clients\"")

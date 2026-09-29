@@ -226,6 +226,67 @@ static void topbar(void) {
     shot("topbar_3.ppm");
 }
 
+/* Settings: every tab of both button pages. */
+static void settings_demo(void) {
+    char p[64];
+    dialog_construct(dialog_settings, lv_scr_act());
+    pump(300);
+    for (int pg_n = 0; pg_n < 2; pg_n++) {
+        buttons_page_t *pg = buttons_get_cur_page();
+        for (int i = 1; i < BUTTONS && pg->items[i]; i++) {
+            pg->items[i]->press(pg->items[i]);
+            pump(300);
+            snprintf(p, sizeof p, "settings_%d_%d.ppm", pg_n + 1, i);
+            shot(p);
+        }
+        pg->items[0]->press(pg->items[0]);
+        pump(100);
+    }
+    dialog_destruct();
+    pump(200);
+}
+
+/* Settings -> Wireless with fake networks/devices (stubs.c): the MFK walks
+ * the rows (focus next), a press (click) opens the action menus. */
+static void wireless_demo(void) {
+    lv_group_t *g = keyboard_group;
+    uint32_t    esc = LV_KEY_ESC;
+
+    params.wifi_enabled.x = true;
+    dialog_construct(dialog_settings, lv_scr_act());
+    pump(500);
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[4]->press(pg->items[4]);
+    pump(300);
+    shot("wireless_1.ppm");
+    lv_group_focus_next(g);
+    lv_group_focus_next(g);   /* MyWiFi */
+    pump(500);
+    shot("wireless_2.ppm");
+    lv_event_send(lv_group_get_focused(g), LV_EVENT_CLICKED, NULL);
+    pump(500);
+    shot("wireless_3.ppm");
+    lv_event_send(lv_group_get_focused(g), LV_EVENT_KEY, &esc);
+    pump(500);
+    for (int i = 0; i < 7; i++) lv_group_focus_next(g);   /* BT Headphones */
+    pump(500);
+    shot("wireless_4.ppm");
+    lv_event_send(lv_group_get_focused(g), LV_EVENT_CLICKED, NULL);
+    pump(500);
+    shot("wireless_5.ppm");
+    lv_event_send(lv_group_get_focused(g), LV_EVENT_KEY, &esc);
+    pump(500);
+    lv_group_focus_prev(g);   /* Scan headphones */
+    lv_event_send(lv_group_get_focused(g), LV_EVENT_CLICKED, NULL);
+    pump(300);
+    shot("wireless_6.ppm");
+    for (int i = 0; i < 6; i++) lv_group_focus_next(g);   /* down to the audio rows */
+    pump(500);
+    shot("wireless_7.ppm");
+    dialog_destruct();
+    pump(200);
+}
+
 static void crash(int sig) {
     void *bt[32];
     int n = backtrace(bt, 32);
@@ -261,7 +322,7 @@ int main(int argc, char **argv) {
     pump(200);
     shot("00_main.ppm");
     buttons_load_page_group(buttons_group_app);
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
         char n[32];
         snprintf(n, sizeof n, "01_app_%d.ppm", i + 1);
         pump(50);
@@ -312,6 +373,8 @@ int main(int argc, char **argv) {
         dialog_destruct();
         pump(200);
     }
+    if (!only || !strcmp(only, "settings")) settings_demo();
+    if (!only || !strcmp(only, "wireless")) wireless_demo();
     if (!only || !strcmp(only, "bookmarks")) {
         bookmarks("navtex", dialog_navtex, 517000);
         bookmarks("wefax", dialog_wefax, 7878500);

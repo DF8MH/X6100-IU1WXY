@@ -15,4 +15,6 @@ sdptool add --channel=1 SP
 pidof bt-agent >/dev/null || bt-agent -c NoInputNoOutput -d
 
 /usr/sbin/btcat-ctl apply
+# headphones: keep A2DP + RX loopback, connect the "Connect at startup" ones
+/usr/sbin/btaudio-ctl boot &
 echo "btcat-setup done"
