@@ -14,11 +14,14 @@
 #include "params/params.h"
 #include "radio.h"
 #include "styles.h"
+#include "cfg/cfg_api.h"
+
+#include <ft8lib/constants.h>
 
 #include <stdint.h>
 
 #define BOX_W  420
-#define ROW_H  44
+#define ROW_H  37
 #define HEAD_H 38
 #define HINT_H 28
 #define BOX_Y  (TOP_BAR_HEIGHT + 4)
@@ -31,18 +34,20 @@ static const struct {
     const char    *name;
     const char    *note;
     press_action_t action;
+    int            ftx; /* FT8 app protocol, -1 = not the FT8 app */
 } modes[] = {
-    {"RTTY", "45 bd", ACTION_APP_RTTY},
-    {"FT8", "15 s", ACTION_APP_FT8},
-    {"JS8", "", ACTION_APP_JS8},
-    {"SSTV", "", ACTION_APP_SSTV},
-    {"WeFax", "", ACTION_APP_WEFAX},
-    {"NavTex", "", ACTION_APP_NAVTEX},
+    {"RTTY", "45 bd", ACTION_APP_RTTY, -1},
+    {"FT8", "15 s", ACTION_APP_FT8, FTX_PROTOCOL_FT8},
+    {"FT4", "7.5 s", ACTION_APP_FT8, FTX_PROTOCOL_FT4},
+    {"JS8", "", ACTION_APP_JS8, -1},
+    {"SSTV", "", ACTION_APP_SSTV, -1},
+    {"WeFax", "", ACTION_APP_WEFAX, -1},
+    {"NavTex", "", ACTION_APP_NAVTEX, -1},
 };
 
 #define MODES_N ((int)(sizeof(modes) / sizeof(modes[0])))
 
-/* 56 + 338 = 394: stays clear of the buttons (480 - BUTTONS_H = 426). */
+/* 80 + 333 = 413: stays clear of the buttons (480 - BUTTONS_H = 426). */
 _Static_assert(BOX_Y + BOX_H <= 480 - BUTTONS_H - 8, "Modes menu overlaps the buttons");
 
 static lv_obj_t *rows[MODES_N];
@@ -75,6 +80,9 @@ static void start_async(void *action) {
 static void open_sel(void) {
     last_used = sel;
     /* The app is started after this event: starting it closes this menu. */
+    if (modes[sel].ftx >= 0) {
+        param_i_set(cfg_ft8_protocol, modes[sel].ftx);
+    }
     lv_async_call(start_async, (void *)(intptr_t)modes[sel].action);
 }
 
