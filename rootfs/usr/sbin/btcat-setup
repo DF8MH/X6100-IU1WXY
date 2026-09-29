@@ -17,4 +17,5 @@ pidof bt-agent >/dev/null || bt-agent -c NoInputNoOutput -d
 /usr/sbin/btcat-ctl apply
 # headphones: keep A2DP + RX loopback, connect the "Connect at startup" ones
 /usr/sbin/btaudio-ctl boot &
+touch /tmp/btcat-setup.done
 echo "btcat-setup done"

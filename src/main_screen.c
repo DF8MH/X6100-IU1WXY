@@ -48,6 +48,7 @@
 #include "dialog_sstv.h"
 #include "dialog_cluster.h"
 #include "dialog_modes.h"
+#include "freq_strip.h"
 #include "backlight.h"
 #include "buttons.h"
 #include "recorder.h"
@@ -1571,10 +1572,9 @@ lv_obj_t * main_screen() {
 
     meter = meter_init(obj);
     tx_info = tx_info_init(obj);
+    freq_strip_init(obj);
 
     cw_tune_init(obj);
-
-    msg_schedule_text_fmt("X6100 de R1CBU es Others " VERSION);
 
     subject_subscribe_delayed((Subject*)freq_lock, on_fg_freq_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_band_split, on_fg_freq_change, NULL);

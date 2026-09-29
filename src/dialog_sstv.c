@@ -28,13 +28,14 @@
 
 #include "audio.h"
 
-#define SSTV_CANVAS_W 440
-#define SSTV_CANVAS_H 330
+/* The image fills the dialog height, 4:3 */
+#define SSTV_CANVAS_H (DIALOG_H - 20)
+#define SSTV_CANVAS_W (SSTV_CANVAS_H * 4 / 3)
 #define SSTV_TEST_WAV "/mnt/sstv.wav"
 #define SSTV_DEBUG_WAV "/mnt/sstv-debug.wav"
 #define SSTV_SAVE_DIR "/mnt/sstv"
-#define SSTV_IMAGE_H 330
-#define SSTV_IMAGE_W 440
+#define SSTV_IMAGE_H SSTV_CANVAS_H
+#define SSTV_IMAGE_W SSTV_CANVAS_W
 #define SSTV_IMAGE_X 10
 #define SSTV_IMAGE_Y 10
 #define SSTV_BROWSER_MAX_FILES 128
@@ -432,7 +433,7 @@ dialog_t *dialog_sstv = &dialog;
 static void construct_cb(lv_obj_t *parent)
 {
     dialog.obj = dialog_init(parent);
-    lv_obj_set_size(dialog.obj, 795, 350);
+    lv_obj_set_size(dialog.obj, 795, DIALOG_H);
     lv_obj_center(dialog.obj);
 
     /* Same BIG geometry/background treatment as WEFAX. */
@@ -456,7 +457,7 @@ static void construct_cb(lv_obj_t *parent)
     lv_obj_remove_style_all(sstv_frame);
     lv_obj_add_style(sstv_frame, &panel_style, 0);
     lv_obj_set_style_bg_img_src(sstv_frame, NULL, LV_PART_MAIN);
-    lv_obj_set_size(sstv_frame, 795, 350);
+    lv_obj_set_size(sstv_frame, 795, DIALOG_H);
     lv_obj_center(sstv_frame);
     lv_obj_set_style_bg_color(sstv_frame, lv_color_hex(0x182028), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(sstv_frame, LV_OPA_COVER, LV_PART_MAIN);

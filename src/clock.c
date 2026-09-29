@@ -101,10 +101,10 @@ lv_obj_t * clock_init(lv_obj_t * parent) {
     lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 0);
 
     time_label = lv_label_create(row);
-    lv_obj_set_style_text_font(time_label, &sony_24, 0);
+    lv_obj_set_style_text_font(time_label, &sony_28, 0);
 
     sec_label = lv_label_create(row);
-    lv_obj_set_style_text_font(sec_label, &sony_16, 0);
+    lv_obj_set_style_text_font(sec_label, &sony_18, 0);
     lv_obj_set_style_pad_bottom(sec_label, 2, 0);
 
     power_label = lv_label_create(obj);

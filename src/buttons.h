@@ -11,9 +11,10 @@
 #include "mfk.h"
 #include "vol.h"
 #include "cfg/cfg_api.h"
+#include "styles.h"
 
 #define BUTTONS 5
-#define BTN_HEIGHT 62
+#define BTN_HEIGHT BUTTONS_H
 #define BTN_WIDTH 160
 
 

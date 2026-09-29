@@ -551,8 +551,9 @@ void buttons_init(lv_obj_t *parent) {
         lv_obj_add_style(f, &btn_disabled_style, LV_STATE_DISABLED);
         // lv_obj_add_style(f, &btn_mark_assigned_style, STATE_ASSIGNED);
 
-        lv_obj_set_pos(f, x, y);
-        lv_obj_set_size(f, BTN_WIDTH, BTN_HEIGHT);
+        /* Drawn buttons: 1 px apart on every side */
+        lv_obj_set_pos(f, x + 1, y + 1);
+        lv_obj_set_size(f, BTN_WIDTH - 2, BTN_HEIGHT - 2);
         x += BTN_WIDTH;
 
         /* Encoder marks */

@@ -24,7 +24,7 @@ int32_t cparam_i_get(const void *p) {
     if (p == cfg_cur_filter_low) return 100;
     if (p == cfg_cur_filter_high) return 2900;
     if (p == cfg_fg_freq) return harness_fg_freq;
-    if (p == cfg_cur_mode) return 7; /* USB-D */
+    if (p == cfg_cur_mode) return 3; /* USB-D */
     if (p == cfg_cur_agc) return 3; /* AUTO */
     if (p == cfg_cur_att) return 0;
     return 1;
@@ -61,7 +61,9 @@ void btaudio_run(const char *args, btaudio_done_cb_t cb, void *user) {
         r.out = "NEW\t11:22:33:44:55:66\tSoundcore Life Q30\n";
     scheduler_put(fake_done, &r, sizeof r);
 }
+extern void *cfg_band_split;
 int32_t param_i_get(const void *p) {
+    if (p == cfg_band_split) return 0;
     if (p == cfg_tx_filter_low) return 160;
     if (p == cfg_tx_filter_high) return 3000;
     return 1;
@@ -86,3 +88,8 @@ void lpf(float *x, float current, float beta, float initial) { *x = current; }
 /* GPS with a fix */
 int gps_status(void) { return 1; /* GPS_STATUS_WORKING */ }
 bool gps_last_fix(double *lat, double *lon, int *age_s) { *lat = 45.0; *lon = 7.6; *age_s = 1; return true; }
+void split_freq(int32_t freq, uint16_t *mhz, uint16_t *khz, uint16_t *hz) {
+    *mhz = freq / 1000000;
+    *khz = (freq / 1000) % 1000;
+    *hz  = freq % 1000;
+}

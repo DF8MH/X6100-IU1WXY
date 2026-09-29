@@ -13,6 +13,7 @@
 #include "msg.h"
 #include "radio.h"
 #include "styles.h"
+#include "freq_strip.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -64,6 +65,13 @@ static void tune(void) {
     if (sel < 0 || items[sel].group) return;
     main_screen_set_freq(dial_of(sel));
     cparam_i_set(cfg_cur_mode, x6100_mode_usb);
+    /* The station stays named in the frequency strip while decoding */
+    char label[64];
+    if (items[sel].note)
+        snprintf(label, sizeof(label), "%s - %s", items[sel].name, items[sel].note);
+    else
+        snprintf(label, sizeof(label), "%s", items[sel].name);
+    freq_strip_set_label(label, dial_of(sel));
     msg_update_text_fmt("%s %d.%d kHz", items[sel].name, items[sel].freq_hz / 1000, (items[sel].freq_hz % 1000) / 100);
     freq_list_close();
 }

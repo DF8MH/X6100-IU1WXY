@@ -7,6 +7,7 @@
  */
 
 #include "dialog.h"
+#include "freq_strip.h"
 
 #include "styles.h"
 #include "main_screen.h"
@@ -29,6 +30,7 @@ void dialog_construct(dialog_t *dialog, lv_obj_t *parent) {
             buttons_load_page(dialog->btn_page);
         }
         dialog->construct_cb(parent);
+        freq_strip_show(true);
 
         dialog->run = true;
     }
@@ -53,6 +55,7 @@ void dialog_destruct() {
         if (current_dialog->prev_page) {
             buttons_load_page(current_dialog->prev_page);
         }
+        freq_strip_show(false);
         main_screen_keys_enable(true);
         current_dialog = NULL;
     }

@@ -99,7 +99,7 @@ lv_obj_t * info_init(lv_obj_t * parent) {
         if (i % 6 == 0) {
             row = lv_obj_create(obj);
             lv_obj_add_style(row, &info_row_style, 0);
-            lv_obj_set_size(row, col_w * 6 - 4, i ? 18 : 22);
+            lv_obj_set_size(row, col_w * 6 - 4, i ? 20 : 25);
             lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
             lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

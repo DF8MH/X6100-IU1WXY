@@ -14,6 +14,7 @@
 #include "dialog_settings.h"
 #include "dialog_cluster.h"
 #include "dialog_modes.h"
+#include "freq_strip.h"
 #include "dialog_msg_voice.h"
 #include "dialog_msg_cw.h"
 #include "cluster/client.h"
@@ -224,6 +225,26 @@ static void topbar(void) {
         pump(10);
     }
     shot("topbar_3.ppm");
+    /* The frequency strip over an app */
+    lv_obj_add_flag(tx, LV_OBJ_FLAG_HIDDEN);
+    harness_fg_freq = 14230000;
+    freq_strip_init(scr);
+    dialog_construct(dialog_sstv, scr);
+    pump(300);
+    shot("topbar_4.ppm");
+    dialog_destruct();
+    harness_fg_freq = 517000;
+    freq_strip_set_label("NAVTEX - International, English", 517000);
+    dialog_construct(dialog_navtex, scr);
+    pump(300);
+    shot("topbar_6.ppm");
+    dialog_destruct();
+    harness_fg_freq = 7074000;
+    dialog_construct(dialog_ft8, scr);
+    pump(300);
+    shot("topbar_5.ppm");
+    dialog_destruct();
+    pump(100);
 }
 
 /* Settings: every tab of both button pages. */

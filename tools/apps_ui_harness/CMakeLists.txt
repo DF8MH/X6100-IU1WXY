@@ -28,7 +28,7 @@ add_library(apps OBJECT
     ${X}/src/dialog_navtex.c ${X}/src/navtex/decoder.cpp ${X}/src/navtex/navtex_rx.cpp ${X}/src/navtex/fftfilt.cxx
     ${X}/src/dialog_ft8.c ${X}/src/ft8/table_view.c ${X}/src/ft8/utils.c ${X}/src/ft8/qso.cpp
     ${X}/src/dialog_settings.cpp
-    ${X}/src/dialog_cluster.c ${X}/src/cluster/spots.c ${X}/src/cluster/client.c ${X}/src/freq_list.c ${X}/src/dialog_modes.c
+    ${X}/src/dialog_cluster.c ${X}/src/cluster/spots.c ${X}/src/cluster/client.c ${X}/src/freq_list.c ${X}/src/dialog_modes.c ${X}/src/freq_strip.c
     ${X}/src/dialog_msg_voice.c ${X}/src/dialog_msg_cw.c ${X}/src/cw_encoder.c
     ${X}/src/info.c ${X}/src/meter.c ${X}/src/clock.c ${X}/src/tx_info.c
     ${X}/src/cfg/settings_manager.cpp ${X}/src/cfg/pending_writes.cpp ${X}/src/cfg/storage_policy.cpp

@@ -28,15 +28,22 @@
 
 // Top bar: info, S-meter and clock panels
 
-#define TOP_BAR_HEIGHT  46
+#define TOP_BAR_HEIGHT  52
 #define TOP_BAR_MARGIN  2
 #define TOP_BAR_BOX_H   (TOP_BAR_HEIGHT - TOP_BAR_MARGIN * 2)
 #define TOP_BAR_METER_X (TOP_BAR_MARGIN + 330 + 3)
 #define TOP_BAR_METER_W (800 - TOP_BAR_METER_X - 3 - 162 - TOP_BAR_MARGIN)
 
-/* App dialogs: from under the top bar down to the buttons */
-#define DIALOG_Y        (TOP_BAR_HEIGHT + TOP_BAR_MARGIN)
-#define DIALOG_H        (414 - DIALOG_Y)
+/* Frequency strip under the top bar, shown while an app is open */
+#define FREQ_STRIP_Y    TOP_BAR_HEIGHT
+#define FREQ_STRIP_H    30
+
+/* Bottom buttons (buttons.h BTN_HEIGHT) */
+#define BUTTONS_H       54
+
+/* App dialogs: from under the frequency strip down to the buttons */
+#define DIALOG_Y        (FREQ_STRIP_Y + FREQ_STRIP_H + TOP_BAR_MARGIN)
+#define DIALOG_H        (480 - BUTTONS_H - TOP_BAR_MARGIN - DIALOG_Y)
 
 // Pallete
 
@@ -73,6 +80,7 @@ extern lv_style_t   panel_style;
 extern lv_style_t   panel_info_style;
 
 extern lv_style_t   dialog_style;
+extern lv_style_t   freq_strip_style;
 extern lv_style_t   dialog_item_style;
 extern lv_style_t   dialog_item_focus_style;
 extern lv_style_t   dialog_item_edited_style;

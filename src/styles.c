@@ -111,6 +111,7 @@ lv_style_t  panel_style;
 lv_style_t  panel_info_style;
 
 lv_style_t  dialog_style;
+lv_style_t  freq_strip_style;
 lv_style_t  dialog_item_style;
 lv_style_t  dialog_item_focus_style;
 lv_style_t  dialog_item_edited_style;
@@ -185,18 +186,20 @@ void styles_init(themes_t theme) {
     lv_style_init(&btn_style);
     lv_style_set_text_font(&btn_style, &sony_30);
     lv_style_set_text_color(&btn_style, lv_color_white());
-    lv_style_set_bg_img_opa(&btn_style, LV_OPA_COVER);
-    lv_style_set_border_width(&btn_style, 0);
-    lv_style_set_radius(&btn_style, 0);
-    lv_style_set_bg_opa(&btn_style, LV_OPA_0);
+    /* Drawn like the top bar; colours set by the theme */
+    lv_style_set_bg_opa(&btn_style, LV_OPA_COVER);
+    lv_style_set_bg_grad_dir(&btn_style, LV_GRAD_DIR_VER);
+    lv_style_set_border_width(&btn_style, 1);
+    lv_style_set_radius(&btn_style, 7);
 
     lv_style_init(&btn_active_style);
-    lv_style_set_bg_img_recolor(&btn_active_style, lv_color_hex(0x00FF00));
-    lv_style_set_bg_img_recolor_opa(&btn_active_style, LV_OPA_20);
+    lv_style_set_bg_color(&btn_active_style, lv_color_hex(0x2d5a2d));
+    lv_style_set_bg_grad_color(&btn_active_style, lv_color_hex(0x183818));
+    lv_style_set_border_color(&btn_active_style, lv_color_hex(0x6fbf6f));
 
     lv_style_init(&btn_disabled_style);
-    lv_style_set_bg_img_recolor(&btn_disabled_style, lv_color_hex(0x000000));
-    lv_style_set_bg_img_recolor_opa(&btn_disabled_style, LV_OPA_20);
+    lv_style_set_bg_color(&btn_disabled_style, lv_color_hex(0x262626));
+    lv_style_set_bg_grad_color(&btn_disabled_style, lv_color_hex(0x181818));
     lv_style_set_text_color(&btn_disabled_style, lv_color_hex(0x101010));
 
     style = &btn_mark_style;
@@ -243,7 +246,7 @@ void styles_init(themes_t theme) {
     lv_style_set_text_color(&panel_style, lv_color_white());
     lv_style_set_text_font(&panel_style, &sony_24);
     lv_style_set_width(&panel_style, 795);
-    lv_style_set_height(&panel_style, 182);
+    lv_style_set_height(&panel_style, 480 - BUTTONS_H - TOP_BAR_MARGIN - 230);
     lv_style_set_x(&panel_style, 800 / 2 - (795 / 2));
     lv_style_set_y(&panel_style, 230);
     lv_style_set_pad_ver(&panel_style, 10);
@@ -269,6 +272,16 @@ void styles_init(themes_t theme) {
     lv_style_set_bg_opa(&dialog_style, LV_OPA_COVER);
     lv_style_set_bg_grad_dir(&dialog_style, LV_GRAD_DIR_VER);
     lv_style_set_border_width(&dialog_style, 1);
+
+    lv_style_init(&freq_strip_style);
+    lv_style_set_x(&freq_strip_style, TOP_BAR_MARGIN);
+    lv_style_set_y(&freq_strip_style, FREQ_STRIP_Y);
+    lv_style_set_width(&freq_strip_style, 800 - 2 * TOP_BAR_MARGIN);
+    lv_style_set_height(&freq_strip_style, FREQ_STRIP_H);
+    lv_style_set_radius(&freq_strip_style, 7);
+    lv_style_set_bg_opa(&freq_strip_style, LV_OPA_COVER);
+    lv_style_set_bg_grad_dir(&freq_strip_style, LV_GRAD_DIR_VER);
+    lv_style_set_border_width(&freq_strip_style, 1);
     lv_style_set_pad_ver(&dialog_style, 0);
     lv_style_set_pad_hor(&dialog_style, 0);
 
@@ -384,7 +397,9 @@ static void setup_theme_legacy() {
     lv_style_set_bg_color(&background_style, bg_color);
 
     /* Buttons */
-    lv_style_set_bg_img_src(&btn_style, PATH "images/btn.bin");
+    lv_style_set_bg_color(&btn_style, lv_color_hex(0x2a5aa0));
+    lv_style_set_bg_grad_color(&btn_style, lv_color_hex(0x103060));
+    lv_style_set_border_color(&btn_style, lv_color_hex(0x8aa8d8));
 
     lv_style_set_bg_img_src(&msg_style, PATH "images/msg.bin");
     /* Top bar: clock, info, meter, TX info */
@@ -396,6 +411,9 @@ static void setup_theme_legacy() {
     lv_style_set_bg_color(&dialog_style, lv_color_hex(0x2a5aa0));
     lv_style_set_bg_grad_color(&dialog_style, lv_color_hex(0x103060));
     lv_style_set_border_color(&dialog_style, lv_color_hex(0x8aa8d8));
+    lv_style_set_bg_color(&freq_strip_style, lv_color_hex(0x1a4078));
+    lv_style_set_bg_grad_color(&freq_strip_style, lv_color_hex(0x0c2448));
+    lv_style_set_border_color(&freq_strip_style, lv_color_hex(0x8aa8d8));
 
     lv_obj_invalidate(lv_scr_act());
 }
@@ -407,7 +425,9 @@ static void setup_theme_simple() {
     lv_style_set_bg_color(&background_style, bg_color);
 
     /* Buttons */
-    lv_style_set_bg_img_src(&btn_style, PATH "images/btn_dark.bin");
+    lv_style_set_bg_color(&btn_style, lv_color_hex(0x4b423c));
+    lv_style_set_bg_grad_color(&btn_style, lv_color_hex(0x2a2420));
+    lv_style_set_border_color(&btn_style, lv_color_hex(0x8a8a8a));
 
     lv_style_set_bg_img_src(&msg_style, PATH "images/msg_dark.bin");
     /* Top bar: clock, info, meter, TX info */
@@ -419,6 +439,9 @@ static void setup_theme_simple() {
     lv_style_set_bg_color(&dialog_style, lv_color_hex(0x49636f));
     lv_style_set_bg_grad_color(&dialog_style, lv_color_hex(0x2c3a45));
     lv_style_set_border_color(&dialog_style, lv_color_hex(0xe0e4e8));
+    lv_style_set_bg_color(&freq_strip_style, lv_color_hex(0x1c2a38));
+    lv_style_set_bg_grad_color(&freq_strip_style, lv_color_hex(0x101a24));
+    lv_style_set_border_color(&freq_strip_style, lv_color_hex(0x4a6a8a));
 
     lv_obj_invalidate(lv_scr_act());
 }
