@@ -15,13 +15,12 @@
 #include <time.h>
 #include <sys/time.h>
 #include <pthread.h>
-#include <stdio.h>
 #include <sys/stat.h>
 
 static lv_obj_t         *obj;
 static lv_obj_t         *time_label;
 static lv_obj_t         *sec_label;
-static lv_obj_t         *power_label;
+static lv_obj_t         *power_labels[4];  /* battery symbol, volts, ext symbol, volts or % */
 static pthread_mutex_t  power_mux;
 
 static lv_timer_t       *timer_time_sync;
@@ -31,8 +30,6 @@ static float            v_ext;
 static float            v_bat;
 static uint8_t          cap_bat;
 static bool             charging;
-
-static char             str[32];
 
 static void check_time_sync_cb(lv_timer_t * t);
 static time_t get_last_sync_time();
@@ -74,15 +71,17 @@ static void show_time() {
         ext_sym = LV_SYMBOL_POWER;
     }
 
+    lv_label_set_text(power_labels[0], bat_sym);
+    lv_label_set_text_fmt(power_labels[1], "%.1fv", v_bat);
     if (v_ext < 3.0f) {
-        snprintf(str, sizeof(str), "%s %.1fv  %i%%", bat_sym, v_bat, cap_bat);
+        lv_label_set_text(power_labels[2], "");
+        lv_label_set_text_fmt(power_labels[3], "%i%%", cap_bat);
     } else {
-        snprintf(str, sizeof(str), "%s %.1fv  %s %.1fv", bat_sym, v_bat, ext_sym, v_ext);
+        lv_label_set_text(power_labels[2], ext_sym);
+        lv_label_set_text_fmt(power_labels[3], "%.1fv", v_ext);
     }
 
     pthread_mutex_unlock(&power_mux);
-
-    lv_label_set_text(power_label, str);
 }
 
 lv_obj_t * clock_init(lv_obj_t * parent) {
@@ -101,16 +100,27 @@ lv_obj_t * clock_init(lv_obj_t * parent) {
     lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 0);
 
     time_label = lv_label_create(row);
-    lv_obj_set_style_text_font(time_label, &sony_28, 0);
+    lv_obj_set_style_text_font(time_label, &sony_32, 0);
 
     sec_label = lv_label_create(row);
-    lv_obj_set_style_text_font(sec_label, &sony_18, 0);
+    lv_obj_set_style_text_font(sec_label, &sony_20, 0);
     lv_obj_set_style_pad_bottom(sec_label, 2, 0);
 
-    power_label = lv_label_create(obj);
-    lv_obj_set_style_text_font(power_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(power_label, lv_color_hex(0xBBBBBB), 0);
-    lv_obj_align(power_label, LV_ALIGN_BOTTOM_MID, 0, -1);
+    /* Voltages: symbols in Montserrat, numbers in Sony */
+    row = lv_obj_create(obj);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 4, 0);
+    lv_obj_align(row, LV_ALIGN_BOTTOM_MID, 0, -3);
+
+    for (int i = 0; i < 4; i++) {
+        power_labels[i] = lv_label_create(row);
+        lv_obj_set_style_text_font(power_labels[i], i % 2 ? &sony_16 : &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(power_labels[i], lv_color_hex(0xBBBBBB), 0);
+    }
+    lv_obj_set_style_pad_left(power_labels[2], 8, 0);
 
     show_time();
     lv_timer_create(show_time, 500, NULL);

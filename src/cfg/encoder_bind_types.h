@@ -63,6 +63,10 @@ typedef enum {
     CTRL_CW_PEAK_Q,
     CTRL_CW_ZAP,
 
+    /* New controls go here, after the others (the encoder binds are stored
+     * by position) and before CTRL_FAST_ACCESS_LAST (bindable) */
+    CTRL_WF_REF,
+
     CTRL_FAST_ACCESS_LAST,
 
     /* APPs */

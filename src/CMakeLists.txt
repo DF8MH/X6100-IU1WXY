@@ -22,6 +22,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     freq_list.c
     dialog_modes.c
     freq_strip.c
+    freq_scale.c
     sstv/decoder.c
     sstv/encoder.c
     wefax/decoder.c

@@ -32,15 +32,15 @@ extern "C" {
 
 // Top bar: info, S-meter and clock panels
 
-#define TOP_BAR_HEIGHT  52
+#define TOP_BAR_HEIGHT  64
 #define TOP_BAR_MARGIN  2
 #define TOP_BAR_BOX_H   (TOP_BAR_HEIGHT - TOP_BAR_MARGIN * 2)
 #define TOP_BAR_METER_X (TOP_BAR_MARGIN + 330 + 3)
 #define TOP_BAR_METER_W (800 - TOP_BAR_METER_X - 3 - 162 - TOP_BAR_MARGIN)
 
-/* Frequency strip under the top bar, shown while an app is open */
+/* Frequency strip under the top bar, always shown */
 #define FREQ_STRIP_Y    TOP_BAR_HEIGHT
-#define FREQ_STRIP_H    30
+#define FREQ_STRIP_H    42
 
 /* Bottom buttons (buttons.h BTN_HEIGHT) */
 #define BUTTONS_H       54
@@ -58,7 +58,6 @@ extern lv_color_t   bg_color;
 extern lv_style_t   background_style;
 extern lv_style_t   spectrum_style;
 extern lv_style_t   freq_style;
-extern lv_style_t   freq_main_style;
 extern lv_style_t   waterfall_style;
 
 extern lv_style_t   btn_style;

@@ -15,7 +15,7 @@ constexpr std::array<cfg_ctrl_t, 8> kEncoderVolDefaults = {{
     CTRL_FILTER_BW,
 }};
 
-constexpr std::array<cfg_ctrl_t, 30> kEncoderMfkDefaults = {{
+constexpr std::array<cfg_ctrl_t, 31> kEncoderMfkDefaults = {{
     CTRL_SPECTRUM_FACTOR,
     CTRL_KEY_SPEED,
     CTRL_KEY_MODE,
@@ -46,5 +46,6 @@ constexpr std::array<cfg_ctrl_t, 30> kEncoderMfkDefaults = {{
     CTRL_CW_PEAK_ON,
     CTRL_CW_PEAK_Q,
     CTRL_IF_SHIFT,
+    CTRL_WF_REF,
 }};
 

@@ -25,6 +25,7 @@
 #include "buttons.h"
 #include "main_screen.h"
 #include "qth/qth.h"
+#include "station.h"
 #include "msg.h"
 #include "util.h"
 #include "recorder.h"
@@ -212,7 +213,7 @@ static void save_qso(const char *remote_callsign, const char *remote_grid, const
         canonized_call,
         now, param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? MODE_FT8 : MODE_FT4,
         s_snr, r_snr, cparam_i_get(cfg_fg_freq), NULL, NULL,
-        params.qth.x, remote_grid
+        station_qth(), remote_grid
     );
     free(canonized_call);
 
@@ -234,7 +235,7 @@ static void save_qso(const char *remote_callsign, const char *remote_grid, const
 }
 
 static void worker_init() {
-    qso_processor = ftx_qso_processor_init(params.callsign.x, params.qth.x,
+    qso_processor = ftx_qso_processor_init(params.callsign.x, station_qth(),
                                            save_qso,
                                            param_i_get(cfg_ft8_max_repeats));
 
@@ -514,7 +515,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_finder_set_range(finder, filter_low, filter_high);
 
-    qth_str_to_pos(params.qth.x, &cur_lat, &cur_lon);
+    qth_str_to_pos(station_qth(), &cur_lat, &cur_lon);
 
     main_screen_lock_ab(true);
     main_screen_lock_mode(true);
@@ -619,7 +620,7 @@ static void tx_cq_en_dis_cb(struct button_data_t *btn_data) {
         subject_i_set(cq_enabled, true);
         subject_i_set(tx_enabled, true);
 
-        cq_make_message(params.callsign.x, params.qth.x, params.ft8_cq_modifier.x, tx_msg.msg);
+        cq_make_message(params.callsign.x, station_qth(), params.ft8_cq_modifier.x, tx_msg.msg);
 
         struct timespec now;
         clock_gettime(CLOCK_REALTIME, &now);
@@ -908,7 +909,7 @@ static void add_rx_text(int16_t snr, const char * text, slot_info_t *s_info, flo
     strncpy(cell_data.text, text, sizeof(cell_data.text) - 1);
     cell_data.meta = meta;
     cell_data.odd = s_info->odd;
-    if (params.qth.x[0] != 0) {
+    if (station_qth()[0] != 0) {
         if (strlen(meta.grid) > 0) {
             double lat, lon;
             qth_str_to_pos(meta.grid, &lat, &lon);

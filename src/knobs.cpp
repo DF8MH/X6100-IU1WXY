@@ -184,6 +184,7 @@ static std::map<int, Control*> controls = {
     {CTRL_RIT, new ControlSubjInt("RIT", &cfg_sm.p_rit)},
     {CTRL_XIT, new ControlSubjInt("XIT", &cfg_sm.p_xit)},
     {CTRL_IF_SHIFT, new ControlSubjInt("IF shift", &cfg_sm.p_band_if_shift)},
+    {CTRL_WF_REF, new ControlSubjInt("WF ref", &cfg_sm.p_waterfall_ref)},
 
     {CTRL_DNF, new ControlSubjOnOff("Notch filter", &cfg_sm.p_dnf)},
     {CTRL_DNF_CENTER, new ControlSubjInt("DNF center", &cfg_sm.p_dnf_center)},

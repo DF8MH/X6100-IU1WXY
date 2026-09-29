@@ -15,6 +15,7 @@
 #include "dialog_cluster.h"
 #include "dialog_modes.h"
 #include "freq_strip.h"
+#include "freq_scale.h"
 #include "dialog_msg_voice.h"
 #include "dialog_msg_cw.h"
 #include "cluster/client.h"
@@ -189,66 +190,115 @@ static void fake_bt_tools(void) {
     setenv("PATH", path, 1);
 }
 
-/* The top bar (info, S-meter, clock) over a black spectrum, both themes,
- * then the TX meter. */
+/* The main screen: top bar (info, S-meter, clock), the frequency strip and
+ * the spectrum / frequency row / waterfall stack (stand-ins, the real row).
+ * GPS fix then saved QTH, both themes, spectrum off, zoom x8, the TX panel,
+ * then apps under the strip. */
 static void topbar(void) {
+    extern bool harness_gps_fix;
     lv_obj_t *scr = lv_scr_act();
-    lv_obj_t *spectrum = lv_obj_create(scr);
+    int32_t   f   = 7127000;
+
+    /* Spectrum on: under the strip, 96 px (main_screen.c), row, waterfall */
+    lv_obj_t *stack = lv_obj_create(scr);
+    lv_obj_remove_style_all(stack);
+    lv_obj_set_size(stack, 800, 480);
+    lv_obj_t *spectrum = lv_obj_create(stack);
     lv_obj_remove_style_all(spectrum);
-    lv_obj_set_size(spectrum, 800, 160);
+    lv_obj_set_pos(spectrum, 0, FREQ_STRIP_Y + FREQ_STRIP_H);
+    lv_obj_set_size(spectrum, 800, 96);
     lv_obj_set_style_bg_color(spectrum, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(spectrum, LV_OPA_COVER, 0);
+    freq_scale_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96);
+    lv_obj_t *wf = lv_obj_create(stack);
+    lv_obj_remove_style_all(wf);
+    lv_obj_set_pos(wf, 0, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
+    lv_obj_set_size(wf, 800, 480);
+    lv_obj_set_style_bg_color(wf, lv_color_hex(0x0a1a44), 0);
+    lv_obj_set_style_bg_opa(wf, LV_OPA_COVER, 0);
+    freq_scale_update(f, 50000, 0xffffff);
+    lv_obj_move_background(stack);   /* created first in main_screen.c */
 
     extern bool harness_notify;
     harness_notify = true;
     fake_bt_tools();
-    FILE *f = fopen("btcat.clients", "w");
-    fprintf(f, "1\n");
-    fclose(f);
+    FILE *fp = fopen("btcat.clients", "w");
+    fprintf(fp, "1\n");
+    fclose(fp);
     cluster_client_start("127.0.0.1", 1, "IU1WXY"); /* connecting: idle icon */
 
+    harness_fg_freq = f;
     clock_update_power(12.0f, 7.8f, 80, false);
     clock_init(scr);
     info_init(scr);
     lv_msg_send(MSG_WIFI_STATE_CHANGED, NULL);
     meter_init(scr);
     lv_obj_t *tx = tx_info_init(scr);
+    freq_strip_set_label("", 0);   /* refresh: the harness subscriptions do nothing */
     for (int i = 0; i < 20; i++) {
         meter_update(-78.2f, 0.5f);
         pump(10);
     }
+    buttons_load_page(&buttons_page_vol_1);
     pump(300);
-    shot("topbar_1.ppm");
+    shot("topbar_1.ppm");          /* GPS fix: locator with the dot */
+    harness_gps_fix = false;
+    pump(3100);
+    shot("topbar_2.ppm");          /* no fix: the saved QTH */
     styles_set_theme(THEME_LEGACY);
     lv_obj_report_style_change(NULL);
     pump(100);
-    shot("topbar_2.ppm");
+    shot("topbar_3.ppm");
     styles_set_theme(THEME_SIMPLE);
     lv_obj_report_style_change(NULL);
+    /* Spectrum off: the row right under the strip; zoom x8 */
+    lv_obj_add_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_y(stack, -96);
+    freq_scale_update(f, 50000 / 8, 0xffffff);
+    pump(100);
+    shot("topbar_4.ppm");
+    lv_obj_clear_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_y(stack, 0);
+    freq_scale_update(f, 50000, 0xffffff);
+    harness_gps_fix = true;
+    pump(3100);
     lv_event_send(tx, EVENT_RADIO_TX, NULL);
     for (int i = 0; i < 60; i++) {
         tx_info_update(5.2f, 1.6f, 7.0f);
         pump(10);
     }
-    shot("topbar_3.ppm");
-    /* The frequency strip over an app */
+    shot("topbar_5.ppm");
     lv_event_send(tx, EVENT_RADIO_RX, NULL);
+    /* Apps under the strip */
     harness_fg_freq = 14230000;
-    freq_strip_init(scr);
+    freq_strip_set_label("", 0);
     dialog_construct(dialog_sstv, scr);
     pump(300);
-    shot("topbar_4.ppm");
+    shot("topbar_6.ppm");
     dialog_destruct();
     harness_fg_freq = 517000;
     freq_strip_set_label("NAVTEX - International, English", 517000);
     dialog_construct(dialog_navtex, scr);
     pump(300);
-    shot("topbar_6.ppm");
+    shot("topbar_7.ppm");
     dialog_destruct();
     harness_fg_freq = 7074000;
+    freq_strip_set_label("", 0);
     dialog_construct(dialog_ft8, scr);
     pump(300);
-    shot("topbar_5.ppm");
+    shot("topbar_8.ppm");
+    dialog_destruct();
+    /* WeFax, View Big (FAX 2:3, 4th button) */
+    harness_fg_freq = 7878500;
+    freq_strip_set_label("", 0);
+    dialog_construct(dialog_wefax, scr);
+    pump(300);
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[0]->press(pg->items[0]);
+    pg = buttons_get_cur_page();
+    pg->items[3]->press(pg->items[3]);
+    pump(300);
+    shot("topbar_9.ppm");
     dialog_destruct();
     pump(100);
 }
@@ -375,6 +425,7 @@ int main(int argc, char **argv) {
 
     buttons_init(scr);
     buttons_load_page(&buttons_page_vol_1);
+    freq_strip_init(scr);   /* always shown, as on the radio */
     pump(200);
     shot("00_main.ppm");
     buttons_load_page_group(buttons_group_app);
@@ -386,9 +437,9 @@ int main(int argc, char **argv) {
         buttons_page_t *pg = buttons_get_cur_page();
         pg->items[0]->press(pg->items[0]);
     }
-    /* VOL 2:2, MFK 2:4, MFK 4:4 */
-    static const int gen_pages[] = {1, 3, 5};
-    for (int i = 0; i < 3; i++) {
+    /* VOL 2:2, MFK 1:4, MFK 2:4, MFK 4:4 */
+    static const int gen_pages[] = {1, 2, 3, 5};
+    for (int i = 0; i < 4; i++) {
         char n[32];
         buttons_load_page(buttons_group_gen[gen_pages[i]]);
         pump(50);

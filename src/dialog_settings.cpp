@@ -1129,36 +1129,6 @@ static uint8_t make_spectrum_show(uint8_t row) {
     return row + 1;
 }
 
-/* Waterfall reference level: below 0 the strong signals get brighter */
-
-static void waterfall_ref_update_cb(lv_event_t *e) {
-    lv_obj_t *obj = lv_event_get_target(e);
-    int       val = lv_slider_get_value(obj);
-
-    lv_obj_t *slider_label = (lv_obj_t *)lv_obj_get_user_data(obj);
-    char     *fmt          = (char *)lv_obj_get_user_data(slider_label);
-    lv_label_set_text_fmt(slider_label, fmt, val);
-    cfg_sm.p_waterfall_ref.set(val);
-}
-
-static uint8_t make_waterfall_ref(uint8_t row) {
-    lv_obj_t *obj;
-
-    obj = lv_label_create(grid);
-    lv_label_set_text(obj, "Waterfall ref level");
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
-
-    obj = lv_obj_create(grid);
-    lv_obj_set_size(obj, SMALL_6, 56);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
-    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_center(obj);
-    slider_with_text(obj, cfg_sm.p_waterfall_ref.get(), -40, 20, 1, SMALL_6 - 120, "%+i dB", waterfall_ref_update_cb);
-
-    return row + 1;
-}
-
 static void auto_level_offset_update_cb(lv_event_t * e) {
     lv_obj_t *obj = lv_event_get_target(e);
     float val = lv_slider_get_value(obj) * AUTO_LEVEL_STEP;
@@ -3099,7 +3069,6 @@ static void make_display_page() {
     row = make_delimiter(row);
 
     row = make_spectrum_show(row);
-    row = make_waterfall_ref(row);
     row = make_auto_offset(row);
     row = make_spectrum_min_max(row);
     row = make_delimiter(row);

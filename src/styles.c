@@ -85,7 +85,6 @@ const uint32_t *wf_palette;
 lv_style_t  background_style;
 lv_style_t  spectrum_style;
 lv_style_t  freq_style;
-lv_style_t  freq_main_style;
 lv_style_t  waterfall_style;
 
 lv_style_t  btn_style;
@@ -158,19 +157,11 @@ void styles_init(themes_t theme) {
 
     lv_style_init(&freq_style);
     lv_style_set_text_color(&freq_style, lv_color_white());
-    lv_style_set_text_font(&freq_style, &sony_30);
-    lv_style_set_pad_ver(&freq_style, 7);
+    lv_style_set_text_font(&freq_style, &sony_22);
+    lv_style_set_pad_ver(&freq_style, 9);
     lv_style_set_width(&freq_style, 150);
     lv_style_set_height(&freq_style, 36);
     lv_style_set_text_align(&freq_style, LV_TEXT_ALIGN_CENTER);
-
-    lv_style_init(&freq_main_style);
-    lv_style_set_text_color(&freq_main_style, lv_color_white());
-    lv_style_set_text_font(&freq_main_style, &sony_38);
-    lv_style_set_pad_ver(&freq_main_style, 5);
-    lv_style_set_width(&freq_main_style, 500);
-    lv_style_set_height(&freq_main_style, 36);
-    lv_style_set_text_align(&freq_main_style, LV_TEXT_ALIGN_CENTER);
 
     lv_style_init(&waterfall_style);
     lv_style_set_bg_color(&waterfall_style, lv_color_hex(0x000000));
@@ -338,10 +329,10 @@ void styles_init(themes_t theme) {
     lv_style_set_border_width(&info_row_style, 0);
     lv_style_set_bg_opa(&info_row_style, LV_OPA_0);
     lv_style_set_pad_all(&info_row_style, 0);
-    lv_style_set_pad_column(&info_row_style, 4);
+    lv_style_set_pad_column(&info_row_style, 1);
 
     lv_style_init(&info_item_style);
-    lv_style_set_text_font(&info_item_style, &sony_18);
+    lv_style_set_text_font(&info_item_style, &sony_20);
     lv_style_set_pad_ver(&info_item_style, 1);
     lv_style_set_radius(&info_item_style, 3);
 
@@ -369,7 +360,7 @@ void styles_init(themes_t theme) {
     lv_style_set_border_width(&cw_tune_style, 0);
     lv_style_set_opa(&cw_tune_style, LV_OPA_50);
     lv_style_set_x(&cw_tune_style, 30);
-    lv_style_set_y(&cw_tune_style, 70);
+    lv_style_set_y(&cw_tune_style, FREQ_STRIP_Y + FREQ_STRIP_H + 18);
 
     styles_set_theme(theme);
 }

@@ -12,6 +12,7 @@
 #include "params/params.h"
 #include "qth/qth.h"
 #include "msg.h"
+#include "gps.h"
 
 #include <ft8lib/encode.h>
 #include <ft8lib/decode.h>
@@ -86,4 +87,19 @@ bool station_qth_save(const char *qth) {
     }
     params_str_set(&params.qth, qth);
     return true;
+}
+
+const char *station_qth(void) {
+    static char gps_qth[7];
+    char        grid[9];
+    double      lat, lon;
+    int         age;
+
+    /* A current fix, as for the GPS icon */
+    if (gps_last_fix(&lat, &lon, &age) && age < 10) {
+        qth_pos_to_str(lat, lon, grid);
+        snprintf(gps_qth, sizeof(gps_qth), "%s", grid);
+        return gps_qth;
+    }
+    return params.qth.x;
 }

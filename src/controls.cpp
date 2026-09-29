@@ -382,6 +382,11 @@ void controls_encoder_update(cfg_ctrl_t ctrl, int32_t diff, std::string &msg) {
             snprintf(msg.data(), msg.capacity(), "RTTY reverse: %s", (b ? "On" : "Off"));
             break;
 
+        case CTRL_WF_REF:
+            i = update_param(cfg_sm.p_waterfall_ref, diff);
+            snprintf(msg.data(), msg.capacity(), "Waterfall ref: %+i dB", i);
+            break;
+
         case CTRL_IF_SHIFT:
             {
                 x6100_base_ver_t base_ver = x6100_control_get_base_ver();

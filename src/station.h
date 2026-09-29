@@ -23,6 +23,10 @@ void station_qth_edit(lv_obj_t *text);
 bool station_callsign_save(const char *callsign);
 bool station_qth_save(const char *qth);
 
+/* The locator to operate with: the 6 characters from a current GPS fix,
+ * else the saved QTH (params.qth.x itself, never overwritten by the GPS). */
+const char *station_qth(void);
+
 #ifdef __cplusplus
 }
 #endif

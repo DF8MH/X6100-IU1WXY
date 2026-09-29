@@ -85,9 +85,13 @@ void *subject_subscribe_delayed_and_notify(void *subj, observer_cb fn, void *use
     return NULL;
 }
 void lpf(float *x, float current, float beta, float initial) { *x = current; }
-/* GPS with a fix */
+/* GPS with a fix (harness_gps_fix = false: no fix since 5 minutes) */
+bool harness_gps_fix = true;
 int gps_status(void) { return 1; /* GPS_STATUS_WORKING */ }
-bool gps_last_fix(double *lat, double *lon, int *age_s) { *lat = 45.0; *lon = 7.6; *age_s = 1; return true; }
+bool gps_last_fix(double *lat, double *lon, int *age_s) {
+    *lat = 45.0; *lon = 7.6; *age_s = harness_gps_fix ? 1 : 300;
+    return true;
+}
 void split_freq(int32_t freq, uint16_t *mhz, uint16_t *khz, uint16_t *hz) {
     *mhz = freq / 1000000;
     *khz = (freq / 1000) % 1000;

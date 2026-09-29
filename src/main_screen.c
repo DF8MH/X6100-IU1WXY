@@ -48,6 +48,7 @@
 #include "dialog_cluster.h"
 #include "dialog_modes.h"
 #include "freq_strip.h"
+#include "freq_scale.h"
 #include "backlight.h"
 #include "buttons.h"
 #include "recorder.h"
@@ -64,7 +65,7 @@
 #include <stdlib.h>
 
 
-static uint16_t     spectrum_height = (480 / 3);
+static uint16_t     spectrum_height = 96;
 static uint16_t     freq_height = 36;
 static lv_obj_t     *obj;
 static SubjectInt   *freq_lock;
@@ -73,7 +74,6 @@ static bool         ab_lock = false;
 static bool         band_lock = false;
 
 static lv_obj_t     *spectrum;
-static lv_obj_t     *freq[3];
 static lv_obj_t     *waterfall;
 static lv_obj_t     *msg;
 static lv_obj_t     *msg_tiny;
@@ -1518,10 +1518,12 @@ lv_obj_t * main_screen() {
 
     spectrum_min_max_reset();
 
-    /* Spectrum off: it shrinks under the top bar, invisible but still the
-     * key target, and the waterfall takes its place. */
-    if (!param_i_get(cfg_spectrum_show)) {
-        spectrum_height = TOP_BAR_HEIGHT;
+    /* Under the frequency strip. Spectrum off: it shrinks under the top bars,
+     * invisible but still the key target, and the waterfall takes its place. */
+    if (param_i_get(cfg_spectrum_show)) {
+        y = FREQ_STRIP_Y + FREQ_STRIP_H;
+    } else {
+        spectrum_height = FREQ_STRIP_Y + FREQ_STRIP_H;
         lv_obj_set_style_opa(spectrum, LV_OPA_TRANSP, 0);
     }
 
@@ -1530,25 +1532,7 @@ lv_obj_t * main_screen() {
 
     y += spectrum_height;
 
-    lv_obj_t *f;
-
-    f = lv_label_create(obj);
-    lv_obj_add_style(f, &freq_style, 0);
-    lv_obj_set_pos(f, 0, y);
-    lv_label_set_recolor(f, true);
-    freq[0] = f;
-
-    f = lv_label_create(obj);
-    lv_obj_add_style(f, &freq_main_style, 0);
-    lv_obj_set_pos(f, 800/2 - 500/2, y);
-    lv_label_set_recolor(f, true);
-    freq[1] = f;
-
-    f = lv_label_create(obj);
-    lv_obj_add_style(f, &freq_style, 0);
-    lv_obj_set_pos(f, 800 - 150, y);
-    lv_label_set_recolor(f, true);
-    freq[2] = f;
+    freq_scale_init(obj, y);
 
     y += freq_height;
 
@@ -1583,6 +1567,7 @@ lv_obj_t * main_screen() {
 
     subject_subscribe_delayed((Subject*)freq_lock, update_freq_boundaries, NULL);
     subject_subscribe_delayed((Subject*)cfg_fg_freq, update_freq_boundaries, NULL);
+    subject_subscribe_delayed((Subject*)cfg_band_if_shift, update_freq_boundaries, NULL);
     subject_subscribe_delayed_and_notify((Subject*)cfg_mode_zoom, update_freq_boundaries, NULL);
 
     subject_subscribe_delayed_and_notify((Subject*)cfg_bg_freq, on_fg_freq_change, NULL);
@@ -1619,7 +1604,6 @@ void main_screen_notify_low_power(bool is_low) {
 
 static void on_fg_freq_change(Subject *subj, void *user_data) {
     int32_t    f;
-    uint32_t    color = subject_i_get(freq_lock) ? 0xBBBBBB : 0xFFFFFF;
 
     bool split = param_i_get(cfg_band_split);
     int32_t fg = cparam_i_get(cfg_fg_freq);
@@ -1642,17 +1626,6 @@ static void on_fg_freq_change(Subject *subj, void *user_data) {
             msg_tiny_set_text_fmt("%i.%03i", mhz, khz);
         }
     }
-
-    if (split) {
-        uint16_t    mhz2, khz2, hz2;
-        int32_t    f2 = (fg == f) ? bg : fg;
-
-        split_freq(f2, &mhz2, &khz2, &hz2);
-
-        lv_label_set_text_fmt(freq[1], "#%03X %i.%03i.%03i / %i.%03i.%03i", color, mhz, khz, hz, mhz2, khz2, hz2);
-    } else {
-        lv_label_set_text_fmt(freq[1], "#%03X %i.%03i.%03i", color, mhz, khz, hz);
-    }
 }
 
 static void update_freq_boundaries(Subject *subj, void *user_data) {
@@ -1667,8 +1640,7 @@ static void update_freq_boundaries(Subject *subj, void *user_data) {
         f = fg;
     }
 
-    uint16_t    mhz, khz, hz;
-    uint32_t    half_width = 50000;
+    int32_t     half_width = 50000;
     uint32_t    color = subject_i_get(freq_lock) ? 0xBBBBBB : 0xFFFFFF;
 
     int32_t zoom = param_i_get(cfg_mode_zoom);
@@ -1677,11 +1649,8 @@ static void update_freq_boundaries(Subject *subj, void *user_data) {
         half_width /= zoom;
     }
 
-    split_freq(f - half_width, &mhz, &khz, &hz);
-    lv_label_set_text_fmt(freq[0], "#%03X %i.%03i", color, mhz, khz);
-
-    split_freq(f + half_width, &mhz, &khz, &hz);
-    lv_label_set_text_fmt(freq[2], "#%03X %i.%03i", color, mhz, khz);
+    /* The waterfall is centred on the VFO minus the IF shift */
+    freq_scale_update(f - param_i_get(cfg_band_if_shift), half_width, color);
 }
 
 static void update_zoom_on_if_shift_change(Subject *subj, void *user_data) {

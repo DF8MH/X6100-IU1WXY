@@ -433,8 +433,7 @@ dialog_t *dialog_sstv = &dialog;
 static void construct_cb(lv_obj_t *parent)
 {
     dialog.obj = dialog_init(parent);
-    lv_obj_set_size(dialog.obj, 795, DIALOG_H);
-    lv_obj_center(dialog.obj);
+    lv_obj_set_size(dialog.obj, 795, DIALOG_H);   /* at DIALOG_Y (dialog_style) */
 
     /* Same BIG geometry/background treatment as WEFAX. */
     lv_obj_set_style_bg_img_src(dialog.obj, NULL, LV_PART_MAIN);

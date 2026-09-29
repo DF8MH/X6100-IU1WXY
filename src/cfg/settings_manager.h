@@ -503,7 +503,7 @@ class SettingsManager {
     // Default mode for a frequency: LSB below 10 MHz, USB at or above.
     static int32_t resolve_default_mode(int32_t freq);
 
-    // Default 49-char encoder-bind string (all NONE except the documented
+    // Default 50-char encoder-bind string (all NONE except the documented
     // VOL/MFK positions). Static: callable from the ctor init list.
     static std::string make_default_encoder_bind();
 

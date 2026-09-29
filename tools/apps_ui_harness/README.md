@@ -19,6 +19,10 @@ mkdir -p build && echo > build/stubs_auto.S && cd build && cmake .. && \
 mkdir -p out && cd out && ../apps_ui_harness [ft8|js8|sstv|wefax|navtex|cluster|msg|settings|wireless|bookmarks|topbar]
 ```
 
-`topbar` renders the main screen top bar (info, S-meter, clock) in both
-themes and the TX meter (`topbar_1..3.ppm`); the Bluetooth tools it polls are
-faked by scripts written to `out/fakebin`.
+`topbar` renders the main screen: top bar (info, S-meter, clock), frequency
+strip with the GPS locator (fake fix, `topbar_1`) and the saved QTH
+(`topbar_2`), legacy theme (`topbar_3`), spectrum off with zoom x8
+(`topbar_4`), the TX panel (`topbar_5`) and apps under the strip
+(`topbar_6..9`); spectrum and waterfall are stand-ins, the frequency row
+under them is the real `freq_scale.c`. The Bluetooth tools it polls are
+faked by scripts written to `out/fakebin`. `01_gen_3` is MFK 1:4 (WF ref).

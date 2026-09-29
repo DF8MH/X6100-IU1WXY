@@ -10,7 +10,6 @@
 
 #include <stdio.h>
 
-#include "dialog.h"
 #include "events.h"
 #include "msg_tiny.h"
 #include "params/params.h"
@@ -140,8 +139,8 @@ static void tx_cb(lv_event_t *e) {
     alc  = 0.0f;
     tx_start = lv_tick_get();
 
-    /* Under the top bar, and under the frequency strip when an app is open */
-    lv_obj_set_y(panel, (dialog_is_run() ? DIALOG_Y : TOP_BAR_HEIGHT) + 8);
+    /* Under the frequency strip */
+    lv_obj_set_y(panel, DIALOG_Y + 8);
     update_head();
 
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_HIDDEN);

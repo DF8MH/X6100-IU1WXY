@@ -16,6 +16,7 @@
 #include "js8/js8_ops.h"
 #include "js8/js8_speed.h"
 #include "qth/qth.h"
+#include "station.h"
 #include "qso_log.h"
 
 #include "audio.h"
@@ -781,10 +782,10 @@ static void station_fields(const js8_station_t *st, int64_t now, station_fields_
             snprintf(heard, sizeof(f->heard), "heard you (%s)", hage);
         }
     }
-    if (st->grid[0] && params.qth.x[0]) {
+    if (st->grid[0] && station_qth()[0]) {
         double lat, lon, my_lat, my_lon;
         qth_str_to_pos(st->grid, &lat, &lon);
-        qth_str_to_pos(params.qth.x, &my_lat, &my_lon);
+        qth_str_to_pos(station_qth(), &my_lat, &my_lon);
         snprintf(dist, sizeof(f->dist), "%.0f km", qth_pos_dist(lat, lon, my_lat, my_lon));
     }
 }
@@ -1471,7 +1472,7 @@ static bool tx_queue_at(const char *text, int offset_hz, bool automatic) {
     }
 
     js8_tx_preview_t pv;
-    js8_tx_preview(params.callsign.x, params.qth.x, text, cur_speed(), &pv);
+    js8_tx_preview(params.callsign.x, station_qth(), text, cur_speed(), &pv);
     if (!pv.ok) {
         msg_update_text_fmt("JS8: %s", pv.error);
         return false;
@@ -1480,7 +1481,7 @@ static bool tx_queue_at(const char *text, int offset_hz, bool automatic) {
     char err[JS8_TX_ERR_LEN];
     atomic_store(&tx_offset_active, offset_hz);
     snprintf(tx_preview, sizeof(tx_preview), "%s", pv.preview);
-    if (!js8_tx_send(tx, params.callsign.x, params.qth.x, text, (float)offset_hz, cur_speed(), err, sizeof(err))) {
+    if (!js8_tx_send(tx, params.callsign.x, station_qth(), text, (float)offset_hz, cur_speed(), err, sizeof(err))) {
         msg_update_text_fmt("JS8: %s", err);
         return false;
     }
@@ -1555,7 +1556,7 @@ static void rotary_cb(int32_t diff) {
 static void compose_changed_cb(lv_event_t *e) {
     (void)e;
     js8_tx_preview_t pv;
-    js8_tx_preview(params.callsign.x, params.qth.x, textarea_window_get(), cur_speed(), &pv);
+    js8_tx_preview(params.callsign.x, station_qth(), textarea_window_get(), cur_speed(), &pv);
     if (pv.ok) {
         msg_update_text_fmt("%d frame%s, %.0f s", pv.frames, pv.frames == 1 ? "" : "s", pv.seconds);
     }
@@ -2272,7 +2273,7 @@ static void hw_cpy_cb(button_data_t *btn) {
 /* CQ with the 4-character grid, as desktop JS8Call sends it. */
 static bool send_cq(bool automatic) {
     char text[32];
-    snprintf(text, sizeof(text), "CQ CQ CQ %.4s", params.qth.x);
+    snprintf(text, sizeof(text), "CQ CQ CQ %.4s", station_qth());
     if (!tx_queue_at(text, params.js8_tx_freq.x, automatic)) return false;
     hb_pause("CQ");
     return true;
@@ -2422,7 +2423,7 @@ static bool send_heartbeat(bool automatic) {
         return false;
     }
     char text[48];
-    js8_heartbeat_text(params.callsign.x, params.qth.x, text, sizeof(text));
+    js8_heartbeat_text(params.callsign.x, station_qth(), text, sizeof(text));
     return tx_queue_at(text, free_hb_offset(), automatic);
 }
 
@@ -2486,7 +2487,7 @@ static void query_item_cb(lv_event_t *e) {
     if (!have) return;
 
     char text[64];
-    if (!js8_query_text(q, call, snr, params.qth.x, text, sizeof(text))) {
+    if (!js8_query_text(q, call, snr, station_qth(), text, sizeof(text))) {
         msg_update_text_fmt(q == JS8_Q_MY_GRID ? "Set your grid first: APP > QTH" : "Nothing to send");
         return;
     }
@@ -2774,7 +2775,7 @@ static void handle_incoming(const js8_rx_msg_t *m) {
         .hb_ack    = params.js8_hb_ack.x,
         .relay     = params.js8_relay.x,
         .my_call   = params.callsign.x,
-        .my_grid   = params.qth.x,
+        .my_grid   = station_qth(),
         .info      = info_text,
         .status    = status_text,
         .groups    = groups_text,
@@ -3197,7 +3198,7 @@ static void aprs_compose(const char *head, const char *tail) {
  * shown, if it isn't set. Any out-pointer may be NULL. */
 static bool aprs_grid(char grid[8], double *lat, double *lon) {
     char g[8];
-    snprintf(g, sizeof(g), "%.6s", params.qth.x);
+    snprintf(g, sizeof(g), "%.6s", station_qth());
     if (strlen(g) < 4) {
         msg_update_text_fmt("Set your grid first: APP > QTH");
         return false;
@@ -3286,7 +3287,7 @@ static void beacon_changed_cb(lv_event_t *e) {
     char text[112], grid[12];
     if (!beacon_text(edit_target == EDIT_BEACON_GPS, textarea_window_get(), text, sizeof(text), grid)) return;
     js8_tx_preview_t pv;
-    js8_tx_preview(params.callsign.x, params.qth.x, text, cur_speed(), &pv);
+    js8_tx_preview(params.callsign.x, station_qth(), text, cur_speed(), &pv);
     if (!pv.ok) return;
     const char *msg = textarea_window_get();
     while (*msg == ' ') msg++;
@@ -3675,10 +3676,7 @@ static bool find_station(const char *call, js8_station_t *out) {
 
 /* 6-character grid from a current GPS fix (portable), else the QTH setting. */
 static void my_log_grid(char *out, size_t size) {
-    double lat, lon;
-    int    age;
-    if (gps_last_fix(&lat, &lon, &age) && age <= 120 && js8_latlon_to_grid(lat, lon, 6, out, size)) return;
-    snprintf(out, size, "%s", params.qth.x);
+    snprintf(out, size, "%s", station_qth());
 }
 
 /* Sent: the report we gave them, else how we heard them. Rcvd: the report
