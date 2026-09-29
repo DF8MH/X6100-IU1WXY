@@ -126,6 +126,8 @@ lv_obj_t * info_init(lv_obj_t * parent) {
     lv_label_set_text(items[INFO_GPS], LV_SYMBOL_GPS);
     lv_label_set_text(items[INFO_CLUSTER], "DX");
     lv_obj_set_style_text_font(items[INFO_CLUSTER], &sony_22, 0);
+    lv_obj_set_style_text_font(items[INFO_VFO], &sony_18, 0);
+    lv_obj_set_style_text_font(items[INFO_MODE], &sony_18, 0);
     lv_obj_set_style_text_color(items[INFO_WIFI], lv_color_hex(COLOR_ICON_IDLE), 0);
 
     subject_subscribe_delayed((Subject*)cfg_band_current_vfo, vfo_label_update, NULL);
