@@ -1,0 +1,100 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:800px;background:#11161c;font-family:"DejaVu Sans",sans-serif;color:#e8e8e8}
+.cap{padding:14px 16px 8px;font-size:15px;color:#9fd;line-height:21px}
+.cap b{color:#fff}
+.scr{width:800px;height:480px;background:#29313b;position:relative;overflow:hidden}
+.panel{position:absolute;top:66px;left:4px;right:4px;height:346px;border:1px solid #9aa;border-radius:10px;background:#1b232c;padding:8px 12px}
+.head{display:flex;justify-content:space-between;font-size:14px;color:#9fd;padding:0 4px 6px}
+.head b{color:#fff}
+.list{position:relative;height:262px;background:#000;border:1px solid #445;overflow:hidden}
+.list .mid{position:absolute;left:0;right:0;top:118px;height:24px;border-top:2px solid #4da3ff;background:#0a1f3a}
+table{width:100%;border-collapse:collapse;font-size:16px;position:absolute;left:0;right:0}
+td{padding:0 6px;height:26px;white-space:nowrap}
+td.f{width:100px;text-align:right;font-family:"DejaVu Sans Mono";color:#fff}
+td.c{width:120px;font-weight:bold}
+td.s{width:100px;color:#9ab}
+td.m{color:#ccc}
+td.t{width:60px;text-align:right;color:#9ab}
+tr.near td{background:#3a2f12}tr.near td.c{color:#ffd24a}
+tr.vfo td{color:#7cc4ff;height:24px}
+tr.sel td{border-top:2px solid #fff;border-bottom:2px solid #fff;background:#4b3c14}tr.sel td:first-child{border-left:2px solid #fff}tr.sel td:last-child{border-right:2px solid #fff}
+tr.empty td{color:#445;text-align:center}
+.status{display:flex;justify-content:space-between;font-size:13px;color:#8a9;padding:6px 4px 0}
+.btns{position:absolute;bottom:0;left:0;right:0;height:64px;display:flex;gap:3px;padding:2px}
+.btn{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:19px;line-height:22px;
+ background:linear-gradient(#4b423c,#2a2420);border:1px solid #8a8a8a;border-radius:8px;color:#fff}
+</style></head><body>
+
+<div class="cap"><b>1 · VFO fisso al centro</b> — la riga blu del VFO sta sempre a metà della lista. Sopra gli spot più bassi di frequenza, sotto quelli più alti.
+Girando la manopola del VFO è la lista a scorrere, non la riga blu.</div>
+<div class="scr">
+ <div class="panel">
+  <div class="head"><span>CLUSTER <b>dxc.ve7cc.net</b> - IU1WXY</span><span><b>20m</b> - VFO <b>14.195.00</b></span><span>8 spots - 19:50Z</span></div>
+  <div class="list"><div class="mid"></div>
+   <table style="top:14px">
+    <tr><td class="f">14.023.5</td><td class="c">VP8LP</td><td class="s">DL1ABC</td><td class="m">CW 599 up 2</td><td class="t">1947Z</td></tr>
+    <tr><td class="f">14.074.0</td><td class="c">JA1XYZ</td><td class="s">IK2AAA</td><td class="m">FT8 -12 dB</td><td class="t">1945Z</td></tr>
+    <tr><td class="f">14.155.0</td><td class="c">EA8/G4XX</td><td class="s">F5ZZZ</td><td class="m">SSB 59</td><td class="t">1940Z</td></tr>
+    <tr class="near"><td class="f">14.193.0</td><td class="c">3B8M</td><td class="s">IZ1BBB</td><td class="m">SSB listening up 5</td><td class="t">1949Z</td></tr>
+    <tr class="vfo"><td class="f">14.195.00</td><td colspan="4">&lt; VFO</td></tr>
+    <tr class="near"><td class="f">14.196.5</td><td class="c">ZL2ABC</td><td class="s">IU1WXY</td><td class="m">SSB LP 57</td><td class="t">1950Z</td></tr>
+    <tr><td class="f">14.205.0</td><td class="c">PY2XB</td><td class="s">EA3CCC</td><td class="m">SSB 55</td><td class="t">1938Z</td></tr>
+    <tr><td class="f">14.243.0</td><td class="c">K1ABC</td><td class="s">G3DDD</td><td class="m">POTA US-1234</td><td class="t">1936Z</td></tr>
+    <tr><td class="f">14.280.0</td><td class="c">W1AW</td><td class="s">K2XX</td><td class="m">SSB</td><td class="t">1930Z</td></tr>
+    <tr><td class="f">14.310.0</td><td class="c">VK9DX</td><td class="s">JA1YYY</td><td class="m">SSB</td><td class="t">1928Z</td></tr>
+   </table>
+  </div>
+  <div class="status"><span>MFK: browse - press: tune - VFO: follow</span><span style="color:#6f6">WiFi - cluster connected</span></div>
+ </div>
+ <div class="btns"><div class="btn">(CLUSTER<br>1:2)</div><div class="btn">Band /<br>All</div><div class="btn">Tune</div><div class="btn">Clear</div><div class="btn">Close</div></div>
+</div>
+
+<div class="cap"><b>2 · VFO salito a 14.250.00</b> — la riga blu è ferma, gli spot sono scivolati in su. La riga del VFO si inserisce sempre
+tra lo spot più basso e quello più alto della frequenza attuale; gli spot vicini al VFO (±3 kHz) restano evidenziati.</div>
+<div class="scr">
+ <div class="panel">
+  <div class="head"><span>CLUSTER <b>dxc.ve7cc.net</b> - IU1WXY</span><span><b>20m</b> - VFO <b>14.250.00</b></span><span>8 spots - 19:51Z</span></div>
+  <div class="list"><div class="mid"></div>
+   <table style="top:-38px">
+    <tr><td class="f">14.074.0</td><td class="c">JA1XYZ</td><td class="s">IK2AAA</td><td class="m">FT8 -12 dB</td><td class="t">1945Z</td></tr>
+    <tr><td class="f">14.155.0</td><td class="c">EA8/G4XX</td><td class="s">F5ZZZ</td><td class="m">SSB 59</td><td class="t">1940Z</td></tr>
+    <tr><td class="f">14.193.0</td><td class="c">3B8M</td><td class="s">IZ1BBB</td><td class="m">SSB listening up 5</td><td class="t">1949Z</td></tr>
+    <tr><td class="f">14.196.5</td><td class="c">ZL2ABC</td><td class="s">IU1WXY</td><td class="m">SSB LP 57</td><td class="t">1950Z</td></tr>
+    <tr><td class="f">14.205.0</td><td class="c">PY2XB</td><td class="s">EA3CCC</td><td class="m">SSB 55</td><td class="t">1938Z</td></tr>
+    <tr><td class="f">14.243.0</td><td class="c">K1ABC</td><td class="s">G3DDD</td><td class="m">POTA US-1234</td><td class="t">1936Z</td></tr>
+    <tr class="vfo"><td class="f">14.250.00</td><td colspan="4">&lt; VFO</td></tr>
+    <tr><td class="f">14.280.0</td><td class="c">W1AW</td><td class="s">K2XX</td><td class="m">SSB</td><td class="t">1930Z</td></tr>
+    <tr><td class="f">14.310.0</td><td class="c">VK9DX</td><td class="s">JA1YYY</td><td class="m">SSB</td><td class="t">1928Z</td></tr>
+    <tr class="empty"><td colspan="5">· fine lista ·</td></tr>
+   </table>
+  </div>
+  <div class="status"><span>MFK: browse - press: tune - VFO: follow</span><span style="color:#6f6">WiFi - cluster connected</span></div>
+ </div>
+ <div class="btns"><div class="btn">(CLUSTER<br>1:2)</div><div class="btn">Band /<br>All</div><div class="btn">Tune</div><div class="btn">Clear</div><div class="btn">Close</div></div>
+</div>
+
+<div class="cap"><b>3 · VFO a inizio banda (14.005.00)</b> — sopra non ci sono spot: la metà alta resta vuota invece di spostare la riga
+blu. Oggi invece la lista si ferma al bordo e il VFO finisce in cima. <b>MFK</b>: la selezione bianca si muove tra gli spot, la riga blu resta al centro;
+alla prossima mossa del VFO la selezione torna sullo spot più vicino.</div>
+<div class="scr">
+ <div class="panel">
+  <div class="head"><span>CLUSTER <b>dxc.ve7cc.net</b> - IU1WXY</span><span><b>20m</b> - VFO <b>14.005.00</b></span><span>8 spots - 19:52Z</span></div>
+  <div class="list"><div class="mid"></div>
+   <table style="top:14px">
+    <tr class="empty"><td colspan="5">· inizio lista ·</td></tr>
+    <tr class="empty"><td colspan="5"></td></tr>
+    <tr class="empty"><td colspan="5"></td></tr>
+    <tr class="empty"><td colspan="5"></td></tr>
+    <tr class="vfo"><td class="f">14.005.00</td><td colspan="4">&lt; VFO</td></tr>
+    <tr><td class="f">14.023.5</td><td class="c">VP8LP</td><td class="s">DL1ABC</td><td class="m">CW 599 up 2</td><td class="t">1947Z</td></tr>
+    <tr class="sel"><td class="f">14.074.0</td><td class="c">JA1XYZ</td><td class="s">IK2AAA</td><td class="m">FT8 -12 dB</td><td class="t">1945Z</td></tr>
+    <tr><td class="f">14.155.0</td><td class="c">EA8/G4XX</td><td class="s">F5ZZZ</td><td class="m">SSB 59</td><td class="t">1940Z</td></tr>
+    <tr><td class="f">14.193.0</td><td class="c">3B8M</td><td class="s">IZ1BBB</td><td class="m">SSB listening up 5</td><td class="t">1949Z</td></tr>
+   </table>
+  </div>
+  <div class="status"><span>MFK: browse - press: tune - VFO: follow</span><span style="color:#6f6">WiFi - cluster connected</span></div>
+ </div>
+ <div class="btns"><div class="btn">(CLUSTER<br>1:2)</div><div class="btn">Band /<br>All</div><div class="btn">Tune</div><div class="btn">Clear</div><div class="btn">Close</div></div>
+</div>
+</body></html>
