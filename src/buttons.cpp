@@ -556,7 +556,7 @@ void buttons_init(lv_obj_t *parent) {
         lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 
         lv_obj_t *value = lv_label_create(f);
-        lv_obj_set_style_text_font(value, &sony_28, 0);
+        lv_obj_set_style_text_font(value, &sony_30, 0);
         lv_obj_set_style_text_color(value, lv_color_white(), 0);
         lv_obj_align(value, LV_ALIGN_BOTTOM_MID, 0, -5);
         lv_obj_add_flag(value, LV_OBJ_FLAG_HIDDEN);
@@ -1018,7 +1018,7 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
         char name[32];
         snprintf(name, sizeof(name), "%.*s", (int)(nl - text - 1), text);
         lv_label_set_text(b->label, name);
-        lv_obj_set_style_text_font(b->label, &sony_18, 0);
+        lv_obj_set_style_text_font(b->label, &sony_20, 0);
         lv_obj_set_style_text_color(b->label, lv_color_hex(0x90f0d0), 0);
         lv_obj_align(b->label, LV_ALIGN_TOP_MID, 0, 4);
         lv_label_set_text(b->value, nl + 1);
@@ -1038,7 +1038,7 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
     } else {
         lv_label_set_text(b->label, text);
     }
-    lv_obj_set_style_text_font(b->label, page ? &sony_24 : &sony_26, 0);
+    lv_obj_set_style_text_font(b->label, page ? &sony_26 : &sony_28, 0);
     lv_obj_set_style_text_color(b->label, lv_color_hex(page ? 0xccddee : 0xffffff), 0);
     lv_obj_center(b->label);
     lv_obj_add_flag(b->value, LV_OBJ_FLAG_HIDDEN);
