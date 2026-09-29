@@ -8,6 +8,7 @@
 
 #include "client.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -18,6 +19,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -31,6 +33,9 @@
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static bool            thread_running; /* under lock */
 static volatile bool   stop_requested;
+static volatile bool   reconnect_requested; /* new server or callsign */
+
+#define ABORTED() (stop_requested || reconnect_requested)
 
 static cluster_store_t store;
 static uint32_t        store_gen = 1;
@@ -78,6 +83,42 @@ void cluster_config_load(char *host, size_t host_size, int *port) {
         }
     }
     fclose(f);
+}
+
+bool cluster_config_save(const char *host, int port) {
+    FILE *f = fopen(CLUSTER_CONF ".tmp", "w");
+    if (!f) return false;
+    fprintf(f, "host=%s\nport=%d\n", host, port);
+    bool ok = fflush(f) == 0 && fsync(fileno(f)) == 0;
+    ok      = fclose(f) == 0 && ok;
+    return ok && rename(CLUSTER_CONF ".tmp", CLUSTER_CONF) == 0;
+}
+
+time_t cluster_config_mtime(void) {
+    struct stat st;
+    return stat(CLUSTER_CONF, &st) == 0 ? st.st_mtime : 0;
+}
+
+bool cluster_parse_server(const char *text, char *host, size_t host_size, int *port) {
+    while (*text == ' ') text++;
+    const char *colon = strrchr(text, ':');
+    size_t      n     = colon ? (size_t)(colon - text) : strlen(text);
+    while (n > 0 && text[n - 1] == ' ') n--;
+    if (n == 0 || n >= host_size) return false;
+    for (size_t i = 0; i < n; i++)
+        if (!(isalnum((unsigned char)text[i]) || text[i] == '.' || text[i] == '-')) return false;
+    int p = CLUSTER_DEFAULT_PORT;
+    if (colon) {
+        char *end;
+        long  v = strtol(colon + 1, &end, 10);
+        while (*end == ' ') end++;
+        if (end == colon + 1 || *end || v <= 0 || v > 65535) return false;
+        p = (int)v;
+    }
+    memcpy(host, text, n);
+    host[n] = '\0';
+    *port   = p;
+    return true;
 }
 
 void cluster_client_feed_line(const char *line) {
@@ -128,7 +169,7 @@ cluster_state_t cluster_client_state(char *detail, size_t size) {
 
 /* Sleeps in small steps so that stop requests are served quickly. */
 static void wait_ms(int ms) {
-    for (int t = 0; t < ms && !stop_requested; t += 100) usleep(100000);
+    for (int t = 0; t < ms && !ABORTED(); t += 100) usleep(100000);
 }
 
 static int open_socket(const char *host, int port_num) {
@@ -145,7 +186,7 @@ static int open_socket(const char *host, int port_num) {
     }
 
     int fd = -1;
-    for (struct addrinfo *ai = res; ai && fd < 0 && !stop_requested; ai = ai->ai_next) {
+    for (struct addrinfo *ai = res; ai && fd < 0 && !ABORTED(); ai = ai->ai_next) {
         fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (fd < 0) continue;
         fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
@@ -154,7 +195,7 @@ static int open_socket(const char *host, int port_num) {
             struct pollfd pfd = {fd, POLLOUT, 0};
             int           so  = 1;
             socklen_t     len = sizeof(so);
-            for (int t = 0; t < CONNECT_TIMEOUT_MS && !stop_requested; t += 250) {
+            for (int t = 0; t < CONNECT_TIMEOUT_MS && !ABORTED(); t += 250) {
                 if (poll(&pfd, 1, 250) != 0) break;
             }
             if ((pfd.revents & POLLOUT) && getsockopt(fd, SOL_SOCKET, SO_ERROR, &so, &len) == 0 && so == 0) break;
@@ -163,7 +204,7 @@ static int open_socket(const char *host, int port_num) {
         fd = -1;
     }
     freeaddrinfo(res);
-    if (fd < 0 && !stop_requested) set_state(CLUSTER_FAILED, "no answer");
+    if (fd < 0 && !ABORTED()) set_state(CLUSTER_FAILED, "no answer");
     return fd;
 }
 
@@ -221,7 +262,7 @@ static void session(int fd, const char *call) {
 
     set_state(CLUSTER_CONNECTED, "");
 
-    while (!stop_requested) {
+    while (!ABORTED()) {
         struct pollfd pfd = {fd, POLLIN, 0};
         int           r   = poll(&pfd, 1, 250);
         int64_t       now = now_ms();
@@ -274,7 +315,7 @@ static void session(int fd, const char *call) {
         }
     }
     close(fd);
-    if (!stop_requested) set_state(CLUSTER_FAILED, "connection closed");
+    if (!ABORTED()) set_state(CLUSTER_FAILED, "connection closed");
 }
 
 static void *thread_cb(void *arg) {
@@ -284,6 +325,7 @@ static void *thread_cb(void *arg) {
             char host[sizeof(host_name)], call[sizeof(login_call)];
             int  port;
             pthread_mutex_lock(&lock);
+            reconnect_requested = false; /* under the lock that start() sets it with */
             memcpy(host, host_name, sizeof(host));
             memcpy(call, login_call, sizeof(call));
             port = host_port;
@@ -292,7 +334,7 @@ static void *thread_cb(void *arg) {
             set_state(CLUSTER_CONNECTING, "");
             int fd = open_socket(host, port);
             if (fd >= 0) session(fd, call);
-            wait_ms(RETRY_DELAY_MS);
+            if (!reconnect_requested) wait_ms(RETRY_DELAY_MS);
         }
         /* Restarted while stopping: carry on instead of exiting. */
         pthread_mutex_lock(&lock);
@@ -311,6 +353,8 @@ static void *thread_cb(void *arg) {
  * block for seconds, and closing the app must not wait for it. */
 void cluster_client_start(const char *host, int port, const char *callsign) {
     pthread_mutex_lock(&lock);
+    if (strcmp(host_name, host) != 0 || strcmp(login_call, callsign) != 0 || host_port != port)
+        reconnect_requested = true; /* the running session picks up the change */
     snprintf(host_name, sizeof(host_name), "%s", host);
     snprintf(login_call, sizeof(login_call), "%s", callsign);
     host_port      = port;

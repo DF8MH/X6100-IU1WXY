@@ -10,6 +10,8 @@
 
 #include "spots.h"
 
+#include <time.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,6 +31,18 @@ typedef enum {
  * or the defaults. */
 void cluster_config_load(char *host, size_t host_size, int *port);
 
+/* Writes CLUSTER_CONF (atomically: a temporary file, then rename). */
+bool cluster_config_save(const char *host, int port);
+
+/* Modification time of CLUSTER_CONF, 0 when missing: the app reloads the
+ * server when the file changes (e.g. from the web configurator). */
+time_t cluster_config_mtime(void);
+
+/* "host" or "host:port" -> host, port (23 when missing). */
+bool cluster_parse_server(const char *text, char *host, size_t host_size, int *port);
+
+/* Starts the client, or makes the running one reconnect when the server
+ * or the callsign changed. */
 void cluster_client_start(const char *host, int port, const char *callsign);
 void cluster_client_stop(void);
 
