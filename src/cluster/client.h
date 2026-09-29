@@ -70,7 +70,6 @@ int cluster_client_snapshot(cluster_spot_t *out, int max, uint32_t *gen);
 
 cluster_state_t cluster_client_state(char *detail, size_t size);
 
-void cluster_client_clear(void);
 
 /* Feeds a line as if it came from the cluster (tests, UI harness). */
 void cluster_client_feed_line(const char *line);

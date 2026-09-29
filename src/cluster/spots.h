@@ -53,7 +53,6 @@ void cluster_store_add(cluster_store_t *s, const cluster_spot_t *spot);
 /* Drops spots older than max_age_min, by their UTC time. */
 void cluster_store_expire(cluster_store_t *s, uint16_t now_utc_min, uint16_t max_age_min);
 
-void cluster_store_clear(cluster_store_t *s);
 
 /* Age of a spot in minutes (0..1439), across midnight. */
 uint16_t cluster_age_min(uint16_t spot_utc_min, uint16_t now_utc_min);

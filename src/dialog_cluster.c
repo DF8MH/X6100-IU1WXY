@@ -45,8 +45,8 @@
 #define POP_HINT_H    56
 #define POP_MAX_ROWS_H (DIALOG_H - POP_HEAD_H - POP_HINT_H - 24)
 
-#define FONT_MAIN     (&sony_28) /* frequency and call */
-#define FONT_SMALL    (&sony_22) /* spotter, comment, time */
+#define FONT_MAIN     (&sony_30) /* frequency and call */
+#define FONT_SMALL    (&sony_24) /* spotter, comment, time */
 
 #define COLOR_NEAR_BG 0x3a2f12
 #define COLOR_SEL_BG  0x5a4818
@@ -60,7 +60,6 @@ static void construct_cb(lv_obj_t *parent);
 static void destruct_cb(void);
 static void key_cb(lv_event_t *e);
 static void close_cb(button_data_t *data);
-static void clear_cb(button_data_t *data);
 static void band_all_cb(button_data_t *data);
 static void tune_cb(button_data_t *data);
 static void server_cb(button_data_t *data);
@@ -76,11 +75,10 @@ static button_data_t btn_page2 = {
 static button_data_t btn_server = {.type = BTN_TEXT, .label = "Server", .press = server_cb};
 static button_data_t btn_band = {.type = BTN_TEXT, .label = "Band /\nAll", .press = band_all_cb};
 static button_data_t btn_tune = {.type = BTN_TEXT, .label = "Tune", .press = tune_cb};
-static button_data_t btn_clear = {.type = BTN_TEXT, .label = "Clear", .press = clear_cb};
 static button_data_t btn_close = {.type = BTN_TEXT, .label = "Close", .press = close_cb};
 
 static buttons_page_t btn_page_1 = {
-    .items = {&btn_page, &btn_band, &btn_tune, &btn_clear, &btn_close},
+    .items = {&btn_page, &btn_band, &btn_tune, NULL, &btn_close},
 };
 static buttons_page_t btn_page_2 = {
     .items = {&btn_page2, &btn_server, NULL, NULL, &btn_close},
@@ -550,11 +548,11 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_add_event_cb(table, table_draw_end_cb, LV_EVENT_DRAW_PART_END, NULL);
     lv_obj_add_event_cb(table, table_click_cb, LV_EVENT_CLICKED, NULL);
 
-    status_left = make_label(dialog.obj, &sony_20, lv_color_hex(COLOR_DIM));
+    status_left = make_label(dialog.obj, &sony_22, lv_color_hex(COLOR_DIM));
     lv_obj_set_pos(status_left, 18, DIALOG_H - STATUS_H - 4);
     lv_obj_set_width(status_left, 440);
     lv_label_set_text(status_left, "MFK: browse - press: tune - VFO: follow");
-    status_right = make_label(dialog.obj, &sony_20, lv_color_hex(COLOR_DIM));
+    status_right = make_label(dialog.obj, &sony_22, lv_color_hex(COLOR_DIM));
     lv_obj_set_width(status_right, 320);
     lv_obj_set_style_text_align(status_right, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(status_right, 796 - 18 - 320, DIALOG_H - STATUS_H - 4);
@@ -585,12 +583,6 @@ static void destruct_cb(void) {
 static void close_cb(button_data_t *data) {
     (void)data;
     dialog_destruct();
-}
-
-static void clear_cb(button_data_t *data) {
-    (void)data;
-    cluster_client_clear();
-    timer_cb(NULL);
 }
 
 static void band_all_cb(button_data_t *data) {
@@ -694,12 +686,12 @@ static void open_popup(void) {
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *head = lv_label_create(box);
-    lv_obj_set_style_text_font(head, &sony_20, 0);
+    lv_obj_set_style_text_font(head, &sony_22, 0);
     lv_obj_set_style_text_color(head, lv_color_hex(0x90f0d0), 0);
     lv_label_set_text(head, "CLUSTER SERVERS");
     lv_obj_set_pos(head, 22, 9);
     lv_obj_t *count = lv_label_create(box);
-    lv_obj_set_style_text_font(count, &sony_20, 0);
+    lv_obj_set_style_text_font(count, &sony_22, 0);
     lv_obj_set_style_text_color(count, lv_color_hex(0x90f0d0), 0);
     lv_label_set_text_fmt(count, "%d", srv_n);
     lv_obj_align(count, LV_ALIGN_TOP_RIGHT, -22, 9);
@@ -725,7 +717,7 @@ static void open_popup(void) {
         lv_obj_add_event_cb(row, server_row_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
 
         lv_obj_t *name = lv_label_create(row);
-        lv_obj_set_style_text_font(name, &sony_26, 0);
+        lv_obj_set_style_text_font(name, &sony_28, 0);
         lv_label_set_long_mode(name, LV_LABEL_LONG_CLIP);
         lv_obj_set_width(name, 220);
         lv_label_set_text(name, srv[i].name);
@@ -734,7 +726,7 @@ static void open_popup(void) {
         char addr[sizeof(srv[i].host) + 8];
         snprintf(addr, sizeof(addr), "%s:%d", srv[i].host, srv[i].port);
         lv_obj_t *a = lv_label_create(row);
-        lv_obj_set_style_text_font(a, &sony_18, 0);
+        lv_obj_set_style_text_font(a, &sony_20, 0);
         lv_label_set_long_mode(a, LV_LABEL_LONG_CLIP);
         lv_obj_set_width(a, 210);
         lv_obj_set_style_text_align(a, LV_TEXT_ALIGN_RIGHT, 0);
@@ -747,12 +739,12 @@ static void open_popup(void) {
         lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_color(dot, lv_color_hex(COLOR_NEW), 0);
         lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
-        lv_obj_align(dot, LV_ALIGN_RIGHT_MID, -22 - lv_txt_get_width(addr, strlen(addr), &sony_18, 0, 0) - 14, 0);
+        lv_obj_align(dot, LV_ALIGN_RIGHT_MID, -22 - lv_txt_get_width(addr, strlen(addr), &sony_20, 0, 0) - 14, 0);
         if (!inuse) lv_obj_add_flag(dot, LV_OBJ_FLAG_HIDDEN);
     }
 
     lv_obj_t *hint = lv_label_create(box);
-    lv_obj_set_style_text_font(hint, &sony_16, 0);
+    lv_obj_set_style_text_font(hint, &sony_18, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(COLOR_DIM), 0);
     lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(hint, POP_W - 44);

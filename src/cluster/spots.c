@@ -167,10 +167,6 @@ bool cluster_parse_line(const char *line, cluster_spot_t *out) {
     return false;
 }
 
-void cluster_store_clear(cluster_store_t *s) {
-    s->count = 0;
-}
-
 /* Spot time a is after b (within 12 hours, across midnight). */
 static bool newer(uint16_t a, uint16_t b) {
     return a != b && (a + 1440 - b) % 1440 < 720;

@@ -202,13 +202,6 @@ void cluster_client_feed_line(const char *line) {
     pthread_mutex_unlock(&lock);
 }
 
-void cluster_client_clear(void) {
-    pthread_mutex_lock(&lock);
-    cluster_store_clear(&store);
-    store_gen++;
-    pthread_mutex_unlock(&lock);
-}
-
 int cluster_client_snapshot(cluster_spot_t *out, int max, uint32_t *gen) {
     static uint16_t last_expire = 0xffff;
     int             n           = -1;
