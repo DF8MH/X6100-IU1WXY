@@ -4,21 +4,18 @@
 #include <cstddef>
 #include "encoder_bind_types.h"
 
-constexpr std::array<cfg_ctrl_t, 11> kEncoderVolDefaults = {{
+constexpr std::array<cfg_ctrl_t, 8> kEncoderVolDefaults = {{
     CTRL_VOL,
     CTRL_SQL,
     CTRL_RFG,
     CTRL_FILTER_LOW,
     CTRL_FILTER_HIGH,
     CTRL_PWR,
-    CTRL_HMIC,
-    CTRL_MIC,
-    CTRL_IMIC,
     CTRL_MONI,
     CTRL_FILTER_BW,
 }};
 
-constexpr std::array<cfg_ctrl_t, 36> kEncoderMfkDefaults = {{
+constexpr std::array<cfg_ctrl_t, 30> kEncoderMfkDefaults = {{
     CTRL_SPECTRUM_FACTOR,
     CTRL_KEY_SPEED,
     CTRL_KEY_MODE,
@@ -37,9 +34,6 @@ constexpr std::array<cfg_ctrl_t, 36> kEncoderMfkDefaults = {{
     CTRL_NB_WIDTH,
     CTRL_NR,
     CTRL_NR_LEVEL,
-    CTRL_AGC_HANG,
-    CTRL_AGC_KNEE,
-    CTRL_AGC_SLOPE,
     CTRL_COMP,
     CTRL_CW_DECODER,
     CTRL_CW_TUNE,
@@ -49,9 +43,6 @@ constexpr std::array<cfg_ctrl_t, 36> kEncoderMfkDefaults = {{
     CTRL_RIT,
     CTRL_XIT,
     CTRL_VOX_ON,
-    CTRL_VOX_GAIN,
-    CTRL_VOX_AG,
-    CTRL_VOX_DELAY,
     CTRL_CW_PEAK_ON,
     CTRL_CW_PEAK_Q,
     CTRL_IF_SHIFT,

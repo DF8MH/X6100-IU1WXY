@@ -9,8 +9,7 @@
 #include "textarea_window.h"
 #include "params/params.h"
 #include "main_screen.h"
-#include "qth/qth.h"
-#include "msg.h"
+#include "station.h"
 #include "dialog.h"
 #include "events.h"
 
@@ -29,13 +28,7 @@ static dialog_t             dialog = {
 dialog_t                    *dialog_qth = &dialog;
 
 static bool edit_ok() {
-    const char *qth = textarea_window_get();
-
-    if (qth_grid_check(qth)) {
-        params_str_set(&params.qth, qth);
-    } else {
-        msg_update_text_fmt("Incorrect QTH Grid");
-    }
+    station_qth_save(textarea_window_get());
 
     dialog_destruct(&dialog);
     return true;
@@ -51,17 +44,8 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_obj_t *text = textarea_window_text();
 
-    lv_textarea_set_accepted_chars(text,
-        "0123456789"
-        "abcdefghijklmnopqrstuvwxyz"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    );
-
-    lv_textarea_set_max_length(text, 6);
-    lv_textarea_set_placeholder_text(text, "QTH Grid");
+    station_qth_edit(text);
     lv_obj_add_event_cb(text, key_cb, LV_EVENT_KEY, NULL);
-
-    textarea_window_set(params.qth.x);
 }
 
 static void destruct_cb() {

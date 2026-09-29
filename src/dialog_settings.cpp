@@ -33,6 +33,7 @@ extern "C" {
     #include "main.h"
     #include "msg.h"
     #include "textarea_window.h"
+    #include "station.h"
 
     #include "lvgl/lvgl.h"
     #include <sys/time.h>
@@ -2876,6 +2877,167 @@ static void grid_delete() {
     }
 }
 
+/* Station: callsign and QTH locator, edited with the on-screen keyboard */
+
+#define ST_CALLSIGN 1
+#define ST_QTH      2
+
+static int st_kbd;  /* keyboard open for ST_CALLSIGN / ST_QTH */
+
+/* The keyboard gets all the keys: the page is built again when it closes */
+static bool st_kbd_close() {
+    st_kbd = 0;
+    textarea_window_close();
+    make_general_page();
+    return true;
+}
+
+static bool st_kbd_ok() {
+    const char *val = textarea_window_get();
+    bool        ok  = st_kbd == ST_CALLSIGN ? station_callsign_save(val) : station_qth_save(val);
+
+    return ok && st_kbd_close();
+}
+
+static void st_kbd_open_cb(lv_event_t *e) {
+    st_kbd = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_current_target(e));
+    lv_group_remove_all_objs(keyboard_group);
+    textarea_window_open(st_kbd_ok, st_kbd_close);
+    if (st_kbd == ST_CALLSIGN) {
+        station_callsign_edit(textarea_window_text());
+    } else {
+        station_qth_edit(textarea_window_text());
+    }
+}
+
+static void st_delete_cb(lv_event_t *e) {
+    if (st_kbd) {
+        st_kbd = 0;
+        textarea_window_close();
+    }
+}
+
+static uint8_t make_station_row(uint8_t row, const char *label, const char *val, int which) {
+    wl_row_label(row, label);
+
+    lv_obj_t *obj = wl_button(row, val[0] ? val : "-", st_kbd_open_cb);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 4, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_user_data(obj, (void *)(intptr_t)which);
+    return row + 1;
+}
+
+static uint8_t make_station(uint8_t row) {
+    row = make_section(row, "STATION");
+    row = make_station_row(row, "Callsign", params.callsign.x, ST_CALLSIGN);
+    row = make_station_row(row, "QTH locator", params.qth.x, ST_QTH);
+    lv_obj_add_event_cb(grid, st_delete_cb, LV_EVENT_DELETE, NULL);
+    return row;
+}
+
+/* Audio: microphone, VOX, AGC */
+
+typedef struct {
+    ParamInt   *param;
+    int32_t     min;
+    int32_t     max;
+    int32_t     step;
+    const char *fmt;
+} param_slider_t;
+
+static param_slider_t hmic_slider      = {&cfg_sm.p_hmic, 0, 50, 1, "%i"};
+static param_slider_t imic_slider      = {&cfg_sm.p_imic, 0, 50, 1, "%i"};
+static param_slider_t vox_gain_slider  = {&cfg_sm.p_vox_gain, 0, 100, 1, "%i"};
+static param_slider_t vox_ag_slider    = {&cfg_sm.p_vox_ag, 0, 100, 1, "%i"};
+static param_slider_t vox_delay_slider = {&cfg_sm.p_vox_delay, 100, 2000, 50, "%i ms"};
+static param_slider_t agc_knee_slider  = {&cfg_sm.p_agc_knee, -100, 0, 1, "%i dB"};
+static param_slider_t agc_slope_slider = {&cfg_sm.p_agc_slope, 0, 10, 1, "%i dB"};
+
+static void param_slider_cb(lv_event_t *e) {
+    lv_obj_t       *obj = lv_event_get_target(e);
+    param_slider_t *p   = (param_slider_t *)lv_event_get_user_data(e);
+    int32_t         val = lv_slider_get_value(obj) * p->step;
+
+    lv_label_set_text_fmt((lv_obj_t *)lv_obj_get_user_data(obj), p->fmt, val);
+    p->param->set(val);
+}
+
+static uint8_t make_param_slider(uint8_t row, const char *label, param_slider_t *p) {
+    lv_obj_t *obj;
+
+    wl_row_label(row, label);
+
+    obj = lv_obj_create(grid);
+    lv_obj_set_size(obj, SMALL_6, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(obj);
+    slider_with_text(obj, p->param->get(), p->min, p->max, p->step, SMALL_6 - 120, p->fmt, param_slider_cb, p);
+
+    return row + 1;
+}
+
+static uint8_t make_param_switch(uint8_t row, const char *label, ParamInt &param) {
+    lv_obj_t *obj;
+
+    wl_row_label(row, label);
+
+    obj = lv_obj_create(grid);
+    lv_obj_set_size(obj, SMALL_3, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 4, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(obj);
+    obj = switch_bool(obj, param);
+    lv_obj_set_width(obj, SMALL_3 - 30);
+
+    return row + 1;
+}
+
+static void mic_update_cb(lv_event_t *e) {
+    cfg_sm.p_mic.set(lv_dropdown_get_selected(lv_event_get_target(e)));
+}
+
+static uint8_t make_mic(uint8_t row) {
+    lv_obj_t *obj;
+
+    wl_row_label(row, "Microphone");
+
+    obj = lv_dropdown_create(grid);
+    dialog_item(&dialog, obj);
+    lv_obj_add_style(lv_dropdown_get_list(obj), &dialog_dropdown_list_style, 0);
+    /* Same order as x6100_mic_builtin, x6100_mic_handle, x6100_mic_auto */
+    lv_dropdown_set_options(obj, " Built-in \n Hand \n Auto ");
+    lv_dropdown_set_symbol(obj, NULL);
+    lv_dropdown_set_selected(obj, cfg_sm.p_mic.get());
+    lv_obj_add_event_cb(obj, mic_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_size(obj, SMALL_3, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 4, 3, LV_GRID_ALIGN_CENTER, row, 1);
+
+    return row + 1;
+}
+
+static uint8_t make_mic_vox_agc(uint8_t row) {
+    row = make_section(row, "MICROPHONE");
+    row = make_mic(row);
+    row = make_param_slider(row, "Hand mic gain", &hmic_slider);
+    row = make_param_slider(row, "Built-in mic gain", &imic_slider);
+    row = make_delimiter(row);
+
+    row = make_section(row, "VOX");
+    row = make_param_switch(row, "VOX", cfg_sm.p_vox_en);
+    row = make_param_slider(row, "VOX gain", &vox_gain_slider);
+    row = make_param_slider(row, "Anti-VOX", &vox_ag_slider);
+    row = make_param_slider(row, "VOX delay", &vox_delay_slider);
+    row = make_delimiter(row);
+
+    row = make_section(row, "AGC");
+    row = make_param_switch(row, "AGC hang", cfg_sm.p_agc_hang);
+    row = make_param_slider(row, "AGC knee", &agc_knee_slider);
+    row = make_param_slider(row, "AGC slope", &agc_slope_slider);
+    return row;
+}
+
 static void make_general_page() {
     grid_delete();
     grid_create();
@@ -2889,6 +3051,10 @@ static void make_general_page() {
 
     memcpy(&ts, t, sizeof(ts));
 
+    row = make_station(row);
+    row = make_delimiter(row);
+
+    row = make_section(row, "DATE AND TIME");
     row = make_date(row);
     row = make_time(row);
     row = make_delimiter(row);
@@ -2987,7 +3153,10 @@ static void make_audio_page() {
     }
     if (base_ver.rev >= 8) {
         row = make_fm_emphasis(row);
+        row = make_delimiter(row);
     }
+
+    row = make_mic_vox_agc(row);
 
     row_dsc[row] = LV_GRID_TEMPLATE_LAST;
     lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);

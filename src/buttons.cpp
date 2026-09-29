@@ -71,24 +71,16 @@ static const char * filter_low_label_getter();
 static const char * filter_high_label_getter();
 static const char * filter_bw_label_getter();
 
-static const char * mic_sel_label_getter();
-static const char * h_mic_gain_label_getter();
-static const char * i_mic_gain_label_getter();
 static const char * moni_level_label_getter();
 
 static const char * rit_label_getter();
 static const char * xit_label_getter();
 
-static const char * agc_hang_label_getter();
-static const char * agc_knee_label_getter();
-static const char * agc_slope_label_getter();
+static const char * agc_label_getter();
 static const char * comp_label_getter();
 static const char * if_shift_label_getter();
 
 static const char * vox_on_label_getter();
-static const char * vox_gain_label_getter();
-static const char * vox_ag_label_getter();
-static const char * vox_delay_label_getter();
 
 static const char * key_speed_label_getter();
 static const char * key_volume_label_getter();
@@ -119,7 +111,7 @@ static const char * nb_width_label_getter();
 static const char * nr_label_getter();
 static const char * nr_level_label_getter();
 
-static void button_action_cb(button_data_t *data);
+static void button_agc_cb(button_data_t *data);
 
 /* Make VOL/MFK button functions */
 static button_data_t make_encoder_btn(const char *name, cfg_ctrl_t ctrl) {
@@ -150,9 +142,6 @@ static button_data_t make_mem_btn(const char *name, int32_t ctrl) {
 static button_data_t make_app_btn(const char *name, press_action_t ctrl) {
     return button_data_t{.type = BTN_TEXT, .label = name, .press = button_app_page_cb, .hold = nullptr, .ctrl = ctrl};
 }
-static button_data_t make_action_btn(const char *name, press_action_t ctrl) {
-    return button_data_t{.type = BTN_TEXT, .label = name, .press = button_action_cb, .hold = nullptr, .ctrl = ctrl};
-}
 
 static button_data_t make_page_btn(const char *name) {
     return button_data_t{
@@ -176,9 +165,6 @@ static button_data_t btn_tx_pwr = make_encoder_btn(tx_power_label_getter, CTRL_P
 static button_data_t btn_flt_low  = make_encoder_btn(filter_low_label_getter, CTRL_FILTER_LOW, (Subject*)&cfg_sm.cp_cur_filter_low);
 static button_data_t btn_flt_high = make_encoder_btn(filter_high_label_getter, CTRL_FILTER_HIGH, (Subject*)&cfg_sm.cp_cur_filter_high);
 static button_data_t btn_flt_bw   = make_encoder_btn(filter_bw_label_getter, CTRL_FILTER_BW, (Subject*)&cfg_sm.cp_cur_filter_bw);
-static button_data_t btn_mic_sel   = make_encoder_btn(mic_sel_label_getter, CTRL_MIC, (Subject*)&cfg_sm.p_mic);
-static button_data_t btn_hmic_gain = make_encoder_btn(h_mic_gain_label_getter, CTRL_HMIC, (Subject*)&cfg_sm.p_hmic);
-static button_data_t btn_imic_hain = make_encoder_btn(i_mic_gain_label_getter, CTRL_IMIC, (Subject*)&cfg_sm.p_imic);
 static button_data_t btn_moni_lvl  = make_encoder_btn(moni_level_label_getter, CTRL_MONI, (Subject*)&cfg_sm.p_moni);
 
 /* MFK */
@@ -186,15 +172,10 @@ static button_data_t btn_moni_lvl  = make_encoder_btn(moni_level_label_getter, C
 static button_data_t btn_zoom      = make_encoder_btn("Spectrum\nZoom", CTRL_SPECTRUM_FACTOR);
 static button_data_t btn_rit       = make_encoder_btn(rit_label_getter, CTRL_RIT, (Subject*)&cfg_sm.p_rit);
 static button_data_t btn_xit       = make_encoder_btn(xit_label_getter, CTRL_XIT, (Subject*)&cfg_sm.p_xit);
-static button_data_t btn_agc_hang  = {.type            = BTN_TEXT_FN,
-                                      .label_fn        = agc_hang_label_getter,
-                                      .press           = controls_toggle_agc_hang,
-                                      .hold            = button_encoder_hold_update_cb,
-                                      .ctrl            = CTRL_AGC_HANG,
-                                      .encoder_allowed = true,
-                                      .subj            = (Subject*)&cfg_sm.p_agc_hang};
-static button_data_t btn_agc_knee  = make_encoder_btn(agc_knee_label_getter, CTRL_AGC_KNEE, (Subject*)&cfg_sm.p_agc_knee);
-static button_data_t btn_agc_slope = make_encoder_btn(agc_slope_label_getter, CTRL_AGC_SLOPE, (Subject*)&cfg_sm.p_agc_slope);
+static button_data_t btn_agc       = {.type     = BTN_TEXT_FN,
+                                      .label_fn = agc_label_getter,
+                                      .press    = button_agc_cb,
+                                      .subj     = (Subject*)&cfg_sm.cp_cur_agc};
 static button_data_t btn_comp      = make_encoder_btn(comp_label_getter, CTRL_COMP, (Subject*)&cfg_sm.p_comp);
 static button_data_t btn_if_shift  = make_encoder_btn(if_shift_label_getter, CTRL_IF_SHIFT, (Subject*)&cfg_sm.p_band_if_shift);
 
@@ -206,9 +187,6 @@ static button_data_t btn_vox_on    = {.type            = BTN_TEXT_FN,
                                       .ctrl            = CTRL_VOX_ON,
                                       .encoder_allowed = true,
                                       .subj            = (Subject*)&cfg_sm.p_vox_en};
-static button_data_t btn_vox_gain  = make_encoder_btn(vox_gain_label_getter, CTRL_VOX_GAIN, (Subject*)&cfg_sm.p_vox_gain);
-static button_data_t btn_vox_ag    = make_encoder_btn(vox_ag_label_getter, CTRL_VOX_AG, (Subject*)&cfg_sm.p_vox_ag);
-static button_data_t btn_vox_delay = make_encoder_btn(vox_delay_label_getter, CTRL_VOX_DELAY, (Subject*)&cfg_sm.p_vox_delay);
 
 /* MEM */
 
@@ -317,8 +295,6 @@ static button_data_t btn_swr  = make_app_btn("SWR\nScan", ACTION_APP_SWRSCAN);
 static button_data_t btn_gps  = make_app_btn("GPS", ACTION_APP_GPS);
 
 static button_data_t btn_rec      = make_app_btn("Recorder", ACTION_APP_RECORDER);
-static button_data_t btn_qth      = make_action_btn("QTH", ACTION_APP_QTH);
-static button_data_t btn_callsign = make_action_btn("Callsign", ACTION_APP_CALLSIGN);
 static button_data_t btn_settings = make_app_btn("Settings", ACTION_APP_SETTINGS);
 
 static button_data_t btn_cluster = make_app_btn("Cluster", ACTION_APP_CLUSTER);
@@ -368,7 +344,7 @@ buttons_page_t buttons_page_vol_1 = {
     {&btn_vol_p1, &btn_vol, &btn_sql, &btn_rfg, &btn_tx_pwr}
 };
 static buttons_page_t page_vol_2 = {
-    {&btn_vol_p2, &btn_mic_sel, &btn_hmic_gain, &btn_imic_hain, &btn_moni_lvl}
+    {&btn_vol_p2, &btn_moni_lvl}
 };
 
 /* MFK pages */
@@ -381,13 +357,13 @@ static buttons_page_t page_mfk_1 = {
     {&btn_mfk_p1, &btn_rit, &btn_xit, &btn_zoom}
 };
 static buttons_page_t page_mfk_2 = {
-    {&btn_mfk_p2, &btn_agc_hang, &btn_agc_knee, &btn_agc_slope, &btn_comp}
+    {&btn_mfk_p2, &btn_agc, &btn_comp}
 };
 static buttons_page_t page_mfk_3 = {
     {&btn_mfk_p3, &btn_if_shift}
 };
 static buttons_page_t page_mfk_4 = {
-    {&btn_mfk_p4, &btn_vox_on, &btn_vox_gain, &btn_vox_ag, &btn_vox_delay},
+    {&btn_mfk_p4, &btn_vox_on},
 };
 
 /* MEM pages */
@@ -450,7 +426,7 @@ static buttons_page_t page_app_1 = {
     {&btn_app_p1, &btn_modes, &btn_cluster, &btn_swr, &btn_gps}
 };
 static buttons_page_t page_app_2 = {
-    {&btn_app_p2, &btn_rec, &btn_qth, &btn_callsign, &btn_settings}
+    {&btn_app_p2, &btn_rec, &btn_settings}
 };
 
 /* RTTY */
@@ -675,8 +651,8 @@ static void button_app_page_cb(button_data_t *data) {
     main_screen_start_app((press_action_t)data->ctrl);
 }
 
-static void button_action_cb(button_data_t *data) {
-    main_screen_action((press_action_t)data->ctrl);
+static void button_agc_cb(button_data_t *data) {
+    main_screen_agc_next();
 }
 
 
@@ -842,24 +818,6 @@ static const char * filter_bw_label_getter() {
 }
 
 
-static const char * mic_sel_label_getter() {
-    static char buf[22];
-    sprintf(buf, "MIC Sel:\n%s", params_mic_str_get((x6100_mic_sel_t)cfg_sm.p_mic.get()));
-    return buf;
-}
-
-
-static const char * h_mic_gain_label_getter() {
-    static char buf[22];
-    sprintf(buf, "H-Mic gain:\n%i", cfg_sm.p_hmic.get());
-    return buf;
-}
-
-static const char * i_mic_gain_label_getter() {
-    static char buf[22];
-    sprintf(buf, "I-Mic gain:\n%i", cfg_sm.p_imic.get());
-    return buf;
-}
 
 static const char * moni_level_label_getter() {
     static char buf[22];
@@ -880,21 +838,11 @@ static const char * xit_label_getter() {
     return buf;
 }
 
-static const char * agc_hang_label_getter() {
+static const char * agc_label_getter() {
+    static const char *names[] = {"Off", "Slow", "Fast", "Auto"};
     static char buf[22];
-    sprintf(buf, "AGC hang:\n%s", cfg_sm.p_agc_hang.get() ? "On": "Off");
-    return buf;
-}
-
-static const char * agc_knee_label_getter() {
-    static char buf[22];
-    sprintf(buf, "AGC knee:\n%i dB", cfg_sm.p_agc_knee.get());
-    return buf;
-}
-
-static const char * agc_slope_label_getter() {
-    static char buf[22];
-    sprintf(buf, "AGC slope:\n%i dB", cfg_sm.p_agc_slope.get());
+    int32_t agc = cfg_sm.cp_cur_agc.get();
+    sprintf(buf, "AGC:\n%s", (agc >= 0 && agc <= x6100_agc_auto) ? names[agc] : "?");
     return buf;
 }
 
@@ -913,24 +861,6 @@ static const char * if_shift_label_getter() {
 const char *vox_on_label_getter() {
     static char buf[22];
     sprintf(buf, "VOX:\n%s", cfg_sm.p_vox_en.get() ? "On": "Off");
-    return buf;
-}
-
-const char *vox_gain_label_getter() {
-    static char buf[22];
-    sprintf(buf, "VOX gain:\n%i", cfg_sm.p_vox_gain.get());
-    return buf;
-}
-
-const char *vox_ag_label_getter() {
-    static char buf[22];
-    sprintf(buf, "VOX a-gain:\n%i", cfg_sm.p_vox_ag.get());
-    return buf;
-}
-
-const char *vox_delay_label_getter() {
-    static char buf[22];
-    sprintf(buf, "VOX delay:\n%i ms", cfg_sm.p_vox_delay.get());
     return buf;
 }
 

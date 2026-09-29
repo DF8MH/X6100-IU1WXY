@@ -64,6 +64,11 @@ static void shot(const char *path) {
     printf("[shot] %s\n", path);
 }
 
+/* The real one (params.c) is not linked */
+void params_str_set(params_str_t *var, const char *x) {
+    strncpy(var->x, x, sizeof(var->x) - 1);
+}
+
 static void pump(int ms) {
     for (int t = 0; t < ms; t += 5) {
         lv_tick_inc(5);
@@ -264,6 +269,33 @@ static void settings_demo(void) {
         pg->items[0]->press(pg->items[0]);
         pump(100);
     }
+    /* Audio scrolled to the end (the MFK wraps to the last row) */
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[3]->press(pg->items[3]);
+    pump(300);
+    lv_group_focus_prev(keyboard_group);
+    pump(500);
+    shot("settings_audio_end.ppm");
+    for (int i = 0; i < 6; i++) lv_group_focus_prev(keyboard_group);
+    pump(500);
+    shot("settings_audio_mid.ppm");
+    /* General: Callsign focused, then pressed (keyboard) */
+    pg->items[1]->press(pg->items[1]);
+    pump(300);
+    shot("settings_station.ppm");
+    lv_event_send(lv_group_get_focused(keyboard_group), LV_EVENT_CLICKED, NULL);
+    pump(300);
+    shot("settings_station_kbd.ppm");
+    uint32_t esc = LV_KEY_ESC, enter = LV_KEY_ENTER;
+    lv_event_send(textarea_window_text(), LV_EVENT_KEY, &esc);
+    pump(300);
+    lv_group_focus_next(keyboard_group);   /* QTH locator */
+    lv_event_send(lv_group_get_focused(keyboard_group), LV_EVENT_CLICKED, NULL);
+    pump(300);
+    textarea_window_set("JN45AB");
+    lv_event_send(textarea_window_text(), LV_EVENT_KEY, &enter);
+    pump(300);
+    shot("settings_station_back.ppm");
     dialog_destruct();
     pump(200);
 }
@@ -353,6 +385,15 @@ int main(int argc, char **argv) {
         shot(n);
         buttons_page_t *pg = buttons_get_cur_page();
         pg->items[0]->press(pg->items[0]);
+    }
+    /* VOL 2:2, MFK 2:4, MFK 4:4 */
+    static const int gen_pages[] = {1, 3, 5};
+    for (int i = 0; i < 3; i++) {
+        char n[32];
+        buttons_load_page(buttons_group_gen[gen_pages[i]]);
+        pump(50);
+        snprintf(n, sizeof n, "01_gen_%d.ppm", gen_pages[i] + 1);
+        shot(n);
     }
     /* APP page 1 with the Modes menu open, then the MFK two steps down */
     buttons_load_page_group(buttons_group_app);

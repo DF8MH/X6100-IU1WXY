@@ -19,7 +19,7 @@ string(REPLACE "A:/dev/shm/" "A:${X}/" STYLES "${STYLES}")
 file(WRITE ${CMAKE_BINARY_DIR}/styles_host.c "${STYLES}")
 file(GLOB FONTS ${X}/src/fonts/*.c)
 add_library(apps OBJECT
-    ${X}/src/dialog.c ${X}/src/buttons.cpp ${X}/src/textarea_window.c ${X}/src/kbd_rollover.c
+    ${X}/src/dialog.c ${X}/src/buttons.cpp ${X}/src/textarea_window.c ${X}/src/station.c ${X}/src/kbd_rollover.c
     ${X}/src/qth/qth.c ${X}/src/scheduler.cpp
     ${X}/src/widgets/lv_waterfall.c ${X}/src/widgets/lv_finder.c
     ${X}/src/dialog_js8.c

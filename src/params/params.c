@@ -576,19 +576,6 @@ uint8_t params_uint8_change(params_uint8_t *var, int16_t df) {
     return var->x;
 }
 
-inline char * params_mic_str_get(x6100_mic_sel_t val) {
-    switch (val) {
-        case x6100_mic_builtin:
-            return "Built-In";
-        case x6100_mic_handle:
-            return "Handle";
-        case x6100_mic_auto:
-            return "Auto";
-        default:
-            return "";
-    }
-}
-
 inline char * params_key_mode_str_get(x6100_key_mode_t val) {
     switch (val) {
         case x6100_key_manual:

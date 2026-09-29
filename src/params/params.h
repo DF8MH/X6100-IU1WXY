@@ -249,8 +249,6 @@ void params_msg_cw_new(const char *val);
 void params_msg_cw_edit(uint32_t id, const char *val);
 void params_msg_cw_delete(uint32_t id);
 
-char *params_mic_str_get(x6100_mic_sel_t val);
-
 char *params_key_mode_str_get(x6100_key_mode_t val);
 
 char *params_iambic_mode_str_ger(x6100_iambic_mode_t val);

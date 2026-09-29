@@ -820,11 +820,9 @@ std::string SettingsManager::make_default_encoder_bind() {
     s[CTRL_FILTER_LOW]  = static_cast<char>(ENCODER_BIND_VOL);
     s[CTRL_FILTER_HIGH] = static_cast<char>(ENCODER_BIND_VOL);
     s[CTRL_PWR]         = static_cast<char>(ENCODER_BIND_VOL);
-    s[CTRL_HMIC]        = static_cast<char>(ENCODER_BIND_VOL);
 
     s[CTRL_SPECTRUM_FACTOR] = static_cast<char>(ENCODER_BIND_MFK);
     s[CTRL_DNF]             = static_cast<char>(ENCODER_BIND_MFK);
-    s[CTRL_AGC_KNEE]        = static_cast<char>(ENCODER_BIND_MFK);
 
     return s;
 }
@@ -833,6 +831,10 @@ std::string SettingsManager::encoder_bind_validate(const std::string &val) {
     std::string result = val;
     if (result.size() != static_cast<size_t>(CTRL_FAST_ACCESS_LAST))
         result.resize(CTRL_FAST_ACCESS_LAST, static_cast<char>(ENCODER_BIND_NONE));
+    /* These moved to Settings: no longer on the encoders */
+    for (cfg_ctrl_t ctrl : {CTRL_HMIC, CTRL_MIC, CTRL_IMIC, CTRL_AGC_HANG, CTRL_AGC_KNEE, CTRL_AGC_SLOPE,
+                            CTRL_VOX_GAIN, CTRL_VOX_AG, CTRL_VOX_DELAY})
+        result[ctrl] = static_cast<char>(ENCODER_BIND_NONE);
     return result;
 }
 

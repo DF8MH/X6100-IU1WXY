@@ -175,17 +175,11 @@ static std::map<int, Control*> controls = {
     {CTRL_FILTER_HIGH, new ControlSubjInt("Filter high", &cfg_sm.cp_cur_filter_high)},
     {CTRL_FILTER_BW, new ControlSubjInt("Filter bw", &cfg_sm.cp_cur_filter_bw)},
     {CTRL_PWR, new ControlSubjFloat("Power", &cfg_sm.p_pwr, "%0.1f")},
-    {CTRL_MIC, new ControlSubjChoices("MIC", &cfg_sm.p_mic, {"Built-In", "Handle", "Auto"})},
-    {CTRL_HMIC, new ControlSubjInt("H-MIC gain", &cfg_sm.p_hmic)},
-    {CTRL_IMIC, new ControlSubjInt("I-MIC gain", &cfg_sm.p_imic)},
     {CTRL_MONI, new ControlSubjInt("Moni level", &cfg_sm.p_moni)},
     {CTRL_SPECTRUM_FACTOR, new ControlSubjInt("Zoom", &cfg_sm.p_mode_zoom)},
     {CTRL_COMP, new ControlComp("Compressor", &cfg_sm.p_comp)},
 
     {CTRL_VOX_ON, new ControlSubjOnOff("VOX", &cfg_sm.p_vox_en)},
-    {CTRL_VOX_GAIN, new ControlSubjInt("VOX gain", &cfg_sm.p_vox_gain)},
-    {CTRL_VOX_AG, new ControlSubjInt("VOX a-gain", &cfg_sm.p_vox_ag)},
-    {CTRL_VOX_DELAY, new ControlSubjInt("VOX delay", &cfg_sm.p_vox_delay)},
 
     {CTRL_RIT, new ControlSubjInt("RIT", &cfg_sm.p_rit)},
     {CTRL_XIT, new ControlSubjInt("XIT", &cfg_sm.p_xit)},
@@ -200,10 +194,6 @@ static std::map<int, Control*> controls = {
     {CTRL_NB_WIDTH, new ControlSubjInt("NB width", &cfg_sm.p_nb_width)},
     {CTRL_NR, new ControlSubjOnOff("Noise reduction", &cfg_sm.p_nr)},
     {CTRL_NR_LEVEL, new ControlSubjInt("NR level", &cfg_sm.p_nr_level)},
-
-    {CTRL_AGC_HANG, new ControlSubjOnOff("AGC hang", &cfg_sm.p_agc_hang)},
-    {CTRL_AGC_KNEE, new ControlSubjInt("AGC knee", &cfg_sm.p_agc_knee)},
-    {CTRL_AGC_SLOPE, new ControlSubjInt("AGC slope", &cfg_sm.p_agc_slope)},
 
     {CTRL_KEY_SPEED, new ControlSubjInt("Key speed", &cfg_sm.p_key_speed)},
     {CTRL_KEY_TRAIN, new ControlSubjOnOff("Key train", &cfg_sm.p_key_train)},
