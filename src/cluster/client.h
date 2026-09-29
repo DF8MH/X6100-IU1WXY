@@ -35,7 +35,7 @@ typedef enum {
 void cluster_config_load(char *host, size_t host_size, int *port);
 
 /* Saved servers: "server=name|host|port" lines (the web page writes them).
- * Without any, the default one; the one in use is added when not listed. */
+ * Without any, the default list; the one in use is added when not listed. */
 #define CLUSTER_MAX_SERVERS 16
 typedef struct {
     char name[32];

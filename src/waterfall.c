@@ -129,9 +129,9 @@ void waterfall_data(float *data_buf, uint16_t size, bool tx, uint32_t base_freq,
         min = DEFAULT_MIN;
         max = DEFAULT_MAX;
     } else {
-        min = grid_min;
-        /* Reference level: below 0 the top colour is reached sooner */
-        max = grid_max + param_i_get(cfg_waterfall_ref);
+        /* Reference level: shifts the whole colour scale, + is brighter */
+        min = grid_min - param_i_get(cfg_waterfall_ref);
+        max = grid_max - param_i_get(cfg_waterfall_ref);
         if (max < min + 10.0f) {
             max = min + 10.0f;
         }

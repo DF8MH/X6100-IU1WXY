@@ -131,6 +131,19 @@ def delete_digital_mode(mode_id, dbcon):
 # the saved ones. The GUI reloads the server when the file's mtime changes.
 
 CLUSTER_DEFAULT_HOST = "dxc.ve7cc.net"
+# Used while cluster.conf has no server= lines (keep in sync with src/cluster/client.c)
+CLUSTER_DEFAULT_SERVERS = [
+    ("VE7CC", "dxc.ve7cc.net", 23),
+    ("W3LPL", "dxc.w3lpl.net", 7373),
+    ("K1TTT", "k1ttt.net", 7373),
+    ("NC7J", "dxc.nc7j.com", 7373),
+    ("W1NR", "dxc.w1nr.net", 23),
+    ("WA9PIE", "dxc.wa9pie.net", 8000),
+    ("K4ZR", "k4zr.no-ip.org", 7300),
+    ("DB0SUE", "db0sue.de", 8000),
+    ("GB7DJK", "gb7djk.dxcluster.net", 7300),
+    ("AE5E", "dxspots.com", 23),
+]
 CLUSTER_DEFAULT_PORT = 23
 CLUSTER_MAX_SERVERS = 16
 
@@ -155,7 +168,7 @@ def read_cluster_conf():
             if len(parts) == 3 and parts[0] and parts[1] and parts[2].isdigit() and 0 < int(parts[2]) < 65536:
                 servers.append((parts[0], parts[1], int(parts[2])))
     if not servers:
-        servers.append(("VE7CC", CLUSTER_DEFAULT_HOST, CLUSTER_DEFAULT_PORT))
+        servers = list(CLUSTER_DEFAULT_SERVERS)
     if (host, port) not in [(h, p) for _, h, p in servers]:
         servers.append((host, host, port))
     return host, port, servers

@@ -112,11 +112,24 @@ int cluster_servers_load(cluster_server_t *out, int max) {
     }
     if (f) fclose(f);
 
-    if (n == 0 && max > 0) {
-        snprintf(out[0].name, sizeof(out[0].name), "VE7CC");
-        snprintf(out[0].host, sizeof(out[0].host), "%s", CLUSTER_DEFAULT_HOST);
-        out[0].port = CLUSTER_DEFAULT_PORT;
-        n           = 1;
+    /* No saved list: well-known public clusters */
+    static const cluster_server_t defaults[] = {
+        {"VE7CC", "dxc.ve7cc.net", 23},
+        {"W3LPL", "dxc.w3lpl.net", 7373},
+        {"K1TTT", "k1ttt.net", 7373},
+        {"NC7J", "dxc.nc7j.com", 7373},
+        {"W1NR", "dxc.w1nr.net", 23},
+        {"WA9PIE", "dxc.wa9pie.net", 8000},
+        {"K4ZR", "k4zr.no-ip.org", 7300},
+        {"DB0SUE", "db0sue.de", 8000},
+        {"GB7DJK", "gb7djk.dxcluster.net", 7300},
+        {"AE5E", "dxspots.com", 23},
+    };
+    if (n == 0) {
+        while (n < max && n < (int)(sizeof(defaults) / sizeof(defaults[0]))) {
+            out[n] = defaults[n];
+            n++;
+        }
     }
     bool listed = false;
     for (int i = 0; i < n; i++) listed |= strcmp(out[i].host, host) == 0 && out[i].port == port;

@@ -350,22 +350,14 @@ static buttons_page_t page_vol_2 = {
 };
 
 /* MFK pages */
-static button_data_t btn_mfk_p1 = make_page_btn("(MFK 1:4)");
-static button_data_t btn_mfk_p2 = make_page_btn("(MFK 2:4)");
-static button_data_t btn_mfk_p3 = make_page_btn("(MFK 3:4)");
-static button_data_t btn_mfk_p4 = make_page_btn("(MFK 4:4)");
+static button_data_t btn_mfk_p1 = make_page_btn("(MFK 1:2)");
+static button_data_t btn_mfk_p2 = make_page_btn("(MFK 2:2)");
 
 static buttons_page_t page_mfk_1 = {
     {&btn_mfk_p1, &btn_rit, &btn_xit, &btn_zoom, &btn_wf_ref}
 };
 static buttons_page_t page_mfk_2 = {
-    {&btn_mfk_p2, &btn_agc, &btn_comp}
-};
-static buttons_page_t page_mfk_3 = {
-    {&btn_mfk_p3, &btn_if_shift}
-};
-static buttons_page_t page_mfk_4 = {
-    {&btn_mfk_p4, &btn_vox_on},
+    {&btn_mfk_p2, &btn_agc, &btn_comp, &btn_if_shift, &btn_vox_on}
 };
 
 /* MEM pages */
@@ -442,8 +434,6 @@ buttons_group_t buttons_group_gen = {
     &page_vol_2,
     &page_mfk_1,
     &page_mfk_2,
-    &page_mfk_3,
-    &page_mfk_4,
 };
 
 buttons_group_t buttons_group_app = {
@@ -566,7 +556,7 @@ void buttons_init(lv_obj_t *parent) {
         lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 
         lv_obj_t *value = lv_label_create(f);
-        lv_obj_set_style_text_font(value, &sony_24, 0);
+        lv_obj_set_style_text_font(value, &sony_28, 0);
         lv_obj_set_style_text_color(value, lv_color_white(), 0);
         lv_obj_align(value, LV_ALIGN_BOTTOM_MID, 0, -5);
         lv_obj_add_flag(value, LV_OBJ_FLAG_HIDDEN);
@@ -1028,7 +1018,7 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
         char name[32];
         snprintf(name, sizeof(name), "%.*s", (int)(nl - text - 1), text);
         lv_label_set_text(b->label, name);
-        lv_obj_set_style_text_font(b->label, &sony_16, 0);
+        lv_obj_set_style_text_font(b->label, &sony_18, 0);
         lv_obj_set_style_text_color(b->label, lv_color_hex(0x90f0d0), 0);
         lv_obj_align(b->label, LV_ALIGN_TOP_MID, 0, 4);
         lv_label_set_text(b->value, nl + 1);
@@ -1048,7 +1038,7 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
     } else {
         lv_label_set_text(b->label, text);
     }
-    lv_obj_set_style_text_font(b->label, page ? &sony_20 : &sony_22, 0);
+    lv_obj_set_style_text_font(b->label, page ? &sony_24 : &sony_26, 0);
     lv_obj_set_style_text_color(b->label, lv_color_hex(page ? 0xccddee : 0xffffff), 0);
     lv_obj_center(b->label);
     lv_obj_add_flag(b->value, LV_OBJ_FLAG_HIDDEN);
