@@ -19,9 +19,10 @@ extern "C" {
 #include "params/params.h"
 #include "backlight.h"
 #include "recorder.h"
-#include "dialog_msg_voice.h"
 #include "msg.h"
 }
+
+#include "dialog_msg_voice.h"
 
 #include <memory>
 #include <stdexcept>
