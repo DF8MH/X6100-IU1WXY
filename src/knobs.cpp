@@ -187,7 +187,6 @@ static std::map<int, Control*> controls = {
     {CTRL_VOX_AG, new ControlSubjInt("VOX a-gain", &cfg_sm.p_vox_ag)},
     {CTRL_VOX_DELAY, new ControlSubjInt("VOX delay", &cfg_sm.p_vox_delay)},
 
-    {CTRL_ANT, new ControlSubjInt("Ant", &cfg_sm.p_ant_id)},
     {CTRL_RIT, new ControlSubjInt("RIT", &cfg_sm.p_rit)},
     {CTRL_XIT, new ControlSubjInt("XIT", &cfg_sm.p_xit)},
     {CTRL_IF_SHIFT, new ControlSubjInt("IF shift", &cfg_sm.p_band_if_shift)},

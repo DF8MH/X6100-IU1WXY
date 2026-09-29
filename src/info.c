@@ -133,7 +133,6 @@ lv_obj_t * info_init(lv_obj_t * parent) {
     subject_subscribe_delayed((Subject*)cfg_cur_mode, mode_label_update, NULL);
     subject_subscribe_delayed_and_notify((Subject*)mode_lock, mode_label_update, NULL);
 
-    subject_subscribe_delayed((Subject*)cfg_ant_id, atu_label_update, NULL);
     subject_subscribe_delayed((Subject*)cfg_fg_freq, atu_label_update, NULL);
     cfg_atu_loaded_subscribe_delayed(atu_label_update, NULL);
     subject_subscribe_delayed_and_notify((Subject*)cfg_atu_enabled, atu_label_update, NULL);
@@ -356,8 +355,7 @@ static void mode_label_update(Subject *subj, void *user_data) {
 }
 
 static void atu_label_update(Subject *subj, void * user_data) {
-    int32_t ant = param_i_get(cfg_ant_id);
-    lv_label_set_text_fmt(items[INFO_ATU], "ATU%i", ant);
+    lv_label_set_text(items[INFO_ATU], "ATU");
     int32_t freq = cparam_i_get(cfg_fg_freq);
 
     if (!param_i_get(cfg_atu_enabled)) {

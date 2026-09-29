@@ -184,7 +184,6 @@ static button_data_t btn_moni_lvl  = make_encoder_btn(moni_level_label_getter, C
 /* MFK */
 
 static button_data_t btn_zoom      = make_encoder_btn("Spectrum\nZoom", CTRL_SPECTRUM_FACTOR);
-static button_data_t btn_ant       = make_encoder_btn("Antenna", CTRL_ANT);
 static button_data_t btn_rit       = make_encoder_btn(rit_label_getter, CTRL_RIT, (Subject*)&cfg_sm.p_rit);
 static button_data_t btn_xit       = make_encoder_btn(xit_label_getter, CTRL_XIT, (Subject*)&cfg_sm.p_xit);
 static button_data_t btn_agc_hang  = {.type            = BTN_TEXT_FN,
@@ -379,7 +378,7 @@ static button_data_t btn_mfk_p3 = make_page_btn("(MFK 3:4)");
 static button_data_t btn_mfk_p4 = make_page_btn("(MFK 4:4)");
 
 static buttons_page_t page_mfk_1 = {
-    {&btn_mfk_p1, &btn_rit, &btn_xit, &btn_zoom, &btn_ant}
+    {&btn_mfk_p1, &btn_rit, &btn_xit, &btn_zoom}
 };
 static buttons_page_t page_mfk_2 = {
     {&btn_mfk_p2, &btn_agc_hang, &btn_agc_knee, &btn_agc_slope, &btn_comp}

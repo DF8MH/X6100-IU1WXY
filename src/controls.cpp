@@ -305,11 +305,6 @@ void controls_encoder_update(cfg_ctrl_t ctrl, int32_t diff, std::string &msg) {
             snprintf(msg.data(), msg.capacity(), "CW peak Q: %i", i);
             break;
 
-        case CTRL_ANT:
-            i = update_param(cfg_sm.p_ant_id, diff);
-            snprintf(msg.data(), msg.capacity(), "Antenna: %i", i);
-            break;
-
         case CTRL_RIT:
             i = update_param(cfg_sm.p_rit, diff, 10);
             snprintf(msg.data(), msg.capacity(), "RIT: %c%i", (i < 0 ? '-' : '+'), abs(i));

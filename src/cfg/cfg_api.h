@@ -56,7 +56,6 @@ extern ParamInt         *cfg_mic;               // p_mic
 extern ParamInt         *cfg_hmic;              // p_hmic
 extern ParamInt         *cfg_imic;              // p_imic
 extern ParamInt         *cfg_moni;              // p_moni
-extern ParamInt         *cfg_ant_id;            // p_ant_id
 extern ParamInt         *cfg_atu_enabled;       // p_atu_enabled
 
 // UI

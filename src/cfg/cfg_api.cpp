@@ -28,7 +28,6 @@ ParamInt         *cfg_mic                 = nullptr;
 ParamInt         *cfg_hmic                = nullptr;
 ParamInt         *cfg_imic                = nullptr;
 ParamInt         *cfg_moni                = nullptr;
-ParamInt         *cfg_ant_id              = nullptr;
 ParamInt         *cfg_atu_enabled         = nullptr;
 ParamInt         *cfg_auto_level_enabled  = nullptr;
 ParamFloat       *cfg_auto_level_offset   = nullptr;
@@ -149,7 +148,6 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_hmic             = &cfg_sm.p_hmic;
     cfg_imic             = &cfg_sm.p_imic;
     cfg_moni             = &cfg_sm.p_moni;
-    cfg_ant_id           = &cfg_sm.p_ant_id;
     cfg_atu_enabled      = &cfg_sm.p_atu_enabled;
     cfg_auto_level_enabled = &cfg_sm.p_auto_level_enabled;
     cfg_auto_level_offset  = reinterpret_cast<ParamFloat *>(&cfg_sm.p_auto_level_offset);

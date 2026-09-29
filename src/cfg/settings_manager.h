@@ -100,8 +100,6 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_moni{"moni", 30, 0, 100,
         StorageType::GLOBAL, pending_writes_, &global_params_};
-    Parameter<int32_t> p_ant_id{"ant", 1, 0, 5,
-        StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_atu_enabled{"atu", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
 
