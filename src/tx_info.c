@@ -46,12 +46,12 @@ static lv_obj_t     *vswr_label;
 static lv_obj_t     *alc_label;
 static uint32_t      tx_start;
 
-#define PANEL_W   500
-#define PANEL_H   176
-#define ROW_Y     52
-#define ROW_STEP  42
-#define BARS_X    64
-#define BARS_W    290
+#define PANEL_W   620
+#define PANEL_H   226
+#define ROW_Y     66
+#define ROW_STEP  54
+#define BARS_X    84
+#define BARS_W    350
 #define SLICES    25
 
 static void on_cur_mode_change(Subject *subj, void *user_data);
@@ -67,7 +67,7 @@ static void draw_bar(lv_draw_ctx_t *draw_ctx, lv_coord_t x1, lv_coord_t y1, floa
     lv_draw_rect_dsc_init(&rect_dsc);
     rect_dsc.bg_opa = LV_OPA_COVER;
     area.y1 = y1;
-    area.y2 = y1 + 15;
+    area.y2 = y1 + 19;
 
     for (int i = 0; i < SLICES; i++) {
         float v = min + (max - min) * i / SLICES;
@@ -104,13 +104,13 @@ static void panel_draw_cb(lv_event_t *e) {
 
     lv_draw_label_dsc_init(&label_dsc);
     label_dsc.color = lv_color_hex(0x88aa99);
-    label_dsc.font  = &sony_14;
+    label_dsc.font  = &sony_18;
     for (int w = 0; w <= 10; w += 2) {
         snprintf(text, sizeof(text), "%i", w);
-        area.x1 = x1 + BARS_W * w / 10 - 6;
-        area.x2 = area.x1 + 20;
-        area.y1 = y1 + 17;
-        area.y2 = area.y1 + 16;
+        area.x1 = x1 + BARS_W * w / 10 - 8;
+        area.x2 = area.x1 + 26;
+        area.y1 = y1 + 22;
+        area.y2 = area.y1 + 20;
         lv_draw_label(draw_ctx, &label_dsc, &area, text, NULL);
     }
 }
@@ -175,7 +175,7 @@ lv_obj_t *tx_info_init(lv_obj_t *parent) {
     lv_obj_set_style_border_color(obj, lv_color_hex(0xff6666), 0);
     lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_t *tx = make_label(obj, &sony_24, 0xffffff);
+    lv_obj_t *tx = make_label(obj, &sony_30, 0xffffff);
     lv_label_set_text(tx, "TX");
     lv_obj_center(tx);
 
@@ -193,7 +193,7 @@ lv_obj_t *tx_info_init(lv_obj_t *parent) {
     lv_obj_add_flag(panel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_event_cb(panel, panel_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
 
-    lv_obj_t *badge = make_label(panel, &sony_18, 0xffffff);
+    lv_obj_t *badge = make_label(panel, &sony_22, 0xffffff);
     lv_label_set_text(badge, "TX");
     lv_obj_set_style_bg_color(badge, lv_color_hex(0xb01e1e), 0);
     lv_obj_set_style_bg_opa(badge, LV_OPA_COVER, 0);
@@ -202,28 +202,28 @@ lv_obj_t *tx_info_init(lv_obj_t *parent) {
     lv_obj_set_style_pad_ver(badge, 2, 0);
     lv_obj_set_pos(badge, 16, 10);
 
-    head_label = make_label(panel, &sony_18, 0x90f0d0);
+    head_label = make_label(panel, &sony_22, 0x90f0d0);
     lv_obj_align(head_label, LV_ALIGN_TOP_MID, 0, 12);
-    time_label = make_label(panel, &sony_18, 0xffffff);
+    time_label = make_label(panel, &sony_22, 0xffffff);
     lv_obj_align(time_label, LV_ALIGN_TOP_RIGHT, -16, 12);
 
     lv_obj_t *line = lv_obj_create(panel);
     lv_obj_remove_style_all(line);
     lv_obj_set_size(line, PANEL_W - 36, 1);
-    lv_obj_set_pos(line, 16, 42);
+    lv_obj_set_pos(line, 16, 50);
     lv_obj_set_style_bg_color(line, lv_color_hex(0x334455), 0);
     lv_obj_set_style_bg_opa(line, LV_OPA_COVER, 0);
 
     static const char *names[] = {"PWR", "SWR", "ALC"};
     lv_obj_t          *values[3];
     for (int i = 0; i < 3; i++) {
-        lv_obj_t *n = make_label(panel, &sony_20, 0xccddee);
+        lv_obj_t *n = make_label(panel, &sony_26, 0xccddee);
         lv_label_set_text(n, names[i]);
         lv_obj_set_pos(n, 16, ROW_Y + i * ROW_STEP);
-        values[i] = make_label(panel, &sony_26, 0xffffff);
-        lv_obj_set_width(values[i], 110);
+        values[i] = make_label(panel, &sony_34, 0xffffff);
+        lv_obj_set_width(values[i], 130);
         lv_obj_set_style_text_align(values[i], LV_TEXT_ALIGN_RIGHT, 0);
-        lv_obj_set_pos(values[i], PANEL_W - 16 - 4 - 110, ROW_Y - 3 + i * ROW_STEP);
+        lv_obj_set_pos(values[i], PANEL_W - 16 - 4 - 130, ROW_Y - 5 + i * ROW_STEP);
     }
     pwr_label  = values[0];
     vswr_label = values[1];
