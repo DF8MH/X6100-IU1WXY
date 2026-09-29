@@ -34,9 +34,9 @@ extern "C" {
 
 #define TOP_BAR_HEIGHT  76
 #define TOP_BAR_MARGIN  2
-#define CLOCK_W         178
+#define CLOCK_W         168
 #define TOP_BAR_BOX_H   (TOP_BAR_HEIGHT - TOP_BAR_MARGIN * 2)
-#define TOP_BAR_METER_X (TOP_BAR_MARGIN + 370 + 3)
+#define TOP_BAR_METER_X (TOP_BAR_MARGIN + 360 + 3)
 #define TOP_BAR_METER_W (800 - TOP_BAR_METER_X - 3 - CLOCK_W - TOP_BAR_MARGIN)
 
 /* Frequency strip under the top bar, always shown */

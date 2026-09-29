@@ -471,9 +471,9 @@ int main(int argc, char **argv) {
         buttons_page_t *pg = buttons_get_cur_page();
         pg->items[0]->press(pg->items[0]);
     }
-    /* VOL 2:2, MFK 1:4, MFK 2:4, MFK 4:4 */
-    static const int gen_pages[] = {1, 2, 3, 5};
-    for (int i = 0; i < 4; i++) {
+    /* VOL 2:2, MFK 1:2, MFK 2:2 */
+    static const int gen_pages[] = {1, 2, 3};
+    for (int i = 0; i < 3; i++) {
         char n[32];
         buttons_load_page(buttons_group_gen[gen_pages[i]]);
         pump(50);

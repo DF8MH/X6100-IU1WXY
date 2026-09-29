@@ -67,7 +67,7 @@ static void meter_draw_cb(lv_event_t * e) {
     lv_area_t           area;
 
     /* Scale on top, bars below it, the dB value on the right */
-    lv_coord_t x1 = obj->coords.x1 + 14;
+    lv_coord_t x1 = obj->coords.x1 + 12;
     lv_coord_t y1 = obj->coords.y1;
 
     uint8_t     slice_db = 3;
@@ -124,7 +124,7 @@ static void meter_draw_cb(lv_event_t * e) {
     lv_draw_label_dsc_init(&label_dsc);
 
     label_dsc.color = lv_color_white();
-    label_dsc.font = &sony_22;
+    label_dsc.font = &sony_20;
 
     area.y1 = y1 + 6;
     area.y2 = area.y1 + 22;
@@ -167,8 +167,8 @@ lv_obj_t * meter_init(lv_obj_t * parent) {
     subject_subscribe_delayed_and_notify((Subject*)cfg_cur_att, on_bool_value_change, &att);
 
     db_val_label = lv_label_create(obj);
-    lv_obj_set_style_text_font(db_val_label, &sony_22, 0);
-    lv_obj_align(db_val_label, LV_ALIGN_RIGHT_MID, -4, 6);
+    lv_obj_set_style_text_font(db_val_label, &sony_24, 0);
+    lv_obj_align(db_val_label, LV_ALIGN_RIGHT_MID, -10, 10);
     lv_obj_set_style_text_color(db_val_label, lv_color_white(), 0);
     lv_label_set_text(db_val_label, "");
     return obj;

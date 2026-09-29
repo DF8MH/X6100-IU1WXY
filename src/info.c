@@ -124,7 +124,8 @@ lv_obj_t * info_init(lv_obj_t * parent) {
     lv_label_set_text(items[INFO_HEADPHONES], LV_SYMBOL_AUDIO);
     lv_label_set_text(items[INFO_CAT], LV_SYMBOL_KEYBOARD);
     lv_label_set_text(items[INFO_GPS], LV_SYMBOL_GPS);
-    lv_label_set_text(items[INFO_CLUSTER], LV_SYMBOL_EYE_OPEN);
+    lv_label_set_text(items[INFO_CLUSTER], "DX");
+    lv_obj_set_style_text_font(items[INFO_CLUSTER], &sony_22, 0);
     lv_obj_set_style_text_color(items[INFO_WIFI], lv_color_hex(COLOR_ICON_IDLE), 0);
 
     subject_subscribe_delayed((Subject*)cfg_band_current_vfo, vfo_label_update, NULL);
