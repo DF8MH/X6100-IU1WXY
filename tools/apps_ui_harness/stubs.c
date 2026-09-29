@@ -3,6 +3,11 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#include "wifi.h"
+#include "btaudio.h"
+#include "scheduler.h"
 extern void *cfg_cur_filter_low, *cfg_cur_filter_high, *cfg_fg_freq, *cfg_cur_mode, *cfg_pwr;
 extern void *cfg_tx_filter_low, *cfg_tx_filter_high, *cfg_ft8_auto, *cfg_ft8_hold_freq, *cfg_ft8_max_repeats,
             *cfg_ft8_protocol, *cfg_ft8_show_all, *cfg_wefax_align, *cfg_wefax_tilt;
@@ -22,7 +27,37 @@ int32_t cparam_i_get(const void *p) {
     return 1;
 }
 void cparam_i_set(void *p, int32_t v) { if (p == cfg_fg_freq) harness_fg_freq = v; }
-int wifi_get_status(void) { return 4; /* WIFI_CONNECTED */ }
+wifi_status_t wifi_get_status(void) { return WIFI_CONNECTED; }
+
+/* Settings -> Wireless: fake networks and Bluetooth devices */
+static gboolean any_password(const char *p) { return TRUE; }
+wifi_ap_arr_t wifi_get_available_access_points(void) {
+    static const wifi_ap_info_t aps[] = {
+        {"Vodafone-A1B2", "", 45, 0, false, false, any_password},
+        {"MyWiFi", "", 90, 0, true, true, any_password},
+        {"MyWiFi-5G", "", 70, 0, false, true, any_password},
+        {"FreeWiFi", "", 20, 0, false, false, NULL},
+    };
+    wifi_ap_arr_t r = {malloc(sizeof aps), 4, true};
+    memcpy(r.ap_arr, aps, sizeof aps);
+    return r;
+}
+void wifi_aps_info_delete(wifi_ap_arr_t a) { free(a.ap_arr); }
+bool wifi_get_ipaddr(char **ip, char **gw) { strcpy(*ip, "10.0.0.62"); strcpy(*gw, "10.0.0.2"); return true; }
+bool btaudio_mute_get(void) { return true; }
+typedef struct { btaudio_done_cb_t cb; void *user; const char *out; } fake_run_t;
+static void fake_done(void *arg) { fake_run_t *r = arg; if (r->cb) r->cb(r->out, 0, r->user); }
+void btaudio_run(const char *args, btaudio_done_cb_t cb, void *user) {
+    fake_run_t r = {cb, user, ""};
+    printf("[btaudio-ctl] %s\n", args);
+    if (!strcmp(args, "list"))
+        r.out = "DEV\t00:11:22:33:44:01\t1\thp\t1\tBT Headphones\n"
+                "DEV\t00:11:22:33:44:02\t0\tcat\t0\tTablet\n"
+                "HP\t1\t60\nRX\tyes\nMUTE\tyes\n";
+    else if (!strcmp(args, "scan"))
+        r.out = "NEW\t11:22:33:44:55:66\tSoundcore Life Q30\n";
+    scheduler_put(fake_done, &r, sizeof r);
+}
 int32_t param_i_get(const void *p) {
     if (p == cfg_tx_filter_low) return 160;
     if (p == cfg_tx_filter_high) return 3000;
@@ -38,3 +73,5 @@ void msg_schedule_text_fmt(const char *fmt, ...) { va_list ap; va_start(ap, fmt)
 const char *x6100_control_get_fw_version_str(void) { return "1.1.9"; }
 const char *util_canonize_callsign(const char *c, bool s) { return c; }
 const char *info_params_mode_label_get(void) { return "USB"; }
+struct { const char *name, *label, *welcome; } voice_item[4] = {
+    {"lyubov", "Lyubov (En)"}, {"slt", "SLT (En)"}, {"alan", "Alan (En)"}, {"evgeniy-eng", "Evgeniy (En)"}};

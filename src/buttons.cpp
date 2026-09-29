@@ -320,7 +320,6 @@ static button_data_t btn_qth      = make_action_btn("QTH", ACTION_APP_QTH);
 static button_data_t btn_callsign = make_action_btn("Callsign", ACTION_APP_CALLSIGN);
 static button_data_t btn_settings = make_app_btn("Settings", ACTION_APP_SETTINGS);
 
-static button_data_t  btn_wifi   = make_app_btn("WiFi", ACTION_APP_WIFI);
 static button_data_t btn_cluster = make_app_btn("Cluster", ACTION_APP_CLUSTER);
 static button_data_t btn_modes   = make_app_btn("Modes", ACTION_APP_MODES);
 
@@ -442,9 +441,8 @@ static buttons_page_t page_dfl_1 = {
 };
 
 /* App pages */
-static button_data_t btn_app_p1 = make_page_btn("(APP 1:3)", "Application|page 1");
-static button_data_t btn_app_p2 = make_page_btn("(APP 2:3)", "Application|page 2");
-static button_data_t btn_app_p3 = make_page_btn("(APP 3:3)", "Application|page 3");
+static button_data_t btn_app_p1 = make_page_btn("(APP 1:2)", "Application|page 1");
+static button_data_t btn_app_p2 = make_page_btn("(APP 2:2)", "Application|page 2");
 
 /* The digital mode apps are in the Modes menu. */
 static buttons_page_t page_app_1 = {
@@ -452,10 +450,6 @@ static buttons_page_t page_app_1 = {
 };
 static buttons_page_t page_app_2 = {
     {&btn_app_p2, &btn_rec, &btn_qth, &btn_callsign, &btn_settings}
-};
-/* WiFi moves to Settings / Wireless; until then it stays here. */
-static buttons_page_t page_app_3 = {
-    {&btn_app_p3, &btn_wifi}
 };
 
 /* RTTY */
@@ -476,7 +470,6 @@ buttons_group_t buttons_group_gen = {
 buttons_group_t buttons_group_app = {
     &page_app_1,
     &page_app_2,
-    &page_app_3,
 };
 
 buttons_group_t buttons_group_key = {

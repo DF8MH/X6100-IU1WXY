@@ -10,11 +10,14 @@
 
 #include "voice.h"
 #include "dsp.h"
+#include "wifi.h"
+#include "btaudio.h"
 #include "cfg/settings_manager.h"
 #include <vector>
 #include <thread>
 #include <string>
 #include <cstdio>
+#include <functional>
 
 extern "C" {
 
@@ -29,6 +32,8 @@ extern "C" {
     #include "audio.h"
     #include "meter.h"
     #include "main.h"
+    #include "msg.h"
+    #include "textarea_window.h"
 
     #include "lvgl/lvgl.h"
     #include <sys/time.h>
@@ -56,12 +61,14 @@ extern "C" {
 static void make_general_page();
 static void make_display_page();
 static void make_audio_page();
+static void make_wireless_page();
 static void make_voice_page();
 static void make_info_page();
 
 static void load_general_page(button_data_t *btn_data);
 static void load_display_page(button_data_t *btn_data);
 static void load_audio_page(button_data_t *btn_data);
+static void load_wireless_page(button_data_t *btn_data);
 static void load_voice_page(button_data_t *btn_data);
 static void load_info_page(button_data_t *btn_data);
 
@@ -86,6 +93,18 @@ static lv_obj_t     *sec;
 
 static std::vector<Subscription> observers;
 
+static button_data_t btn_p1 = {
+    .type  = BTN_TEXT,
+    .label = "(SETTINGS\n1:2)",
+    .press = button_next_page_cb,
+};
+
+static button_data_t btn_p2 = {
+    .type  = BTN_TEXT,
+    .label = "(SETTINGS\n2:2)",
+    .press = button_next_page_cb,
+};
+
 static button_data_t btn_general = {
     .type  = BTN_TEXT,
     .label = "General",
@@ -104,6 +123,12 @@ static button_data_t btn_audio = {
     .press = load_audio_page,
 };
 
+static button_data_t btn_wireless = {
+    .type  = BTN_TEXT,
+    .label = "Wireless",
+    .press = load_wireless_page,
+};
+
 static button_data_t btn_voice = {
     .type  = BTN_TEXT,
     .label = "Voice",
@@ -118,9 +143,17 @@ static button_data_t btn_info = {
 
 buttons_page_t btn_page = {
     {
+     &btn_p1,
      &btn_general,
      &btn_display,
      &btn_audio,
+     &btn_wireless,
+     }
+};
+
+static buttons_page_t btn_page_2 = {
+    {
+     &btn_p2,
      &btn_voice,
      &btn_info,
      }
@@ -137,44 +170,43 @@ static dialog_t     dialog = {
 
 dialog_t            *dialog_settings = &dialog;
 
-static void load_general_page(button_data_t *btn_data) {
-    make_general_page();
-    for (auto &&btn : btn_page.items) {
-        buttons_mark(btn, false);
+static void mark_tab(button_data_t *btn_data) {
+    for (buttons_page_t *page : {&btn_page, &btn_page_2}) {
+        for (auto &&btn : page->items) {
+            buttons_mark(btn, false);
+        }
     }
     buttons_mark(btn_data, true);
+}
+
+static void load_general_page(button_data_t *btn_data) {
+    make_general_page();
+    mark_tab(btn_data);
 }
 
 static void load_display_page(button_data_t *btn_data) {
     make_display_page();
-    for (auto &&btn : btn_page.items) {
-        buttons_mark(btn, false);
-    }
-    buttons_mark(btn_data, true);
+    mark_tab(btn_data);
 }
 
 static void load_audio_page(button_data_t *btn_data) {
     make_audio_page();
-    for (auto &&btn : btn_page.items) {
-        buttons_mark(btn, false);
-    }
-    buttons_mark(btn_data, true);
+    mark_tab(btn_data);
+}
+
+static void load_wireless_page(button_data_t *btn_data) {
+    make_wireless_page();
+    mark_tab(btn_data);
 }
 
 static void load_voice_page(button_data_t *btn_data) {
     make_voice_page();
-    for (auto &&btn : btn_page.items) {
-        buttons_mark(btn, false);
-    }
-    buttons_mark(btn_data, true);
+    mark_tab(btn_data);
 }
 
 static void load_info_page(button_data_t *btn_data) {
     make_info_page();
-    for (auto &&btn : btn_page.items) {
-        buttons_mark(btn, false);
-    }
-    buttons_mark(btn_data, true);
+    mark_tab(btn_data);
 }
 
 /* Shared update */
@@ -2057,7 +2089,7 @@ static uint8_t make_bluetooth(uint8_t row) {
     row++;
 
     obj = lv_label_create(grid);
-    lv_label_set_text(obj, "BT Discoverable");
+    lv_label_set_text(obj, "Discoverable (CAT)");
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
     bt_visible_sw = bt_switch_cell(row, 1, btcat_read("BTCAT_DISCOVERABLE", true), bt_visible_update_cb);
     lv_obj_add_event_cb(bt_visible_sw, bt_visible_delete_cb, LV_EVENT_DELETE, NULL);
@@ -2129,6 +2161,893 @@ static uint8_t make_delimiter(uint8_t row) {
     return row + 1;
 }
 
+/* Wireless: WiFi and Bluetooth. The MFK walks the rows; a press on a
+ * network or device opens its action menu. */
+
+#define WL_ROW_H    40
+#define WIFI_ROWS   8
+#define BT_ROWS     8
+
+typedef struct {
+    lv_obj_t *obj;
+    lv_obj_t *name;
+    lv_obj_t *pill_1;
+    lv_obj_t *pill_2;
+    lv_obj_t *note;
+    lv_obj_t *bars[4];
+    lv_obj_t *lock;
+} wl_row_t;
+
+typedef struct {
+    std::string           label;
+    std::string           note;
+    std::function<void()> fn;
+} wl_item_t;
+
+typedef struct {
+    std::string mac;
+    std::string name;
+    bool        connected;
+    bool        hp;
+    bool        autoconn;
+    bool        is_new;
+} bt_dev_t;
+
+static int                    wl_gen;       /* results for a deleted page are dropped */
+static lv_timer_t            *wl_timer;
+static int                    wl_ticks;
+static bool                   wl_kbd;       /* password keyboard open */
+static wifi_ap_info_t         wl_kbd_ap;
+
+static lv_obj_t              *wl_menu;      /* action menu */
+static lv_obj_t              *wl_menu_back; /* row focused again when it closes */
+static std::vector<wl_item_t> wl_items;
+static std::vector<lv_obj_t *> wl_item_rows;
+static int                    wl_sel;
+
+static struct {
+    lv_obj_t      *status_pill;
+    lv_obj_t      *status_ssid;
+    lv_obj_t      *ip;
+    lv_obj_t      *scan_btn;
+    lv_obj_t      *scan_note;
+    wl_row_t       rows[WIFI_ROWS];
+    wifi_ap_info_t aps[WIFI_ROWS];
+    bool           scanning;
+    time_t         last_scan;
+} wf;
+
+static struct {
+    lv_obj_t             *scan_btn;
+    lv_obj_t             *scan_note;
+    lv_obj_t             *rx;
+    lv_obj_t             *vol;
+    lv_obj_t             *mute;
+    wl_row_t              rows[BT_ROWS];
+    std::vector<bt_dev_t> devs;
+    std::vector<bt_dev_t> found;    /* last "Scan headphones" */
+    bool                  listing;
+    bool                  scanning;
+    bool                  busy;
+    int                   vol_pending = -1;
+    bool                  vol_busy;
+} bt;
+
+static lv_obj_t * wl_label(lv_obj_t *parent, const lv_font_t *font, uint32_t color, lv_coord_t x) {
+    lv_obj_t *obj = lv_label_create(parent);
+
+    lv_obj_set_style_text_font(obj, font, 0);
+    lv_obj_set_style_text_color(obj, lv_color_hex(color), 0);
+    lv_obj_align(obj, LV_ALIGN_LEFT_MID, x, 0);
+    lv_label_set_text(obj, "");
+    return obj;
+}
+
+static lv_obj_t * wl_pill_create(lv_obj_t *parent, lv_coord_t x) {
+    lv_obj_t *obj = wl_label(parent, &sony_18, 0xffffff, x);
+
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(obj, 10, 0);
+    lv_obj_set_style_pad_hor(obj, 8, 0);
+    lv_obj_set_style_pad_ver(obj, 2, 0);
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    return obj;
+}
+
+static void wl_pill(lv_obj_t *obj, const char *text, uint32_t bg, uint32_t fg) {
+    if (!text) {
+        lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text(obj, text);
+    lv_obj_set_style_bg_color(obj, lv_color_hex(bg), 0);
+    lv_obj_set_style_text_color(obj, lv_color_hex(fg), 0);
+}
+
+#define PILL_OK     "connected", 0x1f4a24, 0x88ff88
+#define PILL_HP     "headphones", 0x4b3c14, 0xffd24a
+#define PILL_CAT    "CAT", 0x3a2f5a, 0xccbbff
+#define PILL_NEW    "new", 0x2f3d4a, 0xccddee
+
+static uint8_t make_section(uint8_t row, const char *title) {
+    lv_obj_t *obj = wl_label(grid, &sony_20, 0x90f0d0, 0);
+
+    lv_label_set_text(obj, title);
+    lv_obj_set_style_text_letter_space(obj, 2, 0);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 7, LV_GRID_ALIGN_END, row, 1);
+    row_dsc[row] = 26;
+    return row + 1;
+}
+
+static void wl_row_label(uint8_t row, const char *text) {
+    lv_obj_t *obj = lv_label_create(grid);
+
+    lv_label_set_text(obj, text);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+}
+
+static lv_obj_t * wl_button(uint8_t row, const char *text, lv_event_cb_t cb) {
+    lv_obj_t *obj = lv_btn_create(grid);
+
+    lv_obj_remove_style_all(obj);
+    dialog_item(&dialog, obj);
+    lv_obj_set_style_radius(obj, 8, 0);
+    lv_obj_set_style_border_width(obj, 2, 0);
+    lv_obj_set_style_border_color(obj, lv_color_hex(0x8a8a8a), 0);
+    lv_obj_set_size(obj, SMALL_3, 48);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_add_event_cb(obj, cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *label = lv_label_create(obj);
+    lv_obj_set_style_text_font(label, &sony_26, 0);
+    lv_label_set_text(label, text);
+    lv_obj_center(label);
+    return obj;
+}
+
+/* Note to the right of a 3-column control */
+static lv_obj_t * wl_note(uint8_t row) {
+    lv_obj_t *obj = wl_label(grid, &sony_18, 0x99aabb, 0);
+
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 4, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    return obj;
+}
+
+/* A list (all the columns) of hidden rows; the refresh fills and shows them */
+static lv_obj_t * wl_list(uint8_t row) {
+    lv_obj_t *obj = lv_obj_create(grid);
+
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_size(obj, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(obj, 2, 0);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_STRETCH, 0, 7, LV_GRID_ALIGN_START, row, 1);
+    row_dsc[row] = LV_GRID_CONTENT;
+    return obj;
+}
+
+static void wl_row_create(wl_row_t *r, lv_obj_t *list, lv_event_cb_t cb, int i) {
+    lv_obj_t *obj = lv_obj_create(list);
+
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_size(obj, lv_pct(100), WL_ROW_H);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);   /* a MFK press is a click */
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLL_ON_FOCUS | LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_radius(obj, 4, 0);
+    lv_obj_set_style_bg_color(obj, lv_color_hex(0x5a4818), LV_STATE_FOCUSED);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_STATE_FOCUSED);
+    lv_obj_set_style_border_color(obj, lv_color_white(), LV_STATE_FOCUSED);
+    lv_obj_set_style_border_width(obj, 2, LV_STATE_FOCUSED);
+    lv_obj_add_event_cb(obj, cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    lv_obj_add_event_cb(obj, key_cb, LV_EVENT_KEY, NULL);
+    lv_group_add_obj(keyboard_group, obj);
+
+    r->obj = obj;
+    r->name = wl_label(obj, &sony_24, 0xffffff, 10);
+    lv_obj_set_width(r->name, 270);
+    lv_label_set_long_mode(r->name, LV_LABEL_LONG_DOT);
+}
+
+/* Hidden rows can't have the focus: move it before hiding the focused one */
+static void wl_row_show(wl_row_t *r, bool show, lv_obj_t *fallback) {
+    if (!show && lv_group_get_focused(keyboard_group) == r->obj) {
+        lv_group_focus_obj(fallback);
+    }
+    if (show) {
+        lv_obj_clear_flag(r->obj, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(r->obj, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+/* Action menu */
+
+static void wl_menu_show_sel() {
+    for (size_t i = 0; i < wl_item_rows.size(); i++) {
+        bool on = (int)i == wl_sel;
+
+        lv_obj_set_style_bg_opa(wl_item_rows[i], on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(wl_item_rows[i], on ? 2 : 0, 0);
+        lv_obj_set_style_text_color(lv_obj_get_child(wl_item_rows[i], 0), on ? lv_color_hex(0xffd24a) : lv_color_white(), 0);
+    }
+}
+
+static void wl_menu_close() {
+    if (!wl_menu) {
+        return;
+    }
+    lv_obj_del(wl_menu);
+    wl_menu = NULL;
+    wl_item_rows.clear();
+    if (wl_menu_back) {
+        lv_group_focus_obj(wl_menu_back);
+    }
+    lv_group_set_editing(keyboard_group, false);
+}
+
+/* Run after the event: closing deletes the menu that got it */
+static void wl_menu_pick_async(void *arg) {
+    if (!wl_menu) {
+        return;
+    }
+    int sel = (int)(intptr_t)arg;
+    auto fn = sel >= 0 ? wl_items[sel].fn : nullptr;
+
+    wl_menu_close();
+    if (fn) {
+        fn();
+    }
+}
+
+static void wl_menu_key_cb(lv_event_t *e) {
+    switch (*((uint32_t *)lv_event_get_param(e))) {
+        case LV_KEY_LEFT:
+        case LV_KEY_UP:
+            if (wl_sel > 0) wl_sel--;
+            wl_menu_show_sel();
+            break;
+
+        case LV_KEY_RIGHT:
+        case LV_KEY_DOWN:
+            if (wl_sel < (int)wl_items.size() - 1) wl_sel++;
+            wl_menu_show_sel();
+            break;
+
+        case LV_KEY_ENTER:
+            lv_async_call(wl_menu_pick_async, (void *)(intptr_t)wl_sel);
+            break;
+
+        case LV_KEY_ESC:
+            lv_async_call(wl_menu_pick_async, (void *)(intptr_t)-1);
+            break;
+
+        case KEY_VOL_LEFT_EDIT:
+        case KEY_VOL_LEFT_SELECT:
+            radio_change_vol(-1);
+            break;
+
+        case KEY_VOL_RIGHT_EDIT:
+        case KEY_VOL_RIGHT_SELECT:
+            radio_change_vol(1);
+            break;
+    }
+}
+
+static void wl_menu_click_cb(lv_event_t *e) {
+    lv_obj_t   *target = lv_event_get_target(e);
+    lv_indev_t *indev = lv_indev_get_act();
+
+    /* On the menu itself only the MFK press counts, not a touch */
+    if (target == wl_menu && !(indev && lv_indev_get_type(indev) == LV_INDEV_TYPE_ENCODER)) {
+        return;
+    }
+
+    for (size_t i = 0; i < wl_item_rows.size(); i++) {
+        if (wl_item_rows[i] == target) {
+            wl_sel = i;
+        }
+    }
+    lv_async_call(wl_menu_pick_async, (void *)(intptr_t)wl_sel);
+}
+
+static void wl_menu_open(const std::string &title, std::vector<wl_item_t> items) {
+    const lv_coord_t w = 380, head_h = 36, item_h = 40, hint_h = 30;
+
+    wl_menu_close();
+    wl_items = std::move(items);
+    wl_menu_back = lv_group_get_focused(keyboard_group);
+
+    wl_menu = lv_obj_create(dialog.obj);
+    lv_obj_remove_style_all(wl_menu);
+    lv_obj_set_size(wl_menu, w, head_h + wl_items.size() * item_h + hint_h + 8);
+    lv_obj_center(wl_menu);
+    lv_obj_set_style_bg_color(wl_menu, lv_color_hex(0x0b1622), 0);
+    lv_obj_set_style_bg_opa(wl_menu, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(wl_menu, lv_color_hex(0x99aaaa), 0);
+    lv_obj_set_style_border_width(wl_menu, 2, 0);
+    lv_obj_set_style_radius(wl_menu, 10, 0);
+    lv_obj_clear_flag(wl_menu, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *obj = wl_label(wl_menu, &sony_18, 0x90f0d0, 16);
+    lv_obj_set_width(obj, w - 32);
+    lv_label_set_long_mode(obj, LV_LABEL_LONG_DOT);
+    lv_label_set_text(obj, title.c_str());
+    lv_obj_align(obj, LV_ALIGN_TOP_LEFT, 16, 8);
+
+    for (size_t i = 0; i < wl_items.size(); i++) {
+        lv_obj_t *row = lv_obj_create(wl_menu);
+
+        lv_obj_remove_style_all(row);
+        lv_obj_set_size(row, w - 4, item_h);
+        lv_obj_set_pos(row, 0, head_h + i * item_h);
+        lv_obj_set_style_bg_color(row, lv_color_hex(0x5a4818), 0);
+        lv_obj_set_style_border_color(row, lv_color_white(), 0);
+        lv_obj_set_style_border_side(row, (lv_border_side_t)(LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM), 0);
+        lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(row, wl_menu_click_cb, LV_EVENT_CLICKED, NULL);
+
+        obj = wl_label(row, &sony_26, 0xffffff, 16);
+        lv_label_set_text(obj, wl_items[i].label.c_str());
+
+        obj = wl_label(row, &sony_18, 0x99aabb, 0);
+        lv_label_set_text(obj, wl_items[i].note.c_str());
+        lv_obj_align(obj, LV_ALIGN_RIGHT_MID, -16, 0);
+
+        wl_item_rows.push_back(row);
+    }
+
+    obj = wl_label(wl_menu, &sony_16, 0x88aa99, 16);
+    lv_label_set_text(obj, "MFK: choose - press: confirm - Wireless: close");
+    lv_obj_align(obj, LV_ALIGN_BOTTOM_LEFT, 16, -8);
+
+    wl_sel = 0;
+    wl_menu_show_sel();
+
+    lv_group_add_obj(keyboard_group, wl_menu);
+    lv_obj_add_event_cb(wl_menu, wl_menu_key_cb, LV_EVENT_KEY, NULL);
+    lv_obj_add_event_cb(wl_menu, wl_menu_click_cb, LV_EVENT_CLICKED, NULL);
+    lv_group_focus_obj(wl_menu);
+    lv_group_set_editing(keyboard_group, true);
+}
+
+/* WiFi */
+
+static int wifi_compare_aps(const void *a, const void *b) {
+    const wifi_ap_info_t *ap_a = (const wifi_ap_info_t *)a;
+    const wifi_ap_info_t *ap_b = (const wifi_ap_info_t *)b;
+    int score_a = ap_a->is_connected * 2 + ap_a->known;
+    int score_b = ap_b->is_connected * 2 + ap_b->known;
+
+    if (score_a != score_b) {
+        return score_b - score_a;
+    }
+    return ap_b->strength - ap_a->strength;
+}
+
+static void wifi_update() {
+    static const char *status_names[] = { "off", "starting", "disconnected", "connecting", "connected" };
+    wifi_status_t status = wifi_get_status();
+    bool          on = status != WIFI_OFF && status != WIFI_STARTING;
+    const char   *ssid = "";
+    int           n = 0;
+
+    if (status == WIFI_CONNECTED) {
+        wl_pill(wf.status_pill, PILL_OK);
+    } else {
+        wl_pill(wf.status_pill, status_names[status], 0x2f3d4a, 0xccddee);
+    }
+
+    if (on) {
+        wifi_ap_arr_t aps = wifi_get_available_access_points();
+
+        if (aps.count) {
+            qsort(aps.ap_arr, aps.count, sizeof(wifi_ap_info_t), wifi_compare_aps);
+        }
+        for (; n < aps.count && n < WIFI_ROWS; n++) {
+            wf.aps[n] = aps.ap_arr[n];
+        }
+        wifi_aps_info_delete(aps);
+    }
+
+    for (int i = 0; i < WIFI_ROWS; i++) {
+        wl_row_t       *r = &wf.rows[i];
+        wifi_ap_info_t *ap = &wf.aps[i];
+
+        wl_row_show(r, i < n, wf.scan_btn);
+        if (i >= n) {
+            continue;
+        }
+        lv_label_set_text(r->name, ap->ssid);
+        for (int b = 0; b < 4; b++) {
+            bool lit = b < (ap->strength + 24) / 25;
+
+            lv_obj_set_style_bg_color(r->bars[b], lv_color_hex(lit ? 0x88ff88 : 0x555555), 0);
+        }
+        if (ap->password_validator) {
+            lv_obj_clear_flag(r->lock, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(r->lock, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (ap->is_connected) {
+            wl_pill(r->pill_1, PILL_OK);
+            ssid = ap->ssid;
+        } else {
+            wl_pill(r->pill_1, NULL, 0, 0);
+        }
+        lv_label_set_text(r->note, ap->known ? "saved" : "");
+    }
+    lv_label_set_text(wf.status_ssid, ssid);
+
+    char  ip[16] = "", gw[16] = "";
+    char *ip_p = ip, *gw_p = gw;
+
+    if (status == WIFI_CONNECTED && wifi_get_ipaddr(&ip_p, &gw_p)) {
+        lv_label_set_text_fmt(wf.ip, "%s  /  %s", ip, gw);
+    } else {
+        lv_label_set_text(wf.ip, "-");
+    }
+
+    bool scanning = on && wifi_scanning();
+
+    if (wf.scanning && !scanning) {
+        wf.last_scan = time(NULL);
+    }
+    wf.scanning = scanning;
+    if (scanning) {
+        lv_label_set_text(wf.scan_note, "scanning...");
+    } else if (on && wf.last_scan) {
+        lv_label_set_text_fmt(wf.scan_note, "last scan %i s ago", (int)(time(NULL) - wf.last_scan));
+    } else {
+        lv_label_set_text(wf.scan_note, "");
+    }
+}
+
+static void wifi_power_cb(lv_event_t *e) {
+    if (lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED)) {
+        wifi_power_on();
+        msg_update_text_fmt("Turning on");
+    } else {
+        wifi_power_off();
+    }
+    wifi_update();
+}
+
+static void wifi_scan_cb(lv_event_t *e) {
+    wifi_status_t status = wifi_get_status();
+
+    if (status == WIFI_OFF || status == WIFI_STARTING || wifi_scanning()) {
+        return;
+    }
+    wifi_start_scan();
+}
+
+static bool wl_kbd_close() {
+    wl_kbd = false;
+    textarea_window_close();
+    make_wireless_page();
+    return true;
+}
+
+static bool wl_kbd_ok() {
+    const char *password = textarea_window_get();
+
+    if (wl_kbd_ap.password_validator && !wl_kbd_ap.password_validator(password)) {
+        msg_update_text_fmt("Incorrect password");
+        return false;
+    }
+    if (wl_kbd_ap.known) {
+        wifi_update_connection(wl_kbd_ap.ssid, password);
+    } else {
+        wifi_add_connection(wl_kbd_ap.ssid, password);
+    }
+    return wl_kbd_close();
+}
+
+/* The keyboard gets all the keys: the page is built again when it closes */
+static void wl_kbd_open(const wifi_ap_info_t &ap) {
+    wl_kbd_ap = ap;
+    wl_kbd = true;
+    lv_group_remove_all_objs(keyboard_group);
+    textarea_window_open(wl_kbd_ok, wl_kbd_close);
+    lv_textarea_set_placeholder_text(textarea_window_text(), " Password");
+}
+
+static void wifi_row_cb(lv_event_t *e) {
+    wifi_ap_info_t         ap = wf.aps[(intptr_t)lv_event_get_user_data(e)];
+    std::vector<wl_item_t> items;
+
+    if (ap.is_connected) {
+        items.push_back({"Disconnect", "", [] { wifi_disconnect(); }});
+    } else {
+        items.push_back({"Connect", "", [ap] {
+            if (ap.known) {
+                wifi_connect(ap.ssid);
+            } else if (!ap.password_validator) {
+                wifi_add_connection(ap.ssid, NULL);
+            } else {
+                wl_kbd_open(ap);
+            }
+        }});
+    }
+    if (ap.known && ap.password_validator) {
+        items.push_back({"Change password", "", [ap] { wl_kbd_open(ap); }});
+    }
+    if (ap.known) {
+        items.push_back({"Delete", "", [ap] {
+            wifi_delete_connection(ap.ssid);
+            msg_update_text_fmt("Connection deleted");
+        }});
+    }
+    wl_menu_open(ap.ssid, items);
+}
+
+static uint8_t make_wifi(uint8_t row) {
+    lv_obj_t *obj;
+
+    wl_row_label(row, "WiFi/BT power");
+    bt_switch_cell(row, 1, params.wifi_enabled.x, wifi_power_cb);
+    row = make_delimiter(row + 1);
+
+    wl_row_label(row, "Status");
+    obj = lv_obj_create(grid);
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(obj, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(obj, 12, 0);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
+    wf.status_pill = wl_pill_create(obj, 0);
+    wf.status_ssid = wl_label(obj, &sony_26, 0xffffff, 0);
+    row++;
+
+    obj = wl_label(grid, &sony_22, 0x99aabb, 0);
+    lv_label_set_text(obj, "IP / Gateway");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+    wf.ip = wl_label(grid, &sony_22, 0x99aabb, 0);
+    lv_obj_set_grid_cell(wf.ip, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
+    row_dsc[row] = 36;
+    row = make_delimiter(row + 1);
+
+    wl_row_label(row, "Networks");
+    wf.scan_btn = wl_button(row, "Scan", wifi_scan_cb);
+    wf.scan_note = wl_note(row);
+    row++;
+
+    lv_obj_t *list = wl_list(row);
+
+    for (int i = 0; i < WIFI_ROWS; i++) {
+        wl_row_t *r = &wf.rows[i];
+
+        wl_row_create(r, list, wifi_row_cb, i);
+        for (int b = 0; b < 4; b++) {
+            obj = lv_obj_create(r->obj);
+            lv_obj_remove_style_all(obj);
+            lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
+            lv_obj_set_size(obj, 8, 6 + b * 5);
+            lv_obj_align(obj, LV_ALIGN_BOTTOM_LEFT, 300 + b * 11, -9);
+            r->bars[b] = obj;
+        }
+        /* padlock: shackle and body */
+        r->lock = lv_obj_create(r->obj);
+        lv_obj_remove_style_all(r->lock);
+        lv_obj_set_size(r->lock, 14, 20);
+        lv_obj_align(r->lock, LV_ALIGN_LEFT_MID, 380, 0);
+        obj = lv_obj_create(r->lock);
+        lv_obj_remove_style_all(obj);
+        lv_obj_set_size(obj, 10, 12);
+        lv_obj_align(obj, LV_ALIGN_TOP_MID, 0, 0);
+        lv_obj_set_style_radius(obj, 5, 0);
+        lv_obj_set_style_border_width(obj, 2, 0);
+        lv_obj_set_style_border_color(obj, lv_color_hex(0xe0a030), 0);
+        obj = lv_obj_create(r->lock);
+        lv_obj_remove_style_all(obj);
+        lv_obj_set_size(obj, 14, 11);
+        lv_obj_align(obj, LV_ALIGN_BOTTOM_MID, 0, 0);
+        lv_obj_set_style_radius(obj, 2, 0);
+        lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(obj, lv_color_hex(0xe0a030), 0);
+
+        r->pill_1 = wl_pill_create(r->obj, 440);
+        r->note = wl_label(r->obj, &sony_20, 0x99aabb, 620);
+    }
+    return row + 1;
+}
+
+/* Bluetooth devices and headphones (btaudio-ctl) */
+
+static std::vector<std::string> split(const std::string &s, char sep) {
+    std::vector<std::string> out;
+    size_t                   start = 0, pos;
+
+    while ((pos = s.find(sep, start)) != std::string::npos) {
+        out.push_back(s.substr(start, pos - start));
+        start = pos + 1;
+    }
+    out.push_back(s.substr(start));
+    return out;
+}
+
+static void bt_set_enabled(lv_obj_t *obj, bool on) {
+    if (on) {
+        lv_obj_clear_state(obj, LV_STATE_DISABLED);
+    } else {
+        lv_obj_add_state(obj, LV_STATE_DISABLED);
+    }
+}
+
+static void bt_update_view() {
+    size_t n = bt.devs.size();
+
+    for (size_t i = 0; i < BT_ROWS; i++) {
+        wl_row_t *r = &bt.rows[i];
+
+        wl_row_show(r, i < n, bt.scan_btn);
+        if (i >= n) {
+            continue;
+        }
+        bt_dev_t *d = &bt.devs[i];
+
+        lv_label_set_text(r->name, d->name.empty() ? d->mac.c_str() : d->name.c_str());
+        if (d->is_new) {
+            wl_pill(r->pill_1, PILL_NEW);
+        } else if (d->hp) {
+            wl_pill(r->pill_1, PILL_HP);
+        } else {
+            wl_pill(r->pill_1, PILL_CAT);
+        }
+        wl_pill(r->pill_2, d->connected ? "connected" : NULL, 0x1f4a24, 0x88ff88);
+        if (d->is_new) {
+            lv_label_set_text(r->note, "press to pair");
+        } else if (!d->connected) {
+            lv_label_set_text(r->note, "not connected");
+        } else {
+            lv_label_set_text(r->note, "");
+        }
+        lv_obj_align(r->note, LV_ALIGN_LEFT_MID, d->connected ? 580 : 430, 0);
+    }
+}
+
+static void bt_refresh();
+
+static void bt_list_done(const char *out, int status, void *user) {
+    if ((intptr_t)user != wl_gen) {
+        return;
+    }
+    bt.listing = false;
+    bt.devs.clear();
+
+    bool hp = false;
+
+    for (auto &line : split(out, '\n')) {
+        auto f = split(line, '\t');
+
+        if (f[0] == "DEV" && f.size() >= 6) {
+            bt.devs.push_back({f[1], f[5], f[2] == "1", f[3] == "hp", f[4] == "1", false});
+        } else if (f[0] == "HP" && f.size() >= 3) {
+            hp = f[1] == "1";
+            int vol = atoi(f[2].c_str());
+
+            if (vol >= 0 && bt.vol_pending < 0 && !bt.vol_busy && !lv_obj_has_state(bt.vol, LV_STATE_EDITED)) {
+                lv_slider_set_value(bt.vol, vol, LV_ANIM_OFF);
+                lv_label_set_text_fmt((lv_obj_t *)lv_obj_get_user_data(bt.vol), "%i %%", vol);
+            }
+        } else if (f[0] == "RX" && f.size() >= 2) {
+            if (f[1] == "yes") {
+                lv_obj_add_state(bt.rx, LV_STATE_CHECKED);
+            } else {
+                lv_obj_clear_state(bt.rx, LV_STATE_CHECKED);
+            }
+        }
+    }
+    for (auto &d : bt.found) {
+        bool paired = false;
+
+        for (auto &p : bt.devs) {
+            paired |= p.mac == d.mac;
+        }
+        if (!paired) {
+            bt.devs.push_back(d);
+        }
+    }
+    bt_set_enabled(bt.rx, hp);
+    bt_set_enabled(bt.vol, hp);
+    bt_set_enabled(bt.mute, hp);
+    bt_update_view();
+}
+
+static void bt_refresh() {
+    if (bt.listing || bt.scanning || bt.busy) {
+        return;
+    }
+    bt.listing = true;
+    btaudio_run("list", bt_list_done, (void *)(intptr_t)wl_gen);
+}
+
+static void bt_action_done(const char *out, int status, void *user) {
+    if ((intptr_t)user != wl_gen) {
+        return;
+    }
+    bt.busy = false;
+    lv_label_set_text(bt.scan_note, "");
+    if (status != 0 && *out) {
+        msg_update_text_fmt("%s", split(out, '\n')[0].c_str());
+    }
+    bt_refresh();
+}
+
+static void bt_action(const std::string &args, const std::string &note) {
+    if (bt.busy || bt.scanning) {
+        return;
+    }
+    bt.busy = true;
+    lv_label_set_text(bt.scan_note, note.c_str());
+    btaudio_run(args.c_str(), bt_action_done, (void *)(intptr_t)wl_gen);
+}
+
+static void bt_scan_done(const char *out, int status, void *user) {
+    if ((intptr_t)user != wl_gen) {
+        return;
+    }
+    bt.scanning = false;
+    bt.found.clear();
+    for (auto &line : split(out, '\n')) {
+        auto f = split(line, '\t');
+
+        if (f[0] == "NEW" && f.size() >= 3) {
+            bt.found.push_back({f[1], f[2], false, true, false, true});
+        }
+    }
+    lv_label_set_text(bt.scan_note, bt.found.empty() ? "no headphones found" : "");
+    bt_refresh();
+}
+
+static void bt_scan_cb(lv_event_t *e) {
+    if (bt.busy || bt.scanning) {
+        return;
+    }
+    bt.scanning = true;
+    lv_label_set_text(bt.scan_note, "scanning 15 s, put the headphones in pairing");
+    btaudio_run("scan", bt_scan_done, (void *)(intptr_t)wl_gen);
+}
+
+static void bt_row_cb(lv_event_t *e) {
+    size_t i = (intptr_t)lv_event_get_user_data(e);
+
+    if (i >= bt.devs.size()) {
+        return;
+    }
+    bt_dev_t    d = bt.devs[i];
+    std::string name = d.name.empty() ? d.mac : d.name;
+
+    if (d.is_new) {
+        bt_action("pair " + d.mac, "pairing " + name + "...");
+        return;
+    }
+
+    std::vector<wl_item_t> items;
+
+    if (d.connected) {
+        items.push_back({"Disconnect", "", [d, name] { bt_action("disconnect " + d.mac, "disconnecting..."); }});
+    } else if (d.hp) {
+        items.push_back({"Connect", "", [d, name] { bt_action("connect " + d.mac, "connecting " + name + "..."); }});
+    }
+    if (d.hp) {
+        items.push_back({"Connect at startup", d.autoconn ? "on" : "off",
+                         [d] { bt_action("autoconnect " + d.mac + (d.autoconn ? " off" : " on"), ""); }});
+    }
+    items.push_back({"Remove", "", [d] { bt_action("remove " + d.mac, "removing..."); }});
+    wl_menu_open(name + " - " + d.mac, items);
+}
+
+static void bt_rx_cb(lv_event_t *e) {
+    bool on = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
+
+    btaudio_run(on ? "rx on" : "rx off", NULL, NULL);
+}
+
+static void bt_vol_send();
+
+static void bt_vol_done(const char *out, int status, void *user) {
+    bt.vol_busy = false;
+    bt_vol_send();
+}
+
+/* One volume command at a time, the last value wins */
+static void bt_vol_send() {
+    if (bt.vol_busy || bt.vol_pending < 0) {
+        return;
+    }
+    std::string args = "volume " + std::to_string(bt.vol_pending);
+
+    bt.vol_pending = -1;
+    bt.vol_busy = true;
+    btaudio_run(args.c_str(), bt_vol_done, NULL);
+}
+
+static void bt_vol_cb(lv_event_t *e) {
+    lv_obj_t *obj = lv_event_get_target(e);
+    int       vol = lv_slider_get_value(obj);
+
+    lv_label_set_text_fmt((lv_obj_t *)lv_obj_get_user_data(obj), "%i %%", vol);
+    bt.vol_pending = vol;
+    bt_vol_send();
+}
+
+static void bt_mute_cb(lv_event_t *e) {
+    btaudio_mute_set(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
+}
+
+static uint8_t make_bt_devices(uint8_t row) {
+    lv_obj_t *obj;
+
+    wl_row_label(row, "Devices");
+    bt.scan_btn = wl_button(row, "Scan headphones", bt_scan_cb);
+    lv_obj_set_width(bt.scan_btn, SMALL_4);
+    lv_obj_set_grid_cell(bt.scan_btn, LV_GRID_ALIGN_START, 1, 4, LV_GRID_ALIGN_CENTER, row, 1);
+    bt.scan_note = wl_note(row);
+    lv_obj_set_grid_cell(bt.scan_note, LV_GRID_ALIGN_START, 5, 2, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_label_set_long_mode(bt.scan_note, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(bt.scan_note, SMALL_2);
+    row++;
+
+    lv_obj_t *list = wl_list(row);
+
+    for (int i = 0; i < BT_ROWS; i++) {
+        wl_row_t *r = &bt.rows[i];
+
+        wl_row_create(r, list, bt_row_cb, i);
+        r->pill_1 = wl_pill_create(r->obj, 300);
+        r->pill_2 = wl_pill_create(r->obj, 430);
+        r->note = wl_label(r->obj, &sony_20, 0x99aabb, 430);
+    }
+    row = make_delimiter(row + 1);
+
+    wl_row_label(row, "RX to headphones");
+    bt.rx = bt_switch_cell(row, 1, false, bt_rx_cb);
+    row++;
+
+    wl_row_label(row, "Headphone volume");
+    obj = lv_obj_create(grid);
+    lv_obj_set_size(obj, SMALL_6, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    bt.vol = slider_with_text(obj, 50, 0, 100, 1, SMALL_4, "%i %%", bt_vol_cb);
+    lv_obj_align(bt.vol, LV_ALIGN_LEFT_MID, 10, 0);
+    row++;
+
+    wl_row_label(row, "Mute speaker");
+    bt.mute = bt_switch_cell(row, 1, btaudio_mute_get(), bt_mute_cb);
+    lv_label_set_text(wl_note(row), "AF 0 while connected");
+    row++;
+
+    bt_set_enabled(bt.rx, false);
+    bt_set_enabled(bt.vol, false);
+    bt_set_enabled(bt.mute, false);
+    return row;
+}
+
+static void wl_timer_cb(lv_timer_t *t) {
+    wifi_update();
+    if (++wl_ticks % 5 == 0) {
+        bt_refresh();
+    }
+}
+
+static void wl_delete_cb(lv_event_t *e) {
+    wl_gen++;
+    lv_timer_del(wl_timer);
+    wl_timer = NULL;
+    wl_menu_back = NULL;
+    wl_menu_close();
+    if (wl_kbd) {
+        wl_kbd = false;
+        textarea_window_close();
+    }
+}
+
 static void grid_create() {
     std::fill_n(row_dsc, 64, 55);
     grid = lv_obj_create(dialog.obj);
@@ -2178,9 +3097,6 @@ static void make_general_page() {
     row = make_delimiter(row);
 
     row = make_charger(row);
-    row = make_delimiter(row);
-
-    row = make_bluetooth(row);
     row = make_delimiter(row);
 
     /* TX calibration */
@@ -2274,6 +3190,36 @@ static void make_audio_page() {
     lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
 }
 
+static void make_wireless_page() {
+    grid_delete();
+    grid_create();
+    uint8_t row = 0;
+
+    bt.listing = false;
+    bt.scanning = false;
+    bt.busy = false;
+    bt.devs.clear();
+
+    row = make_section(row, "WIFI");
+    row = make_wifi(row);
+    row = make_delimiter(row);
+
+    row = make_section(row, "BLUETOOTH");
+    row = make_bluetooth(row);
+    row = make_delimiter(row);
+    row = make_bt_devices(row);
+
+    row_dsc[row] = LV_GRID_TEMPLATE_LAST;
+    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
+
+    lv_obj_add_event_cb(grid, wl_delete_cb, LV_EVENT_DELETE, NULL);
+    wl_ticks = 0;
+    wl_timer = lv_timer_create(wl_timer_cb, 1000, NULL);
+    wifi_update();
+    bt_update_view();
+    bt_refresh();
+}
+
 static void make_voice_page() {
     grid_delete();
     grid_create();
@@ -2306,11 +3252,10 @@ static void make_info_page() {
 
 static void construct_cb(lv_obj_t *parent) {
     dialog.obj = dialog_init(parent);
+    btn_p1.next = &btn_page_2;
+    btn_p2.next = &btn_page;
     make_general_page();
-    for (auto &&btn : btn_page.items) {
-        buttons_mark(btn, false);
-    }
-    buttons_mark(&btn_general, true);
+    mark_tab(&btn_general);
 }
 
 static void destruct_cb() {
