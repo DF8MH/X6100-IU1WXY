@@ -59,6 +59,14 @@ jobs:
         sed -i "s,^X6100_GUI_SITE_METHOD = git,X6100_GUI_SITE_METHOD = local,g" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
         sed -i "s,^X6100_GUI_GIT_SUBMODULES,# X6100_GUI_GIT_SUBMODULES,g" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
 
+    # Web configurator: build the copy vendored in webserver/ instead of
+    # fetching gdyuldin/x6100_webserver from GitHub.
+    - name: Patch webserver mk
+      run: |
+        sed -i "s,^X6100_WEBSERVER_SITE = .*,X6100_WEBSERVER_SITE = ${GITHUB_WORKSPACE}/x6100_gui/webserver,g" AetherX6100Buildroot/br2_external/package/x6100-webserver/x6100_webserver.mk
+        sed -i "s,^X6100_WEBSERVER_SITE_METHOD = git,X6100_WEBSERVER_SITE_METHOD = local,g" AetherX6100Buildroot/br2_external/package/x6100-webserver/x6100_webserver.mk
+        grep "^X6100_WEBSERVER_SITE" AetherX6100Buildroot/br2_external/package/x6100-webserver/x6100_webserver.mk
+
     # JS8 (third-party/js8core) needs Boost headers and single-precision FFTW
     # (buildroot package fftw-single, already built for liquid-dsp). Boost
     # with no libraries selected installs headers only.

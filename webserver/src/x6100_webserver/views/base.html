@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="icon" type="image/vnd.microsoft.icon" href="/static/favicon.ico" />
+
+    <title>{{title}} - X6100 WebServer</title>
+    <link href="/static/css/base.css" rel="stylesheet">
+    <link href="/static/css/siimple-icons.css" rel="stylesheet" />
+
+
+    <script src="/static/js/jquery-3.7.1.min.js" type="text/javascript"></script>
+
+    <script>
+      const mode_map = {
+        0: "LSB",
+        1: "LSB-D",
+        2: "USB",
+        3: "USB-D",
+        4: "CW",
+        5: "CW-R",
+        6: "AM",
+        7: "NFM",
+      };
+    </script>
+  </head>
+  <body>
+    <header>
+      <div class="bar">
+        <a class="brand" href="/">
+          <svg width="30" height="30" viewBox="-40 -40 80 80" aria-hidden="true"><g fill="none" stroke="#ffb020" stroke-width="5" stroke-linecap="round"><path d="M-14 -20 A20 20 0 0 0 -14 8"/><path d="M14 -20 A20 20 0 0 1 14 8"/><path d="M-26 -32 A36 36 0 0 0 -26 20" opacity=".6"/><path d="M26 -32 A36 36 0 0 1 26 20" opacity=".6"/></g><line x1="0" y1="-8" x2="0" y2="30" stroke="#e6edf5" stroke-width="5"/><circle cx="0" cy="-10" r="5" fill="#ffb020"/></svg>
+          % call = callsign()
+          <div>X6100 <small>{{call + ' · ' if call else ''}}configurator</small></div>
+        </a>
+        <nav>
+          % for href, label in [('/', 'General'), ('/bands', 'Bands'), ('/digital_modes', 'Digital modes'), ('/cluster', 'Cluster'), ('/files/', 'Files'), ('/time', 'Time')]:
+          % current = request.path == href or (href != '/' and request.path.startswith(href))
+          <a href="{{href}}"{{!' aria-current="page"' if current else ''}}>{{label}}</a>
+          % end
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      {{!base}}
+    </main>
+
+    <footer>
+      Web configurator · <a href="https://github.com/gdyuldin/x6100_gui">alternative firmware</a> for Xiegu X6100
+    </footer>
+  </body>
+  </html>

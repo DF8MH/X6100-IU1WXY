@@ -1,0 +1,26 @@
+% rebase('base.html', title='Main Page')
+<h2>General</h2>
+<p class="sub">Welcome to X6100 alternative firmware configuration editor.</p>
+<section class="card">
+    <h3><a href="/bands">Bands editor</a></h3>
+    <p>Allows to add/change/remove bands. Active column is to bind band to up/down buttons.</p>
+</section>
+<section class="card">
+    <h3><a href="/digital_modes">Digital modes editor</a></h3>
+    <p>Allows to add/change/remove frequencies for FT8/FT4 and JS8</p>
+</section>
+<section class="card">
+    <h3><a href="/cluster">DX Cluster</a></h3>
+    <p>Telnet DX cluster server used by the Cluster app on the radio.</p>
+</section>
+<section class="card">
+    <h3><a href="/files/">File browser</a></h3>
+    <p>Allows to download files from the DATA partition of the SD card (ADI file, screenshoots, recordings, etc).</p>
+    <p><b>Note:</b> there is a small probability, that <code>params.db</code> might be changed during downloading
+        and downloaded version might be corrupted. This will not affect <code>params.db</code> on the radio.
+        You can check downloaded file with opening it using any SQLite3 tool.</p>
+</section>
+<section class="card">
+    <h3><a href="/time">Time editor</a></h3>
+    <p>Shows the radio clock and sets it manually, by NTP, or its timezone.</p>
+</section>
