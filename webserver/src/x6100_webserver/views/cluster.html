@@ -1,0 +1,51 @@
+% rebase('base.html', title='DX Cluster')
+<h2>DX Cluster</h2>
+<p class="sub">Telnet DX cluster used by the Cluster app (APP → page 4). The radio logs in with its callsign and reconnects on its own after a change.</p>
+
+<form class="card" id="cluster">
+  <h3>Server</h3>
+  <div class="grid">
+    <div><label for="host">Host</label><input id="host" autocomplete="off" required pattern="[A-Za-z0-9.\-]{1,127}" maxlength="127"></div>
+    <div><label for="port">Port</label><input id="port" type="number" min="1" max="65535" required></div>
+  </div>
+  <div class="actions">
+    <button type="submit" class="primary">Save</button>
+    <button type="button" class="ghost" id="default">Default</button>
+    <span class="status" id="status"></span>
+  </div>
+</form>
+
+<script>
+var defaults = {};
+
+var showStatus = function(text, error=false) {
+  const el = $("#status");
+  el.toggleClass("error", error);
+  el.html('<span class="dot"></span>').append(document.createTextNode(text));
+}
+
+$.get('/api/cluster', {}, function(data) {
+  defaults = data;
+  $("#host").val(data.host);
+  $("#port").val(data.port);
+  showStatus(`Current: ${data.host}:${data.port}`);
+});
+
+$("#default").on("click", function() {
+  $("#host").val(defaults.default_host);
+  $("#port").val(defaults.default_port);
+});
+
+$("#cluster").on("submit", function(e) {
+  e.preventDefault();
+  $.ajax({
+    url: "/api/cluster",
+    type: "POST",
+    data: JSON.stringify({host: $("#host").val().trim(), port: Number($("#port").val())}),
+    contentType: "application/json; charset=utf-8",
+    dataType: "json",
+    success: function(r) { showStatus(`Saved: ${r.host}:${r.port}`); },
+    error: function(xhr) { showStatus(xhr.responseJSON ? xhr.responseJSON.msg : "Save failed", true); }
+  });
+});
+</script>

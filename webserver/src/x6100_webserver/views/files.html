@@ -1,8 +1,12 @@
 % rebase('base.html', title='File browser')
-<i class="si-folder"></i> <a href="..">..</a><br/>
+<h2>Files</h2>
+<p class="sub">Download files from the DATA partition of the SD card (ADI log, screenshots, recordings, etc).</p>
+<div class="card files">
+<a href=".."><i class="si-folder"></i> ..</a>
 % for item in dirs:
-<i class="si-folder"></i> <a href="{{item}}/">{{item}}</a><br/>
+<a href="{{item}}/"><i class="si-folder"></i> {{item}}</a>
 % end
 % for item in files:
-<i class="si-file"></i> <a href="{{item}}">{{item}}</a><br/>
+<a href="{{item}}"><i class="si-file"></i> {{item}}</a>
 % end
+</div>

@@ -1,19 +1,24 @@
 % rebase('base.html', title='Digital modes editor')
-<h3>Digital modes</h3>
+<h2>Digital modes</h2>
+<p class="sub">Frequencies offered by the FT8/FT4 and JS8 apps.</p>
 
-<button id="add_mode">Add new</button>
+<div class="card">
+<div class="actions top"><button id="add_mode" class="primary">Add frequency</button></div>
+<div class="table-wrap">
 <table id="digital_modes">
   <thead>
     <tr>
       <th class="name">Label</th>
-      <th class="freq">Freq,<br/>MHz</th>
+      <th class="freq">Freq, MHz</th>
       <th class="">Mode</th>
       <th class="">Type</th>
-      <th style="min-width: 6em;">Actions</tr>
+      <th></th>
     </tr>
   </thead>
   <tbody></tbody>
 </table>
+</div>
+</div>
 
 <template id="row-tpl">
   <tr>
@@ -35,6 +40,8 @@
 const type_map = {
   0: "FT8",
   1: "FT4",
+  2: "JS8",          // src/cfg/digital_modes.h cfg_digital_type_t
+  3: "JS8 GhostNet",
 };
 
 const table_el = $("#digital_modes>tbody")[0];
@@ -59,7 +66,7 @@ var fillRow = function(row) {
 
   let mode_td = row.children("td").get(2);
   const mode_str = mode_map[data.mode];
-  mode_td.textContent = mode_str;
+  mode_td.innerHTML = mode_str ? `<span class="tag">${mode_str}</span>` : "";
 
   let type_td = row.children("td").get(3);
   const type_str = type_map[data.type];

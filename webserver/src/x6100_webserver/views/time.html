@@ -1,48 +1,45 @@
 % rebase('base.html', title='Time Editor')
-<p>Welcome to X6100 alternative firmware configuration editor.</p>
+<h2>Time</h2>
+<p class="sub">Radio clock, timezone and time synchronisation.</p>
 
-<h3>Time Information</h3>
-<table>
-    <thead>
-        <tr>
-            <th>Local Time</th>
-            <th>Server Time</th>
-            <th>Server Timezone</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td>
-                <p id="local-time">Loading Local Time...</p>
-            </td>
-            <td>
-                <p id="server-time">Fetching Server Time...</p>
-            </td>
-            <td colspan="2">
-                <p><span id="server-timezone">Fetching Server Timezone...</span></p>
-            </td>
-        </tr>
-    </tbody>
-</table>
+<div class="card">
+    <h3>Time information</h3>
+    <div class="time-now">
+        <section><label>Local time</label><div id="local-time">Loading Local Time...</div></section>
+        <section><label>Server time</label><div id="server-time">Fetching Server Time...</div></section>
+        <section><label>Server timezone</label><div id="server-timezone">Fetching Server Timezone...</div></section>
+    </div>
+    <div class="actions"><button id="sync-local-time-btn" class="primary">Sync Local Time to Server</button></div>
+</div>
 
-<button id="sync-local-time-btn">Sync Local Time to Server</button>
+<div class="card">
+    <h3>Manually update server time</h3>
+    <label for="manual-time">Input time (format: YYYY-MM-DD HH:MM:SS)</label>
+    <div class="row">
+        <input id="manual-time" type="text" placeholder="Input Time">
+        <button id="manual-update-btn">Manually Update Time</button>
+    </div>
+</div>
 
-<h3>Manually Update Server Time</h3>
-<p>Input Time (Format: YYYY-MM-DD HH:MM:SS):</p>
-<input id="manual-time" type="text" placeholder="Input Time">
-<button id="manual-update-btn">Manually Update Time</button>
+<div class="card">
+    <h3>Update server time by NTP</h3>
+    <label for="ntp-servers">Select or input NTP server</label>
+    <div class="row">
+        <select id="ntp-servers"></select>
+        <input id="custom-ntp" type="text" placeholder="Input Custom NTP Server Address" style="display: none;">
+        <button id="update-time-btn">Update Time</button>
+    </div>
+</div>
 
-<h3>Update Server Time by NTP</h3>
-<p>Select or Input NTP Server:</p>
-<select id="ntp-servers"></select>
-<input id="custom-ntp" type="text" placeholder="Input Custom NTP Server Address" style="display: none;">
-<button id="update-time-btn">Update Time</button>
-
-<h3>Set Server Timezone</h3>
-<p>Select Timezone or Input Custom Timezone:</p>
-<select id="timezone-select"></select>
-<input id="custom-timezone" type="text" placeholder="e.g., Asia/Shanghai" style="display: none;">
-<button id="set-timezone-btn">Set Timezone</button>
+<div class="card">
+    <h3>Set server timezone</h3>
+    <label for="timezone-select">Select timezone or input custom timezone</label>
+    <div class="row">
+        <select id="timezone-select"></select>
+        <input id="custom-timezone" type="text" placeholder="e.g., Asia/Shanghai" style="display: none;">
+        <button id="set-timezone-btn">Set Timezone</button>
+    </div>
+</div>
 
 <script>
     // Some Constants

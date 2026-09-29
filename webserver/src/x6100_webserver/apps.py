@@ -3,6 +3,8 @@ from importlib import resources
 import json
 import os
 import pathlib
+import re
+import sqlite3
 import subprocess
 
 import bottle
@@ -17,6 +19,22 @@ bottle.TEMPLATE_PATH += [
 ]
 
 STATIC_PATH = resources.files('x6100_webserver').joinpath('static')
+
+
+def read_callsign():
+    """Callsign from params.db for the page header, "" when missing."""
+    try:
+        con = sqlite3.connect(f"file:{settings.DB_PATH}?mode=ro", uri=True)
+        try:
+            row = con.execute("SELECT val FROM params WHERE name = 'callsign'").fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return ""
+    return str(row[0]) if row and row[0] else ""
+
+
+bottle.BaseTemplate.defaults.update(callsign=read_callsign, request=bottle.request)
 
 
 # Bands API
@@ -105,6 +123,77 @@ def delete_digital_mode(mode_id, dbcon):
     except ValueError as e:
         bottle.response.status = 400
         return {"status": "error", "msg": str(e)}
+
+# DX cluster routes
+#
+# Same file and format as the radio GUI (src/cluster/client.c): "host=..."
+# and "port=..." lines, defaults when missing. The GUI reloads the server
+# when the file's mtime changes.
+
+CLUSTER_DEFAULT_HOST = "dxc.ve7cc.net"
+CLUSTER_DEFAULT_PORT = 23
+
+
+def read_cluster_conf():
+    host, port = CLUSTER_DEFAULT_HOST, CLUSTER_DEFAULT_PORT
+    try:
+        with open(settings.CLUSTER_CONF, errors="replace") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return host, port
+    for line in lines:
+        if line.startswith("host=") and line[5:]:
+            host = line[5:]
+        elif line.startswith("port="):
+            m = re.match(r"\s*[+-]?\d+", line[5:])  # atoi()
+            if m and 0 < int(m.group()) < 65536:
+                port = int(m.group())
+    return host, port
+
+
+def write_cluster_conf(host, port):
+    tmp = settings.CLUSTER_CONF + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(f"host={host}\nport={port}\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.rename(tmp, settings.CLUSTER_CONF)
+
+
+@app.route('/cluster')
+def cluster():
+    return bottle.template('cluster')
+
+
+@app.get('/api/cluster')
+def get_cluster():
+    host, port = read_cluster_conf()
+    return {"host": host, "port": port,
+            "default_host": CLUSTER_DEFAULT_HOST, "default_port": CLUSTER_DEFAULT_PORT}
+
+
+@app.post('/api/cluster')
+def set_cluster():
+    data = bottle.request.json or {}
+    host = str(data.get("host", "")).strip()
+    # Hosts the GUI accepts (cluster_parse_server): letters, digits, '.', '-'
+    if not re.fullmatch(r"[A-Za-z0-9.-]{1,127}", host):
+        bottle.response.status = 400
+        return {"status": "error", "msg": "Invalid host: use letters, digits, '.' and '-'"}
+    try:
+        port = int(str(data.get("port", "")).strip())
+    except ValueError:
+        port = 0
+    if not 0 < port < 65536:
+        bottle.response.status = 400
+        return {"status": "error", "msg": "Invalid port: 1-65535"}
+    try:
+        write_cluster_conf(host, port)
+    except OSError as e:
+        bottle.response.status = 500
+        return {"status": "error", "msg": f"Can't save: {e}"}
+    return {"status": "OK", "host": host, "port": port}
+
 
 # Main routes
 

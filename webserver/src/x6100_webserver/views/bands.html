@@ -1,20 +1,25 @@
 % rebase('base.html', title='Bands editor')
-<h3>Bands editor</h3>
+<h2>Bands</h2>
+<p class="sub">Band edges and default modes shown on the radio. Active bands are reached with the band up/down buttons.</p>
 
-<button id="add_band">Add new band</button>
+<div class="card">
+<div class="actions top"><button id="add_band" class="primary">Add band</button></div>
+<div class="table-wrap">
 <table id="bands">
   <thead>
     <tr>
       <th class="name hdr">Name</th>
-      <th class="freq hdr">Start,<br/>MHz</th>
-      <th class="freq hdr">Stop,<br/>MHz</th>
+      <th class="freq hdr">Start, MHz</th>
+      <th class="freq hdr">Stop, MHz</th>
       <th class="hdr">Mode</th>
       <th class="hdr">Active</th>
-      <th style="min-width: 6em;">Actions</tr>
+      <th></th>
     </tr>
   </thead>
   <tbody></tbody>
 </table>
+</div>
+</div>
 
 <template id="row-tpl">
   <tr>
@@ -57,7 +62,7 @@ var fillRow = function(row) {
 
   let mode_td = row.children("td").get(3);
   const mode_str = mode_map[data.params.vfoa_mode];
-  mode_td.textContent = mode_str;
+  mode_td.innerHTML = mode_str ? `<span class="tag">${mode_str}</span>` : "";
 
   let active_td = row.children("td").get(4);
   active_td.innerHTML = data.type ? '<i class="si-check-square"></i>': '<i class="si-square"></i>';
