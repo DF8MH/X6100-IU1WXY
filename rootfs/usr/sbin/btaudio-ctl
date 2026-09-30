@@ -94,7 +94,16 @@ apply_rx() {
 	fi
 }
 
-sync_audio() { force_a2dp; apply_rx; }
+# Headphones put in their case often drop the link without saying so: the
+# link is then declared lost after the supervision timeout (20 s by default).
+# 2 s (3200 slots of 0.625 ms) brings the speaker back quickly.
+short_lst() {
+	for m in $(hcitool con 2>/dev/null | awk '/ACL/ {print $3}'); do
+		hcitool lst "$m" 3200 >/dev/null 2>&1
+	done
+}
+
+sync_audio() { force_a2dp; short_lst; apply_rx; }
 
 list() {
 	for mac in $(devices); do
