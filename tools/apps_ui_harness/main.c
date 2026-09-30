@@ -456,6 +456,43 @@ static void wireless_demo(void) {
     pump(200);
 }
 
+/* Settings: walk the focus through every control of each tab, report the ones
+ * that end up outside the visible area, shot each time the scroll moves. */
+static void settings_nav(void) {
+    static const char *tabs[] = { "", "general", "display", "audio", "wireless" };
+    char p[64];
+    params.wifi_enabled.x = true;
+    dialog_construct(dialog_settings, lv_scr_act());
+    pump(500);
+    for (int t = 1; t <= 4; t++) {
+        buttons_page_t *pg = buttons_get_cur_page();
+        pg->items[t]->press(pg->items[t]);
+        pump(500);
+        lv_obj_t *first = lv_group_get_focused(keyboard_group);
+        int last_scroll = -1, n_shot = 0, n = 0;
+        do {
+            lv_obj_t *f = lv_group_get_focused(keyboard_group);
+            lv_area_t a;
+            lv_obj_get_coords(f, &a);
+            int scroll = 0;
+            for (lv_obj_t *o = f; o; o = lv_obj_get_parent(o)) scroll += lv_obj_get_scroll_y(o);
+            printf("[nav] %s #%d y=%d..%d x=%d..%d%s\n", tabs[t], n, a.y1, a.y2, a.x1, a.x2,
+                   (a.y1 < 130 || a.y2 > 420 || a.x1 < 0 || a.x2 > 800) ? "  OUTSIDE" : "");
+            if (scroll != last_scroll) {
+                snprintf(p, sizeof p, "settings_b_%s_%d.ppm", tabs[t], ++n_shot);
+                shot(p);
+                last_scroll = scroll;
+            }
+            lv_group_focus_next(keyboard_group);
+            pump(400);
+            n++;
+        } while (lv_group_get_focused(keyboard_group) != first && n < 80);
+        printf("[nav] %s: %d controls\n", tabs[t], n);
+    }
+    dialog_destruct();
+    pump(200);
+}
+
 static void crash(int sig) {
     void *bt[32];
     int n = backtrace(bt, 32);
@@ -556,6 +593,7 @@ int main(int argc, char **argv) {
     }
     if (!only || !strcmp(only, "settings")) settings_demo();
     if (!only || !strcmp(only, "wireless")) wireless_demo();
+    if (only && !strcmp(only, "settings_nav")) settings_nav();
     if (!only || !strcmp(only, "bookmarks")) {
         bookmarks("navtex", dialog_navtex, 517000);
         bookmarks("wefax", dialog_wefax, 7878500);

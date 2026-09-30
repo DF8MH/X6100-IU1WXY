@@ -106,3 +106,5 @@ int __wrap_connect(int fd, const struct sockaddr *addr, socklen_t len) {
     errno = ECONNREFUSED;
     return -1;
 }
+/* BASE rev 12: Settings shows every option (struct of 4 bytes, rev last) */
+uint32_t x6100_control_get_base_ver(void) { return 12u << 24; }
