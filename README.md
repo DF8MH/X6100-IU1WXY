@@ -289,7 +289,8 @@ edits the radio's settings from a browser. Pages:
 | Files | browse `/mnt` |
 | Time | local and server time, NTP sync, timezone |
 
-It listens on port 8080 by default (`--host`, `--port`, `--db`,
+On the radio it listens on port 80: open `http://<radio IP>/` (options:
+`--host`, `--port`, `--db`,
 `--cluster-conf`, `--filebrowser-path`); see
 [webserver/README.md](webserver/README.md).
 
