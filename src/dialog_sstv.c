@@ -84,7 +84,7 @@ static lv_obj_t *status_label = NULL;
 static lv_obj_t *progress_bar = NULL;
 static volatile bool saved_overlay_pending = false;
 static char saved_overlay_name[96];
-static lv_color_t sstv_buffer[SSTV_CANVAS_W * SSTV_CANVAS_H];
+static lv_color_t sstv_buffer[((DIALOG_H_MAX - 20) * 4 / 3) * (DIALOG_H_MAX - 20)];
 static uint8_t test_rgb[SSTV_MAX_W * SSTV_MAX_H * 3];
 static sstv_info_t test_info;
 static lv_timer_t *ui_timer = NULL;

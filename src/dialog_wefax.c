@@ -30,6 +30,7 @@
  */
 #define PREVIEW_WIDTH       750
 #define PREVIEW_HEIGHT      (DIALOG_H - 30)
+#define PREVIEW_HEIGHT_MAX  (DIALOG_H_MAX - 30)   /* static buffers */
 
 /*
  * LVGL refresh period.
@@ -188,7 +189,7 @@ static bool tilt_mfk_active = false;
  * Original (unaligned) source rows corresponding to the LCD rows
  * currently visible.  275 * 1809 = ~486 KiB.
  */
-static uint8_t preview_source_rows[PREVIEW_HEIGHT][WEFAX_WIDTH];
+static uint8_t preview_source_rows[PREVIEW_HEIGHT_MAX][WEFAX_WIDTH];
 static unsigned int preview_source_count = 0;
 static unsigned int preview_source_head = 0;
 
@@ -253,7 +254,7 @@ static bool test_running = false;
  * Canvas framebuffer.
  */
 static lv_color_t preview_buffer[
-    PREVIEW_WIDTH * PREVIEW_HEIGHT
+    PREVIEW_WIDTH * PREVIEW_HEIGHT_MAX
 ];
 
 
