@@ -13,6 +13,9 @@
 #include "msg.h"
 
 #include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 #include <pthread.h>
 #include <sys/stat.h>
@@ -177,4 +180,36 @@ static time_t get_last_sync_time() {
         return attr.st_atime;
     }
     return 0;
+}
+
+/* Time zone: POSIX TZ string kept in /mnt/tz.conf, the system clock stays UTC */
+
+#define TZ_FILE "/mnt/tz.conf"
+
+void clock_tz_init() {
+    char  line[64] = "UTC0";
+    FILE *f = fopen(TZ_FILE, "r");
+
+    if (f) {
+        if (fgets(line, sizeof(line), f)) {
+            line[strcspn(line, "\r\n")] = 0;
+        }
+        fclose(f);
+    }
+    setenv("TZ", line[0] ? line : "UTC0", 1);
+    tzset();
+}
+
+void clock_tz_set(const char *posix) {
+    FILE *f = fopen(TZ_FILE, "w");
+
+    if (f) {
+        fprintf(f, "%s\n", posix);
+        fclose(f);
+    }
+    setenv("TZ", posix, 1);
+    tzset();
+    if (time_label) {
+        show_time();
+    }
 }

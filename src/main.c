@@ -30,6 +30,7 @@
 #include "panel.h"
 #include "cat.h"
 #include "wfview_server.h"
+#include "clock.h"
 #include "rtty.h"
 #include "backlight.h"
 #include "events.h"
@@ -56,6 +57,7 @@ static lv_disp_drv_t        disp_drv;
 void * tick_thread (void *args);
 
 int main(void) {
+    clock_tz_init();
     lv_init();
     // lv_png_init();
 

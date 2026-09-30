@@ -1,0 +1,96 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  body { margin:0; background:#000; font-family:"Segoe UI",sans-serif; color:#fff; }
+  .scr { width:800px; height:480px; background:#27313a; position:relative; overflow:hidden; margin-bottom:8px; }
+  .strip { position:absolute; left:2px; top:76px; width:794px; height:48px; border:1px solid #4a5a66; border-radius:8px;
+           background:linear-gradient(#1d2a34,#12202a); display:flex; align-items:center; font-size:22px; }
+  .strip .band { color:#90f0d0; margin-left:14px; width:260px; }
+  .strip .f { font-size:28px; letter-spacing:1px; } .strip .m { color:#ff6666; margin-left:12px; }
+  .strip .q { margin-left:auto; margin-right:14px; } .strip .q::before { content:"●"; color:#6f6; margin-right:4px; font-size:16px; }
+  .panel { position:absolute; left:2px; top:128px; width:794px; height:294px; border:1px solid #6b7b86; border-radius:8px;
+           background:linear-gradient(#56656f,#44535d); overflow:hidden; }
+  .card { position:absolute; border:1px solid #6d7d88; border-radius:8px; background:rgba(70,85,95,.85); }
+  .title { height:40px; border-bottom:1px solid #6d7d88; display:flex; align-items:center; padding-left:14px;
+           color:#90f0d0; font-size:14px; letter-spacing:2px; }
+  .title i { color:#ffd23c; font-style:normal; margin-right:10px; font-size:18px; }
+  .row { position:absolute; left:26px; font-size:19px; }
+  .box { position:absolute; border:2px solid #d8dde0; border-radius:10px; height:44px; display:flex; align-items:center;
+         justify-content:center; font-size:19px; }
+  .box.sel { background:#aab4ba; color:#111; border-color:#fff; }
+  .dd::after { content:"▾"; position:absolute; right:14px; color:#ddd; }
+  .sw { position:absolute; width:150px; height:30px; border-radius:15px; background:#2196f3; }
+  .sw::after { content:""; position:absolute; right:3px; top:3px; width:24px; height:24px; border-radius:12px; background:#fff; }
+  .swbox { position:absolute; border:2px solid #d8dde0; border-radius:10px; width:176px; height:52px; }
+  .dim { color:#b8c2c8; }
+  .tag { background:#1f4f2c; color:#8f8; border-radius:9px; padding:1px 8px; font-size:13px; margin-right:8px; }
+  .btns { position:absolute; left:0; top:426px; width:800px; height:54px; display:flex; gap:3px; padding:0 2px; box-sizing:border-box; }
+  .btns div { flex:1; border:1px solid #4a5a66; border-radius:8px; background:#0e1820; display:flex; align-items:center;
+              justify-content:center; font-size:21px; }
+  .btns div.first { font-size:17px; text-align:center; line-height:18px; }
+  .btns div.on { background:#2c2410; border:2px solid #ffd23c; }
+  .cap { color:#ffd23c; font-size:14px; padding:6px 10px; background:#000; }
+  .new { outline:2px dashed #ffd23c; outline-offset:2px; }
+</style></head><body>
+
+<div class="cap">1 — Settings › General › Date / Time: new "Zone" row (dropdown, POSIX TZ applied to the clock)</div>
+<div class="scr">
+  <div class="strip"><span class="band">20m</span><span class="f">14.074.000</span><span class="m">USB-D</span><span class="q">JN35ta</span></div>
+  <div class="panel">
+    <div class="card" style="left:14px;top:22px;width:378px;height:164px">
+      <div class="title"><i>⌂</i>STATION</div>
+      <div class="row" style="top:62px">Callsign</div><div class="box sel" style="left:216px;top:50px;width:146px">IU1WXY</div>
+      <div class="row" style="top:122px">QTH locator</div><div class="box" style="left:216px;top:110px;width:146px">JN35</div>
+    </div>
+    <div class="card" style="left:402px;top:22px;width:378px;height:224px">
+      <div class="title"><i>🔔</i>DATE / TIME</div>
+      <div class="row" style="top:62px">Date</div>
+      <div class="box" style="left:100px;top:50px;width:72px">30</div><div class="box" style="left:182px;top:50px;width:72px">09</div><div class="box" style="left:264px;top:50px;width:96px">2026</div>
+      <div class="row" style="top:122px">Time</div>
+      <div class="box" style="left:100px;top:110px;width:72px">17</div><div class="box" style="left:182px;top:110px;width:72px">15</div><div class="box" style="left:264px;top:110px;width:72px">35</div>
+      <div class="row" style="top:182px">Zone</div>
+      <div class="box dd new" style="left:100px;top:170px;width:260px">Europe/Rome (CET)</div>
+    </div>
+    <div class="card" style="left:14px;top:196px;width:378px;height:120px">
+      <div class="title"><i>☰</i>CONTROLS</div>
+    </div>
+  </div>
+  <div class="btns"><div class="first">SETTINGS<br>1:2</div><div class="on">General</div><div>Display</div><div>Audio</div><div>Wireless</div></div>
+</div>
+
+<div class="cap">1b — Zone list (opens over the card, MFK/knob scrolls, press to pick)</div>
+<div class="scr">
+  <div class="strip"><span class="band">20m</span><span class="f">14.074.000</span><span class="m">USB-D</span><span class="q">JN35ta</span></div>
+  <div class="panel">
+    <div class="card" style="left:402px;top:22px;width:378px;height:268px">
+      <div class="title"><i>🔔</i>TIME ZONE</div>
+      <div style="position:absolute;left:14px;top:50px;width:350px;font-size:19px;line-height:36px">
+        <div class="dim">UTC</div>
+        <div class="dim">Europe/London (GMT/BST)</div>
+        <div style="background:#2196f3;border-radius:6px;padding-left:8px">Europe/Rome (CET/CEST)</div>
+        <div class="dim">Europe/Athens (EET/EEST)</div>
+        <div class="dim">Europe/Moscow (MSK)</div>
+        <div class="dim">America/New_York (EST/EDT)</div>
+      </div>
+    </div>
+  </div>
+  <div class="btns"><div class="first">SETTINGS<br>1:2</div><div class="on">General</div><div>Display</div><div>Audio</div><div>Wireless</div></div>
+</div>
+
+<div class="cap">2 — Settings › Wireless: new "WFVIEW SERVER" card (below WiFi / Bluetooth)</div>
+<div class="scr">
+  <div class="strip"><span class="band">20m</span><span class="f">14.074.000</span><span class="m">USB-D</span><span class="q">JN35ta</span></div>
+  <div class="panel">
+    <div class="card new" style="left:14px;top:22px;width:766px;height:300px">
+      <div class="title"><i>⇄</i>WFVIEW SERVER</div>
+      <div class="row" style="top:60px">Server</div>
+      <div class="swbox" style="left:572px;top:48px"><div class="sw" style="left:11px;top:9px"></div></div>
+      <div class="row" style="top:120px">User</div><div class="box" style="left:404px;top:110px;width:344px">x6100</div>
+      <div class="row" style="top:180px">Password</div><div class="box" style="left:404px;top:170px;width:344px">••••••</div>
+      <div class="row dim" style="top:236px">Port / Status</div>
+      <div class="row" style="top:236px;left:404px"><span class="dim">UDP 50001</span> &nbsp; <span class="tag">connected</span>DESKTOP-wfview</div>
+    </div>
+  </div>
+  <div class="btns"><div class="first">SETTINGS<br>1:2</div><div>General</div><div>Display</div><div>Audio</div><div class="on">Wireless</div></div>
+</div>
+</body></html>

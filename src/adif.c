@@ -167,7 +167,7 @@ int adif_read(const char * path, qso_log_record_t ** records) {
             s += pmatch[0].rm_eo;
         }
 
-        cur_record->time = mktime(&qso_ts);
+        cur_record->time = timegm(&qso_ts);
         cur_record->mode = create_mode(mode, submode);
         if (mode) free(mode);
         if (submode) free(submode);

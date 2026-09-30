@@ -1008,7 +1008,7 @@ static void on_tick_cb(const slot_info_t *info, bool new_slot,
         if (!have_tx_msg || !subject_i_get(tx_enabled)) {
             struct timespec now;
             clock_gettime(CLOCK_REALTIME, &now);
-            struct tm *ts = localtime(&now.tv_sec);
+            struct tm *ts = gmtime(&now.tv_sec);
             add_info("RX %s %02i:%02i:%02i", cfg_digital_label_get(),
                      ts->tm_hour, ts->tm_min, ts->tm_sec);
         }

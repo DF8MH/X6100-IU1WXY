@@ -21,6 +21,9 @@ typedef enum {
 lv_obj_t * clock_init(lv_obj_t * parent);
 void clock_update_power(float ext, float bat, uint8_t cap, bool charge);
 
+void clock_tz_init();
+void clock_tz_set(const char *posix);
+
 void clock_set_view(clock_view_t x);
 void clock_set_time_timeout(uint8_t sec);
 void clock_set_power_timeout(uint8_t sec);
