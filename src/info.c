@@ -272,7 +272,7 @@ static void status_update(void *arg) {
 
     set_icon(INFO_BT, st->bt, COLOR_ICON_BT);
     set_icon(INFO_HEADPHONES, st->headphones, COLOR_ICON_BT);
-    set_icon(INFO_CAT, st->cat, 0xFFFFFF);
+    set_icon(INFO_CAT, st->cat, 0xFFB030);   /* amber: stands out from white text */
     set_icon(INFO_GPS, st->gps, COLOR_LIGHT_GREEN);
     set_icon(INFO_CLUSTER, st->cluster, COLOR_LIGHT_GREEN);
 }
