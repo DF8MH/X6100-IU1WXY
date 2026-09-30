@@ -3378,7 +3378,8 @@ static void make_info_page() {
 
     label = lv_label_create(page);
     lv_obj_set_style_text_line_space(label, 20, LV_PART_MAIN);
-    lv_label_set_text_fmt(label, "App version: %s\nBASE version: %s", VERSION, x6100_control_get_fw_version_str());
+    lv_label_set_text_fmt(label, "%s\ninfo@x6100-link.it\nBased on R1CBU + gdyuldin builds\nBaseband version: %s",
+                          VERSION, x6100_control_get_fw_version_str());
 }
 
 static void construct_cb(lv_obj_t *parent) {
