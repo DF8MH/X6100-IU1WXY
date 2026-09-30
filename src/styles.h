@@ -44,11 +44,16 @@ extern "C" {
 #define FREQ_STRIP_H    50
 
 /* Bottom buttons (buttons.h BTN_HEIGHT) */
-#define BUTTONS_H       54
+/* Set at boot by fonts_apply(): taller with DejaVu (two-line labels) */
+#define BUTTONS_H_MIN   54
+#define BUTTONS_H_MAX   62
+extern int buttons_h;
+#define BUTTONS_H       buttons_h
 
 /* App dialogs: from under the frequency strip down to the buttons */
 #define DIALOG_Y        (FREQ_STRIP_Y + FREQ_STRIP_H + TOP_BAR_MARGIN)
 #define DIALOG_H        (480 - BUTTONS_H - TOP_BAR_MARGIN - DIALOG_Y)
+#define DIALOG_H_MAX    (480 - BUTTONS_H_MIN - TOP_BAR_MARGIN - DIALOG_Y)   /* for static buffers */
 
 // Pallete
 

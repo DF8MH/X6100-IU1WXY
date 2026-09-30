@@ -23,9 +23,12 @@ static const lv_font_t *const dejavu[] = { SIZES(DEJAVU) };
 static lv_font_t orig[N_FONTS];
 static bool applied;
 
+int buttons_h = 54;  /* = BUTTONS_H_MIN */
+
 void fonts_apply(uint8_t choice) {
     if (applied || (choice != FONT_ROBOTO && choice != FONT_DEJAVU)) return;
     applied = true;
+    if (choice == FONT_DEJAVU) buttons_h = 62;
     const lv_font_t *const *alt = choice == FONT_ROBOTO ? roboto : dejavu;
 
     for (unsigned i = 0; i < N_FONTS; i++) {

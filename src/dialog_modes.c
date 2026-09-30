@@ -47,8 +47,8 @@ static const struct {
 
 #define MODES_N ((int)(sizeof(modes) / sizeof(modes[0])))
 
-/* 80 + 333 = 413: stays clear of the buttons (480 - BUTTONS_H = 426). */
-_Static_assert(BOX_Y + BOX_H <= 480 - BUTTONS_H - 8, "Modes menu overlaps the buttons");
+/* 80 + 333 = 413: stays clear of the buttons (480 - BUTTONS_H_MAX = 418). */
+_Static_assert(BOX_Y + BOX_H <= 480 - BUTTONS_H_MAX, "Modes menu overlaps the buttons");
 
 static lv_obj_t *rows[MODES_N];
 static int       sel;
