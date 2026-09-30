@@ -125,17 +125,7 @@ void waterfall_data(float *data_buf, uint16_t size, bool tx, uint32_t base_freq,
     scroll_down();
 
     float min, max;
-    if (tx) {
-        min = DEFAULT_MIN;
-        max = DEFAULT_MAX;
-    } else {
-        /* Reference level: shifts the whole colour scale, + is brighter */
-        min = grid_min - param_i_get(cfg_waterfall_ref);
-        max = grid_max - param_i_get(cfg_waterfall_ref);
-        if (max < min + 10.0f) {
-            max = min + 10.0f;
-        }
-    }
+    waterfall_get_levels(tx, &min, &max);
     if (base_freq == 0) {
         base_freq = radio_center_freq + mode_lo_offset;
     } else if (tx) {
@@ -233,6 +223,20 @@ void waterfall_min_max_reset() {
 void waterfall_update_max(float db) {
     if (param_i_get(cfg_auto_level_enabled)) {
         grid_max = db - param_f_get(cfg_auto_level_offset);
+    }
+}
+
+void waterfall_get_levels(bool tx, float *min, float *max) {
+    if (tx) {
+        *min = DEFAULT_MIN;
+        *max = DEFAULT_MAX;
+    } else {
+        /* Reference level: shifts the whole colour scale, + is brighter */
+        *min = grid_min - param_i_get(cfg_waterfall_ref);
+        *max = grid_max - param_i_get(cfg_waterfall_ref);
+        if (*max < *min + 10.0f) {
+            *max = *min + 10.0f;
+        }
     }
 }
 

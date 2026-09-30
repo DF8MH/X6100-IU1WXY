@@ -29,6 +29,7 @@
 #include "cw.h"
 #include "panel.h"
 #include "cat.h"
+#include "wfview_server.h"
 #include "rtty.h"
 #include "backlight.h"
 #include "events.h"
@@ -119,6 +120,7 @@ int main(void) {
     btaudio_init();
     backlight_init();
     cat_init();
+    wfview_server_init();
     gps_init();
     if (!qso_log_init()) {
         LV_LOG_ERROR("Can't init QSO log");

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 #include <unistd.h>
 #include <stdint.h>
 
@@ -20,5 +22,8 @@ void waterfall_min_max_reset();
 
 void waterfall_update_max(float db);
 void waterfall_update_min(float db);
+
+/* Colour scale limits (dB) used for the waterfall rows */
+void waterfall_get_levels(bool tx, float *min, float *max);
 void waterfall_refresh_reset();
 void waterfall_refresh_period_set(uint8_t k);

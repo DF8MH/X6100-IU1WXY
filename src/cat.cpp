@@ -15,6 +15,7 @@
 #include "cfg/settings_manager.h"
 #include "common/queue.h"
 
+#include <atomic>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -221,6 +222,9 @@ uint64_t from_bcd_be(const uint8_t bcd_data[], uint8_t len) {
 #define FRAME_ADD_LEN 5 /* Header and end len */
 
 static TSQueue<std::vector<char>> send_queue;
+
+static std::atomic<bool> scope_out{false};  /* 0x27 0x11: scope wave data output (network only) */
+static thread_local bool net_req;            /* request came from a network (wfview) client */
 
 static void send_waterfall_data();
 
@@ -720,7 +724,13 @@ static Frame *process_req(const Frame *req) {
                             // 41 - S9
                             // 14 - S3
                             int16_t db = meter_get_raw_db();
-                            val = db * 0.75f + 96;
+                            if (net_req) {
+                                // Icom scale (wfview): 0 = S0, 120 = S9, 241 = S9+60
+                                float v = db < S9 ? (db - (S1 - 6)) * 120.0f / 54.0f : 120.0f + (db - S9) * 121.0f / 60.0f;
+                                val = LV_CLAMP(0.0f, v, 255.0f);
+                            } else {
+                                val = db * 0.75f + 96;
+                            }
                             // Wfview:
                             // val = 14;
                             // if (db < S9) {
@@ -974,8 +984,9 @@ static Frame *process_req(const Frame *req) {
                     case 0x11:  // Send/read the Scope wave data output*4
                         if (data_size == 1) {
                             resp->set_payload_len(3);
-                            resp->data[1] = 1;
+                            resp->data[1] = scope_out;
                         } else {
+                            scope_out = req->data[1] != 0;
                             resp->set_payload_len(2);
                         }
                         break;
@@ -992,13 +1003,19 @@ static Frame *process_req(const Frame *req) {
                             resp->set_payload_len(2);
                         }
                         break;
-                    case 0x15:  // Scope span settings
-                        if (req->data[2] == FRAME_END) {
-                            // Span +- 50kHz
+                    case 0x15:  // Scope span settings: half span, follows the radio zoom
+                        if (data_size <= 2) {
                             resp->set_payload_len(8);
-                            to_bcd(&resp->data[1] + 1, 50000, 10);
+                            to_bcd(&resp->data[1] + 1, 50000 / cfg_sm.p_mode_zoom.get(), 10);
+                        } else if (data_size >= 7) {
+                            int32_t span = from_bcd(&req->data[2], 10);
+                            int32_t zoom = 1;
+                            while (zoom < 8 && 50000 / (zoom * 2) >= span)
+                                zoom *= 2;
+                            cfg_sm.p_mode_zoom.set(zoom);
+                            resp->set_code(CODE_OK);
                         } else {
-                            resp->set_payload_len(2);
+                            resp->set_code(CODE_NG);
                         }
                         break;
                     case 0x17:  // Scope hold function
@@ -1075,6 +1092,74 @@ static uint8_t counter = 0;
 //     free(data);
 // }
 
+static std::mutex req_mutex;
+static void (*net_sink)(const uint8_t *data, size_t len);
+
+static Frame *process_req_locked(const Frame *req) {
+    std::lock_guard<std::mutex> lock(req_mutex);
+    return process_req(req);
+}
+
+size_t cat_process_frame(const uint8_t *req, size_t len, uint8_t *resp, size_t resp_max) {
+    if (len < FRAME_ADD_LEN + 1 || req[0] != FRAME_PRE || req[1] != FRAME_PRE || req[len - 1] != FRAME_END)
+        return 0;
+    Frame  frame((const char *)req, len);
+    net_req     = true;
+    Frame *r    = process_req_locked(&frame);
+    auto   data = r->dump();
+    delete r;
+    if (data.size() > resp_max)
+        return 0;
+    memcpy(resp, data.data(), data.size());
+    return data.size();
+}
+
+void cat_set_net_sink(void (*sink)(const uint8_t *data, size_t len)) {
+    net_sink = sink;
+}
+
+#define SCOPE_NBINS 475
+
+void cat_scope_data(const float *psd_db, size_t n, uint32_t center_hz, uint32_t width_hz, bool tx) {
+    static uint64_t last_ms;
+
+    if (!scope_out || !net_sink)
+        return;
+    /* ~30 frames/s */
+    uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (now - last_ms < 33)
+        return;
+    last_ms = now;
+
+    /* Max-pool to 475 bins, 0..200 over the radio waterfall levels */
+    float bins[SCOPE_NBINS];
+    for (size_t i = 0; i < SCOPE_NBINS; i++) {
+        size_t from = i * n / SCOPE_NBINS, to = LV_MAX((i + 1) * n / SCOPE_NBINS, from + 1);
+        bins[i] = psd_db[from];
+        for (size_t j = from + 1; j < to; j++)
+            bins[i] = LV_MAX(bins[i], psd_db[j]);
+    }
+    float min, max;
+    waterfall_get_levels(tx, &min, &max);
+
+    Frame frame{0, LOCAL_ADDRESS, C_CTL_SCP};
+    frame.set_payload_len(1 + 5 + 5 + 5 + 1 + SCOPE_NBINS);
+    uint8_t *d = frame.data.data();
+    d[0] = 0x00;    /* wave data */
+    d[1] = 0x00;    /* main scope */
+    d[2] = 0x01;    /* division 1 of 1 (LAN) */
+    d[3] = 0x01;
+    d[4] = 0x00;    /* center mode */
+    to_bcd(d + 5, center_hz, 10);
+    to_bcd(d + 10, width_hz / 2, 10);
+    d[15] = 0x00;   /* in range */
+    for (size_t i = 0; i < SCOPE_NBINS; i++)
+        d[16 + i] = LV_CLAMP(0.0f, (bins[i] - min) * 200.0f / (max - min), 200.0f);
+    auto data = frame.dump();
+    net_sink((const uint8_t *)data.data(), data.size());
+}
+
 static void cat_thread() {
     while (true) {
         bool sleep = true;
@@ -1083,7 +1168,7 @@ static void cat_thread() {
         if (req) {
             sleep = false;
             conn->send(req);
-            auto resp = process_req(req);
+            auto resp = process_req_locked(req);
             // resp->log("resp");
             conn->send(resp);
         }
@@ -1141,5 +1226,8 @@ static void on_fg_freq_change(Subject *s, void *user_data) {
     // bcd len - 5 bytes
     frame.set_payload_len(6);
     to_bcd(frame.data.data(), new_freq, 10);
-    send_queue.push(frame.dump());
+    auto data = frame.dump();
+    if (net_sink)
+        net_sink((const uint8_t *)data.data(), data.size());
+    send_queue.push(data);
 }
