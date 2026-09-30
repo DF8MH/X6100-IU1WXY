@@ -250,7 +250,7 @@ static void wifi_state_change_cb(void *s, lv_msg_t *m) {
     lv_color_t color;
     switch (wifi_get_status()) {
     case WIFI_CONNECTED:
-        color = lv_color_white();
+        color = lv_color_hex(COLOR_LIGHT_GREEN);
         break;
     case WIFI_OFF:
         color = lv_color_black();
