@@ -2829,12 +2829,13 @@ static void grid_create() {
     std::fill_n(row_dsc, 64, 55);
     grid = lv_obj_create(dialog.obj);
     lv_obj_set_layout(grid, LV_LAYOUT_GRID);
-    lv_obj_set_size(grid, 780, 330);
+    lv_obj_set_size(grid, 780, DIALOG_H - 8);
     lv_obj_set_style_text_color(grid, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(grid, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_column(grid, SMALL_PAD, 0);
     lv_obj_set_style_pad_row(grid, 5, 0);
+    lv_obj_set_style_pad_bottom(grid, 40, 0);   /* room under the last row */
 
     lv_obj_center(grid);
 }
