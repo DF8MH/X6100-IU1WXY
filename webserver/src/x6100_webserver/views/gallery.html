@@ -1,6 +1,6 @@
 % rebase('base.html', title='Gallery')
 <h2>Gallery</h2>
-<p class="sub">Screen recordings (AVI), voice recordings and screenshots stored on the radio. Screen recordings can be converted to MP4 in this browser or on the radio.</p>
+<p class="sub">Screen recordings (AVI), RX audio recordings and screenshots stored on the radio. Screen recordings can be converted to MP4 in this browser or on the radio.</p>
 <div class="card" id="httpsnote" hidden><span class="meta">In-browser conversion needs a secure page. Open <a id="httpslink" href="#">the HTTPS version of this page</a>: the radio uses a self-signed certificate, so the browser shows a warning once. Accept it (Advanced, then Proceed) and the option appears. Converting on the radio works on both.</span></div>
 
 <div class="card" id="empty" hidden>No recordings or screenshots yet.</div>
@@ -9,7 +9,7 @@
 
 <script src="/static/js/mp4-muxer.js"></script>
 <script>
-const KIND_LABEL = {screenrec: "Screen recording", rec: "Voice recording", shots: "Screenshot"};
+const KIND_LABEL = {screenrec: "Screen recording", rec: "RX recording", shots: "Screenshot"};
 
 const showStatus = function(text, error=false) {
   const el = $("#status_gallery");

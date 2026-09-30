@@ -708,7 +708,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_obj_t *head = label(dialog.obj, &sony_20, COLOR_HEAD);
     lv_label_set_recolor(head, true);
-    lv_label_set_text_fmt(head, "VOICE KEYER - #ffffff %s#", info_params_mode_label_get());
+    lv_label_set_text_fmt(head, "VOICE KEYER (TX) - #ffffff %s#", info_params_mode_label_get());
     lv_obj_set_pos(head, 16, 10);
     head_right = label(dialog.obj, &sony_20, COLOR_HEAD);
     lv_obj_set_width(head_right, 250);

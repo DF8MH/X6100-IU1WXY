@@ -59,11 +59,11 @@ void recorder_set_on(bool x) {
             msg_update_text_fmt("Problem with create file");
             return;
         } else {
-            msg_update_text_fmt("Recorder is on");
+            msg_update_text_fmt("RX recorder is on");
         }
         on = true;
     } else {
-        msg_update_text_fmt("Recorder is off");
+        msg_update_text_fmt("RX recorder is off");
         on = false;
         sf_close(file);
     }

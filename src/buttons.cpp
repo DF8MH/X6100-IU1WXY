@@ -321,7 +321,7 @@ static button_data_t btn_nr_level = make_encoder_btn(nr_level_label_getter, CTRL
 static button_data_t btn_swr  = make_app_btn("SWR\nScan", ACTION_APP_SWRSCAN);
 static button_data_t btn_gps  = make_app_btn("GPS", ACTION_APP_GPS);
 
-static button_data_t btn_rec      = make_app_btn("Recorder", ACTION_APP_RECORDER);
+static button_data_t btn_rec      = make_app_btn("RX\nRecorder", ACTION_APP_RECORDER);
 static button_data_t btn_settings = make_app_btn("Settings", ACTION_APP_SETTINGS);
 
 static button_data_t btn_cluster = make_app_btn("Cluster", ACTION_APP_CLUSTER);

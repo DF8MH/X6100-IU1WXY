@@ -774,7 +774,7 @@ typedef struct {
 static action_items_t long_action_items[] = {
     { .label = " None ", .action = ACTION_NONE },
     { .label = " Screenshot ", .action = ACTION_SCREENSHOT },
-    { .label = " Recorder on/off ", .action = ACTION_RECORDER },
+    { .label = " RX recorder on/off ", .action = ACTION_RECORDER },
     { .label = " Screen rec on/off ", .action = ACTION_SCREEN_REC },
     { .label = " Mute ", .action = ACTION_MUTE },
     { .label = " WF mode ", .action = ACTION_WF_MODE },
@@ -788,7 +788,7 @@ static action_items_t long_action_items[] = {
     { .label = " APP SWR Scan ", .action = ACTION_APP_SWRSCAN },
     { .label = " APP GPS ", .action = ACTION_APP_GPS },
     { .label = " APP Settings", .action = ACTION_APP_SETTINGS },
-    { .label = " APP Recorder", .action = ACTION_APP_RECORDER },
+    { .label = " APP RX recorder", .action = ACTION_APP_RECORDER },
     { .label = " APP CW Trainer", .action = ACTION_APP_CWTRAINER },
     { .label = " QTH Grid", .action = ACTION_APP_QTH },
     { .label = NULL, .action = ACTION_NONE }
@@ -909,7 +909,7 @@ static uint8_t make_long_action(uint8_t row) {
 
 static action_items_t hmic_action_items[] = {
     { .label = " None ", .action = ACTION_NONE },
-    { .label = " Recorder on/off ", .action = ACTION_RECORDER },
+    { .label = " RX recorder on/off ", .action = ACTION_RECORDER },
     { .label = " Screen rec on/off ", .action = ACTION_SCREEN_REC },
     { .label = " Mute ", .action = ACTION_MUTE },
     { .label = " Step up ", .action = ACTION_STEP_UP },
@@ -3585,8 +3585,8 @@ static void make_info_page() {
     lv_obj_set_style_pad_ver(page, 40, 0);
 
     label = lv_label_create(page);
-    lv_obj_set_style_text_line_space(label, 20, LV_PART_MAIN);
-    lv_label_set_text_fmt(label, "%s\ninfo@x6100-link.it\nBased on R1CBU + gdyuldin builds\nBaseband version: %s",
+    lv_obj_set_style_text_line_space(label, 12, LV_PART_MAIN);
+    lv_label_set_text_fmt(label, "%s\nCustom firmware by IU1WXY\ninfo@x6100-link.it\nBased on R1CBU + gdyuldin builds\nBaseband version: %s",
                           VERSION, x6100_control_get_fw_version_str());
 }
 

@@ -1,5 +1,7 @@
 <h1 align="center">X6100 custom firmware</h1>
 
+<p align="center"><i>by IU1WXY</i></p>
+
 <p align="center"><b>A complete, fully featured SD-card firmware for the Xiegu X6100:
 digital modes, DX cluster on the waterfall, Bluetooth, wfview server and a web configurator.</b></p>
 
@@ -522,7 +524,7 @@ Design notes and UI mockups are in `docs/` (`docs/mockups/releases/`).
   [license](src/fonts/LICENSE-Roboto-Apache-2.0.txt)), DejaVu (Bitstream Vera
   license, [license](src/fonts/LICENSE-DejaVu-Bitstream-Vera.txt)) and the
   original Sony Sketch.
-- Boot logo and IU1WXY theme: IU1WXY.
+- **IU1WXY**: author of this custom firmware, boot logo and IU1WXY theme.
 
 ## License
 
