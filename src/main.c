@@ -31,6 +31,7 @@
 #include "panel.h"
 #include "cat.h"
 #include "wfview_server.h"
+#include "remote_server.h"
 #include "clock.h"
 #include "rtty.h"
 #include "backlight.h"
@@ -124,6 +125,7 @@ int main(void) {
     backlight_init();
     cat_init();
     wfview_server_init();
+    remote_server_init();
     gps_init();
     if (!qso_log_init()) {
         LV_LOG_ERROR("Can't init QSO log");

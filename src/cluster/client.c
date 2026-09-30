@@ -142,18 +142,25 @@ int cluster_servers_load(cluster_server_t *out, int max) {
     return n;
 }
 
-/* Sets the server in use; the saved "server=" lines are kept. */
+/* Sets the server in use; the saved servers, filters and alerts are kept. */
 bool cluster_config_save(const char *host, int port) {
-    static char servers[CLUSTER_MAX_SERVERS * 320];
+    static const char *keep[] = {"server=", "filter_modes=", "max_age=", "skip_spotters=",
+                                 "alert=",  "alert_popup=", "alert_beep="};
+    static char        servers[24 * 1024];
     servers[0] = '\0';
     FILE *in   = fopen(CLUSTER_CONF, "r");
-    char  line[320];
-    while (in && fgets(line, sizeof(line), in))
-        if (strncmp(line, "server=", 7) == 0 && strlen(servers) + strlen(line) + 2 < sizeof(servers)) {
-            line[strcspn(line, "\r\n")] = '\0';
-            strcat(servers, line);
-            strcat(servers, "\n");
-        }
+    char  line[512];
+    while (in && fgets(line, sizeof(line), in)) {
+        line[strcspn(line, "\r\n")] = '\0';
+        for (size_t i = 0; i < sizeof(keep) / sizeof(keep[0]); i++)
+            if (strncmp(line, keep[i], strlen(keep[i])) == 0) {
+                if (strlen(servers) + strlen(line) + 2 < sizeof(servers)) {
+                    strcat(servers, line);
+                    strcat(servers, "\n");
+                }
+                break;
+            }
+    }
     if (in) fclose(in);
 
     FILE *f = fopen(CLUSTER_CONF ".tmp", "w");
@@ -167,6 +174,159 @@ bool cluster_config_save(const char *host, int port) {
 time_t cluster_config_mtime(void) {
     struct stat st;
     return stat(CLUSTER_CONF, &st) == 0 ? st.st_mtime : 0;
+}
+
+uint8_t cluster_spot_mode_class(const cluster_spot_t *s) {
+    switch (cluster_guess_mode(s)) {
+        case CLUSTER_MODE_CW:   return CLUSTER_FM_CW;
+        case CLUSTER_MODE_DIGI: return CLUSTER_FM_DIG;
+        case CLUSTER_MODE_AM:
+        case CLUSTER_MODE_FM:   return CLUSTER_FM_AMFM;
+        default:                return CLUSTER_FM_SSB;
+    }
+}
+
+static uint8_t mode_bit(const char *w) {
+    if (strcasecmp(w, "CW") == 0) return CLUSTER_FM_CW;
+    if (strcasecmp(w, "SSB") == 0) return CLUSTER_FM_SSB;
+    if (strcasecmp(w, "DIG") == 0) return CLUSTER_FM_DIG;
+    if (strcasecmp(w, "AMFM") == 0) return CLUSTER_FM_AMFM;
+    return 0;
+}
+
+/* Whole-string match, * is any run of characters, case-insensitive. */
+static bool glob_match(const char *pat, const char *str) {
+    const char *star = NULL, *mark = NULL;
+    while (*str) {
+        if (*pat == '*') {
+            star = pat++;
+            mark = str;
+        } else if (*pat && toupper((unsigned char)*pat) == toupper((unsigned char)*str)) {
+            pat++;
+            str++;
+        } else if (star) {
+            pat = star + 1;
+            str = ++mark;
+        } else {
+            return false;
+        }
+    }
+    while (*pat == '*') pat++;
+    return *pat == '\0';
+}
+
+static char *trim(char *s) {
+    while (*s == ' ') s++;
+    for (size_t n = strlen(s); n > 0 && s[n - 1] == ' '; n--) s[n - 1] = '\0';
+    return s;
+}
+
+/* "CW,SSB" -> bits; unknown words are ignored */
+static uint8_t parse_modes(char *list) {
+    uint8_t bits = 0;
+    for (char *w = strtok(list, ","); w; w = strtok(NULL, ",")) bits |= mode_bit(trim(w));
+    return bits;
+}
+
+/* "20,17" -> bits of cluster_band_of() indexes; unknown bands are ignored */
+static uint16_t parse_bands(char *list) {
+    uint16_t bits = 0;
+    for (char *w = strtok(list, ","); w; w = strtok(NULL, ",")) {
+        int m = atoi(w);
+        for (int b = 0; m > 0 && b < 16; b++)
+            if (atoi(cluster_band_name(b)) == m) bits |= (uint16_t)(1u << b);
+    }
+    return bits;
+}
+
+static void filter_line(cluster_filter_t *f, char *line) {
+    if (strncmp(line, "filter_modes=", 13) == 0) {
+        f->modes = parse_modes(line + 13);
+    } else if (strncmp(line, "max_age=", 8) == 0) {
+        int v      = atoi(line + 8);
+        f->max_age = (uint16_t)(v > 0 && v < 1440 ? v : 0);
+    } else if (strncmp(line, "skip_spotters=", 14) == 0) {
+        snprintf(f->skip, sizeof(f->skip), "%s", line + 14);
+    } else if (strncmp(line, "alert_popup=", 12) == 0) {
+        f->popup = atoi(line + 12) != 0;
+    } else if (strncmp(line, "alert_beep=", 11) == 0) {
+        f->beep = atoi(line + 11) != 0;
+    } else if (strncmp(line, "alert=", 6) == 0 && f->alert_count < CLUSTER_MAX_ALERTS) {
+        char *bar1 = strchr(line + 6, '|');
+        char *bar2 = bar1 ? strchr(bar1 + 1, '|') : NULL;
+        if (!bar2) return;
+        *bar1 = *bar2 = '\0';
+        char *pat     = trim(line + 6);
+        if (!*pat || strlen(pat) >= sizeof(f->alerts[0].pattern)) return;
+        cluster_alert_t *a = &f->alerts[f->alert_count++];
+        snprintf(a->pattern, sizeof(a->pattern), "%s", pat);
+        a->bands = parse_bands(bar1 + 1);
+        a->mode  = mode_bit(trim(bar2 + 1));
+    }
+}
+
+void cluster_filter_load(cluster_filter_t *f) {
+    uint32_t gen = f->gen;
+    memset(f, 0, sizeof(*f));
+    f->gen   = gen + 1;
+    f->modes = CLUSTER_FM_ALL;
+
+    FILE *fp = fopen(CLUSTER_CONF, "r");
+    if (!fp) return;
+    char line[512];
+    while (fgets(line, sizeof(line), fp)) {
+        line[strcspn(line, "\r\n")] = '\0';
+        filter_line(f, line);
+    }
+    fclose(fp);
+    if (!f->modes) f->modes = CLUSTER_FM_ALL; /* a list with no known mode is not "hide everything" */
+}
+
+const cluster_filter_t *cluster_filter(void) {
+    static cluster_filter_t f;
+    static time_t           loaded = -1;
+    time_t                  m      = cluster_config_mtime();
+
+    if (m != loaded) {
+        loaded = m;
+        cluster_filter_load(&f);
+    }
+    return &f;
+}
+
+int cluster_alert_match(const cluster_filter_t *f, const cluster_spot_t *s) {
+    int     band = cluster_band_of(s->freq_hz);
+    uint8_t mode = 0;
+
+    for (int i = 0; i < f->alert_count; i++) {
+        const cluster_alert_t *a = &f->alerts[i];
+        if (!glob_match(a->pattern, s->dx)) continue;
+        if (a->bands && (band < 0 || !(a->bands & (1u << band)))) continue;
+        if (a->mode) {
+            if (!mode) mode = cluster_spot_mode_class(s);
+            if (a->mode != mode) continue;
+        }
+        return i;
+    }
+    return -1;
+}
+
+bool cluster_filter_pass(const cluster_filter_t *f, const cluster_spot_t *s, uint16_t now_utc_min) {
+    if (cluster_alert_match(f, s) >= 0) return true;
+    if (!(f->modes & cluster_spot_mode_class(s))) return false;
+    if (f->max_age) {
+        uint16_t age = cluster_age_min(s->utc_min, now_utc_min);
+        if (age > f->max_age && age < 1440 - 5) return false;
+    }
+    if (f->skip[0]) {
+        char list[sizeof(f->skip)];
+        snprintf(list, sizeof(list), "%s", f->skip);
+        for (char *w = strtok(list, ","); w; w = strtok(NULL, ",")) {
+            w = trim(w);
+            if (*w && glob_match(w, s->spotter)) return false;
+        }
+    }
+    return true;
 }
 
 bool cluster_parse_server(const char *text, char *host, size_t host_size, int *port) {

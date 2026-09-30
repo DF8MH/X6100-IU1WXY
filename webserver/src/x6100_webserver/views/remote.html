@@ -1,0 +1,473 @@
+% rebase('base.html', title='Remote')
+<h2>Remote</h2>
+<p class="sub">Tunes the radio and plays its RX audio in this browser. Receive only: there is no transmit from the web in this version.</p>
+
+<section class="card">
+  <div class="rm-top">
+    <div>
+      <div class="rm-dim" id="rm-vfo">VFO-A</div>
+      <div class="rm-freq" id="rm-freq" title="Click to type a frequency">--.---.---</div>
+      <input id="rm-freq-in" class="rm-freq-in" hidden inputmode="decimal" autocomplete="off" placeholder="14.074 MHz">
+    </div>
+    <div class="rm-tune">
+      <button id="rm-down">◀ 100 Hz</button>
+      <button id="rm-up">▶ 100 Hz</button>
+      <select id="rm-step">
+        <option value="10">Step 10 Hz</option>
+        <option value="100" selected>Step 100 Hz</option>
+        <option value="1000">Step 1 kHz</option>
+        <option value="5000">Step 5 kHz</option>
+        <option value="10000">Step 10 kHz</option>
+      </select>
+      <small class="rm-dim">or scroll on the waterfall</small>
+    </div>
+    <div class="rm-smeter">
+      <div class="rm-dim">S-meter</div>
+      <div class="rm-bar"><div id="rm-bar"></div></div>
+      <small id="rm-s">S0</small>
+    </div>
+  </div>
+  <div class="rm-row" id="rm-modes"><span class="rm-dim">Mode</span></div>
+  <div class="rm-row" id="rm-bands"><span class="rm-dim">Band</span></div>
+</section>
+
+<section class="card rm-scope">
+  <canvas id="rm-sp"></canvas>
+  <canvas id="rm-wf"></canvas>
+</section>
+
+<section class="card">
+  <div class="rm-audio">
+    <button class="primary" id="rm-listen">🔊 Listen</button>
+    <div><label for="rm-vol">Browser volume</label><input type="range" id="rm-vol" min="0" max="200" value="100"></div>
+    <div><label for="rm-filter" id="rm-filter-l">Filter</label><input type="range" id="rm-filter" min="100" max="6000" step="50"></div>
+    <div><label for="rm-rfgain" id="rm-rfgain-l">RF gain</label><input type="range" id="rm-rfgain" min="0" max="100"></div>
+  </div>
+  <div class="rm-row">
+    <button class="pill" data-toggle="pre">PRE</button>
+    <button class="pill" data-toggle="att">ATT</button>
+    <button class="pill" id="rm-agc">AGC</button>
+    <button class="pill" data-toggle="nb">NB</button>
+    <button class="pill" data-toggle="nr">NR</button>
+    <button class="rm-ptt" disabled>PTT (not in this version)</button>
+  </div>
+  <p class="rm-dim" style="margin-top:12px">Audio delay ~0.5 s · 1 listener at a time</p>
+  <p class="rm-dim" id="rm-https" hidden>Audio needs <a id="rm-https-link" href="#"></a> (the radio's certificate is self-signed: accept it once in the browser).</p>
+  <div class="actions"><span class="status" id="rm-status"></span></div>
+</section>
+
+<script>
+(function() {
+const MODES = ["LSB", "USB", "CW", "USB-D", "AM", "NFM"];
+const BANDS = [160, 80, 40, 30, 20, 17, 15, 12, 10, 6];
+const AUDIO_RATE = 12000;
+
+let st = null;              // last state from the radio
+let tuneTarget = null, tuneUntil = 0;   // frequency being tuned from this page
+const holdUntil = {};       // slider -> time until which the radio doesn't move it
+
+const showStatus = function(text, error=false) {
+  const el = $("#rm-status");
+  el.toggleClass("error", error);
+  el.html('<span class="dot"></span>').append(document.createTextNode(text));
+}
+
+const send = function(cmd, val) {
+  return $.ajax({
+    url: "/api/remote",
+    type: "POST",
+    data: JSON.stringify({cmd: cmd, val: val}),
+    contentType: "application/json; charset=utf-8",
+    dataType: "json",
+    error: function(xhr) { showStatus(xhr.responseJSON ? xhr.responseJSON.msg : "Radio not reachable", true); }
+  });
+}
+
+// Calls fn at most every ms, always with the last value
+const throttle = function(fn, ms) {
+  let timer = null, last = 0, args;
+  return function() {
+    args = arguments;
+    if (timer) return;
+    const wait = Math.max(0, last + ms - Date.now());
+    timer = setTimeout(function() { timer = null; last = Date.now(); fn.apply(null, args); }, wait);
+  };
+}
+
+const step = function() { return parseInt($("#rm-step").val()); }
+
+const fmtFreq = function(f) {
+  const pad = function(n) { return String(n).padStart(3, "0"); };
+  return Math.floor(f / 1e6) + "." + pad(Math.floor(f / 1e3) % 1000) + "." + pad(f % 1000);
+}
+
+const sText = function(db) {
+  if (db <= -73) return "S" + Math.max(0, Math.min(9, Math.round((db + 127) / 6)));
+  return "S9+" + Math.round(db + 73);
+}
+
+/* Frequency: absolute target, sent at most 10 times a second */
+const sendFreq = throttle(function(f) { send("freq", f); }, 100);
+
+const tuneTo = function(f) {
+  const s = step();
+  f = Math.round(f / s) * s;
+  tuneTarget = f;
+  tuneUntil = Date.now() + 1000;
+  $("#rm-freq").text(fmtFreq(f));
+  sendFreq(f);
+}
+
+/* Controls */
+
+MODES.forEach(function(m) {
+  $("<button class='pill'>").text(m).attr("data-mode", m).appendTo("#rm-modes").on("click", function() { send("mode", m); });
+});
+BANDS.forEach(function(b) {
+  $("<button class='pill'>").text(b).attr("data-band", b).appendTo("#rm-bands").on("click", function() { send("band", b); });
+});
+$("[data-toggle]").on("click", function() {
+  const k = $(this).data("toggle");
+  if (st) send(k, st[k] ? 0 : 1);
+});
+$("#rm-agc").on("click", function() { send("agc"); });
+
+$("#rm-step").on("change", function() {
+  const t = $("#rm-step option:selected").text().replace("Step ", "");
+  $("#rm-down").text("◀ " + t);
+  $("#rm-up").text("▶ " + t);
+});
+$("#rm-down").on("click", function() { send("tune", -step()); });
+$("#rm-up").on("click", function() { send("tune", step()); });
+
+const filterLabel = function(bw) { return "Filter " + (bw >= 1000 ? (bw / 1000).toFixed(1) + " kHz" : bw + " Hz"); }
+const sendFilter = throttle(function(v) { send("filter", v); }, 150);
+const sendRfgain = throttle(function(v) { send("rfgain", v); }, 150);
+$("#rm-filter").on("input", function() {
+  holdUntil.filter = Date.now() + 1500;
+  $("#rm-filter-l").text(filterLabel(this.value));
+  sendFilter(parseInt(this.value));
+});
+$("#rm-rfgain").on("input", function() {
+  holdUntil.rfgain = Date.now() + 1500;
+  $("#rm-rfgain-l").text("RF gain " + this.value);
+  sendRfgain(parseInt(this.value));
+});
+
+/* Typed frequency: MHz (14.074), kHz (14074) or Hz */
+$("#rm-freq").on("click", function() {
+  $(this).prop("hidden", true);
+  $("#rm-freq-in").prop("hidden", false).val(st ? (st.freq / 1e6).toFixed(6).replace(/0+$/, "").replace(/\.$/, "") : "").trigger("focus").trigger("select");
+});
+const closeFreqInput = function() {
+  $("#rm-freq-in").prop("hidden", true);
+  $("#rm-freq").prop("hidden", false);
+}
+$("#rm-freq-in").on("keydown", function(e) {
+  if (e.key == "Escape") closeFreqInput();
+  if (e.key != "Enter") return;
+  const v = parseFloat(this.value.replace(",", "."));
+  closeFreqInput();
+  if (!isFinite(v) || v <= 0) return showStatus("Invalid frequency", true);
+  const f = Math.round(v < 100 ? v * 1e6 : v < 100000 ? v * 1e3 : v);
+  $("#rm-freq").text(fmtFreq(f));
+  send("freq", f);
+}).on("blur", closeFreqInput);
+
+/* State */
+
+const render = function(s) {
+  st = s;
+  const band = (s.band.match(/^(\d+)m\b/) || [])[1];
+  $("#rm-vfo").text("VFO-" + s.vfo + (s.band ? " · " + s.band : "") + (s.tx ? " · TX" : ""));
+  if (Date.now() > tuneUntil || s.freq == tuneTarget) {
+    tuneTarget = null;
+    $("#rm-freq").text(fmtFreq(s.freq));
+  }
+  const pct = Math.max(0, Math.min(100, (s.db + 127) * 100 / 114));
+  $("#rm-bar").css("width", pct + "%");
+  $("#rm-s").text(sText(s.db));
+  $("#rm-modes [data-mode]").each(function() { $(this).toggleClass("on", $(this).data("mode") == s.mode); });
+  $("#rm-bands [data-band]").each(function() { $(this).toggleClass("on", String($(this).data("band")) == band); });
+  $("[data-toggle]").each(function() { $(this).toggleClass("on", !!s[$(this).data("toggle")]); });
+  $("#rm-agc").text("AGC " + s.agc).toggleClass("on", s.agc != "OFF");
+  if (!(Date.now() < holdUntil.filter)) {
+    $("#rm-filter").val(s.filter);
+    $("#rm-filter-l").text(filterLabel(s.filter));
+  }
+  if (!(Date.now() < holdUntil.rfgain)) {
+    $("#rm-rfgain").val(s.rfgain);
+    $("#rm-rfgain-l").text("RF gain " + s.rfgain);
+  }
+}
+
+/* Spectrum and waterfall */
+
+const sp = document.getElementById("rm-sp"), wf = document.getElementById("rm-wf");
+const spCtx = sp.getContext("2d"), wfCtx = wf.getContext("2d");
+let scope = null;           // last spectrum line: {c, w, bins}
+
+// The radio's waterfall colours (legacy palette): black, blue, red, yellow, white; as pixels (RGBA, little endian)
+const PALETTE = (function() {
+  const stops = [[0, 0, 0, 0], [50, 0, 0, 127], [112, 177, 0, 0], [190, 229, 228, 0], [255, 255, 255, 255]];
+  const p = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let k = 0;
+    while (stops[k + 1][0] < i) k++;
+    const a = stops[k], b = stops[k + 1], t = (i - a[0]) / (b[0] - a[0]);
+    const c = [1, 2, 3].map(function(j) { return Math.round(a[j] + (b[j] - a[j]) * t); });
+    p[i] = (0xff000000 | c[2] << 16 | c[1] << 8 | c[0]) >>> 0;
+  }
+  return p;
+})();
+const BLACK = 0xff000000;
+let wfImg, wfPx;
+
+const resize = function() {
+  const w = Math.max(100, Math.round(sp.clientWidth));
+  if (sp.width == w) return;
+  sp.width = wf.width = w;
+  sp.height = 110;
+  wf.height = 220;
+  wfImg = wfCtx.createImageData(w, wf.height);
+  wfPx = new Uint32Array(wfImg.data.buffer).fill(BLACK);
+  wfCtx.putImageData(wfImg, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+const drawSpectrum = function() {
+  const W = sp.width, H = sp.height;
+  spCtx.fillStyle = "#000";
+  spCtx.fillRect(0, 0, W, H);
+  if (!scope) return;
+  const n = scope.bins.length;
+  spCtx.strokeStyle = "#9fe";
+  spCtx.beginPath();
+  for (let x = 0; x < W; x++) {
+    let v = 0;
+    for (let i = Math.floor(x * n / W); i < Math.max(Math.floor((x + 1) * n / W), Math.floor(x * n / W) + 1); i++) v = Math.max(v, scope.bins[i]);
+    const y = H - 2 - v * (H - 6) / 255;
+    x ? spCtx.lineTo(x + .5, y) : spCtx.moveTo(x + .5, y);
+  }
+  spCtx.stroke();
+  if (st) {
+    const x = Math.round((st.freq - scope.c + scope.w / 2) * W / scope.w) + .5;
+    spCtx.strokeStyle = "#ff5050";
+    spCtx.beginPath();
+    spCtx.moveTo(x, 0);
+    spCtx.lineTo(x, H);
+    spCtx.stroke();
+  }
+}
+
+const addLine = function(m) {
+  const raw = atob(m.d), bins = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bins[i] = raw.charCodeAt(i);
+  const W = wf.width, H = wf.height, n = bins.length;
+  if (scope && scope.w == m.w && scope.c != m.c) {
+    // Tuned: move the old rows so that they stay under their frequency
+    const dx = Math.round((scope.c - m.c) * W / m.w);
+    for (let y = 0; y < H && Math.abs(dx) < W; y++) {
+      const r = y * W;
+      if (dx > 0) {
+        wfPx.copyWithin(r + dx, r, r + W - dx);
+        wfPx.fill(BLACK, r, r + dx);
+      } else {
+        wfPx.copyWithin(r, r - dx, r + W);
+        wfPx.fill(BLACK, r + W + dx, r + W);
+      }
+    }
+    if (Math.abs(dx) >= W) wfPx.fill(BLACK);
+  } else if (scope && scope.w != m.w) {
+    wfPx.fill(BLACK);
+  }
+  scope = {c: m.c, w: m.w, bins: bins};
+  wfPx.copyWithin(W, 0, W * (H - 1));
+  for (let x = 0; x < W; x++) {
+    let v = 0;
+    for (let i = Math.floor(x * n / W); i < Math.max(Math.floor((x + 1) * n / W), Math.floor(x * n / W) + 1); i++) v = Math.max(v, bins[i]);
+    wfPx[x] = PALETTE[v];
+  }
+  wfCtx.putImageData(wfImg, 0, 0);
+  drawSpectrum();
+}
+
+/* Click to tune, drag to move, wheel to step */
+let drag = null;
+[sp, wf].forEach(function(cv) {
+  cv.addEventListener("pointerdown", function(e) {
+    if (!st || !scope) return;
+    drag = {x: e.clientX, f: st.freq, moved: false};
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener("pointermove", function(e) {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (Math.abs(dx) > 5) drag.moved = true;
+    if (drag.moved) tuneTo(drag.f - dx * scope.w / cv.clientWidth);
+  });
+  cv.addEventListener("pointerup", function(e) {
+    if (drag && !drag.moved) {
+      const r = cv.getBoundingClientRect();
+      tuneTo(scope.c - scope.w / 2 + (e.clientX - r.left) * scope.w / r.width);
+    }
+    drag = null;
+  });
+  cv.addEventListener("pointercancel", function() { drag = null; });
+  cv.addEventListener("wheel", function(e) {
+    if (!st) return;
+    e.preventDefault();
+    const base = tuneTarget !== null ? tuneTarget : st.freq;
+    tuneTo(base + (e.deltaY < 0 ? step() : -step()));
+  }, {passive: false});
+});
+
+/* Radio events */
+
+const connect = function() {
+  const es = new EventSource("/api/remote/stream");
+  es.onmessage = function(e) {
+    const m = JSON.parse(e.data);
+    if (m.t == "state") {
+      if (!st) showStatus("Connected");
+      render(m);
+    } else if (m.t == "spec") {
+      addLine(m);
+    } else if (m.t == "err") {
+      showStatus(m.err, true);
+    }
+  };
+  es.addEventListener("fail", function(e) { st = null; showStatus(e.data, true); });
+  es.onerror = function() {
+    if (st) showStatus("Connection lost, retrying", true);
+    st = null;
+  };
+}
+connect();
+
+/* RX audio: raw 16 bit 12 kHz from the radio, jitter buffer and resampler in an AudioWorklet */
+
+const JITTER = `
+class Jitter {
+  constructor(outRate) {
+    this.buf = new Float32Array(${AUDIO_RATE} * 4);
+    this.r = 0; this.n = 0; this.pos = 0; this.playing = false;
+    this.step = ${AUDIO_RATE} / outRate;
+  }
+  push(s) {
+    const len = this.buf.length;
+    for (let i = 0; i < s.length && this.n < len; i++, this.n++) this.buf[(this.r + this.n) % len] = s[i];
+    // More than 1 s queued: back to 0.4 s
+    if (this.n > ${AUDIO_RATE}) {
+      const drop = this.n - ${AUDIO_RATE} * 0.4;
+      this.r = (this.r + drop) % len;
+      this.n -= drop;
+    }
+  }
+  pull(out) {
+    const len = this.buf.length;
+    if (!this.playing && this.n < ${AUDIO_RATE} * 0.4) return out.fill(0);
+    this.playing = true;
+    for (let i = 0; i < out.length; i++) {
+      if (this.n < 2) {   // underrun: buffer again
+        this.playing = false;
+        return out.fill(0, i);
+      }
+      const a = this.buf[this.r], b = this.buf[(this.r + 1) % len];
+      out[i] = a + (b - a) * this.pos;
+      this.pos += this.step;
+      while (this.pos >= 1) { this.pos -= 1; this.r = (this.r + 1) % len; this.n--; }
+    }
+  }
+}`;
+const WORKLET = JITTER + `
+class RemoteRx extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.j = new Jitter(sampleRate);
+    this.port.onmessage = (e) => this.j.push(e.data);
+  }
+  process(inputs, outputs) {
+    this.j.pull(outputs[0][0]);
+    return true;
+  }
+}
+registerProcessor("remote-rx", RemoteRx);`;
+
+let audio = null;
+
+const stopAudio = function() {
+  if (!audio) return;
+  audio.abort.abort();
+  audio.ctx.close();
+  audio = null;
+  $("#rm-listen").text("🔊 Listen");
+  showStatus("Connected");
+}
+
+const startAudio = async function() {
+  const a = audio = {abort: new AbortController(), ctx: new AudioContext()};
+  $("#rm-listen").text("■ Stop");
+  a.gain = a.ctx.createGain();
+  a.gain.gain.value = $("#rm-vol").val() / 100;
+  a.gain.connect(a.ctx.destination);
+  let push;
+  if (a.ctx.audioWorklet) {
+    await a.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], {type: "application/javascript"})));
+    const node = new AudioWorkletNode(a.ctx, "remote-rx", {numberOfInputs: 0, outputChannelCount: [1]});
+    node.connect(a.gain);
+    push = function(f) { node.port.postMessage(f, [f.buffer]); };
+  } else {
+    // Browsers without AudioWorklet
+    const j = new (new Function(JITTER + "; return Jitter;")())(a.ctx.sampleRate);
+    const node = a.ctx.createScriptProcessor(4096, 1, 1);
+    node.onaudioprocess = function(e) { j.pull(e.outputBuffer.getChannelData(0)); };
+    node.connect(a.gain);
+    push = function(f) { j.push(f); };
+  }
+  const r = await fetch("/api/remote/audio", {signal: a.abort.signal, cache: "no-store"});
+  if (!r.ok) throw new Error(r.status == 409 ? "Another listener is connected (1 listener at a time)" : "No audio from the radio");
+  showStatus("Listening");
+  const reader = r.body.getReader();
+  let odd = null;
+  while (true) {
+    const res = await reader.read();
+    if (res.done) break;
+    let b = res.value;
+    if (odd !== null) {
+      const t = new Uint8Array(b.length + 1);
+      t[0] = odd;
+      t.set(b, 1);
+      b = t;
+    }
+    const n = b.length >> 1;
+    odd = b.length & 1 ? b[b.length - 1] : null;
+    const dv = new DataView(b.buffer, b.byteOffset, n * 2), f = new Float32Array(n);
+    for (let i = 0; i < n; i++) f[i] = dv.getInt16(i * 2, true) / 32768;
+    push(f);
+  }
+  throw new Error("Audio stopped by the radio");
+}
+
+$("#rm-listen").on("click", function() {
+  if (audio) return stopAudio();
+  startAudio().catch(function(e) {
+    if (e.name == "AbortError") return;
+    stopAudio();
+    showStatus(e.message, true);
+  });
+});
+$("#rm-vol").on("input", function() {
+  if (audio) audio.gain.gain.value = this.value / 100;
+});
+
+// AudioWorklet and fetch streams need a secure page (HTTPS, or localhost)
+if (!window.isSecureContext) {
+  const url = "https://" + location.hostname + "/remote";
+  $("#rm-https-link").attr("href", url).text(url);
+  $("#rm-https").prop("hidden", false);
+  $("#rm-listen").prop("disabled", true);
+}
+})();
+</script>

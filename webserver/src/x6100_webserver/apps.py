@@ -4,14 +4,24 @@ try:
     import gzip
 except ImportError:   # images built before python3-zlib was selected
     gzip = None
+try:
+    import zlib
+except ImportError:
+    zlib = None
+import io
 import json
 import os
 import pathlib
 import re
+import select
 import shutil
+import socket
 import sqlite3
 import subprocess
+import tarfile
+import tempfile
 import threading
+import time
 
 import bottle
 
@@ -135,6 +145,8 @@ def delete_digital_mode(mode_id, dbcon):
 # Same file and format as the radio GUI (src/cluster/client.c): "host=..."
 # and "port=..." lines are the server in use, "server=name|host|port" lines
 # the saved ones. The GUI reloads the server when the file's mtime changes.
+# Filters and alerts are more lines: filter_modes=CW,SSB,DIG,AMFM, max_age=MIN,
+# skip_spotters=A,B, alert=PATTERN|bands|mode, alert_popup=0|1, alert_beep=0|1.
 
 CLUSTER_DEFAULT_HOST = "dxc.ve7cc.net"
 # Used while cluster.conf has no server= lines (keep in sync with src/cluster/client.c)
@@ -152,6 +164,11 @@ CLUSTER_DEFAULT_SERVERS = [
 ]
 CLUSTER_DEFAULT_PORT = 23
 CLUSTER_MAX_SERVERS = 16
+CLUSTER_MAX_ALERTS = 50
+CLUSTER_MODES = ["CW", "SSB", "DIG", "AMFM"]
+CLUSTER_BANDS = [160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6]
+# Written by the radio GUI: pattern|freq_hz|HH:MM of the last spot that matched
+CLUSTER_ALERTS_SEEN = "/tmp/cluster_alerts_seen"
 
 
 def read_cluster_conf():
@@ -180,21 +197,88 @@ def read_cluster_conf():
     return host, port, servers
 
 
-def write_cluster_conf(host, port, servers):
+def read_cluster_options():
+    """Filters and alerts of cluster.conf (same rules as the GUI: missing = no filter)."""
+    opts = {"modes": list(CLUSTER_MODES), "max_age": 0, "skip": "", "alerts": [], "popup": False, "beep": False}
+    try:
+        with open(settings.CLUSTER_CONF, errors="replace") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        if line.startswith("filter_modes="):
+            modes = [m.strip().upper() for m in line[13:].split(",")]
+            modes = [m for m in CLUSTER_MODES if m in modes]
+            opts["modes"] = modes or list(CLUSTER_MODES)
+        elif line.startswith("max_age="):
+            m = re.match(r"\s*[+-]?\d+", line[8:])  # atoi()
+            opts["max_age"] = int(m.group()) if m and 0 < int(m.group()) < 1440 else 0
+        elif line.startswith("skip_spotters="):
+            opts["skip"] = line[14:]
+        elif line.startswith("alert_popup="):
+            opts["popup"] = line[12:].strip() not in ("", "0")
+        elif line.startswith("alert_beep="):
+            opts["beep"] = line[11:].strip() not in ("", "0")
+        elif line.startswith("alert="):
+            parts = line[6:].split("|")
+            if len(parts) == 3 and parts[0].strip() and len(opts["alerts"]) < CLUSTER_MAX_ALERTS:
+                opts["alerts"].append({"pattern": parts[0].strip(), "bands": parts[1], "mode": parts[2].strip().upper()})
+    return opts
+
+
+def cluster_option_lines(opts):
+    lines = []
+    if set(opts["modes"]) != set(CLUSTER_MODES):
+        lines.append("filter_modes=" + ",".join(opts["modes"]))
+    if opts["max_age"]:
+        lines.append(f"max_age={opts['max_age']}")
+    if opts["skip"]:
+        lines.append("skip_spotters=" + opts["skip"])
+    for a in opts["alerts"]:
+        lines.append(f"alert={a['pattern']}|{a['bands']}|{a['mode']}")
+    lines.append(f"alert_popup={int(opts['popup'])}")
+    lines.append(f"alert_beep={int(opts['beep'])}")
+    return lines
+
+
+def write_cluster_conf(host, port, servers, opts=None):
+    if opts is None:
+        opts = read_cluster_options()  # keep the filters and alerts
     tmp = settings.CLUSTER_CONF + ".tmp"
     with open(tmp, "w") as f:
         f.write(f"host={host}\nport={port}\n")
         for name, h, p in servers:
             f.write(f"server={name}|{h}|{p}\n")
+        for line in cluster_option_lines(opts):
+            f.write(line + "\n")
         f.flush()
         os.fsync(f.fileno())
     os.rename(tmp, settings.CLUSTER_CONF)
 
 
+def cluster_alerts_seen():
+    seen = {}
+    try:
+        with open(CLUSTER_ALERTS_SEEN, errors="replace") as f:
+            for line in f.read().splitlines():
+                parts = line.split("|")
+                if len(parts) == 3 and parts[1].isdigit():
+                    seen[parts[0]] = f"{int(parts[1]) / 1000:.1f} kHz {parts[2]}Z"
+    except OSError:
+        pass
+    return seen
+
+
 def cluster_state():
     host, port, servers = read_cluster_conf()
+    opts = read_cluster_options()
+    seen = cluster_alerts_seen()
+    for a in opts["alerts"]:
+        a["seen"] = seen.get(a["pattern"], "")
     return {"host": host, "port": port,
-            "servers": [{"name": n, "host": h, "port": p} for n, h, p in servers]}
+            "servers": [{"name": n, "host": h, "port": p} for n, h, p in servers],
+            "filters": {"modes": opts["modes"], "max_age": opts["max_age"], "skip": opts["skip"]},
+            "alerts": opts["alerts"], "popup": opts["popup"], "beep": opts["beep"]}
 
 
 def cluster_error(status, msg):
@@ -202,9 +286,9 @@ def cluster_error(status, msg):
     return {"status": "error", "msg": msg}
 
 
-def cluster_save(host, port, servers):
+def cluster_save(host, port, servers, opts=None):
     try:
-        write_cluster_conf(host, port, servers)
+        write_cluster_conf(host, port, servers, opts)
     except OSError as e:
         return cluster_error(500, f"Can't save: {e}")
     return cluster_state()
@@ -257,6 +341,122 @@ def set_wfview():
         bottle.response.status = 500
         return {"status": "error", "msg": f"Can't save: {e}"}
     return read_wfview_conf()
+
+
+# Web remote: control and spectrum through the GUI's local socket (src/remote_server.cpp,
+# one JSON object per line), RX audio from PulseAudio. Receive only: there is no PTT.
+
+REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", "rfgain", "filter"}
+# The radio RX audio as the GUI's decoders get it (src/audio.c), 16 bit mono
+REMOTE_AUDIO_CMD = ["parec", "--device=alsa_input.platform-sound.stereo-fallback", "--format=s16le",
+                    "--rate=12000", "--channels=1", "--latency-msec=100",
+                    "--client-name=X6100 web remote", "--stream-name=Web remote RX"]
+remote_audio_lock = threading.Lock()
+remote_audio_busy = False
+
+
+def remote_connect(timeout):
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        sock.connect(settings.REMOTE_SOCK)
+    except OSError:
+        sock.close()
+        raise
+    return sock
+
+
+@app.route('/remote')
+def remote():
+    return bottle.template('remote')
+
+
+@app.post('/api/remote')
+def remote_command():
+    try:
+        data = bottle.request.json
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or data.get("cmd") not in REMOTE_CMDS:
+        return api_error(400, "Invalid command")
+    val = data.get("val")
+    # The GUI checks the values; keep the line short and plain
+    if not (val is None or (isinstance(val, int) and not isinstance(val, bool)) or (isinstance(val, str) and len(val) <= 8)):
+        return api_error(400, "Invalid value")
+    try:
+        with remote_connect(3) as sock, sock.makefile("rb") as f:
+            sock.sendall(json.dumps({"cmd": data["cmd"], "val": val}).encode() + b"\n")
+            reply = json.loads(f.readline() or b"{}")
+    except (OSError, ValueError):
+        return api_error(503, "Radio GUI not reachable")
+    if reply.get("t") != "ok":
+        return api_error(409, reply.get("err", "Rejected by the radio"))
+    return {"status": "OK"}
+
+
+@app.get('/api/remote/stream')
+def remote_stream():
+    """Server-sent events: the GUI's state and spectrum lines, until the page is closed."""
+    bottle.response.content_type = 'text/event-stream'
+    bottle.response.set_header('Cache-Control', 'no-cache')
+
+    def events():
+        try:
+            sock = remote_connect(5)
+        except OSError:
+            yield b"retry: 3000\nevent: fail\ndata: Radio GUI not reachable\n\n"
+            return
+        # A closed page ends the generator at a yield: the GUI sees the socket close
+        try:
+            sock.sendall(b'{"cmd":"sub"}\n')
+            yield b"retry: 3000\n\n"
+            for line in sock.makefile("rb"):
+                yield b"data: " + line.rstrip(b"\n") + b"\n\n"
+        except OSError:   # GUI gone or silent for 5 s: the browser reconnects
+            pass
+        finally:
+            sock.close()
+
+    return events()
+
+
+@app.get('/api/remote/audio')
+def remote_audio():
+    """Raw s16le mono 12 kHz. One listener; parec is killed when the page stops listening."""
+    bottle.response.content_type = 'application/octet-stream'
+    bottle.response.set_header('Cache-Control', 'no-store')
+
+    def pcm():
+        global remote_audio_busy
+        with remote_audio_lock:
+            if remote_audio_busy:
+                raise bottle.HTTPError(409, "Another listener is connected: 1 listener at a time")
+            remote_audio_busy = True
+        proc = None
+        try:
+            env = dict(os.environ)
+            env.setdefault("PULSE_SERVER", "unix:/var/run/pulse/native")
+            try:
+                proc = subprocess.Popen(REMOTE_AUDIO_CMD, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
+            except OSError:
+                raise bottle.HTTPError(503, "parec is not available")
+            fd, first = proc.stdout.fileno(), True
+            while True:
+                data = os.read(fd, 4800) if select.select([fd], [], [], 5)[0] else b""
+                if not data:   # parec failed or stalled
+                    if first:
+                        raise bottle.HTTPError(503, "No audio from the radio")
+                    break
+                first = False
+                yield data
+        finally:
+            if proc:
+                proc.kill()
+                proc.wait()
+            with remote_audio_lock:
+                remote_audio_busy = False
+
+    return pcm()
 
 
 # Memories: MEM button slots (params.db, table `memory`) and named channels
@@ -471,6 +671,81 @@ def add_cluster_server():
     if any(h == host and p == port for _, h, p in servers):
         return cluster_error(400, "This server is already in the list")
     return cluster_save(cur_host, cur_port, servers + [(name, host, port)])
+
+
+def cluster_text_ok(text, max_len):
+    return len(text) <= max_len and not any(c in text for c in "|\r\n")
+
+
+@app.post('/api/cluster/filters')
+def set_cluster_filters():
+    data = bottle.request.json or {}
+    modes = data.get("modes", [])
+    if not isinstance(modes, list) or any(m not in CLUSTER_MODES for m in modes):
+        return cluster_error(400, "Invalid modes")
+    if not modes:
+        return cluster_error(400, "Select at least one mode")
+    try:
+        max_age = int(data.get("max_age", 0))
+    except (TypeError, ValueError):
+        max_age = -1
+    if not 0 <= max_age < 1440:
+        return cluster_error(400, "Invalid max age")
+    skip = ",".join(w.strip() for w in str(data.get("skip", "")).split(",") if w.strip())
+    if not cluster_text_ok(skip, 120) or not re.fullmatch(r"[A-Za-z0-9/*#@,-]*", skip):
+        return cluster_error(400, "Invalid spotters: letters, digits, '*', '#', '-', '/' separated by commas")
+    host, port, servers = read_cluster_conf()
+    opts = read_cluster_options()
+    opts.update(modes=[m for m in CLUSTER_MODES if m in modes], max_age=max_age, skip=skip)
+    return cluster_save(host, port, servers, opts)
+
+
+@app.post('/api/cluster/alerts')
+def add_cluster_alert():
+    data = bottle.request.json or {}
+    pattern = str(data.get("pattern", "")).strip().upper()
+    if not pattern or len(pattern) > 31 or not re.fullmatch(r"[A-Z0-9/*]+", pattern):
+        return cluster_error(400, "Invalid pattern: 1-31 characters, letters, digits, '/' and '*'")
+    bands = data.get("bands", [])
+    if not isinstance(bands, list):
+        return cluster_error(400, "Invalid bands")
+    try:
+        bands = sorted({int(b) for b in bands}, reverse=True)
+    except (TypeError, ValueError):
+        return cluster_error(400, "Invalid bands")
+    if any(b not in CLUSTER_BANDS for b in bands):
+        return cluster_error(400, "Invalid bands")
+    mode = str(data.get("mode", "")).strip().upper()
+    if mode not in ("", "CW", "SSB", "DIG"):
+        return cluster_error(400, "Invalid mode")
+    host, port, servers = read_cluster_conf()
+    opts = read_cluster_options()
+    if len(opts["alerts"]) >= CLUSTER_MAX_ALERTS:
+        return cluster_error(400, f"At most {CLUSTER_MAX_ALERTS} alerts")
+    bands = ",".join(str(b) for b in bands)
+    if any(a["pattern"].upper() == pattern and a["bands"] == bands and a["mode"] == mode for a in opts["alerts"]):
+        return cluster_error(400, "This alert is already in the list")
+    opts["alerts"].append({"pattern": pattern, "bands": bands, "mode": mode})
+    return cluster_save(host, port, servers, opts)
+
+
+@app.delete('/api/cluster/alerts/<index:int>')
+def delete_cluster_alert(index):
+    host, port, servers = read_cluster_conf()
+    opts = read_cluster_options()
+    if not 0 <= index < len(opts["alerts"]):
+        return cluster_error(404, "No such alert")
+    del opts["alerts"][index]
+    return cluster_save(host, port, servers, opts)
+
+
+@app.post('/api/cluster/alert-options')
+def set_cluster_alert_options():
+    data = bottle.request.json or {}
+    host, port, servers = read_cluster_conf()
+    opts = read_cluster_options()
+    opts.update(popup=bool(data.get("popup")), beep=bool(data.get("beep")))
+    return cluster_save(host, port, servers, opts)
 
 
 @app.post('/api/cluster/use/<index:int>')
@@ -741,6 +1016,448 @@ def cancel_convert():
         if convert_proc:
             convert_proc.kill()
     return {"status": "OK"}
+
+
+# Backup / restore routes
+# A backup is a tar(.gz) with manifest.json and a fixed set of member names. An uploaded
+# archive is never extracted by tarfile: only whitelisted names are copied, to a work dir.
+
+BACKUP_MAX_BYTES = 50 * 1024 * 1024   # upload size and total unpacked size
+BACKUP_MAX_MEMBERS = 200
+BACKUP_TEXT_MAX = 1024 * 1024         # any member that is not a .db or .mp3
+BACKUP_NAME = r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,59}"
+BACKUP_DIRS = (("voice", "msg/", re.compile("msg/" + BACKUP_NAME + r"\.mp3")),
+               ("wifi", "wifi/", re.compile("wifi/" + BACKUP_NAME + r"\.nmconnection")))
+BACKUP_GUI_PARTS = ("settings", "memories", "qso", "cw")   # files the GUI owns: restore with it stopped
+TAR_ERRORS = (tarfile.TarError, EOFError, OSError) + ((zlib.error,) if zlib else ())
+
+backup_lock = threading.Lock()
+
+
+class BackupError(Exception):
+    pass
+
+
+def backup_files():
+    """Fixed members: name -> (part, path on the radio). memory_slots.json is made from params.db."""
+    return {"params.db": ("settings", settings.DB_PATH),
+            "channels.json": ("memories", settings.CHANNELS_FILE),
+            "memory_slots.json": ("memories", settings.DB_PATH),
+            "cluster.conf": ("cluster", settings.CLUSTER_CONF),
+            "wfview.conf": ("wfview", settings.WFVIEW_CONF),
+            "qso_log.db": ("qso", settings.QSO_LOG_DB),
+            "cw_trainer.json": ("cw", settings.CW_TRAINER_FILE)}
+
+
+def backup_member(name):
+    """(part, path on the radio) of a member name, None when it isn't a known one."""
+    if name in backup_files():
+        return backup_files()[name]
+    for part, prefix, pattern in BACKUP_DIRS:
+        if pattern.fullmatch(name):
+            return part, os.path.join(settings.VOICE_DIR if part == "voice" else settings.WIFI_DIR, name[len(prefix):])
+    return None
+
+
+def backup_current():
+    """member -> path of everything the radio has now."""
+    files = {n: p for n, (_, p) in backup_files().items() if os.path.isfile(p)}
+    for part, prefix, pattern in BACKUP_DIRS:
+        d = settings.VOICE_DIR if part == "voice" else settings.WIFI_DIR
+        try:
+            names = sorted(os.listdir(d))
+        except OSError:
+            continue
+        files.update({prefix + n: os.path.join(d, n) for n in names if pattern.fullmatch(prefix + n)})
+    return files
+
+
+def plural(n, word):
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
+def fmt_size(n):
+    return f"{n / 1048576:.1f} MB" if n >= 1048576 else f"{max(n // 1024, 1)} kB" if n else "0 kB"
+
+
+def read_text(path):
+    with open(path, errors="replace") as f:
+        return f.read(BACKUP_TEXT_MAX)
+
+
+def memory_rows(path):
+    """[[id, name, val]] of the MEM slots, from memory_slots.json or from a params.db."""
+    if path.endswith(".json"):
+        with open(path) as f:
+            return json.load(f)["rows"]
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        return [list(r) for r in con.execute("SELECT id, name, val FROM memory")]
+    finally:
+        con.close()
+
+
+def describe_backup(files, date=None):
+    """part -> one line summary of the members in files (member -> path); date overrides the file time."""
+    def when(member):
+        return date or datetime.fromtimestamp(os.path.getmtime(files[member])).strftime("%Y-%m-%d %H:%M")
+
+    def count(member, sql):
+        con = sqlite3.connect(f"file:{files[member]}?mode=ro", uri=True)
+        try:
+            return con.execute(sql).fetchone()[0]
+        finally:
+            con.close()
+
+    out = {}
+    try:
+        if "params.db" in files:
+            out["settings"] = when("params.db")
+        if "channels.json" in files or "memory_slots.json" in files:
+            slots = len({r[0] for r in memory_rows(files["memory_slots.json"]) if r[1] == "vfoa_freq" and r[0] in MEM_SLOTS}) \
+                if "memory_slots.json" in files else 0
+            try:
+                with open(files["channels.json"]) as f:
+                    chans = len(json.load(f)["channels"])
+            except (KeyError, OSError, ValueError, TypeError):
+                chans = 0
+            out["memories"] = f"{plural(slots, 'slot')}, {plural(chans, 'channel')}"
+        if "cluster.conf" in files:
+            lines = read_text(files["cluster.conf"]).splitlines()
+            servers = sum(1 for x in lines if x.startswith("server="))
+            alerts = sum(1 for x in lines if x.startswith("alert"))
+            out["cluster"] = plural(servers, "server") + (f", {plural(alerts, 'alert')}" if alerts else "")
+        if "wfview.conf" in files:
+            on = "enabled=1" in read_text(files["wfview.conf"]).splitlines()
+            out["wfview"] = "server enabled" if on else "server disabled"
+        if "qso_log.db" in files:
+            out["qso"] = plural(count("qso_log.db", "SELECT count(*) FROM qso_log"), "QSO")
+        voice = [n for n in files if n.startswith("msg/")]
+        if voice:
+            size = sum(os.path.getsize(files[n]) for n in voice)
+            out["voice"] = f"{plural(len(voice), 'message')}, {fmt_size(size)}"
+        if "cw_trainer.json" in files:
+            out["cw"] = when("cw_trainer.json")
+        wifi = [n for n in files if n.startswith("wifi/")]
+        if wifi:
+            out["wifi"] = plural(len(wifi), "network")
+    except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
+        pass   # a part that can't be read just has no summary
+    return out
+
+
+def check_sqlite(path, table):
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            ok = con.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+            ok = ok and con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        ok = False
+    if not ok:
+        raise BackupError(f"{os.path.basename(path)} in the file is not a valid database")
+
+
+def check_member(name, path):
+    """Content check of one unpacked member; raises BackupError."""
+    try:
+        if name == "params.db":
+            check_sqlite(path, "params")
+        elif name == "qso_log.db":
+            check_sqlite(path, "qso_log")
+        elif name == "memory_slots.json":
+            with open(path) as f:
+                rows = json.load(f)["rows"]
+            if not isinstance(rows, list) or len(rows) > 1000 or not all(
+                    isinstance(r, list) and len(r) == 3 and isinstance(r[0], int) and isinstance(r[1], str) and len(r[1]) <= 32
+                    and isinstance(r[2], (int, float)) and not isinstance(r[2], bool) for r in rows):
+                raise ValueError
+        elif name == "channels.json":
+            with open(path) as f:
+                if not isinstance(json.load(f)["channels"], list):
+                    raise ValueError
+        elif name == "cw_trainer.json":
+            with open(path) as f:
+                json.load(f)
+        elif name.endswith((".conf", ".nmconnection")):
+            with open(path, "rb") as f:
+                data = f.read()
+            if b"\0" in data or (name.endswith(".nmconnection") and b"[connection]" not in data):
+                raise ValueError
+    except (OSError, ValueError, KeyError, TypeError):
+        raise BackupError(f"{name} in the file is not valid")
+
+
+def unpack_backup(archive, stage):
+    """Checks a backup and copies its members into stage. Returns the manifest."""
+    with open(archive, "rb") as f:
+        gz = f.read(2) == b"\x1f\x8b"
+    if gz and not zlib:
+        raise BackupError("This radio image can't read .tar.gz backups: upload a plain .tar")
+    try:
+        with tarfile.open(archive, "r:gz" if gz else "r:") as tf:
+            seen, total = set(), 0
+            for m in tf:
+                if len(seen) >= BACKUP_MAX_MEMBERS:
+                    raise BackupError("Too many items in the file")
+                if m.name != "manifest.json" and not backup_member(m.name):
+                    raise BackupError(f"Unexpected item in the file: {m.name[:60]!r}")
+                if m.type not in (tarfile.REGTYPE, tarfile.AREGTYPE) or m.name in seen:
+                    raise BackupError(f"Unexpected item in the file: {m.name[:60]!r}")
+                total += m.size
+                if total > BACKUP_MAX_BYTES or (m.size > BACKUP_TEXT_MAX and not m.name.endswith((".db", ".mp3"))):
+                    raise BackupError("The file is too large")
+                seen.add(m.name)
+                dst = os.path.join(stage, m.name)
+                os.makedirs(os.path.dirname(dst), mode=0o700, exist_ok=True)
+                with tf.extractfile(m) as src, open(dst, "wb") as out:
+                    shutil.copyfileobj(src, out)
+                    out.flush()
+                    os.fsync(out.fileno())
+    except TAR_ERRORS as e:
+        raise BackupError(f"Not a valid backup file ({e.__class__.__name__})")
+    try:
+        with open(os.path.join(stage, "manifest.json")) as f:
+            manifest = json.load(f)
+        if manifest["version"] != 1 or not isinstance(manifest["date"], str):
+            raise ValueError
+    except (OSError, ValueError, KeyError, TypeError):
+        raise BackupError("Not an X6100 backup: manifest.json is missing or has an unknown version")
+    for name in seen - {"manifest.json"}:
+        check_member(name, os.path.join(stage, name))
+    return manifest
+
+
+def backup_error(status, msg):
+    bottle.response.status = status
+    return {"status": "error", "msg": msg}
+
+
+@app.route('/backup')
+def backup():
+    return bottle.template('backup')
+
+
+@app.get('/api/backup')
+def get_backup():
+    return {"parts": describe_backup(backup_current())}
+
+
+@app.get('/api/backup/download')
+def download_backup():
+    parts = [p for p in bottle.request.query.get("parts", "").split(",") if p]
+    files = {n: p for n, p in backup_current().items() if backup_member(n)[0] in parts}
+    if not files:
+        return backup_error(400, "Nothing to back up")
+    now = datetime.now()
+    os.makedirs(settings.BACKUP_WORK, mode=0o700, exist_ok=True)
+    out = tempfile.TemporaryFile(dir=settings.BACKUP_WORK)
+    try:
+        with tempfile.TemporaryDirectory(dir=settings.BACKUP_WORK) as tmp:
+            for name, path in list(files.items()):
+                copy = os.path.join(tmp, name.replace("/", "_"))
+                if name == "memory_slots.json":
+                    with open(copy, "w") as f:
+                        json.dump({"rows": memory_rows(path)}, f)
+                elif name.endswith(".db"):   # consistent copy while the GUI has it open
+                    src, dst = sqlite3.connect(f"file:{path}?mode=ro", uri=True), sqlite3.connect(copy)
+                    src.backup(dst)
+                    src.close()
+                    dst.close()
+                else:
+                    shutil.copyfile(path, copy)
+                files[name] = copy
+            callsign = read_callsign()
+            call = re.sub(r"[^A-Za-z0-9_-]", "-", callsign)
+            manifest = {"version": 1, "date": now.strftime("%Y-%m-%d %H:%M"), "callsign": callsign,
+                        "parts": describe_backup(files, now.strftime("%Y-%m-%d %H:%M"))}
+            with tarfile.open(fileobj=out, mode="w:gz" if zlib else "w") as tf:
+                data = json.dumps(manifest, indent=1).encode()
+                info = tarfile.TarInfo("manifest.json")
+                info.size, info.mtime = len(data), int(now.timestamp())
+                tf.addfile(info, io.BytesIO(data))
+                for name, copy in files.items():
+                    info = tf.gettarinfo(copy, name)
+                    info.uid = info.gid = 0
+                    info.uname = info.gname = ""
+                    info.mode = 0o600
+                    with open(copy, "rb") as f:
+                        tf.addfile(info, f)
+    except (OSError, sqlite3.Error, ValueError) as e:
+        out.close()
+        return backup_error(500, f"Can't make the backup: {e}")
+    out.seek(0, os.SEEK_END)
+    size = out.tell()
+    out.seek(0)
+    ext = "tar.gz" if zlib else "tar"
+    name = f"x6100-backup-{call + '-' if call else ''}{now.strftime('%Y-%m-%d')}.{ext}"
+    bottle.response.content_type = "application/gzip" if zlib else "application/x-tar"
+    bottle.response.set_header("Content-Disposition", f'attachment; filename="{name}"')
+    bottle.response.set_header("Content-Length", str(size))
+    return out
+
+
+def backup_stage():
+    return os.path.join(settings.BACKUP_WORK, "stage")
+
+
+@app.post('/api/backup/upload')
+def upload_backup():
+    length = bottle.request.content_length
+    if length <= 0 or length > BACKUP_MAX_BYTES:
+        return backup_error(413, "The file is empty or larger than 50 MB")
+    if not backup_lock.acquire(blocking=False):
+        return backup_error(409, "Another backup operation is running")
+    try:
+        stage = backup_stage()
+        shutil.rmtree(stage, ignore_errors=True)
+        os.makedirs(stage, mode=0o700)
+        archive = os.path.join(settings.BACKUP_WORK, "upload.tar")
+        try:
+            with open(archive, "wb") as f:
+                left, src = length, bottle.request.environ["wsgi.input"]
+                while left > 0:
+                    chunk = src.read(min(left, 65536))
+                    if not chunk:
+                        raise BackupError("Upload interrupted")
+                    f.write(chunk)
+                    left -= len(chunk)
+            manifest = unpack_backup(archive, stage)
+        except (BackupError, OSError) as e:
+            shutil.rmtree(stage, ignore_errors=True)
+            return backup_error(400, str(e))
+        finally:
+            try:
+                os.remove(archive)
+            except OSError:
+                pass
+        in_file = describe_backup(stage_files(), manifest["date"][:32])
+        return {"date": manifest["date"][:32], "callsign": str(manifest.get("callsign", ""))[:16],
+                "parts": {p: {"file": s, "now": describe_backup(backup_current()).get(p, "")} for p, s in in_file.items()}}
+    finally:
+        backup_lock.release()
+
+
+def stage_files():
+    """member -> path of what the last upload unpacked."""
+    files = {}
+    for root, _, names in os.walk(backup_stage()):
+        for n in names:
+            path = os.path.join(root, n)
+            member = os.path.relpath(path, backup_stage()).replace(os.sep, "/")
+            if member != "manifest.json":
+                files[member] = path
+    return files
+
+
+def install_file(src, dst, mode):
+    """Atomic copy: tmp file in the target directory, fsync, rename."""
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    tmp = dst + ".tmp"
+    with open(src, "rb") as i, open(tmp, "wb") as o:
+        shutil.copyfileobj(i, o)
+        o.flush()
+        os.fsync(o.fileno())
+    os.chmod(tmp, mode)
+    os.replace(tmp, dst)
+
+
+def save_safety_copy(member, path):
+    if not os.path.isfile(path):
+        return
+    dst = os.path.join(settings.BACKUP_SAFETY, member)
+    os.makedirs(os.path.dirname(dst), mode=0o700, exist_ok=True)
+    if member.endswith(".db"):
+        try:
+            src, out = sqlite3.connect(path), sqlite3.connect(dst)
+            src.backup(out)
+            src.close()
+            out.close()
+            return
+        except sqlite3.Error:
+            pass   # not a database (corrupt): plain copy
+    shutil.copyfile(path, dst)
+
+
+def apply_memory_slots(path):
+    rows = [r for r in memory_rows(path) if r[0] in MEM_SLOTS]
+    con = sqlite3.connect(settings.DB_PATH)
+    try:
+        with con:
+            con.execute("DELETE FROM memory WHERE id BETWEEN ? AND ?", (MEM_SLOTS[0], MEM_SLOTS[-1]))
+            con.executemany("INSERT OR REPLACE INTO memory(id, name, val) VALUES(?, ?, ?)", rows)
+    finally:
+        con.close()
+
+
+def gui_service(action):
+    subprocess.run([settings.GUI_INIT, action], capture_output=True, timeout=60)
+
+
+@app.post('/api/backup/restore')
+def restore_backup():
+    parts = (bottle.request.json or {}).get("parts")
+    if not isinstance(parts, list) or not parts:
+        return backup_error(400, "Nothing selected")
+    if not backup_lock.acquire(blocking=False):
+        return backup_error(409, "Another backup operation is running")
+    try:
+        files = stage_files()
+        todo = {}   # member -> path on the radio, in the order of params.db first
+        for name, path in sorted(files.items(), key=lambda x: x[0] != "params.db"):
+            member = backup_member(name)
+            if member and member[0] in parts:
+                todo[name] = member[1]
+        if not todo:
+            return backup_error(409, "No uploaded backup: choose the file again")
+        gui = any(backup_member(n)[0] in BACKUP_GUI_PARTS for n in todo)
+        if gui:
+            try:
+                gui_service("stop")
+            except (OSError, subprocess.SubprocessError) as e:
+                return backup_error(500, f"Can't stop the radio screen: {e}")
+            time.sleep(1)
+        failed, restored = {}, []
+        try:
+            for name, dst in todo.items():
+                part = backup_member(name)[0]
+                try:
+                    if name == "memory_slots.json":
+                        if "params.db" not in todo:   # else already saved, and dst is the new file
+                            save_safety_copy("params.db", dst)
+                        apply_memory_slots(files[name])
+                    else:
+                        save_safety_copy(name, dst)
+                        install_file(files[name], dst, 0o600 if part == "wifi" else 0o644)
+                        if name.endswith(".db"):
+                            for ext in ("-wal", "-shm"):   # stale journal of the replaced file
+                                try:
+                                    os.remove(dst + ext)
+                                except OSError:
+                                    pass
+                    if part not in restored:
+                        restored.append(part)
+                except (OSError, sqlite3.Error, ValueError, KeyError) as e:
+                    failed[part] = str(e)
+            os.sync()
+            if "wifi" in restored:
+                try:
+                    subprocess.run(["nmcli", "connection", "reload"], capture_output=True, timeout=20)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+        finally:
+            if gui:
+                try:
+                    gui_service("start")
+                except (OSError, subprocess.SubprocessError) as e:
+                    failed["gui"] = f"Can't start the radio screen: {e}"
+            shutil.rmtree(backup_stage(), ignore_errors=True)
+        restored = [p for p in restored if p not in failed]
+        return {"restored": restored, "failed": failed, "gui_restarted": gui}
+    finally:
+        backup_lock.release()
 
 
 # Timezone routes

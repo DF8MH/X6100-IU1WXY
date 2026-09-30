@@ -31,6 +31,7 @@ static cluster_spot_t spots[CLUSTER_MAX_SPOTS];
 static int            spots_n;
 static uint32_t       spots_gen;
 static uint16_t       last_min = 0xFFFF;
+static uint32_t       last_fgen;
 
 static uint16_t utc_now_min(void) {
     time_t    now = time(NULL);
@@ -54,6 +55,9 @@ static void redraw(void) {
     int      cnt[ROWS] = {0};
     int32_t  left = span_center - span_half;
     uint16_t now  = utc_now_min();
+    const cluster_filter_t *flt = cluster_filter();
+
+    last_fgen = flt->gen;
 
     if (span_half > 0 && param_i_get(cfg_cluster_spots_wf)) {
         /* Newest first: they win the free places */
@@ -63,7 +67,7 @@ static void redraw(void) {
             lv_coord_t x = dx, lx, w;
             int       row;
 
-            if (dx < 0 || dx >= WIDTH) {
+            if (dx < 0 || dx >= WIDTH || !cluster_filter_pass(flt, s, now)) {
                 continue;
             }
             w  = lv_txt_get_width(s->dx, strlen(s->dx), &sony_18, 0, LV_TEXT_FLAG_NONE) + 4;
@@ -86,7 +90,7 @@ static void redraw(void) {
             start[row][cnt[row]] = lx;
             end[row][cnt[row]++] = lx + w;
 
-            uint32_t color = age_color(cluster_age_min(s->utc_min, now));
+            uint32_t color = cluster_alert_match(flt, s) >= 0 ? 0xFF4FC0 : age_color(cluster_age_min(s->utc_min, now));
             mark_t  *m     = &marks[n++];
 
             lv_label_set_text(m->label, s->dx);
@@ -113,7 +117,7 @@ static void timer_cb(lv_timer_t *t) {
     if (n >= 0) {
         spots_n = n;
     }
-    if (n >= 0 || min != last_min) {
+    if (n >= 0 || min != last_min || cluster_filter()->gen != last_fgen) {
         last_min = min;
         redraw();
     }

@@ -8,6 +8,7 @@
 
 #include "dsp.h"
 #include "cat.h"
+#include "remote_server.h"
 
 #include "cfg/settings_manager.h"
 
@@ -505,6 +506,7 @@ void dsp_samples(cfloat *buf_samples, uint16_t size, bool tx, uint32_t base_freq
             waterfall_data(waterfall_psd, WATERFALL_NFFT, tx, base_freq, width_hz);
         }
         cat_scope_data(waterfall_psd, WATERFALL_NFFT, base_freq, waterfall_fft_decim ? FULL_BW_HZ / spectrum_factor : FULL_BW_HZ, tx);
+        remote_scope_data(waterfall_psd, WATERFALL_NFFT, base_freq, waterfall_fft_decim ? FULL_BW_HZ / spectrum_factor : FULL_BW_HZ, tx);
 
         // TODO: skip on disabled auto min/max
         if (!tx) {

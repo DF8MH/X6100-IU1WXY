@@ -8,7 +8,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     hkey.c clock.c info.c
     meter.c band_info.cpp tx_info.c
     audio.c mfk.cpp cw.cpp cw_decoder.c panel.cpp
-    rtty.c screenshot.c screen_rec.c avi_writer.c backlight.c gps.c cat.cpp wfview_server.c
+    rtty.c screenshot.c screen_rec.c avi_writer.c backlight.c gps.c cat.cpp wfview_server.c remote_server.cpp
     dialog.c dialog_settings.cpp dialog_swrscan.c
     dialog_ft8.c dialog_freq.c dialog_gps.c dialog_msg_cw.c
     dialog_msg_voice.c dialog_recorder.c dialog_qth.c station.c
@@ -25,6 +25,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     freq_strip.c
     freq_scale.c
     spot_marks.c
+    band_plan.c
     cluster_column.c
     sstv/decoder.c
     sstv/encoder.c

@@ -1174,6 +1174,25 @@ static uint8_t make_cluster_spots_wf(uint8_t row) {
     return row + 1;
 }
 
+static uint8_t make_band_plan(uint8_t row) {
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "Band plan");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = lv_obj_create(grid);
+    lv_obj_set_size(obj, SMALL_3, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(obj);
+    obj = switch_bool(obj, cfg_sm.p_band_plan);
+    lv_obj_set_width(obj, SMALL_3 - 30);
+
+    return row + 1;
+}
+
 static uint8_t make_cluster_column(uint8_t row) {
     lv_obj_t *obj;
 
@@ -3456,6 +3475,7 @@ static void make_display_page() {
     row = card_begin(LV_SYMBOL_IMAGE, "SPECTRUM");
     row = make_spectrum_show(row);
     row = make_cluster_spots_wf(row);
+    row = make_band_plan(row);
     row = make_cluster_column(row);
     row = make_auto_offset(row);
     row = make_spectrum_min_max(row);

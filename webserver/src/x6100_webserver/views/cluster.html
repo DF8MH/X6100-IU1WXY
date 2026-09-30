@@ -26,9 +26,76 @@
   </div>
 </form>
 
+<div class="card">
+  <h3>Filters</h3>
+  <p class="sub">Spots hidden here disappear from APP Cluster, the cluster column and the waterfall marks.</p>
+  <label>Modes</label>
+  <div class="actions" id="modes">
+    <label><input type="checkbox" value="CW"> CW</label>
+    <label><input type="checkbox" value="SSB"> SSB</label>
+    <label><input type="checkbox" value="DIG"> Digital</label>
+    <label><input type="checkbox" value="AMFM"> AM/FM</label>
+  </div>
+  <div class="grid" style="grid-template-columns:160px 1fr">
+    <div><label for="max_age">Max age</label>
+      <select id="max_age">
+        <option value="0">Off</option>
+        <option value="10">10 min</option>
+        <option value="15">15 min</option>
+        <option value="30">30 min</option>
+        <option value="60">60 min</option>
+        <option value="120">120 min</option>
+      </select></div>
+    <div><label for="skip">Skip spotters</label><input id="skip" autocomplete="off" maxlength="120" placeholder="e.g. K1TTT-# , *-3"></div>
+  </div>
+  <div class="actions">
+    <button type="button" class="primary" id="save-filters">Save</button>
+    <span class="status" id="fstatus"></span>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Alerts</h3>
+  <p class="sub">Callsigns or prefixes you are looking for. <code>*</code> matches anything: VP8*, */P, 3Y0J.</p>
+  <div class="table-wrap">
+  <table id="alerts">
+    <thead>
+      <tr><th>Pattern</th><th>Only bands</th><th>Only mode</th><th>Last seen</th><th></th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  </div>
+  <form id="add-alert">
+    <div class="grid" style="grid-template-columns:2fr 2fr 1fr">
+      <div><label for="pattern">Pattern</label><input id="pattern" autocomplete="off" required maxlength="31" pattern="[A-Za-z0-9/*]+" placeholder="e.g. VP8*"></div>
+      <div><label for="bands">Only bands</label>
+        <select id="bands" multiple size="4"></select></div>
+      <div><label for="mode">Only mode</label>
+        <select id="mode">
+          <option value="">Any</option>
+          <option value="CW">CW</option>
+          <option value="SSB">SSB</option>
+          <option value="DIG">DIG</option>
+        </select></div>
+    </div>
+    <p class="sub">No band selected = all bands.</p>
+    <div class="actions">
+      <button type="submit" class="primary">Add</button>
+    </div>
+  </form>
+  <div class="actions">
+    <label><input type="checkbox" id="popup"> Popup on the radio</label>
+    <label><input type="checkbox" id="beep"> Beep</label>
+    <span class="status" id="astatus"></span>
+  </div>
+</div>
+
 <script>
-var showStatus = function(text, error=false) {
-  const el = $("#status");
+var bandList = [160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6];
+bandList.forEach(function(b) { $("#bands").append($("<option>").val(b).text(b + " m")); });
+
+var showStatus = function(text, error=false, sel="#status") {
+  const el = $(sel);
   el.toggleClass("error", error);
   el.html('<span class="dot"></span>').append(document.createTextNode(text));
 }
@@ -46,17 +113,36 @@ var render = function(data) {
     if (!inUse) actions.append(" ", $("<button class='ghost'>Delete</button>").on("click", function() { call("DELETE", "/api/cluster/servers/" + i); }));
     body.append(row.append(actions));
   });
+
+  const f = data.filters;
+  $("#modes input").each(function() { $(this).prop("checked", f.modes.indexOf(this.value) >= 0); });
+  $("#max_age").val(String(f.max_age));
+  if ($("#max_age").val() === null) $("#max_age").append($("<option>").val(f.max_age).text(f.max_age + " min")).val(String(f.max_age));
+  $("#skip").val(f.skip.split(",").join(", "));
+
+  const alerts = $("#alerts>tbody").empty();
+  data.alerts.forEach(function(a, i) {
+    const row = $("<tr>");
+    row.append($("<td>").text(a.pattern));
+    row.append($("<td>").text(a.bands ? a.bands.split(",").join(", ") + " m" : "All"));
+    row.append($("<td>").text(a.mode || "Any"));
+    row.append($("<td>").text(a.seen || "—"));
+    row.append($("<td class='action-cell'>").append($("<button class='ghost'>Delete</button>").on("click", function() { call("DELETE", "/api/cluster/alerts/" + i, null, "#astatus"); })));
+    alerts.append(row);
+  });
+  $("#popup").prop("checked", data.popup);
+  $("#beep").prop("checked", data.beep);
 }
 
-var call = function(type, url, payload) {
+var call = function(type, url, payload, st="#status") {
   $.ajax({
     url: url,
     type: type,
     data: payload ? JSON.stringify(payload) : undefined,
     contentType: "application/json; charset=utf-8",
     dataType: "json",
-    success: function(r) { render(r); showStatus("Saved"); },
-    error: function(xhr) { showStatus(xhr.responseJSON ? xhr.responseJSON.msg : "Save failed", true); }
+    success: function(r) { render(r); showStatus("Saved", false, st); },
+    error: function(xhr) { showStatus(xhr.responseJSON ? xhr.responseJSON.msg : "Save failed", true, st); }
   });
 }
 
@@ -67,5 +153,23 @@ $("#add").on("submit", function(e) {
   call("POST", "/api/cluster/servers",
        {name: $("#name").val().trim(), host: $("#host").val().trim(), port: Number($("#port").val())});
   $("#name, #host").val("");
+});
+
+$("#save-filters").on("click", function() {
+  const modes = $("#modes input:checked").map(function() { return this.value; }).get();
+  call("POST", "/api/cluster/filters",
+       {modes: modes, max_age: Number($("#max_age").val()), skip: $("#skip").val().trim()}, "#fstatus");
+});
+
+$("#add-alert").on("submit", function(e) {
+  e.preventDefault();
+  call("POST", "/api/cluster/alerts",
+       {pattern: $("#pattern").val().trim(), bands: ($("#bands").val() || []).map(Number), mode: $("#mode").val()}, "#astatus");
+  $("#pattern").val("");
+  $("#bands").val([]);
+});
+
+$("#popup, #beep").on("change", function() {
+  call("POST", "/api/cluster/alert-options", {popup: $("#popup").prop("checked"), beep: $("#beep").prop("checked")}, "#astatus");
 });
 </script>

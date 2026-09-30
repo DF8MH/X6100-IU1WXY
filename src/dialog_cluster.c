@@ -55,6 +55,15 @@
 #define COLOR_VFO_BG  0x0a1f3a
 #define COLOR_DIM     0x90a0b0
 #define COLOR_NEW     0x60ff60
+#define COLOR_ALERT_BG     0x7a1f5c
+#define COLOR_ALERT_BORDER 0xff4fc0
+#define COLOR_ALERT_TEXT   0xff9be0
+
+#define ALERT_SHOW_MS   10000
+#define ALERT_NEW_MIN   5    /* only fresh spots raise an alert */
+#define ALERT_REPEAT_S  600  /* the same call on the same band: once per 10 min */
+#define ALERT_SEEN      64
+#define ALERTS_SEEN_FILE "/tmp/cluster_alerts_seen" /* pattern|freq_hz|utc_min, for the web page */
 
 static void construct_cb(lv_obj_t *parent);
 static void destruct_cb(void);
@@ -62,9 +71,12 @@ static void key_cb(lv_event_t *e);
 static void close_cb(button_data_t *data);
 static void band_all_cb(button_data_t *data);
 static void tune_cb(button_data_t *data);
+static void mode_cb(button_data_t *data);
+static const char *mode_label(void);
 static void server_cb(button_data_t *data);
 static bool popup_key(uint32_t key);
 static void use_server(int i);
+static void alert_scan(void);
 
 static buttons_page_t btn_page_1, btn_page_2;
 
@@ -74,11 +86,12 @@ static button_data_t btn_page2 = {
     .type = BTN_TEXT, .label = "(CLUSTER\n2:2)", .press = button_next_page_cb, .next = &btn_page_1};
 static button_data_t btn_server = {.type = BTN_TEXT, .label = "Server", .press = server_cb};
 static button_data_t btn_band = {.type = BTN_TEXT, .label = "Band /\nAll", .press = band_all_cb};
+static button_data_t btn_mode = {.type = BTN_TEXT_FN, .label_fn = mode_label, .press = mode_cb};
 static button_data_t btn_tune = {.type = BTN_TEXT, .label = "Tune", .press = tune_cb};
 static button_data_t btn_close = {.type = BTN_TEXT, .label = "Close", .press = close_cb};
 
 static buttons_page_t btn_page_1 = {
-    .items = {&btn_page, &btn_band, &btn_tune, NULL, &btn_close},
+    .items = {&btn_page, &btn_band, &btn_tune, &btn_mode, &btn_close},
 };
 static buttons_page_t btn_page_2 = {
     .items = {&btn_page2, &btn_server, NULL, NULL, &btn_close},
@@ -115,6 +128,10 @@ static int            row_count;
 static int      sel = -1; /* index into view[] */
 static bool     follow_vfo = true;
 static bool     show_all;
+static uint8_t  view_mode;  /* quick view filter (CLUSTER_FM_*, 0 = all), not saved */
+static int      scope_count; /* spots of the band (or all) before the filters */
+static const cluster_filter_t *flt;
+static uint32_t filter_gen;
 static int32_t  last_vfo;
 static int      last_band = -2;
 static uint16_t now_min;
@@ -142,6 +159,7 @@ static void background_cb(lv_timer_t *t) {
     bool up = wifi_get_status() == WIFI_CONNECTED;
     if (up && !wifi_was_up) cluster_client_retry();
     wifi_was_up = up;
+    alert_scan();
 }
 
 void dialog_cluster_start_client(void) {
@@ -154,6 +172,157 @@ static uint16_t utc_now_min(void) {
     struct tm tm;
     gmtime_r(&now, &tm);
     return (uint16_t)(tm.tm_hour * 60 + tm.tm_min);
+}
+
+/* ---- Alerts: a popup on the main screen for a new spot matching one ---- */
+
+static lv_obj_t      *alert_box;
+static lv_timer_t    *alert_timer;
+static cluster_spot_t alert_spot;
+static cluster_spot_t bg_spots[CLUSTER_MAX_SPOTS];
+static uint32_t       bg_gen, bg_filter_gen;
+static struct {
+    char   dx[CLUSTER_CALL_LEN];
+    int    band;
+    time_t t;
+} seen[ALERT_SEEN];
+static struct {
+    char    pattern[32];
+    int32_t freq_hz;
+    uint16_t utc_min;
+} last_hit[CLUSTER_MAX_ALERTS];
+static int last_hit_n;
+
+static void alert_hide(void) {
+    if (alert_timer) {
+        lv_timer_del(alert_timer);
+        alert_timer = NULL;
+    }
+    if (alert_box) {
+        lv_obj_del(alert_box);
+        alert_box = NULL;
+    }
+}
+
+static void alert_timer_cb(lv_timer_t *t) {
+    (void)t;
+    alert_timer = NULL; /* one-shot: LVGL deletes it */
+    if (alert_box) {
+        lv_obj_del(alert_box);
+        alert_box = NULL;
+    }
+}
+
+static void alert_show(const cluster_spot_t *s) {
+    static const char *const mode_name[] = {"CW", "LSB", "USB", "DIG", "AM", "FM"};
+
+    alert_hide();
+    alert_spot = *s;
+    alert_box  = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(alert_box);
+    lv_obj_set_pos(alert_box, 120, 318);
+    lv_obj_set_size(alert_box, 420, 78);
+    lv_obj_set_style_bg_color(alert_box, lv_color_hex(0x2a0f22), 0);
+    lv_obj_set_style_bg_opa(alert_box, 240, 0);
+    lv_obj_set_style_border_color(alert_box, lv_color_hex(COLOR_ALERT_BORDER), 0);
+    lv_obj_set_style_border_width(alert_box, 2, 0);
+    lv_obj_set_style_radius(alert_box, 10, 0);
+    lv_obj_clear_flag(alert_box, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *title = lv_label_create(alert_box);
+    lv_obj_set_style_text_font(title, &sony_18, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(COLOR_ALERT_TEXT), 0);
+    lv_label_set_text(title, "CLUSTER ALERT");
+    lv_obj_set_pos(title, 14, 8);
+
+    lv_obj_t *hint = lv_label_create(alert_box);
+    lv_obj_set_style_text_font(hint, &sony_18, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(COLOR_DIM), 0);
+    lv_label_set_text(hint, "MFK: tune");
+    lv_obj_align(hint, LV_ALIGN_TOP_RIGHT, -14, 8);
+
+    lv_obj_t *line = lv_label_create(alert_box);
+    lv_obj_set_style_text_font(line, FONT_MAIN, 0);
+    lv_obj_set_style_text_color(line, lv_color_white(), 0);
+    lv_label_set_long_mode(line, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(line, 420 - 28);
+    lv_label_set_text_fmt(line, "%s  %d.%03d.%d  %s", s->dx, s->freq_hz / 1000000, (s->freq_hz / 1000) % 1000,
+                          (s->freq_hz % 1000) / 100, mode_name[cluster_guess_mode(s)]);
+    lv_obj_set_pos(line, 14, 34);
+
+    alert_timer = lv_timer_create(alert_timer_cb, ALERT_SHOW_MS, NULL);
+    lv_timer_set_repeat_count(alert_timer, 1);
+}
+
+/* MFK press while the popup is shown: tune to the spot. */
+bool dialog_cluster_alert_press(void) {
+    if (!alert_box) return false;
+    cluster_spot_t s = alert_spot;
+    alert_hide();
+    dialog_cluster_tune_spot(&s);
+    return true;
+}
+
+/* Last spot seen for each alert pattern, for the web page. */
+static void write_last_hit(const cluster_spot_t *s, const char *pattern) {
+    int i;
+    for (i = 0; i < last_hit_n; i++)
+        if (strcmp(last_hit[i].pattern, pattern) == 0) break;
+    if (i == last_hit_n) {
+        if (last_hit_n == CLUSTER_MAX_ALERTS) return;
+        last_hit_n++;
+    }
+    snprintf(last_hit[i].pattern, sizeof(last_hit[i].pattern), "%s", pattern);
+    last_hit[i].freq_hz = s->freq_hz;
+    last_hit[i].utc_min = s->utc_min;
+
+    FILE *f = fopen(ALERTS_SEEN_FILE, "w");
+    if (!f) return;
+    for (i = 0; i < last_hit_n; i++)
+        fprintf(f, "%s|%d|%02d:%02d\n", last_hit[i].pattern, (int)last_hit[i].freq_hz, last_hit[i].utc_min / 60,
+                last_hit[i].utc_min % 60);
+    fclose(f);
+}
+
+/* True once per call and band in ALERT_REPEAT_S. */
+static bool alert_is_new(const cluster_spot_t *s, time_t now) {
+    int band = cluster_band_of(s->freq_hz), free_i = 0;
+
+    for (int i = 0; i < ALERT_SEEN; i++) {
+        if (seen[i].t && now - seen[i].t < ALERT_REPEAT_S && seen[i].band == band &&
+            strcasecmp(seen[i].dx, s->dx) == 0)
+            return false;
+        if (seen[i].t < seen[free_i].t) free_i = i; /* the oldest (or an unused) entry */
+    }
+    snprintf(seen[free_i].dx, sizeof(seen[free_i].dx), "%s", s->dx);
+    seen[free_i].band = band;
+    seen[free_i].t    = now;
+    return true;
+}
+
+/* Looks at the new spots, also while the app is closed. */
+static void alert_scan(void) {
+    const cluster_filter_t *f = cluster_filter();
+    if (f->gen != bg_filter_gen) {
+        bg_filter_gen = f->gen;
+        bg_gen        = 0; /* alerts changed: look at the spots again */
+    }
+    int n = cluster_client_snapshot(bg_spots, CLUSTER_MAX_SPOTS, &bg_gen);
+    if (n <= 0 || f->alert_count == 0) return;
+
+    time_t   now = time(NULL);
+    uint16_t min = utc_now_min();
+    int      hit = -1;
+    for (int i = 0; i < n; i++) {
+        int a = cluster_alert_match(f, &bg_spots[i]);
+        if (a < 0 || cluster_age_min(bg_spots[i].utc_min, min) > ALERT_NEW_MIN) continue;
+        if (!alert_is_new(&bg_spots[i], now)) continue;
+        hit = i;
+        write_last_hit(&bg_spots[i], f->alerts[a].pattern);
+    }
+    /* The newest one is shown; there is no speaker beep (nothing safe to reuse:
+     * the speaker path is the TX audio path while transmitting). */
+    if (hit >= 0 && f->popup) alert_show(&bg_spots[hit]);
 }
 
 static int vfo_band(void) {
@@ -213,9 +382,16 @@ static void rebuild(void) {
     if (had_sel) keep = view[sel];
 
     int band = vfo_band();
-    view_count = 0;
-    for (int i = 0; i < all_count; i++)
-        if (showing_all() || cluster_band_of(all_spots[i].freq_hz) == band) view[view_count++] = all_spots[i];
+    flt = cluster_filter();
+    view_count  = 0;
+    scope_count = 0;
+    for (int i = 0; i < all_count; i++) {
+        if (!showing_all() && cluster_band_of(all_spots[i].freq_hz) != band) continue;
+        scope_count++;
+        if (!cluster_filter_pass(flt, &all_spots[i], now_min)) continue;
+        if (view_mode && cluster_spot_mode_class(&all_spots[i]) != view_mode) continue;
+        view[view_count++] = all_spots[i];
+    }
     qsort(view, (size_t)view_count, sizeof(view[0]), cmp_freq);
 
     int32_t vfo = cparam_i_get(cfg_fg_freq);
@@ -253,7 +429,14 @@ static void update_header(void) {
     lv_label_set_text_fmt(head_mid, "#ffffff %s# - VFO #ffffff %d.%03d.%02d#",
                           showing_all() ? "All" : cluster_band_name(vfo_band()), vfo / 1000000,
                           (vfo / 1000) % 1000, (vfo % 1000) / 10);
-    lv_label_set_text_fmt(head_right, "%d spots - %02d:%02dZ", view_count, now_min / 60, now_min % 60);
+    bool conf_filtered = flt && (flt->modes != CLUSTER_FM_ALL || flt->max_age || flt->skip[0]);
+    if (view_mode || conf_filtered) {
+        static const char *const names[] = {"Filtered", "CW only", "SSB only", "", "DIG only"};
+        lv_label_set_text_fmt(head_right, "%s - %d/%d - %02d:%02dZ", names[view_mode], view_count,
+                              scope_count, now_min / 60, now_min % 60);
+    } else {
+        lv_label_set_text_fmt(head_right, "%d spots - %02d:%02dZ", view_count, now_min / 60, now_min % 60);
+    }
 }
 
 static void update_status(void) {
@@ -313,8 +496,12 @@ static void timer_cb(lv_timer_t *t) {
         changed = true; /* "new" marks age */
     }
 
-    /* The server can be changed from the web configurator too. */
+    /* The server can be changed from the web configurator too, and the filters. */
     if (cluster_config_mtime() != conf_mtime) load_server();
+    if (cluster_filter() != flt || cluster_filter()->gen != filter_gen) {
+        filter_gen = cluster_filter()->gen;
+        changed    = true;
+    }
 
     if (changed) rebuild();
     update_header();
@@ -340,6 +527,12 @@ static void table_draw_cb(lv_event_t *e) {
         dsc->rect_dsc->bg_color     = lv_color_hex(COLOR_SEL_BG);
         dsc->rect_dsc->border_color = lv_color_white();
         dsc->rect_dsc->border_width = 2;
+        dsc->rect_dsc->border_opa   = LV_OPA_COVER;
+        dsc->rect_dsc->border_side  = LV_BORDER_SIDE_FULL;
+    } else if (flt && cluster_alert_match(flt, s) >= 0) {
+        dsc->rect_dsc->bg_color     = lv_color_hex(COLOR_ALERT_BG);
+        dsc->rect_dsc->border_color = lv_color_hex(COLOR_ALERT_BORDER);
+        dsc->rect_dsc->border_width = 1;
         dsc->rect_dsc->border_opa   = LV_OPA_COVER;
         dsc->rect_dsc->border_side  = LV_BORDER_SIDE_FULL;
     } else if (abs(s->freq_hz - cparam_i_get(cfg_fg_freq)) <= NEAR_HZ) {
@@ -393,17 +586,20 @@ static void table_draw_end_cb(lv_event_t *e) {
     const cluster_spot_t *s    = &view[rows[r]];
     bool                  near = abs(s->freq_hz - cparam_i_get(cfg_fg_freq)) <= NEAR_HZ || rows[r] == sel;
     uint16_t              age  = cluster_age_min(s->utc_min, now_min);
+    bool                  alert = flt && cluster_alert_match(flt, s) >= 0;
 
     snprintf(text, sizeof(text), "%d.%03d.%d", s->freq_hz / 1000000, (s->freq_hz / 1000) % 1000,
              (s->freq_hz % 1000) / 100);
     draw_text(dsc, FONT_MAIN, 0, 122, lv_color_hex(0xd0e0f0), LV_TEXT_ALIGN_RIGHT, text);
-    draw_text(dsc, FONT_MAIN, 136, 290, near ? lv_color_hex(COLOR_NEAR) : lv_color_white(), LV_TEXT_ALIGN_LEFT, s->dx);
+    draw_text(dsc, FONT_MAIN, 136, 290, alert ? lv_color_hex(COLOR_ALERT_TEXT) : near ? lv_color_hex(COLOR_NEAR) : lv_color_white(),
+              LV_TEXT_ALIGN_LEFT, s->dx);
     if (age <= NEW_MIN) {
         lv_coord_t w = lv_txt_get_width(s->dx, strlen(s->dx), FONT_MAIN, 0, 0);
         draw_text(dsc, FONT_MAIN, 136 + w + 4, 310, lv_color_hex(COLOR_NEW), LV_TEXT_ALIGN_LEFT, "*");
     }
     draw_text(dsc, FONT_SMALL, 300, 400, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_LEFT, s->spotter);
-    draw_text(dsc, FONT_SMALL, 410, 690, lv_color_hex(0xd0d0d0), LV_TEXT_ALIGN_LEFT, s->comment);
+    draw_text(dsc, FONT_SMALL, 410, alert ? 620 : 690, lv_color_hex(0xd0d0d0), LV_TEXT_ALIGN_LEFT, s->comment);
+    if (alert) draw_text(dsc, FONT_SMALL, 624, 686, lv_color_hex(COLOR_ALERT_BORDER), LV_TEXT_ALIGN_RIGHT, "ALERT");
     snprintf(text, sizeof(text), "%02d%02dZ", s->utc_min / 60, s->utc_min % 60);
     draw_text(dsc, FONT_SMALL, 690, WIDTH - 12, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_RIGHT, text);
 }
@@ -479,6 +675,7 @@ static void dialog_click_cb(lv_event_t *e) {
     (void)e;
     lv_indev_t *indev = lv_indev_get_act();
     if (!indev || lv_indev_get_type(indev) != LV_INDEV_TYPE_ENCODER) return;
+    if (dialog_cluster_alert_press()) return;
     if (popup) use_server(srv_sel);
     else tune_to(sel);
 }
@@ -513,6 +710,7 @@ static void construct_cb(lv_obj_t *parent) {
     last_band  = vfo_band();
     spots_gen  = 0;
     all_count  = 0;
+    view_mode  = 0;
 
     lv_color_t head_color = lv_color_hex(0x90f0d0);
     head_left             = make_label(dialog.obj, &sony_22, head_color);
@@ -523,9 +721,9 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_text_align(head_mid, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_pos(head_mid, 800 / 2 - 125 + 40, 12);
     head_right = make_label(dialog.obj, &sony_22, head_color);
-    lv_obj_set_width(head_right, 200);
+    lv_obj_set_width(head_right, 260);
     lv_obj_set_style_text_align(head_right, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(head_right, 796 - 18 - 200, 12);
+    lv_obj_set_pos(head_right, 796 - 18 - 260, 12);
 
     table = lv_table_create(dialog.obj);
     lv_obj_remove_style(table, NULL, LV_STATE_ANY | LV_PART_MAIN);
@@ -594,6 +792,22 @@ static void band_all_cb(button_data_t *data) {
     rebuild();
     update_header();
     msg_update_text_fmt("Cluster: %s", show_all ? "all bands" : "current band");
+}
+
+static const char *mode_label(void) {
+    static const char *const label[] = {"Mode /\nAll", "Mode /\nCW", "Mode /\nSSB", "", "Mode /\nDIG"};
+    return label[view_mode];
+}
+
+/* All -> CW -> SSB -> DIG -> All */
+static void mode_cb(button_data_t *data) {
+    view_mode = view_mode ? (view_mode == CLUSTER_FM_DIG ? 0 : view_mode << 1) : CLUSTER_FM_CW;
+    buttons_refresh(data);
+    if (table) {
+        follow_vfo = true;
+        rebuild();
+        update_header();
+    }
 }
 
 static void tune_cb(button_data_t *data) {

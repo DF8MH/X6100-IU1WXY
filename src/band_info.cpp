@@ -190,6 +190,14 @@ extern "C" void band_info_update(int32_t f) {
 
     lv_obj_invalidate(obj);
 
+    /* The band plan strip is in the same place and already shows the band */
+    if (cfg_band_plan->get()) {
+        lv_anim_del(obj, fade_anim);
+        fade_run = false;
+        lv_obj_set_style_opa_layered(obj, LV_OPA_TRANSP, 0);
+        return;
+    }
+
     if (!fade_run) {
         fade_run = true;
         lv_anim_set_values(&fade, lv_obj_get_style_opa(obj, 0), LV_OPA_COVER);

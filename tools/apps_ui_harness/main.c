@@ -17,10 +17,12 @@
 #include "freq_strip.h"
 #include "freq_scale.h"
 #include "spot_marks.h"
+#include "band_plan.h"
 #include "cluster_column.h"
 #include "dialog_msg_voice.h"
 #include "dialog_msg_cw.h"
 #include "dialog_cw_trainer.h"
+#include "cw_encoder.h"
 #include "cluster/client.h"
 #include "textarea_window.h"
 #include "info.h"
@@ -210,12 +212,29 @@ static void cluster_demo(void) {
     }
     FILE *conf = fopen("cluster.conf", "w"); /* CLUSTER_CONF for the harness */
     fputs("host=dxc.ve7cc.net\nport=23\nserver=VE7CC|dxc.ve7cc.net|23\n"
-          "server=IK5PWJ|dxc.ik5pwj.it|8000\nserver=DX Summit|dxc.dxsummit.fi|8000\n", conf);
+          "server=IK5PWJ|dxc.ik5pwj.it|8000\nserver=DX Summit|dxc.dxsummit.fi|8000\n"
+          "alert=VP8*|20,17|CW\nalert=3B8M||\nalert_popup=1\n", conf);
     fclose(conf);
     harness_fg_freq = 14195000;
+    dialog_cluster_start_client(); /* the alert popup comes from the background timer */
+    pump(2100);
+    shot("cluster_popup.ppm");
+    bool pressed = dialog_cluster_alert_press();
+    printf("cluster: popup press tunes: %d (expected 1), again: %d (expected 0)\n", pressed,
+           dialog_cluster_alert_press());
     dialog_construct(dialog_cluster, lv_scr_act());
     pump(600);
     shot("cluster_1.ppm");
+    {
+        buttons_page_t *p1 = buttons_get_cur_page();
+        p1->items[3]->press(p1->items[3]); /* Mode: CW */
+        pump(300);
+        shot("cluster_mode_cw.ppm");
+        p1->items[3]->press(p1->items[3]);
+        p1->items[3]->press(p1->items[3]);
+        p1->items[3]->press(p1->items[3]); /* back to All */
+        pump(300);
+    }
     uint32_t key = LV_KEY_RIGHT;
     lv_event_send(dialog_cluster->obj, LV_EVENT_KEY, &key);
     lv_event_send(dialog_cluster->obj, LV_EVENT_KEY, &key);
@@ -326,8 +345,11 @@ static void topbar(void) {
         }
     }
     cluster_column_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H);
+    band_plan_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 - BAND_PLAN_H);
+    band_plan_update(f, 50000);
     spot_marks_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
     spot_marks_update(f, 50000);
+    band_plan_update(f, 50000);
     lv_obj_move_background(stack);   /* created first in main_screen.c */
 
     extern bool harness_notify;
@@ -356,6 +378,7 @@ static void topbar(void) {
     {   /* Waterfall Fixed: the span stays put, the VFO line is 30 kHz right of the centre */
         freq_scale_update(f - 30000, 50000, 0xffffff);
         spot_marks_update(f - 30000, 50000);
+        band_plan_update(f - 30000, 50000);
         lv_obj_t *l1 = lv_obj_create(spectrum), *l2 = lv_obj_create(wf);
         lv_obj_t *ls[2] = {l1, l2};
         for (int i = 0; i < 2; i++) {
@@ -371,6 +394,7 @@ static void topbar(void) {
         lv_obj_del(l2);
         freq_scale_update(f, 50000, 0xffffff);
         spot_marks_update(f, 50000);
+        band_plan_update(f, 50000);
     }
     harness_gps_fix = false;
     pump(3100);
@@ -385,25 +409,46 @@ static void topbar(void) {
     shot("topbar_outdoor.ppm");
     styles_set_theme(THEME_SIMPLE);
     lv_obj_report_style_change(NULL);
+    /* Band plan: zoom x8 on the CW/DIG edge, a band edge with beacons, out of any band */
+    freq_scale_update(7040000, 50000 / 8, 0xffffff);
+    band_plan_update(7040000, 50000 / 8);
+    pump(100);
+    shot("topbar_bp1.ppm");
+    freq_scale_update(14100000, 50000, 0xffffff);
+    band_plan_update(14100000, 50000);
+    pump(100);
+    shot("topbar_bp2.ppm");
+    freq_scale_update(13500000, 50000, 0xffffff);
+    band_plan_update(13500000, 50000);
+    pump(100);
+    shot("topbar_bp3.ppm");
+    freq_scale_update(f, 50000, 0xffffff);
+    band_plan_update(f, 50000);
     /* Spectrum off: the row right under the strip; zoom x8 */
+    band_plan_set_y(FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H); /* top of the waterfall */
     lv_obj_add_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_y(stack, -96);
     spot_marks_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H, 24, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36); /* lines: top of the waterfall */
     freq_scale_update(f, 50000 / 8, 0xffffff);
     spot_marks_update(f, 50000 / 8);
+    band_plan_update(f, 50000 / 8);
     pump(1100);
     shot("topbar_4.ppm");
     freq_scale_update(f, 50000, 0xffffff);
     spot_marks_update(f, 50000);
+    band_plan_update(f, 50000);
     pump(100);
     shot("topbar_4b.ppm");         /* spectrum off, zoom x1 */
     freq_scale_update(f, 50000 / 8, 0xffffff);
     spot_marks_update(f, 50000 / 8);
+    band_plan_update(f, 50000 / 8);
     spot_marks_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
     lv_obj_clear_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
+    band_plan_set_y(FREQ_STRIP_Y + FREQ_STRIP_H + 96 - BAND_PLAN_H);
     lv_obj_set_y(stack, 0);
     freq_scale_update(f, 50000, 0xffffff);
     spot_marks_update(f, 50000);
+    band_plan_update(f, 50000);
     harness_gps_fix = true;
     pump(3100);
     lv_event_send(tx, EVENT_RADIO_TX, NULL);
@@ -497,7 +542,48 @@ static void cwt_round(const char *answer_or_null) {
     pump(300);
 }
 
+/* Stats file of the demo (CWT_STATS_FILE in the harness build): a corrupt one
+ * must be ignored, then a filled one is shown in the Stats view */
+#define CWT_FILE "cw_trainer_demo.json"
+
+static void cwt_write(const char *content) {
+    FILE *f = fopen(CWT_FILE, "w");
+    fputs(content, f);
+    fclose(f);
+}
+
+static void cwt_preload(void) {
+    time_t    t = time(NULL);
+    struct tm tm;
+    char      buf[600];
+    localtime_r(&t, &tm);
+    /* sample histories, newest result in bit 0 */
+    snprintf(buf, sizeof buf,
+             "{\"date\":%d,\"tries\":46,\"right\":38,\"sec\":1260,\"best_score\":2115,\"best_wpm\":28,\"chars\":"
+             "{\"K\":[20,1048575],\"M\":[20,1048063],\"R\":[20,1031103],\"S\":[20,1048575],\"U\":[10,1019],"
+             "\"A\":[20,1002255],\"P\":[6,62],\"T\":[5,1],\"L\":[20,1048447]}}",
+             (tm.tm_year + 1900) * 10000 + (tm.tm_mon + 1) * 100 + tm.tm_mday);
+    cwt_write(buf);
+}
+
+/* Wait for the sidetone of the call to end */
+static void cwt_wait_sent(void) {
+    pump(300);
+    for (int i = 0; i < 60 && cw_encoder_state() != CW_ENCODER_IDLE; i++) pump(200);
+    pump(300);
+}
+
 static void cwtrainer_demo(void) {
+    cwt_write("{{ not json \x01\x02");
+    harness_key_speed = 30;
+    harness_cwt_level = 5;
+    buttons_load_page_group(buttons_group_app);
+    dialog_construct(dialog_cw_trainer, lv_scr_act());
+    pump(200);
+    dialog_destruct();
+    pump(100);
+    printf("corrupt stats file survived\n");
+    cwt_preload();
     harness_key_speed = 30;
     harness_cwt_level = 5;   /* K M R S U */
     harness_cwt_group = 1;
@@ -513,8 +599,35 @@ static void cwtrainer_demo(void) {
     harness_cwt_group = 2;
     cwt_round("SS");                               /* wrong (unless it was SS) */
     shot("cwtrainer_2.ppm");                       /* WRONG */
-    /* Practice: free keying */
+    /* Stats view: page 3 */
+    harness_cwt_level = 10;
     buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[0]->press(pg->items[0]);
+    pump(100);
+    pg = buttons_get_cur_page();
+    pg->items[0]->press(pg->items[0]);
+    pump(100);
+    pg = buttons_get_cur_page();
+    pg->items[1]->press(pg->items[1]);             /* Stats */
+    pump(200);
+    shot("cwtrainer_5.ppm");
+    pg->items[2]->press(pg->items[2]);             /* Reset stats: first press */
+    pump(200);
+    shot("cwtrainer_6.ppm");                       /* "Sure?" */
+    pump(3300);
+    shot("cwtrainer_7.ppm");                       /* back to "Reset stats", nothing lost */
+    harness_cwt_level = 25;                        /* high level: 20 tiles, the last ones */
+    pg->items[1]->press(pg->items[1]);             /* Stats off */
+    pg->items[1]->press(pg->items[1]);             /* Stats on */
+    pump(200);
+    shot("cwtrainer_8.ppm");
+    pg->items[1]->press(pg->items[1]);
+    harness_cwt_level = 5;
+    pump(100);
+    pg->items[0]->press(pg->items[0]);             /* page 1 */
+    pump(100);
+    pg = buttons_get_cur_page();
+    /* Practice: free keying */
     pg->items[3]->press(pg->items[3]);
     pump(200);
     static const char *msg[] = {"C", "Q", " ", "C", "Q", " ", "D", "E", " ", "I", "U", "1", "W", "X", "Y", " ",
@@ -527,6 +640,52 @@ static void cwtrainer_demo(void) {
     pg->items[0]->press(pg->items[0]);
     pump(100);
     shot("cwtrainer_4.ppm");    /* page 2 */
+    pg = buttons_get_cur_page();
+    pg->items[0]->press(pg->items[0]);
+    pump(100);
+    pg = buttons_get_cur_page();
+    pg->items[0]->press(pg->items[0]);
+    pump(100);
+    pg = buttons_get_cur_page();            /* page 1 */
+
+    /* Calls: the speed changes with the answers and is given back */
+    pg->items[3]->press(pg->items[3]);
+    pump(200);
+    shot("cwtrainer_9.ppm");                /* Calls, before Start */
+    pg->items[1]->press(pg->items[1]);      /* Start */
+    pump(600);
+    shot("cwtrainer_10.ppm");               /* Listen... */
+    cwt_wait_sent();
+    shot("cwtrainer_11.ppm");               /* Your turn */
+    char call[16];
+    snprintf(call, sizeof call, "%s", dialog_cw_trainer_target());
+    printf("call: %s at %d WPM\n", call, (int)harness_key_speed);
+    cwt_answer(call);
+    pump(300);
+    shot("cwtrainer_12.ppm");               /* right: 30 -> 31 */
+    pump(1400);                             /* the next call follows by itself */
+    cwt_wait_sent();
+    snprintf(call, sizeof call, "%s", dialog_cw_trainer_target());
+    printf("call: %s at %d WPM (31 expected)\n", call, (int)harness_key_speed);
+    call[1] = call[1] == 'X' ? 'Q' : 'X';
+    cwt_answer(call);
+    pump(300);
+    shot("cwtrainer_13.ppm");               /* wrong: 31 -> 30 */
+    pg->items[1]->press(pg->items[1]);      /* Pause */
+    pump(3000);
+    printf("paused, speed %d\n", (int)harness_key_speed);
+    pg->items[3]->press(pg->items[3]);      /* Mode: Learn, speed given back */
+    pump(100);
+    printf("speed after leaving Calls: %d (30 expected)\n", (int)harness_key_speed);
+    pg->items[3]->press(pg->items[3]);
+    pg->items[3]->press(pg->items[3]);      /* Calls again */
+    pg->items[1]->press(pg->items[1]);      /* Start and close while playing */
+    pump(800);
+    dialog_destruct();
+    printf("speed after closing in Calls: %d (30 expected)\n", (int)harness_key_speed);
+    pump(100);
+    dialog_construct(dialog_cw_trainer, lv_scr_act());
+    pump(100);
     dialog_destruct();
     pump(200);
     printf("mode after: %d (3 expected)\n", harness_mode);
@@ -558,6 +717,15 @@ static void settings_demo(void) {
     }
     pump(500);
     shot("wf_mode_settings.ppm");
+    /* Display scrolled to the Band plan switch (third switch: spectrum, cluster spots, band plan) */
+    pg->items[2]->press(pg->items[2]);
+    pump(300);
+    for (int i = 0, n = 0; i < 40 && n < 3; i++) {
+        lv_group_focus_next(keyboard_group);
+        if (lv_obj_check_type(lv_group_get_focused(keyboard_group), &lv_switch_class)) n++;
+    }
+    pump(500);
+    shot("band_plan_settings.ppm");
     /* Audio scrolled to the end (the MFK wraps to the last row) */
     pg->items[3]->press(pg->items[3]);
     pump(300);

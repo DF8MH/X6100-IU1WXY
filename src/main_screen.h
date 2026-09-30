@@ -33,6 +33,10 @@ void main_screen_lock_freq(bool lock);
 void main_screen_lock_band(bool lock);
 void main_screen_lock_mode(bool lock);
 void main_screen_lock_ab(bool lock);
+/* Locks set by the apps, checked by the web remote */
+bool main_screen_freq_locked();
+bool main_screen_band_locked();
+bool main_screen_mode_locked();
 
 void main_screen_set_freq(uint64_t f);
 

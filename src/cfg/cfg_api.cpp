@@ -34,6 +34,7 @@ ParamFloat       *cfg_auto_level_offset   = nullptr;
 ParamInt         *cfg_knob_info           = nullptr;
 ParamInt         *cfg_spectrum_show       = nullptr;
 ParamInt         *cfg_cluster_spots_wf    = nullptr;
+ParamInt         *cfg_band_plan           = nullptr;
 ParamInt         *cfg_cluster_column      = nullptr;
 ParamInt         *cfg_waterfall_ref       = nullptr;
 ParamInt         *cfg_wf_mode             = nullptr;
@@ -159,6 +160,7 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_knob_info        = &cfg_sm.p_knob_info;
     cfg_spectrum_show    = &cfg_sm.p_spectrum_show;
     cfg_cluster_spots_wf = &cfg_sm.p_cluster_spots_wf;
+    cfg_band_plan        = &cfg_sm.p_band_plan;
     cfg_cluster_column = &cfg_sm.p_cluster_column;
     cfg_waterfall_ref    = &cfg_sm.p_waterfall_ref;
     cfg_wf_mode          = &cfg_sm.p_wf_mode;

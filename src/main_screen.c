@@ -52,6 +52,7 @@
 #include "freq_strip.h"
 #include "freq_scale.h"
 #include "spot_marks.h"
+#include "band_plan.h"
 #include "cluster_column.h"
 #include "backlight.h"
 #include "buttons.h"
@@ -1462,6 +1463,7 @@ static void spectrum_key_cb(lv_event_t * e) {
 }
 
 static void spectrum_pressed_cb(lv_event_t * e) {
+    if (dialog_cluster_alert_press()) return;
     switch (mfk_state) {
         case MFK_STATE_EDIT:
             mfk_state = MFK_STATE_SELECT;
@@ -1517,6 +1519,18 @@ void main_screen_lock_ab(bool lock) {
     ab_lock = lock;
 }
 
+bool main_screen_freq_locked() {
+    return subject_i_get(freq_lock);
+}
+
+bool main_screen_band_locked() {
+    return band_lock;
+}
+
+bool main_screen_mode_locked() {
+    return mode_lock;
+}
+
 void main_screen_set_freq(uint64_t freq) {
     cparam_i_set(cfg_fg_freq, freq);
     event_send(lv_scr_act(), EVENT_SCREEN_UPDATE, NULL);
@@ -1530,6 +1544,13 @@ static void on_cluster_spots_wf_change(Subject *subj, void *user_data) {
     freq_scale_lines_set_y(y);
     spot_marks_layout(param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, 36, spot_tag_y);
     cluster_column_layout(y);
+    if (!param_i_get(cfg_spectrum_show)) {
+        band_plan_set_y(y);
+    }
+}
+
+static void on_band_plan_change(Subject *subj, void *user_data) {
+    band_plan_refresh();
 }
 
 static void on_cluster_column_change(Subject *subj, void *user_data) {
@@ -1602,12 +1623,15 @@ lv_obj_t * main_screen() {
 
     lv_obj_set_y(waterfall, y);
     waterfall_set_height(480 - y);
+    /* Band plan: the last rows of the spectrum, or the top of the waterfall when it is off */
+    band_plan_init(obj, param_i_get(cfg_spectrum_show) ? wf_y - freq_height - BAND_PLAN_H : y);
     freq_scale_lines_init(obj, y, 480 - y);
     /* Cluster spots: tags under the frequency labels, lines at the bottom of
      * the spectrum, or at the top of the waterfall when it is off */
     spot_marks_init(obj, param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, 36, spot_tag_y);
     cluster_column_init(obj, wf_y);
     subject_subscribe_delayed_and_notify((Subject*)cfg_cluster_spots_wf, on_cluster_spots_wf_change, NULL);
+    subject_subscribe_delayed((Subject*)cfg_band_plan, on_band_plan_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_cluster_column, on_cluster_column_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_fg_freq, on_cluster_column_change, NULL);
 
@@ -1723,6 +1747,7 @@ static void update_freq_boundaries(Subject *subj, void *user_data) {
     int32_t center = f - param_i_get(cfg_band_if_shift) - waterfall_view_shift();
     freq_scale_update(center, half_width, color);
     spot_marks_update(center, half_width);
+    band_plan_update(center, half_width);
 }
 
 static void update_zoom_on_if_shift_change(Subject *subj, void *user_data) {

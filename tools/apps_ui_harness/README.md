@@ -30,3 +30,6 @@ faked by scripts written to `out/fakebin`. `01_gen_3` is MFK 1:4 (WF ref).
 `cwtrainer` renders the CW Trainer: Learn with a right and a wrong answer,
 Practice with decoded text (the decoder is fed by hand, `harness_decode`) and the
 button page 2, and checks that the radio mode is set to CW and given back.
+It also renders the Stats view (page 3, from a sample `cw_trainer_demo.json` written
+in `out/` instead of `/mnt/cw_trainer.json`; a corrupt file is tried first) and Calls
+(a right and a wrong answer), and checks that the key speed is given back.

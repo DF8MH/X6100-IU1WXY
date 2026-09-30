@@ -16,6 +16,10 @@ void dialog_cluster_start_client(void);
 /* Tunes the radio to a spot: frequency and the mode its comment / the band plan suggests */
 void dialog_cluster_tune_spot(const cluster_spot_t *s);
 
+/* MFK press while an alert popup is shown: tunes to its spot and closes it.
+ * False when there is no popup. */
+bool dialog_cluster_alert_press(void);
+
 #ifdef __cplusplus
 }
 #endif

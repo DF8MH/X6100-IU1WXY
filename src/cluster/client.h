@@ -53,6 +53,51 @@ bool cluster_config_save(const char *host, int port);
  * server when the file changes (e.g. from the web configurator). */
 time_t cluster_config_mtime(void);
 
+/* Filters and alerts, from the same file (the web page writes them):
+ *   filter_modes=CW,SSB,DIG,AMFM  modes shown (missing: all)
+ *   max_age=30                    minutes (0 or missing: the store's own limit)
+ *   skip_spotters=K1TTT-#,*-3     spotter calls hidden, * matches any run
+ *   alert=PATTERN|bands|mode      e.g. VP8*|20,17,15|CW (bands, mode: empty = any)
+ *   alert_popup=1, alert_beep=1
+ * Matching is case-insensitive; an alert pattern must match the whole call. */
+#define CLUSTER_MAX_ALERTS 50
+#define CLUSTER_FM_CW      (1 << 0)
+#define CLUSTER_FM_SSB     (1 << 1)
+#define CLUSTER_FM_DIG     (1 << 2)
+#define CLUSTER_FM_AMFM    (1 << 3)
+#define CLUSTER_FM_ALL     0xF
+
+typedef struct {
+    char     pattern[32];
+    uint16_t bands; /* bit per cluster_band_of() index, 0 = all */
+    uint8_t  mode;  /* one CLUSTER_FM_*, 0 = any */
+} cluster_alert_t;
+
+typedef struct {
+    uint8_t         modes;
+    uint16_t        max_age;
+    char            skip[128];
+    cluster_alert_t alerts[CLUSTER_MAX_ALERTS];
+    int             alert_count;
+    bool            popup, beep;
+    uint32_t        gen; /* changes when the file was read again */
+} cluster_filter_t;
+
+/* Mode class (CLUSTER_FM_*) of a spot */
+uint8_t cluster_spot_mode_class(const cluster_spot_t *s);
+
+/* Reads the filters from CLUSTER_CONF (defaults when missing). */
+void cluster_filter_load(cluster_filter_t *f);
+
+/* The filters in use, read again when CLUSTER_CONF changed (LVGL thread only). */
+const cluster_filter_t *cluster_filter(void);
+
+/* Index of the alert the spot matches, or -1. */
+int cluster_alert_match(const cluster_filter_t *f, const cluster_spot_t *s);
+
+/* The spot is shown: its mode, age and spotter pass (an alert match always does). */
+bool cluster_filter_pass(const cluster_filter_t *f, const cluster_spot_t *s, uint16_t now_utc_min);
+
 /* "host" or "host:port" -> host, port (23 when missing). */
 bool cluster_parse_server(const char *text, char *host, size_t host_size, int *port);
 

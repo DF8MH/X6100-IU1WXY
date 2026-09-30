@@ -44,6 +44,7 @@ works as in the base firmware.
 - Channel list and MEM 1-9 slots, editable from the web configurator
 - Long-press action on every button group: screenshot, recorder, mute, apps, QTH grid
 - SWR Scan, GPS view, Recorder and a CW decoder with WPM
+- CW trainer: Learn (Koch, weak characters come up more often, per-character stats), Practice (paddle to screen, no TX) and Calls (RufzXP-style callsign trainer with score)
 - Local time zone (Settings → Date / Time → Zone); logs stay in UTC
 - Fully editable band list and digital-mode frequencies
 
@@ -52,13 +53,14 @@ works as in the base firmware.
 - FT8 and FT4 with logging in ADIF (`ft_log.adi`) and worked-before marks
 - JS8 (all four speeds at once): decoder, inbox, store and forward, log, APRS gateways
 - RTTY, SSTV, WeFax and NavTex (from the 1KO125 fork), with broadcast frequency lists
-- DX Cluster app: telnet client over WiFi, spots by frequency around the VFO, one-press tune, saved servers
+- DX Cluster app: telnet client over WiFi, spots by frequency around the VFO, one-press tune, saved servers, mode/age/spotter filters and callsign alerts with a popup
 
 **Display**
 
 - Three themes: IU1WXY (default), Legacy and **Outdoor** (high contrast, black with white borders, sunlight waterfall palette)
 - DX cluster on the main screen: callsign tags and spot lines on the waterfall, plus a cluster column at the right (rotate the MFK to browse, long press to tune)
 - S-meter with thin bars, S-scale and dB value; bars above S9 fade from green to red
+- IARU Region 1 **band plan** strip (CW, DIG, SSB, beacons) at the bottom of the spectrum, or at the top of the waterfall when the spectrum is off (Settings → Display → Band plan)
 - Waterfall mode **Centered** (VFO in the middle) or **Fixed** (span stays put, amber VFO line moves)
 - Three fonts (Sony Sketch, Roboto, DejaVu), settings in cards, spectrum on/off
 
@@ -232,13 +234,23 @@ asks for the latest 50 spots (`sh/dx`).
   the comment (CW, FT8, SSB, ...) or else from the band plan: CW, USB-D on
   the FT8/FT4 frequencies, LSB below 10 MHz, USB above.
 - Page 1: **Band / All** switches between the current band and all bands
-  (always all when the VFO is outside the amateur bands), **Tune**, **Close**.
+  (always all when the VFO is outside the amateur bands), **Tune**, **Mode**
+  (All → CW → SSB → DIG, a quick view filter), **Close**.
 - Page 2: **Server** opens the list of saved servers: MFK to choose, press (or
   tap) to use it, **Server** again or ESC to close. The choice is saved in
   `/mnt/cluster.conf`.
 - The status line shows WiFi/cluster state ("Set your callsign", "WiFi not
   connected", "Connecting...", "cluster connected", or the error and
   "retrying").
+
+**Filters and alerts** (web configurator → Cluster, saved in `/mnt/cluster.conf`):
+
+- **Filters**: modes shown (CW, SSB, Digital, AM/FM), maximum age, spotters
+  to skip (`*` wildcard). They apply to the app, the column and the waterfall.
+- **Alerts**: callsigns or prefixes (`3B8M`, `VP8*`, `*/MM`), optionally
+  only on some bands or one mode. Matching spots are magenta with an `ALERT`
+  tag and are never filtered out; a new one pops up on the main screen for
+  10 s (MFK press tunes it).
 
 **Main screen** (Settings → Display → SPECTRUM):
 
@@ -313,9 +325,11 @@ same network. Pages:
 | General | index of the pages below |
 | Bands | edit the band list |
 | Digital modes | add, edit and delete digital mode frequencies |
-| Cluster | DX cluster servers: add, use, delete (writes `/mnt/cluster.conf`) |
+| Cluster | DX cluster servers, filters and alerts (writes `/mnt/cluster.conf`) |
 | wfview | enable the wfview server, set user and password |
 | Memories | MEM 1-9 slots and the named channel list |
+| Remote | tune the radio from the browser: frequency, mode, band, filter, RF gain, PRE/ATT/AGC/NB/NR, live spectrum and waterfall (click or drag to tune), RX audio (HTTPS page, one listener). Receive only, no PTT |
+| Backup | download settings, memories, cluster, wfview, QSO log, voice messages (optionally CW trainer and WiFi) as one file, and restore the parts you choose |
 | Gallery | screen recordings, voice recordings and screenshots; convert AVI to MP4 in the browser or on the radio (ffmpeg) |
 | Files | browse `/mnt` |
 | Time | local and server time, NTP sync, timezone |
@@ -451,7 +465,8 @@ The DATA partition, readable on a PC.
 | File | What |
 |---|---|
 | `params.db`, `qso_log.db` | the radio's settings and QSO database |
-| `cluster.conf` | DX cluster server in use and saved servers |
+| `cluster.conf` | DX cluster server in use, saved servers, filters and alerts |
+| `cw_trainer.json` | CW trainer statistics and Calls best score |
 | `wfview.conf` | wfview server on/off, user and password |
 | `btcat.conf` | Bluetooth power and Discoverable (CAT), written by `btcat-ctl` |
 | `btaudio.conf` | headphones settings (RX loopback, speaker mute, Connect at startup devices) |

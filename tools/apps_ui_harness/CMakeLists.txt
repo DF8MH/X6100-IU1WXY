@@ -28,7 +28,7 @@ add_library(apps OBJECT
     ${X}/src/dialog_navtex.c ${X}/src/navtex/decoder.cpp ${X}/src/navtex/navtex_rx.cpp ${X}/src/navtex/fftfilt.cxx
     ${X}/src/dialog_ft8.c ${X}/src/ft8/table_view.c ${X}/src/ft8/utils.c ${X}/src/ft8/qso.cpp
     ${X}/src/dialog_settings.cpp
-    ${X}/src/dialog_cluster.c ${X}/src/cluster/spots.c ${X}/src/cluster/client.c ${X}/src/freq_list.c ${X}/src/dialog_modes.c ${X}/src/dialog_cw_trainer.c ${X}/src/freq_strip.c ${X}/src/freq_scale.c ${X}/src/spot_marks.c ${X}/src/cluster_column.c
+    ${X}/src/dialog_cluster.c ${X}/src/cluster/spots.c ${X}/src/cluster/client.c ${X}/src/freq_list.c ${X}/src/dialog_modes.c ${X}/src/dialog_cw_trainer.c ${X}/src/cJSON.c ${X}/src/freq_strip.c ${X}/src/freq_scale.c ${X}/src/spot_marks.c ${X}/src/band_plan.c ${X}/src/cluster_column.c
     ${X}/src/dialog_msg_voice.c ${X}/src/dialog_msg_cw.c ${X}/src/cw_encoder.c
     ${X}/src/info.c ${X}/src/meter.c ${X}/src/clock.c ${X}/src/tx_info.c
     ${X}/src/cfg/settings_manager.cpp ${X}/src/cfg/pending_writes.cpp ${X}/src/cfg/storage_policy.cpp
@@ -37,6 +37,7 @@ add_library(apps OBJECT
 target_link_libraries(apps PRIVATE lvgl)
 set_source_files_properties(${X}/src/info.c PROPERTIES COMPILE_DEFINITIONS "BTCAT_CLIENTS_FILE=\"btcat.clients\"")
 set_source_files_properties(${X}/src/dialog_msg_voice.c PROPERTIES COMPILE_DEFINITIONS "VOICE_MSG_PATH=\"msg_demo\"")
+set_source_files_properties(${X}/src/dialog_cw_trainer.c PROPERTIES COMPILE_DEFINITIONS "CWT_STATS_FILE=\"cw_trainer_demo.json\"")
 set_source_files_properties(${X}/src/scheduler.cpp PROPERTIES COMPILE_OPTIONS "-include;cstdlib")
 add_executable(apps_ui_harness main.c stubs.c $<TARGET_OBJECTS:apps> ${CMAKE_BINARY_DIR}/stubs_auto.S)
 # No network from the harness: the cluster client must not log in anywhere
