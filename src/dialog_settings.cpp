@@ -776,6 +776,7 @@ static action_items_t long_action_items[] = {
     { .label = " Screenshot ", .action = ACTION_SCREENSHOT },
     { .label = " Recorder on/off ", .action = ACTION_RECORDER },
     { .label = " Mute ", .action = ACTION_MUTE },
+    { .label = " WF mode ", .action = ACTION_WF_MODE },
     { .label = " APP RTTY ", .action = ACTION_APP_RTTY },
     { .label = " APP FT8 ", .action = ACTION_APP_FT8 },
     { .label = " APP JS8 ", .action = ACTION_APP_JS8 },
@@ -912,6 +913,7 @@ static action_items_t hmic_action_items[] = {
     { .label = " Step down ", .action = ACTION_STEP_DOWN },
     { .label = " NR toggle ", .action = ACTION_NR_TOGGLE },
     { .label = " NB toggle ", .action = ACTION_NB_TOGGLE },
+    { .label = " WF mode ", .action = ACTION_WF_MODE },
     { .label = NULL, .action = ACTION_NONE }
 };
 
@@ -1405,6 +1407,31 @@ static uint8_t make_waterfall_line_zoom(uint8_t row) {
     obj = switch_bool(obj, &params.waterfall_zoom);
 
     lv_obj_set_width(obj, SMALL_3 - 30);
+
+    return row + 1;
+}
+
+static void wf_mode_update_cb(lv_event_t *e) {
+    cfg_sm.p_wf_mode.set(lv_dropdown_get_selected(lv_event_get_target(e)));
+}
+
+/* Centered: the VFO stays in the middle. Fixed: the span stays put, the VFO line moves */
+static uint8_t make_waterfall_mode(uint8_t row) {
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "Waterfall mode");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = lv_dropdown_create(grid);
+    dialog_item(&dialog, obj);
+    lv_obj_add_style(lv_dropdown_get_list(obj), &dialog_dropdown_list_style, 0);
+    lv_dropdown_set_options(obj, " Centered \n Fixed ");
+    lv_dropdown_set_symbol(obj, NULL);
+    lv_dropdown_set_selected(obj, cfg_sm.p_wf_mode.get());
+    lv_obj_add_event_cb(obj, wf_mode_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_size(obj, SMALL_3, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
 
     return row + 1;
 }
@@ -3434,6 +3461,7 @@ static void make_display_page() {
     card_end(row);
 
     row = card_begin(LV_SYMBOL_DOWNLOAD, "WATERFALL");
+    row = make_waterfall_mode(row);
     row = make_waterfall_line_zoom(row);
     row = make_waterfall_smooth_scroll(row);
     card_end(row);

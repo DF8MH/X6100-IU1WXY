@@ -196,6 +196,7 @@ static std::map<int, Control*> controls = {
     {CTRL_XIT, new ControlSubjInt("XIT", &cfg_sm.p_xit)},
     {CTRL_IF_SHIFT, new ControlSubjInt("IF shift", &cfg_sm.p_band_if_shift)},
     {CTRL_WF_REF, new ControlSubjInt("WF ref", &cfg_sm.p_waterfall_ref)},
+    {CTRL_WF_MODE, new ControlSubjChoices("WF mode", &cfg_sm.p_wf_mode, {"Centered", "Fixed"})},
     {CTRL_CLUSTER, new ControlCluster("Cluster")},
 
     {CTRL_DNF, new ControlSubjOnOff("Notch filter", &cfg_sm.p_dnf)},

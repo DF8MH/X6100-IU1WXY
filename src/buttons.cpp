@@ -80,6 +80,7 @@ static const char * agc_label_getter();
 static const char * comp_label_getter();
 static const char * if_shift_label_getter();
 static const char * wf_ref_label_getter();
+static const char * wf_mode_label_getter();
 
 static const char * vox_on_label_getter();
 
@@ -180,6 +181,14 @@ static button_data_t btn_agc       = {.type     = BTN_TEXT_FN,
 static button_data_t btn_comp      = make_encoder_btn(comp_label_getter, CTRL_COMP, (Subject*)&cfg_sm.p_comp);
 static button_data_t btn_if_shift  = make_encoder_btn(if_shift_label_getter, CTRL_IF_SHIFT, (Subject*)&cfg_sm.p_band_if_shift);
 static button_data_t btn_wf_ref    = make_encoder_btn(wf_ref_label_getter, CTRL_WF_REF, (Subject*)&cfg_sm.p_waterfall_ref);
+
+static button_data_t btn_wf_mode   = {.type            = BTN_TEXT_FN,
+                                      .label_fn        = wf_mode_label_getter,
+                                      .press           = controls_toggle_wf_mode,
+                                      .hold            = button_encoder_hold_update_cb,
+                                      .ctrl            = CTRL_WF_MODE,
+                                      .encoder_allowed = true,
+                                      .subj            = (Subject*)&cfg_sm.p_wf_mode};
 
 /* VOX */
 static button_data_t btn_vox_on    = {.type            = BTN_TEXT_FN,
@@ -350,14 +359,18 @@ static buttons_page_t page_vol_2 = {
 };
 
 /* MFK pages */
-static button_data_t btn_mfk_p1 = make_page_btn("(MFK 1:2)");
-static button_data_t btn_mfk_p2 = make_page_btn("(MFK 2:2)");
+static button_data_t btn_mfk_p1 = make_page_btn("(MFK 1:3)");
+static button_data_t btn_mfk_p2 = make_page_btn("(MFK 2:3)");
+static button_data_t btn_mfk_p3 = make_page_btn("(MFK 3:3)");
 
 static buttons_page_t page_mfk_1 = {
     {&btn_mfk_p1, &btn_rit, &btn_xit, &btn_zoom, &btn_wf_ref}
 };
 static buttons_page_t page_mfk_2 = {
     {&btn_mfk_p2, &btn_agc, &btn_comp, &btn_if_shift, &btn_vox_on}
+};
+static buttons_page_t page_mfk_3 = {
+    {&btn_mfk_p3, &btn_wf_mode}
 };
 
 /* MEM pages */
@@ -434,6 +447,7 @@ buttons_group_t buttons_group_gen = {
     &page_vol_2,
     &page_mfk_1,
     &page_mfk_2,
+    &page_mfk_3,
 };
 
 buttons_group_t buttons_group_app = {
@@ -854,6 +868,10 @@ static const char * wf_ref_label_getter() {
     static char buf[22];
     sprintf(buf, "WF ref:\n%+i dB", cfg_sm.p_waterfall_ref.get());
     return buf;
+}
+
+static const char * wf_mode_label_getter() {
+    return cfg_sm.p_wf_mode.get() ? "WF\nFixed" : "WF\nCenter";
 }
 
 const char *vox_on_label_getter() {

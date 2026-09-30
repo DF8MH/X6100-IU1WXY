@@ -18,6 +18,7 @@
 #include "pubsub_ids.h"
 #include "radio.h"
 #include "recorder.h"
+#include "waterfall.h"
 #include "rtty.h"
 #include "scheduler.h"
 #include "styles.h"
@@ -122,7 +123,9 @@ static void spectrum_draw_cb(lv_event_t *e) {
     lv_coord_t spectrum_offset, markers_offset;
     // spectrum_offset: shift for the spectrum data
     // markers_offset: shift for filter data, notch, etc
-    markers_offset = ((mode_lo_offset + if_shift) * zoom_factor * w + width_hz / 2) / width_hz;
+    /* Fixed waterfall mode: the whole view is shifted against the received data */
+    int32_t view_shift = waterfall_view_shift();
+    markers_offset = ((mode_lo_offset + if_shift + view_shift) * zoom_factor * w + width_hz / 2) / width_hz;
     if (spectrum_tx) {
         spectrum_offset = markers_offset;
     } else {
@@ -131,7 +134,7 @@ static void spectrum_draw_cb(lv_event_t *e) {
             // Handle delay between sending new settings to base and new data flow
             data_shift = cur_base_lo_freq - (fg_freq + mode_lo_offset - if_shift + rit);
         }
-        spectrum_offset = ((mode_lo_offset + data_shift) * zoom_factor * w + width_hz / 2) / width_hz;
+        spectrum_offset = ((mode_lo_offset + data_shift + view_shift) * zoom_factor * w + width_hz / 2) / width_hz;
     }
 
     lv_point_t main_a, main_b;

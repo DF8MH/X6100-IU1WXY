@@ -24,6 +24,7 @@ void controls_toggle_nb(button_data_t *data);
 void controls_toggle_nr(button_data_t *data);
 
 void controls_toggle_vox(button_data_t *data);
+void controls_toggle_wf_mode(button_data_t *data);
 
 void controls_cw_zap(button_data_t *data);
 

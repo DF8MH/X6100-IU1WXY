@@ -25,5 +25,10 @@ void waterfall_update_min(float db);
 
 /* Colour scale limits (dB) used for the waterfall rows */
 void waterfall_get_levels(bool tx, float *min, float *max);
+/* Fixed mode (cfg_wf_mode): the displayed span stays put and the VFO moves across it.
+ * Returns how far (Hz) the centre of the received data is from the display centre;
+ * always 0 in Centered mode. Re-centres the view when the VFO nears an edge. */
+int32_t waterfall_view_shift(void);
+
 void waterfall_refresh_reset();
 void waterfall_refresh_period_set(uint8_t k);

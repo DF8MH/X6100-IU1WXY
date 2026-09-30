@@ -65,11 +65,16 @@ static uint8_t          refresh_counter = 0;
 
 static uint8_t          zoom = 1;
 
+/* Fixed mode: RF frequency at the display centre, valid while view_fixed */
+static int32_t          view_center = 0;
+static bool             view_fixed = false;
+
 static void refresh_waterfall( void * arg);
 static void update_middle_line();
 static void middle_line_cb(lv_event_t * event);
 static void redraw_cb(lv_event_t * e);
 static void on_zoom_changed(Subject *subj, void *user_data);
+static void on_view_changed(Subject *subj, void *user_data);
 static void on_fg_freq_change(Subject *subj, void *user_data);
 static void on_mode_lo_offset_change(Subject *subj, void *user_data);
 static void on_if_shift_changed(Subject *subj, void *user_data);
@@ -102,6 +107,9 @@ lv_obj_t * waterfall_init(lv_obj_t * parent) {
 
     subject_subscribe_delayed_and_notify((Subject*)cfg_mode_zoom, on_zoom_changed, NULL);
     subject_subscribe_delayed_and_notify((Subject*)cfg_band_if_shift, on_if_shift_changed, NULL);
+
+    subject_subscribe_delayed((Subject*)cfg_fg_freq, on_view_changed, NULL);
+    subject_subscribe_delayed((Subject*)cfg_wf_mode, on_view_changed, NULL);
 
     subject_subscribe_and_notify((Subject*)cfg_mode_lo_offset, on_mode_lo_offset_change, NULL);
     subject_subscribe((Subject*)cfg_auto_level_enabled, on_grid_min_change, NULL);
@@ -155,14 +163,33 @@ void waterfall_data(float *data_buf, uint16_t size, bool tx, uint32_t base_freq,
     scheduler_put_noargs(refresh_waterfall);
 }
 
+int32_t waterfall_view_shift(void) {
+    if (!param_i_get(cfg_wf_mode)) {
+        view_fixed = false;
+        return 0;
+    }
+    int32_t rc = cparam_i_get(cfg_fg_freq) - param_i_get(cfg_band_if_shift);
+    int32_t vfo = cparam_i_get(cfg_fg_freq);
+    /* Keep a 20% margin: the received data (centred on rc) and the VFO must stay inside */
+    int32_t limit = 50000 / param_i_get(cfg_mode_zoom) * 8 / 10;
+
+    if (!view_fixed || abs(rc - view_center) > limit || abs(vfo - view_center) > limit) {
+        view_center = rc;
+        view_fixed = true;
+    }
+    return rc - view_center;
+}
+
 static void do_scroll_cb(lv_event_t * event) {
-    if (wf_center_freq == radio_center_freq) {
+    int32_t target = radio_center_freq - waterfall_view_shift();
+
+    if (wf_center_freq == target) {
         return;
     }
     if (params.waterfall_smooth_scroll.x) {
-        wf_center_freq += (radio_center_freq - wf_center_freq) / 10 + 1;
+        wf_center_freq += (target - wf_center_freq) / 10 + 1;
     } else {
-        wf_center_freq = radio_center_freq;
+        wf_center_freq = target;
     }
     scheduler_put_noargs(refresh_waterfall);
 }
@@ -341,6 +368,11 @@ static void on_zoom_changed(Subject *subj, void *user_data) {
     update_middle_line();
 }
 
+static void on_view_changed(Subject *subj, void *user_data) {
+    update_middle_line();
+    scheduler_put_noargs(refresh_waterfall);
+}
+
 static void on_if_shift_changed(Subject *subj, void *user_data) {
     delay = 2;
     if_shift = subject_i_get((SubjectInt*)subj);
@@ -359,7 +391,7 @@ static void on_mode_lo_offset_change(Subject *subj, void *user_data) {
 
 static void update_middle_line() {
     lv_coord_t width = zoom / 2 + 2;
-    lv_obj_set_pos(middle_line, if_shift * zoom * WIDTH / width_hz + width / 2, 0);
+    lv_obj_set_pos(middle_line, (if_shift + waterfall_view_shift()) * zoom * WIDTH / width_hz + width / 2, 0);
     lv_style_set_line_width(&middle_line_style, width);
 }
 

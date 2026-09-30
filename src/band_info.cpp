@@ -13,6 +13,7 @@ extern "C" {
     #include "events.h"
     #include "pubsub_ids.h"
     #include "styles.h"
+    #include "waterfall.h"
     #include "lvgl/lvgl.h"
 }
 
@@ -76,13 +77,15 @@ static void band_info_draw_cb(lv_event_t *e) {
     lv_coord_t w = lv_obj_get_width(obj);
     lv_coord_t h = lv_obj_get_height(obj) - 1;
 
+    int32_t view_shift = waterfall_view_shift();
+
     for (const BandInfo &band : bands) {
         /* Rect */
 
         lv_border_side_t border_side = LV_BORDER_SIDE_NONE;
 
-        int32_t start = (int64_t)(band.start_freq - freq + if_shift) * w / width_hz * current_zoom;
-        int32_t stop  = (int64_t)(band.stop_freq - freq + if_shift) * w / width_hz * current_zoom;
+        int32_t start = (int64_t)(band.start_freq - freq + if_shift + view_shift) * w / width_hz * current_zoom;
+        int32_t stop  = (int64_t)(band.stop_freq - freq + if_shift + view_shift) * w / width_hz * current_zoom;
 
         start += w / 2;
         stop += w / 2;

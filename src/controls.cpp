@@ -83,6 +83,10 @@ void controls_toggle_vox(button_data_t *data) {
     toggle_param(cfg_sm.p_vox_en);
 }
 
+void controls_toggle_wf_mode(button_data_t *data) {
+    toggle_param(cfg_sm.p_wf_mode);
+}
+
 void controls_cw_zap(button_data_t *data) {
     x6100_mode_t mode = (x6100_mode_t)(cfg_sm.cp_cur_mode.get());
     if ((mode != x6100_mode_cw) && (mode != x6100_mode_cwr)) {
@@ -387,6 +391,15 @@ void controls_encoder_update(cfg_ctrl_t ctrl, int32_t diff, std::string &msg) {
         case CTRL_WF_REF:
             i = update_param(cfg_sm.p_waterfall_ref, diff);
             snprintf(msg.data(), msg.capacity(), "Waterfall ref: %+i dB", i);
+            break;
+
+        case CTRL_WF_MODE:
+            i = cfg_sm.p_wf_mode.get();
+            if (diff) {
+                i = !i;
+                cfg_sm.p_wf_mode.set(i);
+            }
+            snprintf(msg.data(), msg.capacity(), "Waterfall: %s", i ? "Fixed" : "Centered");
             break;
 
         case CTRL_CLUSTER:

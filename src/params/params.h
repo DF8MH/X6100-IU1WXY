@@ -40,6 +40,7 @@ typedef enum {
     ACTION_BAT_INFO,    /* unused (spoken battery info removed) */
     ACTION_NR_TOGGLE,
     ACTION_NB_TOGGLE,
+    ACTION_WF_MODE,     /* appended: waterfall Centered/Fixed toggle */
 
     ACTION_APP_RTTY = 100,
     ACTION_APP_FT8,

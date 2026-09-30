@@ -67,6 +67,7 @@ typedef enum {
      * by position) and before CTRL_FAST_ACCESS_LAST (bindable) */
     CTRL_WF_REF,
     CTRL_CLUSTER,     /* MFK only, offered while the cluster column is shown; not stored */
+    CTRL_WF_MODE,
 
     CTRL_FAST_ACCESS_LAST,
 

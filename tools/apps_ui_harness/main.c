@@ -314,6 +314,25 @@ static void topbar(void) {
     buttons_load_page(&buttons_page_vol_1);
     pump(300);
     shot("topbar_1.ppm");          /* GPS fix: locator with the dot */
+    {   /* Waterfall Fixed: the span stays put, the VFO line is 30 kHz right of the centre */
+        freq_scale_update(f - 30000, 50000, 0xffffff);
+        spot_marks_update(f - 30000, 50000);
+        lv_obj_t *l1 = lv_obj_create(spectrum), *l2 = lv_obj_create(wf);
+        lv_obj_t *ls[2] = {l1, l2};
+        for (int i = 0; i < 2; i++) {
+            lv_obj_remove_style_all(ls[i]);
+            lv_obj_set_style_bg_color(ls[i], lv_color_hex(0xFFA000), 0);
+            lv_obj_set_style_bg_opa(ls[i], LV_OPA_COVER, 0);
+            lv_obj_set_size(ls[i], 2, i ? 200 : 96);
+            lv_obj_set_pos(ls[i], 400 + 30000 * 800 / 100000 - 1, 0);
+        }
+        pump(100);
+        shot("wf_mode_fixed_raw.ppm");
+        lv_obj_del(l1);
+        lv_obj_del(l2);
+        freq_scale_update(f, 50000, 0xffffff);
+        spot_marks_update(f, 50000);
+    }
     harness_gps_fix = false;
     pump(3100);
     shot("topbar_2.ppm");          /* no fix: the saved QTH */
@@ -428,8 +447,17 @@ static void settings_demo(void) {
         pg->items[0]->press(pg->items[0]);
         pump(100);
     }
-    /* Audio scrolled to the end (the MFK wraps to the last row) */
+    /* Display scrolled to the Waterfall mode row (the second dropdown) */
     buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[2]->press(pg->items[2]);
+    pump(300);
+    for (int i = 0, n = 0; i < 40 && n < 2; i++) {
+        lv_group_focus_next(keyboard_group);
+        if (lv_obj_check_type(lv_group_get_focused(keyboard_group), &lv_dropdown_class)) n++;
+    }
+    pump(500);
+    shot("wf_mode_settings.ppm");
+    /* Audio scrolled to the end (the MFK wraps to the last row) */
     pg->items[3]->press(pg->items[3]);
     pump(300);
     lv_group_focus_prev(keyboard_group);
@@ -590,9 +618,9 @@ int main(int argc, char **argv) {
         buttons_page_t *pg = buttons_get_cur_page();
         pg->items[0]->press(pg->items[0]);
     }
-    /* VOL 2:2, MFK 1:2, MFK 2:2 */
-    static const int gen_pages[] = {1, 2, 3};
-    for (int i = 0; i < 3; i++) {
+    /* VOL 2:2, MFK 1:3, MFK 2:3, MFK 3:3 */
+    static const int gen_pages[] = {1, 2, 3, 4};
+    for (int i = 0; i < 4; i++) {
         char n[32];
         buttons_load_page(buttons_group_gen[gen_pages[i]]);
         pump(50);

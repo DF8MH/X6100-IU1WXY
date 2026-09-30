@@ -66,6 +66,7 @@ extern ParamInt         *cfg_spectrum_show;      // p_spectrum_show
 extern ParamInt         *cfg_cluster_spots_wf;   // p_cluster_spots_wf
 extern ParamInt         *cfg_cluster_column;     // p_cluster_column
 extern ParamInt         *cfg_waterfall_ref;      // p_waterfall_ref
+extern ParamInt         *cfg_wf_mode;            // p_wf_mode
 extern ParamText        *cfg_encoder_bind;       // p_encoder_bind
 
 // VOX

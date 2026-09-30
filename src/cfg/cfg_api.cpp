@@ -36,6 +36,7 @@ ParamInt         *cfg_spectrum_show       = nullptr;
 ParamInt         *cfg_cluster_spots_wf    = nullptr;
 ParamInt         *cfg_cluster_column      = nullptr;
 ParamInt         *cfg_waterfall_ref       = nullptr;
+ParamInt         *cfg_wf_mode             = nullptr;
 ParamText        *cfg_encoder_bind        = nullptr;
 ParamInt         *cfg_vox_on              = nullptr;
 ParamInt         *cfg_vox_gain            = nullptr;
@@ -158,6 +159,7 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_cluster_spots_wf = &cfg_sm.p_cluster_spots_wf;
     cfg_cluster_column = &cfg_sm.p_cluster_column;
     cfg_waterfall_ref    = &cfg_sm.p_waterfall_ref;
+    cfg_wf_mode          = &cfg_sm.p_wf_mode;
     cfg_encoder_bind     = &cfg_sm.p_encoder_bind;
     cfg_vox_on           = &cfg_sm.p_vox_en;
     cfg_vox_gain         = &cfg_sm.p_vox_gain;

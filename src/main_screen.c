@@ -680,6 +680,12 @@ void main_screen_action(press_action_t action) {
             msg_update_text_fmt("#FFFFFF NB: %s", b ? "On" : "Off");
             break;
 
+        case ACTION_WF_MODE:
+            b = !param_i_get(cfg_wf_mode);
+            param_i_set(cfg_wf_mode, b);
+            msg_update_text_fmt("#FFFFFF Waterfall: %s", b ? "Fixed" : "Centered");
+            break;
+
         case ACTION_APP_RTTY:
         case ACTION_APP_FT8:
         case ACTION_APP_SWRSCAN:
@@ -1522,8 +1528,14 @@ static void on_cluster_column_change(Subject *subj, void *user_data) {
 }
 
 
+static void channels_poll_cb(lv_timer_t *t) {
+    dialog_channels_poll();
+}
+
 lv_obj_t * main_screen() {
     broadcast_db_init();
+    channels_load();    /* creates channels.json with the defaults when missing */
+    lv_timer_create(channels_poll_cb, 2000, NULL);
     uint16_t y = 0;
 
     freq_lock = subject_i_create(false);
@@ -1612,6 +1624,7 @@ lv_obj_t * main_screen() {
     subject_subscribe_delayed((Subject*)freq_lock, update_freq_boundaries, NULL);
     subject_subscribe_delayed((Subject*)cfg_fg_freq, update_freq_boundaries, NULL);
     subject_subscribe_delayed((Subject*)cfg_band_if_shift, update_freq_boundaries, NULL);
+    subject_subscribe_delayed((Subject*)cfg_wf_mode, update_freq_boundaries, NULL);
     subject_subscribe_delayed_and_notify((Subject*)cfg_mode_zoom, update_freq_boundaries, NULL);
 
     subject_subscribe_delayed_and_notify((Subject*)cfg_bg_freq, on_fg_freq_change, NULL);
@@ -1694,8 +1707,10 @@ static void update_freq_boundaries(Subject *subj, void *user_data) {
     }
 
     /* The waterfall is centred on the VFO minus the IF shift */
-    freq_scale_update(f - param_i_get(cfg_band_if_shift), half_width, color);
-    spot_marks_update(f - param_i_get(cfg_band_if_shift), half_width);
+    /* Fixed waterfall mode: the centre stays put while the VFO moves */
+    int32_t center = f - param_i_get(cfg_band_if_shift) - waterfall_view_shift();
+    freq_scale_update(center, half_width, color);
+    spot_marks_update(center, half_width);
 }
 
 static void update_zoom_on_if_shift_change(Subject *subj, void *user_data) {
