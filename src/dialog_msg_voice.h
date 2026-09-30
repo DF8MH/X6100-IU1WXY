@@ -26,6 +26,7 @@ extern dialog_t *dialog_msg_voice;
 
 msg_voice_state_t dialog_msg_voice_get_state();
 void dialog_msg_voice_put_audio_samples(size_t nsamples, int16_t *samples);
+void dialog_msg_voice_ptt_pressed(void);
 
 #ifdef __cplusplus
 }

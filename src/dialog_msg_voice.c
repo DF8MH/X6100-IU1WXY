@@ -6,8 +6,9 @@
  *  Copyright (c) 2022-2023 Belousov Oleg aka R1CBU
  *
  *  Voice keyer: record messages from the mic, listen to them, send them
- *  on air once or as a beacon. One page for the usual work (Rec, Listen,
- *  TX), a second one to manage the messages (Beacon, Rename, Delete).
+ *  on air once or as an automatic call. One page for the usual work (Rec,
+ *  Listen, TX, Auto call), a second one to manage the messages (Interval,
+ *  Rename, Delete, Close).
  */
 
 #include <time.h>
@@ -42,6 +43,9 @@
 #define TIMER_MS     100
 #define CONFIRM_MS   3000
 #define LEAD_IN_US   100000
+#define PERIOD_MIN   3
+#define PERIOD_MAX   300
+#define OWN_TX_MS    1000
 
 #define LIST_X       10
 #define LIST_Y       40
@@ -60,7 +64,10 @@ typedef struct {
     float secs;
 } item_t;
 
-static const char *path = "/mnt/msg";
+#ifndef VOICE_MSG_PATH
+#define VOICE_MSG_PATH "/mnt/msg"
+#endif
+static const char *path = VOICE_MSG_PATH;
 
 static item_t  items[MAX_ITEMS];
 static int     count;
@@ -75,7 +82,7 @@ static char            rec_name[NAME_LEN + 1];
 static volatile long   rec_frames;
 static volatile int    rec_peak;
 
-/* Playback worker: listen locally, or send on air (once or as a beacon) */
+/* Playback worker: listen locally, or send on air (once or as an auto call) */
 static pthread_t     worker;
 static bool          worker_started;
 static volatile bool worker_done;
@@ -84,8 +91,10 @@ static volatile bool on_air;
 static volatile bool pausing;
 static volatile long play_pos, play_total;
 static volatile int  pause_left;
+static volatile uint32_t air_off_tick;
 static bool          job_tx;
-static bool          beacon_on;
+static bool          job_loop;
+static bool          adjusting;
 static char          play_path[128];
 static int16_t       samples_buf[BUF_SIZE];
 
@@ -101,28 +110,30 @@ static void rec_cb(button_data_t *btn);
 static void listen_cb(button_data_t *btn);
 static void tx_btn_cb(button_data_t *btn);
 static void close_cb(button_data_t *btn);
-static void beacon_cb(button_data_t *btn);
+static void auto_cb(button_data_t *btn);
+static void interval_cb(button_data_t *btn);
 static void rename_cb(button_data_t *btn);
 static void delete_cb(button_data_t *btn);
 static const char *rec_label(void);
 static const char *listen_label(void);
 static const char *tx_label(void);
-static const char *beacon_label(void);
+static const char *auto_label(void);
+static const char *interval_label(void);
 
 static button_data_t btn_p1 = {.type = BTN_TEXT, .label = "(MSG 1:2)", .press = button_next_page_cb};
 static button_data_t btn_rec = {.type = BTN_TEXT_FN, .label_fn = rec_label, .press = rec_cb};
 static button_data_t btn_listen = {.type = BTN_TEXT_FN, .label_fn = listen_label, .press = listen_cb};
 static button_data_t btn_tx = {.type = BTN_TEXT_FN, .label_fn = tx_label, .press = tx_btn_cb};
-static button_data_t btn_close = {.type = BTN_TEXT, .label = "Close", .press = close_cb};
+static button_data_t btn_auto = {.type = BTN_TEXT_FN, .label_fn = auto_label, .press = auto_cb};
 
 static button_data_t btn_p2 = {.type = BTN_TEXT, .label = "(MSG 2:2)", .press = button_next_page_cb};
-static button_data_t btn_beacon = {.type = BTN_TEXT_FN, .label_fn = beacon_label, .press = beacon_cb};
+static button_data_t btn_interval = {.type = BTN_TEXT_FN, .label_fn = interval_label, .press = interval_cb};
 static button_data_t btn_rename = {.type = BTN_TEXT, .label = "Rename", .press = rename_cb};
+static button_data_t btn_close = {.type = BTN_TEXT, .label = "Close", .press = close_cb};
 static button_data_t btn_delete = {.type = BTN_TEXT, .label = "Delete", .press = delete_cb};
-static button_data_t btn_close2 = {.type = BTN_TEXT, .label = "Close", .press = close_cb};
 
-static buttons_page_t page_1 = {{&btn_p1, &btn_rec, &btn_listen, &btn_tx, &btn_close}};
-static buttons_page_t page_2 = {{&btn_p2, &btn_beacon, &btn_rename, &btn_delete, &btn_close2}};
+static buttons_page_t page_1 = {{&btn_p1, &btn_rec, &btn_listen, &btn_tx, &btn_auto}};
+static buttons_page_t page_2 = {{&btn_p2, &btn_interval, &btn_rename, &btn_delete, &btn_close}};
 
 static dialog_t dialog = {
     .run          = false,
@@ -205,11 +216,16 @@ static const char *sel_name(void) {
 
 /* Playback worker */
 
-static void play_file(void) {
+static int interval_s(void) {
+    int v = params.voice_msg_period;
+    return v < PERIOD_MIN ? PERIOD_MIN : (v > PERIOD_MAX ? PERIOD_MAX : v);
+}
+
+static bool play_file(void) {
     SF_INFO info;
     memset(&info, 0, sizeof(info));
     SNDFILE *f = sf_open(play_path, SFM_READ, &info);
-    if (!f) return;
+    if (!f) return false;
 
     play_total = info.frames;
     play_pos   = 0;
@@ -224,27 +240,31 @@ static void play_file(void) {
     /* Stop: drop the queued audio instead of sending it. */
     if (stop_req) audio_play_flush();
     else audio_play_wait();
+    return true;
 }
 
 static void *worker_cb(void *arg) {
     (void)arg;
     while (true) {
+        bool ok;
         if (job_tx) {
             on_air = true;
             radio_set_modem(true);
-            usleep(LEAD_IN_US);
-            play_file();
+            /* Stop during the lead-in: play_file drops the audio at once */
+            if (!stop_req) usleep(LEAD_IN_US);
+            ok = play_file();
             radio_set_modem(false);
-            on_air = false;
+            air_off_tick = lv_tick_get();
+            on_air       = false;
         } else {
             audio_set_play_mode(AUDIO_PLAY_ON);
-            play_file();
+            ok = play_file();
             audio_set_play_mode(AUDIO_PLAY_OFF);
         }
-        if (!job_tx || !beacon_on || stop_req) break;
+        if (!ok || !job_tx || !job_loop || stop_req) break;
 
         pausing = true;
-        for (int t = params.voice_msg_period * 10; t > 0 && !stop_req; t--) {
+        for (int t = interval_s() * 10; t > 0 && !stop_req; t--) {
             pause_left = (t + 9) / 10;
             usleep(100000);
         }
@@ -255,10 +275,12 @@ static void *worker_cb(void *arg) {
     return NULL;
 }
 
-static void start_play(bool tx) {
+static void start_play(bool tx, bool loop) {
     if (state != MSG_VOICE_OFF || !sel_name()) return;
     file_path(play_path, sizeof(play_path), sel_name());
     job_tx         = tx;
+    job_loop       = loop;
+    adjusting      = false;
     stop_req       = false;
     worker_done    = false;
     play_pos       = 0;
@@ -370,10 +392,13 @@ static const char *tx_label(void) {
     return sending() ? "Stop" : "TX";
 }
 
-static const char *beacon_label(void) {
+static const char *auto_label(void) {
+    return sending() && job_loop ? "Auto\nStop" : "Auto\ncall";
+}
+
+static const char *interval_label(void) {
     static char buf[24];
-    if (!beacon_on) return "Beacon\nOff";
-    snprintf(buf, sizeof(buf), "Beacon\n%i s", params.voice_msg_period);
+    snprintf(buf, sizeof(buf), adjusting ? "Interval\n< %i s >" : "Interval\n%i s", interval_s());
     return buf;
 }
 
@@ -398,18 +423,19 @@ static void update_buttons(void) {
     set_btn(&btn_rec, !(rec || idle));
     set_btn(&btn_listen, !(listening() || (idle && !empty)));
     set_btn(&btn_tx, !(sending() || (idle && !empty)));
+    set_btn(&btn_auto, !(sending() || (idle && !empty)));
     set_btn(&btn_close, rec);
-    set_btn(&btn_close2, rec);
-    set_btn(&btn_beacon, !idle);
+    set_btn(&btn_interval, !idle);
     set_btn(&btn_rename, !idle || empty);
     set_btn(&btn_delete, !idle || empty);
     set_btn(&btn_p1, !idle);
     set_btn(&btn_p2, !idle);
 
-    static const char *rec_l, *listen_l, *tx_l;
+    static const char *rec_l, *listen_l, *tx_l, *auto_l;
     relabel(&btn_rec, &rec_l);
     relabel(&btn_listen, &listen_l);
     relabel(&btn_tx, &tx_l);
+    relabel(&btn_auto, &auto_l);
 }
 
 /* Status panel */
@@ -443,14 +469,19 @@ static void update_status(void) {
     if (sending()) {
         if (pausing) {
             char text[32];
-            snprintf(text, sizeof(text), "BEACON %i s", pause_left);
+            snprintf(text, sizeof(text), "AUTO %i s", pause_left);
             set_state(text, 0x1f2a35, 0xffd24a);
         } else {
             set_state("ON AIR", 0xb01e1e, 0xffffff);
         }
         lv_bar_set_value(bar, pausing ? 0 : pct, LV_ANIM_OFF);
-        lv_label_set_text(info_lbl, beacon_on ? "Beacon: repeats until Stop" : "Beacon: off");
-        lv_label_set_text(hint, "TX or PTT: stop");
+        if (!job_loop)
+            lv_label_set_text(info_lbl, "Single transmission");
+        else if (pausing)
+            lv_label_set_text_fmt(info_lbl, "Next call in %i s\nInterval %i s", pause_left, interval_s());
+        else
+            lv_label_set_text_fmt(info_lbl, "Auto call: repeats every %i s", interval_s());
+        lv_label_set_text(hint, job_loop ? "Auto call, TX or PTT: stop" : "TX or PTT: stop");
     } else if (listening()) {
         set_state("LISTEN", 0x153a1c, 0x88ff88);
         lv_obj_set_style_bg_color(bar, lv_color_hex(0x66cc66), LV_PART_INDICATOR);
@@ -460,11 +491,9 @@ static void update_status(void) {
     } else {
         set_state("READY", 0x1f2a35, 0x90f0d0);
         lv_bar_set_value(bar, 0, LV_ANIM_OFF);
-        if (beacon_on)
-            lv_label_set_text_fmt(info_lbl, "Beacon: every %i s\nTX starts it", params.voice_msg_period);
-        else
-            lv_label_set_text(info_lbl, "Beacon: off (page 2)");
-        lv_label_set_text(hint, count ? "MFK: choose - press MFK: listen" : "Rec: record the first message");
+        lv_label_set_text_fmt(info_lbl, "Auto call every %i s\nInterval: page 2", interval_s());
+        lv_label_set_text(hint, adjusting ? "MFK or VOL: interval - press MFK: done"
+                          : count ? "MFK: choose - press MFK: listen" : "Rec: record the first message");
     }
 }
 
@@ -473,6 +502,10 @@ static void timer_cb(lv_timer_t *t) {
     reap_worker(false);
     if (state == MSG_VOICE_RECORD && rec_frames >= (long)REC_MAX_S * AUDIO_CAPTURE_RATE) stop_rec();
     if (delete_armed && lv_tick_elaps(delete_armed) > CONFIRM_MS) delete_armed = 0;
+    if (adjusting && buttons_get_cur_page() != &page_2) adjusting = false;
+    /* Someone else keyed the radio during the pause (mic PTT): stop. */
+    if (pausing && !stop_req && lv_tick_elaps(air_off_tick) > OWN_TX_MS && radio_get_state() == RADIO_TX)
+        stop_play();
     update_status();
     update_buttons();
 }
@@ -517,8 +550,43 @@ static void move_sel(int step) {
 
 /* Keys */
 
+static void change_interval(int step) {
+    int v = interval_s() + step;
+    if (v < PERIOD_MIN) v = PERIOD_MIN;
+    if (v > PERIOD_MAX) v = PERIOD_MAX;
+    params_lock();
+    params.voice_msg_period = v;
+    params_unlock(&params.dirty.voice_msg_period);
+    buttons_refresh(&btn_interval);
+}
+
+/* MFK or VOL turn the interval while Interval is selected, else the list / volume. */
 static void key_cb(lv_event_t *e) {
-    switch (*((uint32_t *)lv_event_get_param(e))) {
+    uint32_t key = *((uint32_t *)lv_event_get_param(e));
+
+    if (adjusting && state == MSG_VOICE_OFF) {
+        switch (key) {
+            case LV_KEY_LEFT:
+            case LV_KEY_DOWN:
+            case KEY_VOL_LEFT_EDIT:
+            case KEY_VOL_LEFT_SELECT:
+                change_interval(-1);
+                return;
+            case LV_KEY_RIGHT:
+            case LV_KEY_UP:
+            case KEY_VOL_RIGHT_EDIT:
+            case KEY_VOL_RIGHT_SELECT:
+                change_interval(1);
+                return;
+            case LV_KEY_ENTER:
+                interval_cb(NULL);
+                return;
+            default:
+                break;
+        }
+    }
+
+    switch (key) {
         case LV_KEY_LEFT:
         case LV_KEY_UP:
             move_sel(-1);
@@ -550,13 +618,21 @@ static void key_cb(lv_event_t *e) {
 static void click_cb(lv_event_t *e) {
     (void)e;
     lv_indev_t *indev = lv_indev_get_act();
-    if (indev && lv_indev_get_type(indev) == LV_INDEV_TYPE_ENCODER) listen_cb(NULL);
+    if (!indev || lv_indev_get_type(indev) != LV_INDEV_TYPE_ENCODER) return;
+    if (adjusting) interval_cb(NULL);
+    else listen_cb(NULL);
 }
 
-/* PTT stops a beacon (and anything playing); our own keying is ignored. */
+/* The radio went to TX. Our own keying (on_air, plus a short tail for the
+ * late flag from the radio) is ignored; anything else is the operator. */
 static void radio_tx_cb(lv_event_t *e) {
     (void)e;
-    if (state == MSG_VOICE_PLAY && !on_air) stop_play();
+    if (state == MSG_VOICE_PLAY && !on_air && lv_tick_elaps(air_off_tick) > OWN_TX_MS) stop_play();
+}
+
+/* Front PTT key (main_screen): stops the call even while we are on air. */
+void dialog_msg_voice_ptt_pressed(void) {
+    if (state == MSG_VOICE_PLAY) stop_play();
 }
 
 /* Button actions */
@@ -571,14 +647,14 @@ static void rec_cb(button_data_t *btn) {
 static void listen_cb(button_data_t *btn) {
     (void)btn;
     if (listening()) stop_play();
-    else start_play(false);
+    else start_play(false, false);
     timer_cb(NULL);
 }
 
 static void tx_btn_cb(button_data_t *btn) {
     (void)btn;
     if (sending()) stop_play();
-    else start_play(true);
+    else start_play(true, false);
     timer_cb(NULL);
 }
 
@@ -587,26 +663,19 @@ static void close_cb(button_data_t *btn) {
     if (state != MSG_VOICE_RECORD) dialog_destruct();
 }
 
-static void beacon_cb(button_data_t *btn) {
+static void auto_cb(button_data_t *btn) {
+    (void)btn;
+    if (sending() && job_loop) stop_play();
+    else start_play(true, true);
+    timer_cb(NULL);
+}
+
+/* Selects the interval for MFK / VOL; press again to give the encoders back. */
+static void interval_cb(button_data_t *btn) {
     (void)btn;
     if (state != MSG_VOICE_OFF) return;
-
-    /* Off -> 10 -> 30 -> 60 -> 120 s -> Off */
-    params_lock();
-    if (!beacon_on) {
-        beacon_on               = true;
-        params.voice_msg_period = 10;
-    } else if (params.voice_msg_period < 30) {
-        params.voice_msg_period = 30;
-    } else if (params.voice_msg_period < 60) {
-        params.voice_msg_period = 60;
-    } else if (params.voice_msg_period < 120) {
-        params.voice_msg_period = 120;
-    } else {
-        beacon_on = false;
-    }
-    params_unlock(&params.dirty.voice_msg_period);
-    buttons_refresh(&btn_beacon);
+    adjusting = !adjusting;
+    buttons_refresh(&btn_interval);
     timer_cb(NULL);
 }
 
@@ -782,7 +851,8 @@ static void construct_cb(lv_obj_t *parent) {
     lv_group_set_editing(keyboard_group, true);
 
     mkdir(path, 0755);
-    sel = 0;
+    sel       = 0;
+    adjusting = false;
     load_items(NULL);
     timer = lv_timer_create(timer_cb, TIMER_MS, NULL);
     timer_cb(NULL);
@@ -793,6 +863,7 @@ static void destruct_cb() {
      * recording or leaves the radio keyed. */
     if (state == MSG_VOICE_RECORD) stop_rec();
     reap_worker(true);
+    adjusting = false;
     if (renaming) {
         textarea_window_close();
         renaming = false;

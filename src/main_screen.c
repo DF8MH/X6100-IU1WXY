@@ -1060,6 +1060,7 @@ static void main_screen_keypad_cb(lv_event_t * e) {
         case KEYPAD_PTT:
             switch (keypad->state) {
                 case KEYPAD_PRESS:
+                    dialog_msg_voice_ptt_pressed();
                     radio_set_ptt(true);
 
                     switch (cparam_i_get(cfg_cur_mode)) {

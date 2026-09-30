@@ -36,6 +36,8 @@
 #include <unistd.h>
 #include <execinfo.h>
 #include <sys/stat.h>
+#include <sndfile.h>
+#include <math.h>
 #include <signal.h>
 
 #define W 800
@@ -81,6 +83,42 @@ static void pump(int ms) {
         lv_timer_handler();
         usleep(5000);
     }
+}
+
+/* Voice keyer: fake messages, Auto call in the pause between two calls */
+static void voicekeyer(void) {
+    static const char *names[] = {"CQ 20m", "CQ contest IU1WXY", "Message 3"};
+    mkdir("msg_demo", 0755);
+    for (int i = 0; i < 3; i++) {
+        char p[64];
+        SF_INFO info = {.samplerate = 8000, .channels = 1, .format = SF_FORMAT_WAV | SF_FORMAT_PCM_16};
+        snprintf(p, sizeof p, "msg_demo/%s.mp3", names[i]);
+        SNDFILE *f = sf_open(p, SFM_WRITE, &info);
+        short b[800];
+        for (int k = 0; k < 800; k++) b[k] = (short)(8000 * sin(k * 0.3));
+        for (int k = 0; k < 10 * (i + 2); k++) sf_write_short(f, b, 800);
+        sf_close(f);
+    }
+    params.voice_msg_period = 30;
+    dialog_construct(dialog_msg_voice, lv_scr_act());
+    pump(300);
+    shot("voice_keyer_1.ppm");                 /* page 1, ready */
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[4]->press(pg->items[4]);         /* Auto call */
+    pump(1500);                                /* call played, now in the pause */
+    shot("voice_keyer_2.ppm");
+    pg->items[4]->press(pg->items[4]);         /* stop */
+    pump(400);
+    pg->items[0]->press(pg->items[0]);
+    pump(200);
+    pg = buttons_get_cur_page();
+    pg->items[1]->press(pg->items[1]);         /* Interval: MFK adjusts it */
+    uint32_t key = LV_KEY_RIGHT;
+    for (int i = 0; i < 15; i++) lv_event_send(dialog_msg_voice->obj, LV_EVENT_KEY, &key);
+    pump(200);
+    shot("voice_keyer_3.ppm");                 /* page 2, interval 45 s */
+    dialog_destruct();
+    pump(200);
 }
 
 static void app(const char *name, dialog_t *d, int pages) {
@@ -723,6 +761,7 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < sizeof apps / sizeof apps[0]; i++)
         if (!only || !strcmp(only, apps[i].n)) app(apps[i].n, *apps[i].d, apps[i].pages);
     if (!only || !strcmp(only, "cluster")) cluster_demo();
+    if (only && !strcmp(only, "voicekeyer")) voicekeyer();
     if (!only || !strcmp(only, "msg")) {
         dialog_construct(dialog_msg_voice, lv_scr_act());
         pump(300);

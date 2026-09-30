@@ -368,8 +368,10 @@ static void theme_defaults() {
     lv_style_set_border_width(&btn_active_style, 2);
     lv_style_remove_prop(&btn_active_style, LV_STYLE_TEXT_COLOR);
 
-    lv_style_set_opa(&btn_disabled_style, LV_OPA_40);
-    lv_style_set_text_color(&btn_disabled_style, lv_color_hex(0x101010));
+    /* Disabled: same opaque button, dimmed text and border (not see-through) */
+    lv_style_set_opa(&btn_disabled_style, LV_OPA_COVER);
+    lv_style_set_text_color(&btn_disabled_style, lv_color_hex(0x55606C));
+    lv_style_set_border_color(&btn_disabled_style, lv_color_hex(0x2A323C));
     lv_style_set_opa(&btn_mark_assigned_style, LV_OPA_40);
     lv_style_set_bg_color(&btn_mark_assigned_style, lv_color_hex(0x80ff80));
 
