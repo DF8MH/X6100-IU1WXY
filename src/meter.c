@@ -15,6 +15,8 @@
 #include "util.h"
 #include "scheduler.h"
 
+#include <math.h>
+
 #define NUM_ITEMS   7
 #define METER_PEAK_HOLD 1500
 #define METER_PEAK_SPEED 20
@@ -194,6 +196,13 @@ void meter_set_noise(float val) {
 }
 
 void meter_update(float db, float beta) {
+    /* A NaN (empty PSD while the span changes) would stick in the smoothing forever */
+    if (isnan(db)) {
+        return;
+    }
+    if (!isfinite(meter_db) || !isfinite(meter_peak)) {
+        meter_db = meter_peak = min_db;
+    }
     if (att) {
         db += 15.0f;
     }
