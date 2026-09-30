@@ -2980,7 +2980,7 @@ static void grid_create() {
     lv_obj_set_style_pad_all(page, 6, 0);
     lv_obj_set_style_pad_row(page, 8, 0);
     lv_obj_set_style_pad_bottom(page, 40, 0);   /* room under the last row */
-    lv_obj_set_style_text_font(page, &sony_28, 0);  /* dialogs use 36 */
+    lv_obj_set_style_text_font(page, &sony_26, 0);  /* dialogs use 36 */
 
     lv_obj_center(page);
 }
