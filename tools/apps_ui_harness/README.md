@@ -16,7 +16,7 @@ devices from `stubs.c`.
 ../js8_ui_harness/fetch_deps.sh      # deps are shared (symlink)
 mkdir -p build && echo > build/stubs_auto.S && cd build && cmake .. && \
   (make apps_ui_harness 2>link.log || (python3 ../gen_stubs.py . && make apps_ui_harness))
-mkdir -p out && cd out && ../apps_ui_harness [ft8|js8|sstv|wefax|navtex|cluster|msg|settings|wireless|bookmarks|topbar]
+mkdir -p out && cd out && ../apps_ui_harness [ft8|js8|sstv|wefax|navtex|cluster|msg|settings|wireless|bookmarks|topbar|cwtrainer]
 ```
 
 `topbar` renders the main screen: top bar (info, S-meter, clock), frequency
@@ -26,3 +26,7 @@ strip with the GPS locator (fake fix, `topbar_1`) and the saved QTH
 (`topbar_6..9`); spectrum and waterfall are stand-ins, the frequency row
 under them is the real `freq_scale.c`. The Bluetooth tools it polls are
 faked by scripts written to `out/fakebin`. `01_gen_3` is MFK 1:4 (WF ref).
+
+`cwtrainer` renders the CW Trainer: Learn with a right and a wrong answer,
+Practice with decoded text (the decoder is fed by hand, `harness_decode`) and the
+button page 2, and checks that the radio mode is set to CW and given back.

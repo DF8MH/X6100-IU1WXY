@@ -5,3 +5,6 @@ SettingsManager cfg_sm;
 // Cluster spots on the main screen (topbar demo)
 #include "cfg/cfg_api.h"
 static int cluster_spots_init = (cfg_cluster_spots_wf = &cfg_sm.p_cluster_spots_wf, cfg_cluster_column = &cfg_sm.p_cluster_column, 0);
+// CW trainer
+static int cwt_init = (cfg_cwt_level = &cfg_sm.p_cwt_level, cfg_cwt_group = &cfg_sm.p_cwt_group,
+                       cfg_key_speed = &cfg_sm.p_key_speed, cfg_key_train = &cfg_sm.p_key_train, 0);

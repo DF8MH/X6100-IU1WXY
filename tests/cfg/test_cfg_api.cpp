@@ -146,6 +146,8 @@ TEST_CASE("cfg_api_init wires the extended global param handles", "[cfg_api]") {
     REQUIRE(cfg_qsk_time != nullptr);
     REQUIRE(cfg_cw_peak_on != nullptr);
     REQUIRE(cfg_cw_peak_q != nullptr);
+    REQUIRE(cfg_cwt_level != nullptr);
+    REQUIRE(cfg_cwt_group != nullptr);
     REQUIRE(cfg_cw_decoder != nullptr);
     REQUIRE(cfg_cw_tune != nullptr);
     REQUIRE(cfg_agc_hang != nullptr);

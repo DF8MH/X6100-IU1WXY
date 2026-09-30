@@ -47,6 +47,7 @@
 #include "dialog_sstv.h"
 #include "dialog_cluster.h"
 #include "dialog_modes.h"
+#include "dialog_cw_trainer.h"
 #include "freq_strip.h"
 #include "freq_scale.h"
 #include "spot_marks.h"
@@ -627,6 +628,10 @@ void main_screen_start_app(press_action_t app_action) {
             dialog_construct(dialog_cluster, obj);
             break;
 
+        case ACTION_APP_CWTRAINER:
+            dialog_construct(dialog_cw_trainer, obj);
+            break;
+
         default:
             break;
     }
@@ -699,6 +704,7 @@ void main_screen_action(press_action_t action) {
         case ACTION_APP_SSTV:
         case ACTION_APP_CLUSTER:
         case ACTION_APP_MODES:
+        case ACTION_APP_CWTRAINER:
             main_screen_start_app(action);
             break;
 

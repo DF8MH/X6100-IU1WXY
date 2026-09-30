@@ -57,6 +57,7 @@ typedef enum {
     ACTION_APP_SSTV,    /* appended after JS8 */
     ACTION_APP_CLUSTER, /* appended after SSTV */
     ACTION_APP_MODES,   /* appended after CLUSTER */
+    ACTION_APP_CWTRAINER, /* appended after MODES */
 } press_action_t;
 
 typedef enum {

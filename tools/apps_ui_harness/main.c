@@ -20,6 +20,7 @@
 #include "cluster_column.h"
 #include "dialog_msg_voice.h"
 #include "dialog_msg_cw.h"
+#include "dialog_cw_trainer.h"
 #include "cluster/client.h"
 #include "textarea_window.h"
 #include "info.h"
@@ -431,6 +432,68 @@ static void topbar(void) {
     pump(100);
 }
 
+/* CW trainer: the decoder is fed by hand (harness_decode) with what the
+ * paddle would have produced. Learn: right and wrong answers; Practice. */
+extern int32_t harness_cwt_level, harness_cwt_group, harness_key_speed, harness_mode;
+void harness_decode(const char *t);
+void harness_decode_wpm(int w);
+
+static void cwt_answer(const char *s) {
+    for (; *s; s++) {
+        char c[2] = {*s, 0};
+        harness_decode(c);
+        pump(50);
+    }
+}
+
+/* Play, wait for the sidetone to end, answer, wait for the result */
+static void cwt_round(const char *answer_or_null) {
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[1]->press(pg->items[1]);   /* Play */
+    pump(3500);
+    char wrong[8];
+    const char *t = dialog_cw_trainer_target();
+    if (answer_or_null) snprintf(wrong, sizeof wrong, "%s", answer_or_null);
+    else snprintf(wrong, sizeof wrong, "%s", t);
+    cwt_answer(wrong);
+    pump(300);
+}
+
+static void cwtrainer_demo(void) {
+    harness_key_speed = 30;
+    harness_cwt_level = 5;   /* K M R S U */
+    harness_cwt_group = 1;
+    printf("mode before: %d\n", harness_mode);
+    buttons_load_page_group(buttons_group_app);
+    dialog_construct(dialog_cw_trainer, lv_scr_act());
+    pump(300);
+    printf("mode in the app: %d (4 = CW expected)\n", harness_mode);
+    shot("cwtrainer_0.ppm");
+    for (int i = 0; i < 6; i++) cwt_round(NULL);   /* six right answers for the score */
+    cwt_round(NULL);
+    shot("cwtrainer_1.ppm");                       /* OK */
+    harness_cwt_group = 2;
+    cwt_round("SS");                               /* wrong (unless it was SS) */
+    shot("cwtrainer_2.ppm");                       /* WRONG */
+    /* Practice: free keying */
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[3]->press(pg->items[3]);
+    pump(200);
+    static const char *msg[] = {"C", "Q", " ", "C", "Q", " ", "D", "E", " ", "I", "U", "1", "W", "X", "Y", " ",
+                                "I", "U", "1", "W", "X", "Y", " ", "K", " ", "T", "N", "X", " ", "G", "M", " ", "U", "R", " ",
+                                "5", "9", "9", " ", "F", "B", " ", "T", "U", " ", "7", "3", " ", "K"};
+    for (unsigned i = 0; i < sizeof msg / sizeof msg[0]; i++) harness_decode(msg[i]);
+    harness_decode_wpm(22);
+    pump(300);
+    shot("cwtrainer_3.ppm");
+    pg->items[0]->press(pg->items[0]);
+    pump(100);
+    shot("cwtrainer_4.ppm");    /* page 2 */
+    dialog_destruct();
+    pump(200);
+    printf("mode after: %d (3 expected)\n", harness_mode);
+}
+
 /* Settings: every tab of both button pages. */
 static void settings_demo(void) {
     char p[64];
@@ -676,6 +739,7 @@ int main(int argc, char **argv) {
         dialog_destruct();
         pump(200);
     }
+    if (only && !strcmp(only, "cwtrainer")) cwtrainer_demo();
     if (!only || !strcmp(only, "settings")) settings_demo();
     if (!only || !strcmp(only, "wireless")) wireless_demo();
     if (only && !strcmp(only, "settings_nav")) settings_nav();

@@ -128,11 +128,27 @@ cw_characters_t cw_characters[] = {
 void cw_decoder_init() {
 }
 
+static void (*sink_text)(const char *);
+static void (*sink_wpm)(int);
+
+void cw_decoder_set_sink(void (*text)(const char *), void (*wpm)(int)) {
+    sink_text = text;
+    sink_wpm  = wpm;
+}
+
 static void cw_decoder_ans(const char *ans) {
-    panel_add_text(ans);
+    if (sink_text) {
+        sink_text(ans);
+    } else {
+        panel_add_text(ans);
+    }
 }
 
 static void cw_decoder_wpm(uint16_t wpm) {
+    if (sink_wpm) {
+        sink_wpm(wpm);
+        return;
+    }
     char buf[8];
     snprintf(buf, 8, "WPM: %d", wpm);
     panel_set_info(buf);

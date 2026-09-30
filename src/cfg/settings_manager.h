@@ -177,6 +177,12 @@ class SettingsManager {
     Parameter<int32_t>            p_cw_peak_q{"cw_peak_q", 1, 1, 16,
         StorageType::GLOBAL, pending_writes_, &global_params_};
 
+    // CW trainer (Koch level = number of characters in use, 2 = K M)
+    Parameter<int32_t> p_cwt_level{"cwt_level", 2, 2, 40,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_cwt_group{"cwt_group", 1, 1, 5,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+
     // CW decoder
     Parameter<int32_t> p_cw_decoder{"cw_decoder", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};

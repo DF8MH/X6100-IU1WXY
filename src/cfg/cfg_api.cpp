@@ -58,6 +58,8 @@ ParamInt         *cfg_key_train           = nullptr;
 ParamInt         *cfg_qsk_time            = nullptr;
 ParamFloat       *cfg_key_ratio           = nullptr;
 ParamInt         *cfg_cw_peak_on          = nullptr;
+ParamInt         *cfg_cwt_level           = nullptr;
+ParamInt         *cfg_cwt_group           = nullptr;
 ParamInt         *cfg_cw_peak_q           = nullptr;
 ParamInt         *cfg_cw_decoder          = nullptr;
 ParamInt         *cfg_cw_tune             = nullptr;
@@ -181,6 +183,8 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_qsk_time         = &cfg_sm.p_qsk_time;
     cfg_key_ratio        = reinterpret_cast<ParamFloat *>(&cfg_sm.p_key_ratio);
     cfg_cw_peak_on       = &cfg_sm.p_cw_peak_on;
+    cfg_cwt_level        = &cfg_sm.p_cwt_level;
+    cfg_cwt_group        = &cfg_sm.p_cwt_group;
     cfg_cw_peak_q        = &cfg_sm.p_cw_peak_q;
     cfg_cw_decoder       = &cfg_sm.p_cw_decoder;
     cfg_cw_tune          = &cfg_sm.p_cw_tune;

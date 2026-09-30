@@ -20,16 +20,17 @@ __attribute__((constructor)) static void init_ptrs(void) {
     for (unsigned i = 0; i < sizeof pp / sizeof pp[0]; i++) *pp[i] = dummies[i];
 }
 int32_t harness_fg_freq = 14074000;
+int32_t harness_mode = 3; /* USB-D, the trainer switches to CW */
 int32_t cparam_i_get(const void *p) {
     if (p == cfg_cur_filter_low) return 100;
     if (p == cfg_cur_filter_high) return 2900;
     if (p == cfg_fg_freq) return harness_fg_freq;
-    if (p == cfg_cur_mode) return 3; /* USB-D */
+    if (p == cfg_cur_mode) return harness_mode;
     if (p == cfg_cur_agc) return 3; /* AUTO */
     if (p == cfg_cur_att) return 0;
     return 1;
 }
-void cparam_i_set(void *p, int32_t v) { if (p == cfg_fg_freq) harness_fg_freq = v; }
+void cparam_i_set(void *p, int32_t v) { if (p == cfg_fg_freq) harness_fg_freq = v; if (p == cfg_cur_mode) harness_mode = v; }
 /* wfview server: enabled, one fake client logged in */
 bool wfview_server_get_enabled(void) { return true; }
 void wfview_server_set_enabled(bool on) { (void)on; }
@@ -71,7 +72,25 @@ void btaudio_run(const char *args, btaudio_done_cb_t cb, void *user) {
 extern void *cfg_band_split;
 extern void *cfg_cluster_column;
 int32_t harness_cluster_column;
+/* CW trainer: level, group and keyer speed are kept here, train is on */
+extern void *cfg_cwt_level, *cfg_cwt_group, *cfg_key_speed, *cfg_key_train;
+int32_t harness_cwt_level = 2, harness_cwt_group = 1, harness_key_speed = 15;
+void param_i_set(void *p, int32_t v) {
+    if (p == cfg_cwt_level) harness_cwt_level = v;
+    if (p == cfg_cwt_group) harness_cwt_group = v;
+    if (p == cfg_key_speed) harness_key_speed = v;
+}
+/* The decoder sink of the trainer: the harness feeds "decoded" text */
+static void (*sink_text)(const char *);
+static void (*sink_wpm)(int);
+void cw_decoder_set_sink(void (*text)(const char *), void (*wpm)(int)) { sink_text = text; sink_wpm = wpm; }
+void harness_decode_wpm(int w) { if (sink_wpm) sink_wpm(w); }
+void harness_decode(const char *t) { if (sink_text) sink_text(t); }
 int32_t param_i_get(const void *p) {
+    if (p == cfg_cwt_level) return harness_cwt_level;
+    if (p == cfg_cwt_group) return harness_cwt_group;
+    if (p == cfg_key_speed) return harness_key_speed;
+    if (p == cfg_key_train) return 1;
     if (p == cfg_cluster_column) return harness_cluster_column;
     if (p == cfg_band_split) return 0;
     if (p == cfg_tx_filter_low) return 160;

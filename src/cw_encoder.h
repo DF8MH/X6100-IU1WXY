@@ -21,6 +21,10 @@ typedef enum {
 void cw_encoder_send(const char *text, bool beacon);
 void cw_encoder_stop();
 
+/* While set the key is never closed unless key train is on (the sidetone
+ * without transmitting): the CW trainer must not transmit. */
+void cw_encoder_require_train(bool on);
+
 cw_encoder_state_t cw_encoder_state();
 
 /* Seconds left in a beacon pause */

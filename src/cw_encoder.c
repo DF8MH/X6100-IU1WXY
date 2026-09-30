@@ -46,6 +46,22 @@ static uint8_t get_morse(char *str, char **morse) {
 }
 
 static volatile bool stop_req;
+static volatile bool need_train;
+
+void cw_encoder_require_train(bool on) {
+    need_train = on;
+}
+
+/* Closes the key; with the train requirement and no train, stops instead. */
+static bool key_down(void) {
+    if (need_train && !param_i_get(cfg_key_train)) {
+        stop_req = true;
+        return false;
+    }
+    radio_set_morse_key(true);
+    return true;
+}
+
 static volatile int  pause_left;
 
 /* Sleeps nsec, in short steps so a stop is quick. False when stopped. */
@@ -63,13 +79,13 @@ static void send_morse(char *str, long dit_nsec, long dah_nsec) {
     while (*str && !stop_req) {
         switch (*str) {
             case '.':
-                radio_set_morse_key(true);
+                if (!key_down()) return;
                 wait_nsec(dit_nsec);
                 radio_set_morse_key(false);
                 break;
 
             case '-':
-                radio_set_morse_key(true);
+                if (!key_down()) return;
                 wait_nsec(dah_nsec);
                 radio_set_morse_key(false);
                 break;

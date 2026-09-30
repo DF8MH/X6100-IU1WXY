@@ -99,6 +99,8 @@ extern ParamInt   *cfg_cw_peak_on;          // p_cw_peak_on
 extern ParamInt   *cfg_cw_peak_q;           // p_cw_peak_q
 
 // CW decoder
+extern ParamInt   *cfg_cwt_level;           // p_cwt_level
+extern ParamInt   *cfg_cwt_group;           // p_cwt_group
 extern ParamInt   *cfg_cw_decoder;         // p_cw_decoder
 extern ParamInt   *cfg_cw_tune;            // p_cw_tune
 extern ParamFloat *cfg_cw_decoder_snr;     // p_cw_decoder_snr

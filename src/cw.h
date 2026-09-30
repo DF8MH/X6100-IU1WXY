@@ -32,6 +32,9 @@ void cw_put_audio_samples(unsigned int n, float *samples);
 
 float cw_get_tone_freq(void);
 
+/* CW trainer: decode always, with a narrower filter around the key tone */
+void cw_trainer_set(bool on);
+
 #ifdef __cplusplus
 }
 

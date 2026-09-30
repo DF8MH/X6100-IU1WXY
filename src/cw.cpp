@@ -37,6 +37,7 @@ static float ema_noise_db = S9;
 static float threshold_pulse;
 static float threshold_silence;
 static bool  peak_on = false;
+static bool  trainer = false;
 static size_t samples_counter = 0;
 static float tone_freq;
 
@@ -82,7 +83,7 @@ void cw_put_audio_samples(unsigned int n, float *samples) {
     if (!ready) {
         return;
     }
-    if ((!cw_decoder) && (!cw_tune)) {
+    if ((!cw_decoder) && (!cw_tune) && (!trainer)) {
         return;
     }
 
@@ -142,6 +143,17 @@ void cw_put_audio_samples(unsigned int n, float *samples) {
             update_peak_freq(key_tone - avg_freq);
         }
     }
+}
+
+/* The peak filter is r = 0.8 (about 700 Hz wide at 11 kHz); r = 0.95 is about
+ * 175 Hz wide around the sidetone and still follows a 60 ms dit. */
+void cw_trainer_set(bool on) {
+    if (!ready) {
+        return;
+    }
+    cw_detector->set_r(on ? 0.95f : 0.8f);
+    cw_detector->set_f0(key_tone);
+    trainer = on;
 }
 
 float cw_get_tone_freq(void) {

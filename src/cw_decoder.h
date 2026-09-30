@@ -18,4 +18,8 @@ typedef struct {
 extern cw_characters_t cw_characters[];
 
 void cw_decoder_init();
+
+/* Redirects the decoded text and the WPM estimate (called from the audio
+ * thread) instead of the panel; NULL, NULL restores the panel. */
+void cw_decoder_set_sink(void (*text)(const char *), void (*wpm)(int));
 void cw_decoder_signal(bool on, float ms);
