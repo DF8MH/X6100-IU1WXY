@@ -1458,6 +1458,15 @@ static void spectrum_pressed_cb(lv_event_t * e) {
     mfk_update(0);
 }
 
+/* Long MFK press: with the Cluster item active, tune to the highlighted spot.
+ * The press already toggled the MFK state; toggle it back to keep browsing. */
+static void spectrum_long_pressed_cb(lv_event_t * e) {
+    if (mfk_ctrl == CTRL_CLUSTER) {
+        cluster_column_tune();
+        spectrum_pressed_cb(e);
+    }
+}
+
 static void keys_enable_cb(lv_timer_t *t) {
     lv_group_add_obj(keyboard_group, spectrum);
     lv_group_set_editing(keyboard_group, true);
@@ -1506,6 +1515,9 @@ static void on_cluster_spots_wf_change(Subject *subj, void *user_data) {
 }
 
 static void on_cluster_column_change(Subject *subj, void *user_data) {
+    if (!param_i_get(cfg_cluster_column)) {
+        mfk_cluster_gone();
+    }
     cluster_column_refresh();
 }
 
@@ -1533,6 +1545,9 @@ lv_obj_t * main_screen() {
 
     lv_obj_add_event_cb(spectrum, spectrum_key_cb, LV_EVENT_KEY, NULL);
     lv_obj_add_event_cb(spectrum, spectrum_pressed_cb, LV_EVENT_PRESSED, NULL);
+    /* Not scrollable: LVGL then sends LONG_PRESSED for the MFK button (it was a no-op before) */
+    lv_obj_clear_flag(spectrum, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(spectrum, spectrum_long_pressed_cb, LV_EVENT_LONG_PRESSED, NULL);
 
     spectrum_min_max_reset();
 

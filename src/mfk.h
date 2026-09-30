@@ -24,12 +24,14 @@ typedef enum {
 } mfk_state_t;
 
 extern mfk_state_t  mfk_state;
+extern cfg_ctrl_t   mfk_ctrl;
 
 void mfk_init();
 
 void mfk_update(int16_t diff);
 void mfk_change_ctrl(int16_t dir);
 void mfk_set_ctrl(cfg_ctrl_t mode);
+void mfk_cluster_gone();
 
 #ifdef __cplusplus
 }

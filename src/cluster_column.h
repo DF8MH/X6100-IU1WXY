@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 #include "lvgl/lvgl.h"
 
 #ifdef __cplusplus
@@ -21,6 +23,15 @@ void cluster_column_layout(lv_coord_t y);
 
 /* Setting or VFO changed: redraw */
 void cluster_column_refresh(void);
+
+/* The MFK "Cluster" item is active: a highlight row is shown and moved */
+void cluster_column_set_active(bool on);
+
+/* Moves the highlight by dir spots (clamped); returns the highlighted call ("" if none) */
+const char *cluster_column_move(int dir);
+
+/* Tunes the radio to the highlighted spot */
+void cluster_column_tune(void);
 
 #ifdef __cplusplus
 }

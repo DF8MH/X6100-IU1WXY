@@ -13,6 +13,7 @@
 #include "knobs.h"
 #include "dsp.h"
 #include "controls.h"
+#include "cluster_column.h"
 
 #include <vector>
 
@@ -41,6 +42,7 @@ void mfk_init() {
     // Find first available config
     mfk_ctrl = controls_encoder_get_next(ENCODER_BIND_MFK, mfk_ctrl, 0);
     knobs_set_mfk_param(mfk_ctrl);
+    cluster_column_set_active(mfk_ctrl == CTRL_CLUSTER);
 }
 
 void mfk_update(int16_t diff) {
@@ -61,6 +63,7 @@ void mfk_change_ctrl(int16_t dir) {
     }
     mfk_ctrl = controls_encoder_get_next(ENCODER_BIND_MFK, mfk_ctrl, dir);
     knobs_set_mfk_param(mfk_ctrl);
+    cluster_column_set_active(mfk_ctrl == CTRL_CLUSTER);
     mfk_update(0);
 }
 
@@ -69,5 +72,13 @@ void mfk_set_ctrl(cfg_ctrl_t ctrl) {
     mfk_state = MFK_STATE_EDIT;
     knobs_set_mfk_state(true);
     knobs_set_mfk_param(mfk_ctrl);
+    cluster_column_set_active(mfk_ctrl == CTRL_CLUSTER);
     mfk_update(0);
+}
+
+/* The cluster column was switched off while its MFK item was the active one */
+void mfk_cluster_gone() {
+    if (mfk_ctrl == CTRL_CLUSTER) {
+        mfk_change_ctrl(+1);
+    }
 }

@@ -394,6 +394,11 @@ static void topbar(void) {
     cluster_column_refresh();
     pump(1100);
     shot("cluster_column_1.ppm");
+    cluster_column_set_active(true);
+    cluster_column_move(1);
+    pump(100);
+    shot("cluster_mfk.ppm");
+    cluster_column_set_active(false);
     harness_fg_freq = 14074000;
     pump(1100);
     shot("cluster_column_2.ppm");

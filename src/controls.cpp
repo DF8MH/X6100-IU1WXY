@@ -1,4 +1,5 @@
 #include "controls.h"
+#include "knobs.h"
 
 #include "cfg/settings_manager.h"
 #include "util.hpp"
@@ -8,6 +9,7 @@
 
 extern "C" {
 #include "msg.h"
+#include "cluster_column.h"
 #include "rtty.h"
 }
 
@@ -387,6 +389,11 @@ void controls_encoder_update(cfg_ctrl_t ctrl, int32_t diff, std::string &msg) {
             snprintf(msg.data(), msg.capacity(), "Waterfall ref: %+i dB", i);
             break;
 
+        case CTRL_CLUSTER:
+            snprintf(msg.data(), msg.capacity(), "Cluster: %s", cluster_column_move(diff));
+            knobs_set_mfk_param(CTRL_CLUSTER);  /* no subject: refresh the knob label */
+            break;
+
         case CTRL_IF_SHIFT:
             {
                 x6100_base_ver_t base_ver = x6100_control_get_base_ver();
@@ -408,9 +415,14 @@ cfg_ctrl_t controls_encoder_get_next(encoder_binds_t encoder, cfg_ctrl_t current
     std::string binds = cfg_sm.p_encoder_bind.get();
     size_t n_binds = binds.size();
     // Initialization
+    /* Cluster: always on the MFK, but only while its column is shown */
+    auto bound = [&](size_t c) {
+        return c == CTRL_CLUSTER ? encoder == ENCODER_BIND_MFK && cfg_sm.p_cluster_column.get()
+                                 : binds[c] == encoder;
+    };
     if (dir == 0) {
         if (current < n_binds) {
-            if (binds[current] == encoder) {
+            if (bound(current)) {
                 return current;
             }
         }
@@ -421,7 +433,7 @@ cfg_ctrl_t controls_encoder_get_next(encoder_binds_t encoder, cfg_ctrl_t current
         for (size_t i = current + 1; i < current + 1 + n_binds; i++)
         {
             new_ctrl = (cfg_ctrl_t)(i % n_binds);
-            if (binds[new_ctrl] == encoder) {
+            if (bound(new_ctrl)) {
                 return new_ctrl;
             }
         }
@@ -429,7 +441,7 @@ cfg_ctrl_t controls_encoder_get_next(encoder_binds_t encoder, cfg_ctrl_t current
         for (size_t i = 2 * n_binds + current - 1; i > n_binds + current - 1; i--)
         {
             new_ctrl = (cfg_ctrl_t)(i % n_binds);
-            if (binds[new_ctrl] == encoder) {
+            if (bound(new_ctrl)) {
                 return new_ctrl;
             }
         }

@@ -9,6 +9,7 @@
 
 
 #include "knobs.h"
+#include "cluster_column.h"
 
 #include "buttons.h"
 #include "cfg/settings_manager.h"
@@ -76,6 +77,11 @@ struct ControlSubjBase : public Control {
 struct ControlSubjInt : public ControlSubjBase<int32_t> {
     using ControlSubjBase<int32_t>::ControlSubjBase;
     std::string to_str() { return std::to_string(subj->get()); }
+};
+
+struct ControlCluster : public Control {
+    using Control::Control;
+    std::string to_str() { return cluster_column_move(0); }
 };
 
 struct ControlSubjFloat : public ControlSubjBase<float> {
@@ -157,8 +163,13 @@ class KnobInfo {
             update();
         } else {
             this->item = item;
-            subscription = Subscription(item->subscribe(on_subj_change, (void *)this));
-            subscription->notify();
+            ObserverDelayed *obs = item->subscribe(on_subj_change, (void *)this);
+            subscription = Subscription(obs);
+            if (obs) {
+                subscription->notify();
+            } else {
+                update();   /* no subject (Cluster) */
+            }
         }
     }
 };
@@ -185,6 +196,7 @@ static std::map<int, Control*> controls = {
     {CTRL_XIT, new ControlSubjInt("XIT", &cfg_sm.p_xit)},
     {CTRL_IF_SHIFT, new ControlSubjInt("IF shift", &cfg_sm.p_band_if_shift)},
     {CTRL_WF_REF, new ControlSubjInt("WF ref", &cfg_sm.p_waterfall_ref)},
+    {CTRL_CLUSTER, new ControlCluster("Cluster")},
 
     {CTRL_DNF, new ControlSubjOnOff("Notch filter", &cfg_sm.p_dnf)},
     {CTRL_DNF_CENTER, new ControlSubjInt("DNF center", &cfg_sm.p_dnf_center)},

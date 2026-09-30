@@ -408,10 +408,7 @@ static void table_draw_end_cb(lv_event_t *e) {
     draw_text(dsc, FONT_SMALL, 690, WIDTH - 12, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_RIGHT, text);
 }
 
-static void tune_to(int idx) {
-    if (idx < 0 || idx >= view_count) return;
-    const cluster_spot_t *s = &view[idx];
-
+void dialog_cluster_tune_spot(const cluster_spot_t *s) {
     x6100_mode_t mode;
     switch (cluster_guess_mode(s)) {
         case CLUSTER_MODE_CW:   mode = x6100_mode_cw; break;
@@ -423,9 +420,14 @@ static void tune_to(int idx) {
     }
     main_screen_set_freq(s->freq_hz);
     cparam_i_set(cfg_cur_mode, mode);
-    follow_vfo = true;
     msg_update_text_fmt("%s %d.%03d.%d", s->dx, s->freq_hz / 1000000, (s->freq_hz / 1000) % 1000,
                         (s->freq_hz % 1000) / 100);
+}
+
+static void tune_to(int idx) {
+    if (idx < 0 || idx >= view_count) return;
+    dialog_cluster_tune_spot(&view[idx]);
+    follow_vfo = true;
 }
 
 static void move_selection(int step) {
