@@ -75,8 +75,14 @@ static void destruct_cb();
 static void key_cb(lv_event_t * e);
 
 static lv_obj_t     *grid;
-static lv_coord_t   col_dsc[] = { 740 - (SMALL_1 + SMALL_PAD) * 6, SMALL_1, SMALL_1, SMALL_1, SMALL_1, SMALL_1, SMALL_1, LV_GRID_TEMPLATE_LAST };
-static lv_coord_t   row_dsc[64] = { 1 };
+static lv_obj_t     *page;      /* scrolling column of cards */
+static lv_obj_t     *band;      /* row of two half cards, or NULL */
+static lv_coord_t   col_dsc[] = { LV_GRID_FR(1), SMALL_1, SMALL_1, SMALL_1, SMALL_1, SMALL_1, SMALL_1, LV_GRID_TEMPLATE_LAST };
+static lv_coord_t   col_station[] = { LV_GRID_FR(1), 150, LV_GRID_TEMPLATE_LAST };
+static lv_coord_t   col_datetime[] = { LV_GRID_FR(1), 78, 78, 100, LV_GRID_TEMPLATE_LAST };
+static lv_coord_t   row_pool[8][64];    /* row descriptors: one per card of the page */
+static lv_coord_t   *row_dsc = row_pool[0];
+static int          card_n;
 
 static bool         datetime_changed;
 static time_t       now;
@@ -415,7 +421,7 @@ static uint8_t make_date(uint8_t row) {
 
     obj = lv_label_create(grid);
 
-    lv_label_set_text(obj, "Day, Month, Year");
+    lv_label_set_text(obj, "Date");
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col++, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     /* Day */
@@ -429,9 +435,9 @@ static uint8_t make_date(uint8_t row) {
     lv_spinbox_set_range(obj, 1, 31);
     lv_spinbox_set_digit_format(obj, 2, 0);
     lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, 56);
+    lv_obj_set_size(obj, 78, 56);
 
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);   col += 2;
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 1, LV_GRID_ALIGN_CENTER, row, 1);   col++;
     lv_obj_add_event_cb(obj, datetime_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(obj, datetime_set_rtc_cb, LV_EVENT_FOCUSED, NULL);
 
@@ -446,9 +452,9 @@ static uint8_t make_date(uint8_t row) {
     lv_spinbox_set_range(obj, 1, 12);
     lv_spinbox_set_digit_format(obj, 2, 0);
     lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, 56);
+    lv_obj_set_size(obj, 78, 56);
 
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);   col += 2;
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 1, LV_GRID_ALIGN_CENTER, row, 1);   col++;
     lv_obj_add_event_cb(obj, datetime_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(obj, datetime_set_rtc_cb, LV_EVENT_FOCUSED, NULL);
 
@@ -463,9 +469,9 @@ static uint8_t make_date(uint8_t row) {
     lv_spinbox_set_range(obj, 2020, 2038);
     lv_spinbox_set_digit_format(obj, 4, 0);
     lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, 56);
+    lv_obj_set_size(obj, 100, 56);
 
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);   col += 2;
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 1, LV_GRID_ALIGN_CENTER, row, 1);   col++;
     lv_obj_add_event_cb(obj, datetime_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(obj, datetime_set_rtc_cb, LV_EVENT_FOCUSED, NULL);
 
@@ -480,7 +486,7 @@ static uint8_t make_time(uint8_t row) {
 
     obj = lv_label_create(grid);
 
-    lv_label_set_text(obj, "Hour, Min, Sec");
+    lv_label_set_text(obj, "Time");
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col++, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     /* Hour */
@@ -494,9 +500,9 @@ static uint8_t make_time(uint8_t row) {
     lv_spinbox_set_range(obj, 0, 23);
     lv_spinbox_set_digit_format(obj, 2, 0);
     lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, 56);
+    lv_obj_set_size(obj, 78, 56);
 
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);   col += 2;
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 1, LV_GRID_ALIGN_CENTER, row, 1);   col++;
     lv_obj_add_event_cb(obj, datetime_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(obj, datetime_set_rtc_cb, LV_EVENT_FOCUSED, NULL);
 
@@ -511,9 +517,9 @@ static uint8_t make_time(uint8_t row) {
     lv_spinbox_set_range(obj, 0, 59);
     lv_spinbox_set_digit_format(obj, 2, 0);
     lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, 56);
+    lv_obj_set_size(obj, 78, 56);
 
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);   col += 2;
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 1, LV_GRID_ALIGN_CENTER, row, 1);   col++;
     lv_obj_add_event_cb(obj, datetime_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(obj, datetime_set_rtc_cb, LV_EVENT_FOCUSED, NULL);
 
@@ -528,9 +534,9 @@ static uint8_t make_time(uint8_t row) {
     lv_spinbox_set_range(obj, 0, 59);
     lv_spinbox_set_digit_format(obj, 2, 0);
     lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, 56);
+    lv_obj_set_size(obj, 78, 56);
 
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);   col += 2;
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 1, LV_GRID_ALIGN_CENTER, row, 1);   col++;
     lv_obj_add_event_cb(obj, datetime_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(obj, datetime_set_rtc_cb, LV_EVENT_FOCUSED, NULL);
 
@@ -2047,14 +2053,130 @@ static void wl_pill(lv_obj_t *obj, const char *text, uint32_t bg, uint32_t fg) {
 #define PILL_CAT    "CAT", 0x3a2f5a, 0xccbbff
 #define PILL_NEW    "new", 0x2f3d4a, 0xccddee
 
-static uint8_t make_section(uint8_t row, const char *title) {
-    lv_obj_t *obj = wl_label(grid, &sony_20, 0x90f0d0, 0);
+/* Cards: a rounded panel with a header (icon, title, divider) and its own
+ * grid. `grid` is the card being filled, the option rows go from row 1. */
 
-    lv_label_set_text(obj, title);
-    lv_obj_set_style_text_letter_space(obj, 2, 0);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 7, LV_GRID_ALIGN_END, row, 1);
-    row_dsc[row] = 26;
-    return row + 1;
+#define CARD_HEAD_H     36
+
+static lv_coord_t *card_cols;
+
+static void band_begin() {
+    band = lv_obj_create(page);
+    lv_obj_remove_style_all(band);
+    lv_obj_set_size(band, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(band, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(band, 8, 0);
+    lv_obj_clear_flag(band, LV_OBJ_FLAG_SCROLLABLE);
+}
+
+static void band_end() {
+    band = NULL;
+}
+
+static uint8_t card_begin(const char *icon, const char *title, lv_coord_t *cols = col_dsc) {
+    lv_obj_t *obj;
+
+    grid = lv_obj_create(band ? band : page);
+    lv_obj_remove_style_all(grid);
+    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
+    if (band) {
+        lv_obj_set_size(grid, 10, LV_SIZE_CONTENT);
+        lv_obj_set_flex_grow(grid, 1);
+    } else {
+        lv_obj_set_size(grid, lv_pct(100), LV_SIZE_CONTENT);
+    }
+    lv_obj_clear_flag(grid, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_text_color(grid, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(grid, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(grid, LV_OPA_10, 0);
+    lv_obj_set_style_border_width(grid, 1, 0);
+    lv_obj_set_style_border_color(grid, lv_color_hex(0x506070), 0);
+    lv_obj_set_style_radius(grid, 10, 0);
+    lv_obj_set_style_pad_hor(grid, 12, 0);
+    lv_obj_set_style_pad_ver(grid, 6, 0);
+    lv_obj_set_style_pad_column(grid, SMALL_PAD, 0);
+    lv_obj_set_style_pad_row(grid, 5, 0);
+
+    card_cols = cols;
+    row_dsc = row_pool[card_n++];
+    std::fill_n(row_dsc, 64, 55);
+    row_dsc[0] = CARD_HEAD_H;
+
+    int ncols = 0;
+    while (cols[ncols] != LV_GRID_TEMPLATE_LAST) ncols++;
+
+    obj = lv_obj_create(grid);
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(obj, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(obj, 10, 0);
+    lv_obj_set_style_border_width(obj, 1, 0);
+    lv_obj_set_style_border_side(obj, LV_BORDER_SIDE_BOTTOM, 0);
+    lv_obj_set_style_border_color(obj, lv_color_hex(0x506070), 0);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_STRETCH, 0, ncols, LV_GRID_ALIGN_STRETCH, 0, 1);
+
+    lv_obj_t *ico = lv_label_create(obj);
+    lv_obj_set_style_text_font(ico, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_color(ico, lv_color_hex(0xffd24a), 0);
+    lv_label_set_text(ico, icon);
+
+    lv_obj_t *lbl = lv_label_create(obj);
+    lv_obj_set_style_text_font(lbl, &sony_20, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(0x90f0d0), 0);
+    lv_obj_set_style_text_letter_space(lbl, 2, 0);
+    lv_label_set_text(lbl, title);
+    return 1;
+}
+
+/* Rows go up to `row` (exclusive): indent the labels, put a lone control at
+ * the right edge, draw a divider under each row but the last. */
+static void card_end(uint8_t row) {
+    uint8_t  ctl[64] = {};
+    int      ncols = 0;
+    uint32_t n = lv_obj_get_child_cnt(grid);
+
+    while (card_cols[ncols] != LV_GRID_TEMPLATE_LAST) ncols++;
+    row_dsc[row] = LV_GRID_TEMPLATE_LAST;
+    lv_obj_set_grid_dsc_array(grid, card_cols, row_dsc);
+
+    for (uint32_t i = 1; i < n; i++) {
+        lv_obj_t *c = lv_obj_get_child(grid, i);
+
+        if (lv_obj_get_style_grid_cell_column_pos(c, 0) >= 1) {
+            ctl[lv_obj_get_style_grid_cell_row_pos(c, 0)]++;
+        }
+    }
+    for (uint32_t i = 1; i < n; i++) {
+        lv_obj_t *c    = lv_obj_get_child(grid, i);
+        int       pos  = lv_obj_get_style_grid_cell_column_pos(c, 0);
+        int       span = lv_obj_get_style_grid_cell_column_span(c, 0);
+        int       r    = lv_obj_get_style_grid_cell_row_pos(c, 0);
+
+        if (pos == 0 && lv_obj_check_type(c, &lv_label_class)) {
+            lv_obj_set_style_pad_left(c, 14, 0);
+        } else if (pos >= 1 && ctl[r] == 1 && pos + span < ncols) {
+            lv_coord_t w = lv_obj_get_style_width(c, 0);
+
+            if (LV_COORD_IS_PX(w) && w > span * (SMALL_1 + SMALL_PAD) - SMALL_PAD) {
+                span = ncols - 1;   /* wider than its cells */
+            }
+            lv_obj_set_grid_cell(c, (lv_grid_align_t)lv_obj_get_style_grid_cell_x_align(c, 0), ncols - span, span,
+                                 (lv_grid_align_t)lv_obj_get_style_grid_cell_y_align(c, 0), r, 1);
+        }
+    }
+    for (uint8_t r = 1; r + 1 < row; r++) {
+        if (row_dsc[r] == 10 || row_dsc[r] == LV_GRID_CONTENT || row_dsc[r + 1] == 10) {
+            continue;
+        }
+        lv_obj_t *obj = lv_obj_create(grid);
+
+        lv_obj_remove_style_all(obj);
+        lv_obj_set_height(obj, 1);
+        lv_obj_set_style_bg_color(obj, lv_color_hex(0x506070), 0);
+        lv_obj_set_style_bg_opa(obj, LV_OPA_50, 0);
+        lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_STRETCH, 0, ncols, LV_GRID_ALIGN_END, r, 1);
+    }
 }
 
 static void wl_row_label(uint8_t row, const char *text) {
@@ -2779,7 +2901,11 @@ static uint8_t make_bt_devices(uint8_t row) {
         r->pill_2 = wl_pill_create(r->obj, 430);
         r->note = wl_label(r->obj, &sony_20, 0x99aabb, 430);
     }
-    row = make_delimiter(row + 1);
+    return row + 1;
+}
+
+static uint8_t make_headphones(uint8_t row) {
+    lv_obj_t *obj;
 
     wl_row_label(row, "RX to headphones");
     bt.rx = bt_switch_cell(row, 1, false, bt_rx_cb);
@@ -2826,25 +2952,28 @@ static void wl_delete_cb(lv_event_t *e) {
 }
 
 static void grid_create() {
-    std::fill_n(row_dsc, 64, 55);
-    grid = lv_obj_create(dialog.obj);
-    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
-    lv_obj_set_size(grid, 780, DIALOG_H - 8);
-    lv_obj_set_style_text_color(grid, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(grid, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_column(grid, SMALL_PAD, 0);
-    lv_obj_set_style_pad_row(grid, 5, 0);
-    lv_obj_set_style_pad_bottom(grid, 40, 0);   /* room under the last row */
+    card_n = 0;
+    band = NULL;
+    page = lv_obj_create(dialog.obj);
+    lv_obj_set_size(page, 780, DIALOG_H - 8);
+    lv_obj_set_flex_flow(page, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_text_color(page, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(page, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(page, 6, 0);
+    lv_obj_set_style_pad_row(page, 8, 0);
+    lv_obj_set_style_pad_bottom(page, 40, 0);   /* room under the last row */
 
-    lv_obj_center(grid);
+    lv_obj_center(page);
 }
 
 static void grid_delete() {
-    if (grid) {
+    if (page) {
         lv_group_set_editing(keyboard_group, false);
         // lv_group_remove_all_objs(keyboard_group);
-        lv_obj_del(grid);
+        lv_obj_del(page);
+        page = NULL;
+        grid = NULL;
     }
 }
 
@@ -2892,13 +3021,13 @@ static uint8_t make_station_row(uint8_t row, const char *label, const char *val,
     wl_row_label(row, label);
 
     lv_obj_t *obj = wl_button(row, val[0] ? val : "-", st_kbd_open_cb);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 4, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_size(obj, 150, 48);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_CENTER, row, 1);
     lv_obj_set_user_data(obj, (void *)(intptr_t)which);
     return row + 1;
 }
 
 static uint8_t make_station(uint8_t row) {
-    row = make_section(row, "STATION");
     row = make_station_row(row, "Callsign", params.callsign.x, ST_CALLSIGN);
     row = make_station_row(row, "QTH locator", params.qth.x, ST_QTH);
     lv_obj_add_event_cb(grid, st_delete_cb, LV_EVENT_DELETE, NULL);
@@ -2988,32 +3117,11 @@ static uint8_t make_mic(uint8_t row) {
     return row + 1;
 }
 
-static uint8_t make_mic_vox_agc(uint8_t row) {
-    row = make_section(row, "MICROPHONE");
-    row = make_mic(row);
-    row = make_param_slider(row, "Hand mic gain", &hmic_slider);
-    row = make_param_slider(row, "Built-in mic gain", &imic_slider);
-    row = make_delimiter(row);
-
-    row = make_section(row, "VOX");
-    row = make_param_switch(row, "VOX", cfg_sm.p_vox_en);
-    row = make_param_slider(row, "VOX gain", &vox_gain_slider);
-    row = make_param_slider(row, "Anti-VOX", &vox_ag_slider);
-    row = make_param_slider(row, "VOX delay", &vox_delay_slider);
-    row = make_delimiter(row);
-
-    row = make_section(row, "AGC");
-    row = make_param_switch(row, "AGC hang", cfg_sm.p_agc_hang);
-    row = make_param_slider(row, "AGC knee", &agc_knee_slider);
-    row = make_param_slider(row, "AGC slope", &agc_slope_slider);
-    return row;
-}
-
 static void make_general_page() {
     grid_delete();
     grid_create();
 
-    uint8_t row = 0;
+    uint8_t row;
 
     x6100_base_ver_t base_ver = x6100_control_get_base_ver();
 
@@ -3022,137 +3130,140 @@ static void make_general_page() {
 
     memcpy(&ts, t, sizeof(ts));
 
+    band_begin();
+    row = card_begin(LV_SYMBOL_HOME, "STATION", col_station);
     row = make_station(row);
-    row = make_delimiter(row);
+    card_end(row);
 
-    row = make_section(row, "DATE AND TIME");
+    row = card_begin(LV_SYMBOL_BELL, "DATE / TIME", col_datetime);
     row = make_date(row);
     row = make_time(row);
-    row = make_delimiter(row);
+    card_end(row);
+    band_end();
 
+    row = card_begin(LV_SYMBOL_LIST, "CONTROLS");
     row = make_long_action(row);
-    row = make_delimiter(row);
-
     row = make_hmic_action(row);
-    row = make_delimiter(row);
-
     row = make_freq_accel(row);
-    row = make_delimiter(row);
-
     row = make_charger(row);
-    row = make_delimiter(row);
+    card_end(row);
 
     /* TX calibration */
+    row = card_begin(LV_SYMBOL_SETTINGS, "TX CALIBRATION");
     row = make_tx_offset(row);
-    row = make_delimiter(row);
-
     if (base_ver.rev >= 8) {
         row = band_out_gain_correction(row);
-        row = make_delimiter(row);
     }
+    card_end(row);
 
+    row = card_begin(LV_SYMBOL_SHUFFLE, "TRANSVERTERS");
     row = make_transverter(row, cfg_sm.p_transverter_0_from, cfg_sm.p_transverter_0_to, cfg_sm.p_transverter_0_shift);
     row = make_transverter(row, cfg_sm.p_transverter_1_from, cfg_sm.p_transverter_1_to, cfg_sm.p_transverter_1_shift);
-
-    row_dsc[row] = LV_GRID_TEMPLATE_LAST;
-    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
+    card_end(row);
 }
 
 static void make_display_page() {
     grid_delete();
     grid_create();
-    uint8_t row = 0;
+    uint8_t row;
 
+    row = card_begin(LV_SYMBOL_EYE_OPEN, "BACKLIGHT");
     row = make_backlight(row);
-    row = make_delimiter(row);
+    card_end(row);
 
-    row = make_mag(row);
-    row = make_delimiter(row);
-
+    row = card_begin(LV_SYMBOL_IMAGE, "SPECTRUM");
     row = make_spectrum_show(row);
     row = make_auto_offset(row);
     row = make_spectrum_min_max(row);
-    row = make_delimiter(row);
-
     row = make_spectrum_fill_peak(row);
     row = make_spectrum_beta_peak_hold_speed(row);
+    card_end(row);
 
+    row = card_begin(LV_SYMBOL_DOWNLOAD, "WATERFALL");
     row = make_waterfall_line_zoom(row);
     row = make_waterfall_smooth_scroll(row);
+    card_end(row);
+
+    row = card_begin(LV_SYMBOL_SETTINGS, "INTERFACE");
+    row = make_mag(row);
     row = make_knob_info(row);
-    row = make_delimiter(row);
-
     row = make_theme(row);
-
-    row_dsc[row] = LV_GRID_TEMPLATE_LAST;
-    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
+    card_end(row);
 }
 
 static void make_audio_page() {
     grid_delete();
     grid_create();
-    uint8_t row = 0;
+    uint8_t row;
 
     x6100_base_ver_t base_ver = x6100_control_get_base_ver();
 
     /* RX / speaker */
+    row = card_begin(LV_SYMBOL_VOLUME_MAX, "RX AUDIO");
     row = make_sp_mode(row);
-    row = make_delimiter(row);
-
     row = make_line_gain(row);
-    row = make_delimiter(row);
-
     row = make_audio_gain(row);
-    row = make_delimiter(row);
+    card_end(row);
 
     /* TX audio */
     if (base_ver.rev >= 3) {
+        row = card_begin(LV_SYMBOL_UPLOAD, "TX AUDIO");
         row = make_codec_gain(row);
-        row = make_delimiter(row);
-
         row = make_comp_th_makeup(row);
-        row = make_delimiter(row);
-    }
-    if (base_ver.rev >= 9) {
-        row = make_tx_filter(row);
-        row = make_delimiter(row);
-    }
-    if (base_ver.rev >= 12) {
-        row = make_cessb(row);
-        row = make_delimiter(row);
-    }
-    if (base_ver.rev >= 8) {
-        row = make_fm_emphasis(row);
-        row = make_delimiter(row);
+        if (base_ver.rev >= 9) {
+            row = make_tx_filter(row);
+        }
+        if (base_ver.rev >= 12) {
+            row = make_cessb(row);
+        }
+        if (base_ver.rev >= 8) {
+            row = make_fm_emphasis(row);
+        }
+        card_end(row);
     }
 
-    row = make_mic_vox_agc(row);
+    row = card_begin(LV_SYMBOL_AUDIO, "MICROPHONE");
+    row = make_mic(row);
+    row = make_param_slider(row, "Hand mic gain", &hmic_slider);
+    row = make_param_slider(row, "Built-in mic gain", &imic_slider);
+    card_end(row);
 
-    row_dsc[row] = LV_GRID_TEMPLATE_LAST;
-    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
+    row = card_begin(LV_SYMBOL_PLAY, "VOX");
+    row = make_param_switch(row, "VOX", cfg_sm.p_vox_en);
+    row = make_param_slider(row, "VOX gain", &vox_gain_slider);
+    row = make_param_slider(row, "Anti-VOX", &vox_ag_slider);
+    row = make_param_slider(row, "VOX delay", &vox_delay_slider);
+    card_end(row);
+
+    row = card_begin(LV_SYMBOL_LOOP, "AGC");
+    row = make_param_switch(row, "AGC hang", cfg_sm.p_agc_hang);
+    row = make_param_slider(row, "AGC knee", &agc_knee_slider);
+    row = make_param_slider(row, "AGC slope", &agc_slope_slider);
+    card_end(row);
 }
 
 static void make_wireless_page() {
     grid_delete();
     grid_create();
-    uint8_t row = 0;
+    uint8_t row;
 
     bt.listing = false;
     bt.scanning = false;
     bt.busy = false;
     bt.devs.clear();
 
-    row = make_section(row, "WIFI");
+    row = card_begin(LV_SYMBOL_WIFI, "WIFI");
     row = make_wifi(row);
-    row = make_delimiter(row);
+    card_end(row);
 
-    row = make_section(row, "BLUETOOTH");
+    row = card_begin(LV_SYMBOL_BLUETOOTH, "BLUETOOTH");
     row = make_bluetooth(row);
-    row = make_delimiter(row);
     row = make_bt_devices(row);
+    card_end(row);
 
-    row_dsc[row] = LV_GRID_TEMPLATE_LAST;
-    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
+    row = card_begin(LV_SYMBOL_AUDIO, "HEADPHONES");
+    row = make_headphones(row);
+    card_end(row);
 
     lv_obj_add_event_cb(grid, wl_delete_cb, LV_EVENT_DELETE, NULL);
     wl_ticks = 0;
@@ -3167,15 +3278,15 @@ static void make_info_page() {
 
     lv_obj_t    *label;
 
-    grid = lv_obj_create(dialog.obj);
-    lv_obj_set_size(grid, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_border_width(grid, 0, LV_PART_MAIN);
-    lv_obj_set_style_text_color(grid, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_pad_hor(grid, 30, 0);
-    lv_obj_set_style_pad_ver(grid, 40, 0);
+    page = lv_obj_create(dialog.obj);
+    lv_obj_set_size(page, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_border_width(page, 0, LV_PART_MAIN);
+    lv_obj_set_style_text_color(page, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_pad_hor(page, 30, 0);
+    lv_obj_set_style_pad_ver(page, 40, 0);
 
-    label = lv_label_create(grid);
+    label = lv_label_create(page);
     lv_obj_set_style_text_line_space(label, 20, LV_PART_MAIN);
     lv_label_set_text_fmt(label, "App version: %s\nBASE version: %s", VERSION, x6100_control_get_fw_version_str());
 }
@@ -3190,7 +3301,6 @@ static void construct_cb(lv_obj_t *parent) {
 
 static void destruct_cb() {
     grid_delete();
-    grid = NULL;
     observers.clear();
 
 }
