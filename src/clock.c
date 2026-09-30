@@ -117,10 +117,10 @@ lv_obj_t * clock_init(lv_obj_t * parent) {
 
     for (int i = 0; i < 4; i++) {
         power_labels[i] = lv_label_create(row);
-        lv_obj_set_style_text_font(power_labels[i], i % 2 ? &sony_20 : &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_font(power_labels[i], i % 2 ? &sony_22 : &lv_font_montserrat_18, 0);
         lv_obj_set_style_text_color(power_labels[i], lv_color_hex(0xBBBBBB), 0);
     }
-    lv_obj_set_style_pad_left(power_labels[2], 8, 0);
+    lv_obj_set_style_pad_left(power_labels[2], 6, 0);
 
     show_time();
     lv_timer_create(show_time, 500, NULL);
