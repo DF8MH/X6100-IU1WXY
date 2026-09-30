@@ -62,7 +62,10 @@ void btaudio_run(const char *args, btaudio_done_cb_t cb, void *user) {
     scheduler_put(fake_done, &r, sizeof r);
 }
 extern void *cfg_band_split;
+extern void *cfg_cluster_column;
+int32_t harness_cluster_column;
 int32_t param_i_get(const void *p) {
+    if (p == cfg_cluster_column) return harness_cluster_column;
     if (p == cfg_band_split) return 0;
     if (p == cfg_tx_filter_low) return 160;
     if (p == cfg_tx_filter_high) return 3000;

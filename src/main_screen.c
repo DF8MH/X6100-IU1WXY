@@ -50,6 +50,7 @@
 #include "freq_strip.h"
 #include "freq_scale.h"
 #include "spot_marks.h"
+#include "cluster_column.h"
 #include "backlight.h"
 #include "buttons.h"
 #include "recorder.h"
@@ -1501,6 +1502,11 @@ static void on_cluster_spots_wf_change(Subject *subj, void *user_data) {
     lv_obj_set_y(waterfall, y);
     freq_scale_lines_set_y(y);
     spot_marks_layout(param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, 36, spot_tag_y);
+    cluster_column_layout(y);
+}
+
+static void on_cluster_column_change(Subject *subj, void *user_data) {
+    cluster_column_refresh();
 }
 
 
@@ -1561,7 +1567,10 @@ lv_obj_t * main_screen() {
     /* Cluster spots: tags under the frequency labels, lines at the bottom of
      * the spectrum, or at the top of the waterfall when it is off */
     spot_marks_init(obj, param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, 36, spot_tag_y);
+    cluster_column_init(obj, wf_y);
     subject_subscribe_delayed_and_notify((Subject*)cfg_cluster_spots_wf, on_cluster_spots_wf_change, NULL);
+    subject_subscribe_delayed((Subject*)cfg_cluster_column, on_cluster_column_change, NULL);
+    subject_subscribe_delayed((Subject*)cfg_fg_freq, on_cluster_column_change, NULL);
 
     knobs_init(obj);
 
