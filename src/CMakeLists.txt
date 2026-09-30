@@ -24,6 +24,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     freq_strip.c
     freq_scale.c
     spot_marks.c
+    cluster_column.c
     sstv/decoder.c
     sstv/encoder.c
     wefax/decoder.c

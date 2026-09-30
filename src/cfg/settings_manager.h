@@ -114,6 +114,8 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_cluster_spots_wf{"cluster_spots_wf", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_cluster_column{"cluster_column", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_waterfall_ref{"waterfall_ref", 0, -40, 20,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // String mapping encoder (cfg_ctrl_t) positions to bind values

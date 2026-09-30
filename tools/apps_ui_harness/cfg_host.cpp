@@ -4,4 +4,4 @@ SettingsManager cfg_sm;
 
 // Cluster spots on the main screen (topbar demo)
 #include "cfg/cfg_api.h"
-static int cluster_spots_init = (cfg_cluster_spots_wf = &cfg_sm.p_cluster_spots_wf, 0);
+static int cluster_spots_init = (cfg_cluster_spots_wf = &cfg_sm.p_cluster_spots_wf, cfg_cluster_column = &cfg_sm.p_cluster_column, 0);

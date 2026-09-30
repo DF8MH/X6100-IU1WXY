@@ -17,6 +17,7 @@
 #include "freq_strip.h"
 #include "freq_scale.h"
 #include "spot_marks.h"
+#include "cluster_column.h"
 #include "dialog_msg_voice.h"
 #include "dialog_msg_cw.h"
 #include "cluster/client.h"
@@ -270,7 +271,22 @@ static void topbar(void) {
                      sp[i].khz10 % 10, sp[i].call, tm.tm_hour, tm.tm_min);
             cluster_client_feed_line(line);
         }
+        static const struct { const char *call; int khz10, age; } o[] = {   /* other bands, and more 40m for the column */
+            {"JA1XYZ", 140741, 1}, {"K1TTT", 142050, 8}, {"VK3ZZ", 142950, 17}, {"OH2BH", 70320, 41},
+            {"EA5XX", 70410, 26}, {"DL2ABC", 70320, 4}, {"UA3AA", 71180, 12}, {"I2ABC", 71260, 33},
+            {"G4XYZ", 71300, 0},
+        };
+        for (unsigned i = 0; i < sizeof o / sizeof o[0]; i++) {
+            time_t t = now - o[i].age * 60;
+            struct tm tm;
+            gmtime_r(&t, &tm);
+            char line[160];
+            snprintf(line, sizeof line, "DX de K1ABC:  %d.%d  %s  CW  %02d%02dZ", o[i].khz10 / 10,
+                     o[i].khz10 % 10, o[i].call, tm.tm_hour, tm.tm_min);
+            cluster_client_feed_line(line);
+        }
     }
+    cluster_column_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H);
     spot_marks_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
     spot_marks_update(f, 50000);
     lv_obj_move_background(stack);   /* created first in main_screen.c */
@@ -366,6 +382,24 @@ static void topbar(void) {
     pump(300);
     shot("topbar_9.ppm");
     dialog_destruct();
+    /* Cluster column: on (40m), other band, spot band off (follows the waterfall), off */
+    extern int32_t harness_cluster_column;
+    harness_cluster_column = 1;
+    harness_fg_freq = 7127000;
+    freq_strip_set_label("", 0);
+    cluster_column_refresh();
+    pump(1100);
+    shot("cluster_column_1.ppm");
+    harness_fg_freq = 14074000;
+    pump(1100);
+    shot("cluster_column_2.ppm");
+    harness_fg_freq = 7127000;
+    cluster_column_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
+    pump(1100);
+    shot("cluster_column_3.ppm");
+    harness_cluster_column = 0;
+    cluster_column_refresh();
+    shot("cluster_column_4.ppm");
     pump(100);
 }
 
