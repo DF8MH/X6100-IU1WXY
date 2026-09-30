@@ -1,6 +1,9 @@
 from datetime import datetime, timezone, timedelta
 from importlib import resources
-import gzip
+try:
+    import gzip
+except ImportError:   # images built before python3-zlib was selected
+    gzip = None
 import json
 import os
 import pathlib
@@ -254,6 +257,186 @@ def set_wfview():
     return read_wfview_conf()
 
 
+# Memories: MEM button slots (params.db, table `memory`) and named channels
+# (channels.json, same format as the radio GUI, src/channels.c)
+# Names and enum values are x6100_mode_t / x6100_agc_t from x6100_control
+MODES = ["LSB", "LSB-D", "USB", "USB-D", "CW", "CWR", "AM", "NFM"]
+AGCS = ["OFF", "SLOW", "FAST", "AUTO"]
+MEM_SLOTS = range(1, 10)  # MEM_HKEY_MAX_ID in src/main_screen.h; 10 is the GUI's backup slot
+FREQ_MIN, FREQ_MAX = 500000, 56000000
+CHANNELS_MAX = 100
+CHANNEL_NAME_RE = re.compile(r"[ -~]{0,31}")
+
+
+def parse_entry(data, named):
+    """Validated slot/channel dict from request JSON; ValueError with a message."""
+    if not isinstance(data, dict):
+        raise ValueError("Invalid request")
+    freq = data.get("frequency")
+    if isinstance(freq, bool) or not isinstance(freq, int) or not FREQ_MIN <= freq <= FREQ_MAX:
+        raise ValueError("Frequency must be between 0.5 and 56 MHz")
+    if data.get("mode") not in MODES:
+        raise ValueError("Invalid mode")
+    if data.get("agc") not in AGCS:
+        raise ValueError("Invalid AGC")
+    for key in ("pre", "att"):
+        if not isinstance(data.get(key), bool):
+            raise ValueError(f"Invalid {key.upper()}")
+    entry = {"frequency": freq, "mode": data["mode"], "agc": data["agc"], "pre": data["pre"], "att": data["att"]}
+    if named:
+        name = data.get("name")
+        if not isinstance(name, str) or not CHANNEL_NAME_RE.fullmatch(name):
+            raise ValueError("Invalid name: up to 31 printable ASCII characters")
+        entry = {"name": name, **entry}
+    return entry
+
+
+def api_error(status, msg):
+    bottle.response.status = status
+    return {"status": "error", "msg": msg}
+
+
+@app.route('/memories')
+def memories():
+    return bottle.template('memories')
+
+
+def read_slots(dbcon):
+    vals = {}
+    for id_, name, val in dbcon.execute("SELECT id, name, val FROM memory"):
+        vals.setdefault(id_, {})[name] = val
+    slots = []
+    for id_ in MEM_SLOTS:
+        v = vals.get(id_, {})
+        if "vfoa_freq" in v:  # the GUI treats a slot without vfoa_freq as empty
+            slots.append({"id": id_, "frequency": v["vfoa_freq"],
+                          "mode": MODES[v.get("vfoa_mode", 0) % len(MODES)],
+                          "agc": AGCS[v.get("vfoa_agc", 0) % len(AGCS)],
+                          "pre": bool(v.get("vfoa_pre", 0)), "att": bool(v.get("vfoa_att", 0))})
+        else:
+            slots.append({"id": id_, "frequency": None})
+    return {"slots": slots}
+
+
+@app.get('/api/memories')
+def get_memories(dbcon):
+    return read_slots(dbcon)
+
+
+@app.put('/api/memories/<id:int>')
+def set_memory(dbcon, id):
+    if id not in MEM_SLOTS:
+        return api_error(404, "No such slot")
+    try:
+        e = parse_entry(bottle.request.json, False)
+    except ValueError as ex:
+        return api_error(400, str(ex))
+    vals = {"vfoa_freq": e["frequency"], "vfoa_mode": MODES.index(e["mode"]), "vfoa_agc": AGCS.index(e["agc"]),
+            "vfoa_pre": int(e["pre"]), "vfoa_att": int(e["att"])}
+    try:
+        with dbcon:
+            dbcon.executemany("INSERT OR REPLACE INTO memory(id, name, val) VALUES(?, ?, ?)",
+                              [(id, k, v) for k, v in vals.items()])
+    except sqlite3.Error as ex:
+        return api_error(500, f"Can't save: {ex}")
+    return read_slots(dbcon)
+
+
+@app.delete('/api/memories/<id:int>')
+def clear_memory(dbcon, id):
+    if id not in MEM_SLOTS:
+        return api_error(404, "No such slot")
+    try:
+        with dbcon:
+            dbcon.execute("DELETE FROM memory WHERE id = ?", (id,))
+    except sqlite3.Error as ex:
+        return api_error(500, f"Can't save: {ex}")
+    return read_slots(dbcon)
+
+
+def read_channels():
+    """Valid channels from channels.json; invalid ones are skipped like the GUI does."""
+    try:
+        with open(settings.CHANNELS_FILE) as f:
+            items = json.load(f)["channels"]
+        items = [parse_entry(x, True) for x in items if isinstance(x, dict)] if isinstance(items, list) else []
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+    return items[:CHANNELS_MAX]
+
+
+def write_channels(channels):
+    tmp = settings.CHANNELS_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump({"version": 1, "channels": channels}, f, indent="\t")
+        f.write("\n")
+    os.rename(tmp, settings.CHANNELS_FILE)
+
+
+def channels_state():
+    return {"channels": read_channels(), "max": CHANNELS_MAX}
+
+
+def channels_edit(change):
+    """Read, change (raises ValueError), write, return the new list."""
+    channels = read_channels()
+    try:
+        change(channels)
+    except ValueError as ex:
+        return api_error(400, str(ex))
+    try:
+        write_channels(channels)
+    except OSError as ex:
+        return api_error(500, f"Can't save: {ex}")
+    return channels_state()
+
+
+def check_index(channels, i):
+    if not 0 <= i < len(channels):
+        raise ValueError("No such channel")
+
+
+@app.get('/api/channels')
+def get_channels():
+    return channels_state()
+
+
+@app.post('/api/channels')
+def add_channel():
+    def change(channels):
+        if len(channels) >= CHANNELS_MAX:
+            raise ValueError(f"At most {CHANNELS_MAX} channels")
+        channels.append(parse_entry(bottle.request.json, True))
+    return channels_edit(change)
+
+
+@app.put('/api/channels/<i:int>')
+def set_channel(i):
+    def change(channels):
+        check_index(channels, i)
+        channels[i] = parse_entry(bottle.request.json, True)
+    return channels_edit(change)
+
+
+@app.delete('/api/channels/<i:int>')
+def delete_channel(i):
+    def change(channels):
+        check_index(channels, i)
+        del channels[i]
+    return channels_edit(change)
+
+
+@app.post('/api/channels/<i:int>/move')
+def move_channel(i):
+    def change(channels):
+        check_index(channels, i)
+        to = (bottle.request.json or {}).get("to")
+        if isinstance(to, bool) or not isinstance(to, int) or not 0 <= to < len(channels):
+            raise ValueError("Invalid position")
+        channels.insert(to, channels.pop(i))
+    return channels_edit(change)
+
+
 @app.route('/cluster')
 def cluster():
     return bottle.template('cluster')
@@ -317,7 +500,7 @@ def server_static(filepath):
     if isinstance(response, bottle.HTTPError) or response.status_code != 200:
         return response
     response.set_header('Cache-Control', 'max-age=86400')
-    if 'gzip' in bottle.request.headers.get('Accept-Encoding', ''):
+    if gzip and 'gzip' in bottle.request.headers.get('Accept-Encoding', ''):
         if filepath not in _gzip_cache:
             with open(STATIC_PATH.joinpath(filepath), 'rb') as f:
                 _gzip_cache[filepath] = gzip.compress(f.read())

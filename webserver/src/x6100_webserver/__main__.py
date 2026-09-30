@@ -37,6 +37,7 @@ def run():
     parser.add_argument("--filebrowser-path", help="path file browser root", default="/mnt")
     parser.add_argument("--cluster-conf", help="path to DX cluster config", default=settings.CLUSTER_CONF)
     parser.add_argument("--wfview-conf", help="path to wfview server config", default=settings.WFVIEW_CONF)
+    parser.add_argument("--channels-file", help="path to channels.json", default=settings.CHANNELS_FILE)
     args = parser.parse_args()
     plugin = bottle.ext.sqlite.Plugin(dbfile=args.db, keyword="dbcon")
     apps.app.install(plugin)
@@ -44,6 +45,7 @@ def run():
     settings.DB_PATH = args.db
     settings.CLUSTER_CONF = args.cluster_conf
     settings.WFVIEW_CONF = args.wfview_conf
+    settings.CHANNELS_FILE = args.channels_file
     apps.app.run(server=ThreadedServer, host=args.host, port=args.port, debug=args.debug, reloader=args.debug)
 
 run()

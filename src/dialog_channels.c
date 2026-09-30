@@ -1458,6 +1458,16 @@ static bool recall_row(int16_t row, bool close_dialog) {
  *   GENE -> first channel
  */
 
+void dialog_channels_poll(void) {
+
+    if (dialog.run) {
+        return;
+    }
+
+    channels_reload_if_changed();
+}
+
+
 const char *dialog_channels_last_recalled_name(void) {
 
     static char fallback_name[32];

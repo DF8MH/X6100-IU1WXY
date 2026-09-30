@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 
 #define CHANNELS_FILE "/mnt/channels.json"
@@ -17,6 +18,20 @@
 
 static channel_t channels[CHANNELS_MAX];
 static uint16_t channel_count = 0;
+
+/* mtime of channels.json as last read or written by the GUI (web changes differ) */
+static struct timespec file_mtime;
+
+
+static bool file_changed(struct timespec *mt) {
+    struct stat st;
+
+    if (stat(CHANNELS_FILE, &st) != 0) {
+        return false;
+    }
+    *mt = st.st_mtim;
+    return mt->tv_sec != file_mtime.tv_sec || mt->tv_nsec != file_mtime.tv_nsec;
+}
 
 
 /*
@@ -478,8 +493,9 @@ bool channels_save(void) {
     }
 
 
+    /* Atomic: the web configurator may read the file at any time */
     file = fopen(
-        CHANNELS_FILE,
+        CHANNELS_FILE ".tmp",
         "w"
     );
 
@@ -507,7 +523,17 @@ bool channels_save(void) {
 cleanup:
 
     if (file) {
-        fclose(file);
+        if (fclose(file) != 0) {
+            result = false;
+        }
+        if (result && rename(CHANNELS_FILE ".tmp", CHANNELS_FILE) != 0) {
+            result = false;
+        }
+        if (!result) {
+            remove(CHANNELS_FILE ".tmp");
+        } else {
+            file_changed(&file_mtime);
+        }
     }
 
     if (json_text) {
@@ -619,6 +645,8 @@ bool channels_load(void) {
 
     fclose(test_file);
 
+    /* Take the mtime before reading: a later write triggers another reload */
+    file_changed(&file_mtime);
 
     char *json_text = read_json_file();
 
@@ -778,6 +806,21 @@ bool channels_load(void) {
     cJSON_Delete(root);
 
     return true;
+}
+
+
+/*
+ * Reload channels.json when it was changed by someone else
+ * (web configurator). The count may change: callers must not
+ * keep indexes across this call.
+ */
+void channels_reload_if_changed(void) {
+
+    struct timespec mt;
+
+    if (file_changed(&mt)) {
+        channels_load();
+    }
 }
 
 

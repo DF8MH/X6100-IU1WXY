@@ -24,3 +24,9 @@ const char *dialog_channels_last_recalled_name(void);
  * adds the current radio settings as a new channel.
  */
 void dialog_channels_add_on_open(void);
+
+/*
+ * Periodic check for changes made by the web configurator.
+ * Does nothing while the dialog is open.
+ */
+void dialog_channels_poll(void);

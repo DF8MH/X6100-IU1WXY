@@ -40,6 +40,12 @@ bool channels_save(void);
 
 
 /*
+ * Reload the database when channels.json was modified externally.
+ */
+void channels_reload_if_changed(void);
+
+
+/*
  * Number of currently loaded channels.
  */
 uint16_t channels_count(void);
