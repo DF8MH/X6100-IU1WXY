@@ -99,7 +99,7 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_set_style_radius(qth_dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(qth_dot, lv_color_hex(COLOR_LIGHT_GREEN), 0);
     lv_obj_set_style_bg_opa(qth_dot, LV_OPA_COVER, 0);
-    qth_label = make_label(right, LV_ALIGN_DEFAULT, 0, &sony_24, 0xffffff);
+    qth_label = make_label(right, LV_ALIGN_DEFAULT, 0, &sony_28, 0xffffff);
 
     subject_subscribe_delayed((Subject *)cfg_fg_freq, update_cb, NULL);
     subject_subscribe_delayed((Subject *)cfg_bg_freq, update_cb, NULL);
