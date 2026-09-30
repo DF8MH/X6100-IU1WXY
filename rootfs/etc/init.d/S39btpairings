@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# Restores the Bluetooth pairings saved on /mnt by btaudio-ctl, before
+# bluetoothd starts (S40): a new image would otherwise forget them.
+#
+
+case "$1" in
+  start)
+    [ -f /mnt/backups/bluetooth.tgz ] && tar xzf /mnt/backups/bluetooth.tgz -C /
+    ;;
+esac
+
+exit 0

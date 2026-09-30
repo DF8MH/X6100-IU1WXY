@@ -124,12 +124,31 @@ connect() {
 }
 
 pair() {
-	# bluez forgets discovered devices ~30 s after the scan
-	bluetoothctl info "$1" >/dev/null 2>&1 || bluetoothctl --timeout 8 scan on >/dev/null 2>&1
-	bluetoothctl pair "$1" >/dev/null 2>&1
+	# One bluetoothctl session with an agent: a one-shot "bluetoothctl pair"
+	# exits before the headphones answer and the pairing is dropped.
+	# Scanning keeps the device known (bluez forgets it ~30 s after a scan).
+	{
+		echo "agent NoInputNoOutput"; echo default-agent
+		echo "scan on"; sleep 5
+		echo "pair $1"
+		for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+			sleep 1
+			bluetoothctl info "$1" 2>/dev/null | grep -q "Paired: yes" && break
+		done
+		echo "scan off"; echo quit
+	} | bluetoothctl >/dev/null 2>&1
 	bluetoothctl info "$1" 2>/dev/null | grep -q "Paired: yes" || { echo "Pairing failed"; return 1; }
 	bluetoothctl trust "$1" >/dev/null 2>&1
+	save_pairings
 	connect "$1"
+}
+
+# /var/lib/bluetooth is on the rootfs, which a new image replaces: keep a copy
+# on /mnt (vfat, so as a tarball), restored at boot by S39btpairings.
+save_pairings() {
+	mkdir -p /mnt/backups
+	tar czf /mnt/backups/bluetooth.tgz -C / var/lib/bluetooth 2>/dev/null
+	sync
 }
 
 autoconnect() {
@@ -171,7 +190,7 @@ case "$1" in
 	pair)        pair "$2";;
 	connect)     connect "$2";;
 	disconnect)  bluetoothctl disconnect "$2" >/dev/null 2>&1; sleep 1; apply_rx;;
-	remove)      autoconnect "$2" off; bluetoothctl remove "$2" >/dev/null 2>&1; sleep 1; apply_rx;;
+	remove)      autoconnect "$2" off; bluetoothctl remove "$2" >/dev/null 2>&1; save_pairings; sleep 1; apply_rx;;
 	autoconnect) autoconnect "$2" "$3";;
 	rx)          set_kv BTAUDIO_RX "$(yn "$2")"; apply_rx;;
 	volume)      for s in $(hp_sinks); do pactl set-sink-volume "$s" "$2%"; done;;
