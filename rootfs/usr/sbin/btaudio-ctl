@@ -19,7 +19,7 @@ STATE=/tmp/btaudio-hp
 PIDFILE=/tmp/btaudio-monitor.pid
 SOURCE=alsa_input.platform-sound.stereo-fallback
 BTAUDIO_RX=yes
-BTAUDIO_MUTE=no
+BTAUDIO_MUTE=yes
 BTAUDIO_AUTOCONNECT=""
 # shellcheck source=/dev/null
 [ -r $CONF ] && . $CONF
@@ -73,7 +73,18 @@ apply_rx() {
 	if [ "$BTAUDIO_RX" = "yes" ]; then
 		for s in $sinks; do
 			pactl list short modules 2>/dev/null | grep -q "sink=$s " && continue
-			pactl load-module module-loopback source=$SOURCE sink="$s" latency_msec=30 \
+			# Lowest radio-side latency, one reason per option:
+			# - latency_msec=10: end-to-end target of the loopback; pulse raises it
+			#   by itself to what the ALSA source/sink can sustain, so a value this
+			#   low means "as low as it can go without crackling".
+			# - adjust_time=1: re-measure and re-sync every second (default 10) so
+			#   the buffer does not drift up between corrections.
+			# - latency offset 0 on the bluez sink port: no extra delay is added to
+			#   the reported latency (some setups leave a non-zero offset).
+			# A2DP/SBC encoding and the headphones add their own delay after this.
+			card=bluez_card.${s#bluez_sink.}; card=${card%.a2dp_sink}
+			pactl set-port-latency-offset "$card" headphone-output 0 2>/dev/null
+			pactl load-module module-loopback source=$SOURCE sink="$s" latency_msec=10 adjust_time=1 \
 				source_dont_move=true sink_dont_move=true >/dev/null
 		done
 	else

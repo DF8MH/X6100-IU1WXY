@@ -24,6 +24,9 @@ void btaudio_run(const char *args, btaudio_done_cb_t cb, void *user);
 bool btaudio_mute_get(void);
 void btaudio_mute_set(bool on);
 
+/* True while headphones are connected and the speaker is to stay silent. */
+bool btaudio_speaker_muted(void);
+
 #ifdef __cplusplus
 }
 #endif

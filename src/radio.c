@@ -29,6 +29,7 @@
 #include "info.h"
 #include "dialog_swrscan.h"
 #include "cw.h"
+#include "btaudio.h"
 #include "audio.h"
 #include "pubsub_ids.h"
 
@@ -97,6 +98,7 @@ static void on_change_uint32(Subject *subj, void *user_data);
 static void on_change_int32(Subject *subj, void *user_data);
 static void on_change_uint16(Subject *subj, void *user_data);
 static void on_change_uint8(Subject *subj, void *user_data);
+static void on_volume_change(Subject *subj, void *user_data);
 static void on_change_int8(Subject *subj, void *user_data);
 
 static void recover_processing_audio_inputs();
@@ -196,7 +198,7 @@ void radio_start() {
     subject_subscribe((Subject*)cfg_cur_filter_high, on_high_filter_change, NULL);
     subject_subscribe_and_notify((Subject*)cfg_cur_mode, on_high_filter_change, NULL);
 
-    subject_subscribe_and_notify((Subject*)cfg_volume, on_change_uint8, x6100_control_rxvol_set);
+    subject_subscribe_and_notify((Subject*)cfg_volume, on_volume_change, NULL);
     subject_subscribe_and_notify((Subject*)cfg_squelch, on_change_uint8, x6100_control_sql_set);
     subject_subscribe_and_notify((Subject*)cfg_pwr, on_change_float, x6100_control_txpwr_set);
     subject_subscribe_and_notify((Subject*)cfg_output_gain, on_change_float, x6100_control_adc_dac_gain_set);
@@ -329,7 +331,16 @@ uint16_t radio_change_vol(int16_t df) {
 
 void radio_change_mute() {
     mute = !mute;
-    x6100_control_rxvol_set(mute ? 0 : param_i_get(cfg_volume));
+    radio_vol_refresh();
+}
+
+/* Speaker AF: 0 when muted or when btaudio silences it (headphones connected) */
+void radio_vol_refresh() {
+    WITH_RADIO_LOCK(x6100_control_rxvol_set((mute || btaudio_speaker_muted()) ? 0 : param_i_get(cfg_volume)));
+}
+
+static void on_volume_change(Subject *subj, void *user_data) {
+    radio_vol_refresh();
 }
 
 bool radio_change_spmode(int16_t df) {
