@@ -89,9 +89,9 @@ lv_obj_t * waterfall_init(lv_obj_t * parent) {
     // Middle line style
     lv_style_init(&middle_line_style);
     lv_style_set_line_width(&middle_line_style, 1);
-    lv_style_set_line_color(&middle_line_style, lv_color_hex(0xAAAAAA));
-    lv_style_set_line_opa(&middle_line_style, LV_OPA_60);
-    lv_style_set_blend_mode(&middle_line_style, LV_BLEND_MODE_ADDITIVE);
+    /* VFO line in amber so it stands out from the grey 20 kHz grid */
+    lv_style_set_line_color(&middle_line_style, lv_color_hex(0xFFA000));
+    lv_style_set_line_opa(&middle_line_style, LV_OPA_COVER);
     lv_style_set_pad_all(&middle_line_style, 0);
 
     middle_line = lv_line_create(obj);

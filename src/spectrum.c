@@ -306,6 +306,7 @@ static void spectrum_draw_cb(lv_event_t *e) {
     /* Center */
 
     main_line_dsc.width = 1;
+    main_line_dsc.color = lv_color_hex(0xFFA000);   /* VFO line, amber like the waterfall one */
 
     main_a.x = x1 + markers_offset + w / 2;
     main_a.y = y1;
