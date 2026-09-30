@@ -45,7 +45,7 @@ params_t params = {
     .waterfall_center_line  = { .x = true,  .name = "waterfall_center_line" },
     .waterfall_zoom         = { .x = true,  .name = "waterfall_zoom" },
     .mag_freq               = { .x = false,  .name = "mag_freq" },
-    .mag_info               = { .x = true,  .name = "mag_info" },
+    .mag_info               = { .x = false, .name = "mag_info" },
     .mag_alc                = { .x = true,  .name = "mag_alc" },
     .clock_view             = CLOCK_TIME_POWER,
     .clock_time_timeout     = 5,

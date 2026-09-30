@@ -701,7 +701,7 @@ static uint8_t make_mag(uint8_t row) {
 
     obj = lv_label_create(grid);
 
-    lv_label_set_text(obj, "Mag Freq, Info, ALC");
+    lv_label_set_text(obj, "Popups: Freq, Info, ALC");
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col++, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     /* Freq */
