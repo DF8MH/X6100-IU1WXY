@@ -2982,8 +2982,30 @@ static void grid_create() {
     lv_obj_set_style_pad_all(page, 6, 0);
     lv_obj_set_style_pad_row(page, 8, 0);
     lv_obj_set_style_pad_bottom(page, 40, 0);   /* room under the last row */
+    lv_obj_set_style_text_font(page, &sony_30, 0);  /* dialogs use 36 */
 
     lv_obj_center(page);
+}
+
+/* MFK focus: bring the whole row into view, with a margin (the default
+ * scroll-on-focus left rows at the bottom edge half hidden) */
+static void focus_cb(lv_group_t *g) {
+    lv_obj_t *obj = lv_group_get_focused(g);
+
+    if (!page || !obj || !lv_obj_has_flag(page, LV_OBJ_FLAG_SCROLLABLE)) {
+        return;
+    }
+    lv_area_t  a, p;
+    lv_coord_t margin = 24;
+
+    lv_obj_update_layout(page);
+    lv_obj_get_coords(obj, &a);
+    lv_obj_get_coords(page, &p);
+    if (a.y2 + margin > p.y2) {
+        lv_obj_scroll_by(page, 0, p.y2 - (a.y2 + margin), LV_ANIM_OFF);
+    } else if (a.y1 - margin < p.y1) {
+        lv_obj_scroll_by(page, 0, p.y1 - (a.y1 - margin), LV_ANIM_OFF);
+    }
 }
 
 static void grid_delete() {
@@ -3317,9 +3339,11 @@ static void construct_cb(lv_obj_t *parent) {
     btn_p2.next = &btn_page;
     make_general_page();
     mark_tab(&btn_general);
+    lv_group_set_focus_cb(keyboard_group, focus_cb);
 }
 
 static void destruct_cb() {
+    lv_group_set_focus_cb(keyboard_group, NULL);
     grid_delete();
     observers.clear();
 
