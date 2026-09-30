@@ -66,14 +66,19 @@ static void meter_draw_cb(lv_event_t * e) {
     lv_draw_label_dsc_t label_dsc;
     lv_area_t           area;
 
-    /* Scale on top, bars below it, the dB value on the right */
-    lv_coord_t x1 = obj->coords.x1 + 12;
-    lv_coord_t y1 = obj->coords.y1;
+    /* R1CBU layout fitted to the box: bars full width, dB value below */
+    lv_coord_t y1 = obj->coords.y1 + 11;
 
-    uint8_t     slice_db = 3;
-    uint8_t     slices_total = (max_db - min_db) / slice_db + 1;
-    uint8_t     slice_w = 6;
-    uint8_t     slice_spacing = 2;
+    /* Two thin bars per S unit up to S9 (3 dB), then one per 5 dB */
+    static const int16_t bar_db[] = { S1, S1 + 3, S1 + 6, S1 + 9, S1 + 12, S1 + 15, S1 + 18, S1 + 21, S1 + 24,
+                                      S1 + 27, S1 + 30, S1 + 33, S1 + 36, S1 + 39, S1 + 42, S1 + 45, S9,
+                                      S9 + 5, S9 + 10, S9 + 15, S9_20, S9 + 25, S9 + 30, S9 + 35, S9_40 };
+    const uint8_t slices_total = sizeof(bar_db) / sizeof(bar_db[0]);
+
+    /* First bar centred 16 px in, last one 22 px before the edge (room for "+40") */
+    uint8_t     slice_w = (lv_obj_get_width(obj) - 16 - 22) / (slices_total - 1);
+    uint8_t     slice_spacing = slice_w * 45 / 100;   /* thin bars, wide gaps */
+    lv_coord_t  x1 = obj->coords.x1 + 16 - 30;
 
     /* Rects */
 
@@ -81,19 +86,19 @@ static void meter_draw_cb(lv_event_t * e) {
 
     rect_dsc.bg_opa = LV_OPA_80;
 
-    uint32_t count = (meter_db - min_db) / slice_db + 1.5f;
-    count = LV_MIN(count, slices_total);
+    area.y1 = y1 - 5;
+    area.y2 = y1 + 32;
 
-    area.y1 = y1 + 33;
-    area.y2 = y1 + 54;
+    uint8_t peak_i = 0;
 
-    int16_t db = s_items[0].db;
+    for (uint8_t i = 0; i < slices_total; i++) {
+        int16_t db = bar_db[i];
 
-    for (uint16_t i = 0; i < slices_total; i++) {
-        if (i >= count) {
-            rect_dsc.bg_color = lv_color_hex(0x000000);
-            rect_dsc.bg_opa = LV_OPA_40;
-        } else if (db <= noise_level) {
+        if (meter_peak >= db - 1.5f)
+            peak_i = i;
+        if (meter_db < db - 1.5f)
+            continue;
+        if (db <= noise_level) {
             rect_dsc.bg_color = lv_color_hex(0x777777);
         } else if (db <= -73) {
             rect_dsc.bg_color = lv_color_hex(0xAAAAAA);
@@ -102,18 +107,16 @@ static void meter_draw_cb(lv_event_t * e) {
         } else {
             rect_dsc.bg_color = lv_color_hex(0xAA0000);
         }
-        area.x1 = x1 + i * slice_w;
-        area.x2 = area.x1 + slice_w - slice_spacing - 1;
+        area.x1 = x1 + 30 + i * slice_w - slice_w / 2 + slice_spacing / 2;
+        area.x2 = area.x1 + slice_w - slice_spacing;
 
         lv_draw_rect(draw_ctx, &rect_dsc, &area);
-
-        db += slice_db;
     }
 
     /* Peak */
-    if (meter_peak > meter_db + 1.5f * slice_db) {
-        area.x1 = x1 + slice_w * (uint8_t)((meter_peak - min_db) / slice_db + 0.5f);
-        area.x2 = area.x1 + slice_w - slice_spacing - 1;
+    if (peak_i > 0 && meter_db < bar_db[peak_i] - 1.5f) {
+        area.x1 = x1 + 30 - slice_w / 2 + slice_w * peak_i + slice_spacing / 2;
+        area.x2 = area.x1 + slice_w - slice_spacing;
         rect_dsc.bg_opa = LV_OPA_50;
         rect_dsc.bg_color = lv_color_hex(0xAAAAAA);
         lv_draw_rect(draw_ctx, &rect_dsc, &area);
@@ -124,10 +127,12 @@ static void meter_draw_cb(lv_event_t * e) {
     lv_draw_label_dsc_init(&label_dsc);
 
     label_dsc.color = lv_color_white();
-    label_dsc.font = &sony_20;
+    label_dsc.font = &sony_22;
 
-    area.y1 = y1 + 6;
-    area.y2 = area.y1 + 22;
+    area.x1 = x1;
+    area.x2 = x1 + 20;
+    area.y1 = y1 + 5;
+    area.y2 = area.y1 + 18;
 
     lv_point_t label_size;
 
@@ -137,7 +142,10 @@ static void meter_draw_cb(lv_event_t * e) {
 
         lv_txt_get_size(&label_size, label, label_dsc.font, 0, 0, LV_COORD_MAX, 0);
 
-        area.x1 = x1 + slice_w * ((db  - min_db) / slice_db) + (slice_w - slice_spacing) / 2 - label_size.x / 2;
+        uint8_t bar = 0;
+        while (bar_db[bar] != db)
+            bar++;
+        area.x1 = x1 + 30 + slice_w * bar - label_size.x / 2;
         area.x2 = area.x1 + label_size.x;
 
         lv_draw_label(draw_ctx, &label_dsc, &area, label, NULL);
@@ -167,8 +175,8 @@ lv_obj_t * meter_init(lv_obj_t * parent) {
     subject_subscribe_delayed_and_notify((Subject*)cfg_cur_att, on_bool_value_change, &att);
 
     db_val_label = lv_label_create(obj);
-    lv_obj_set_style_text_font(db_val_label, &sony_24, 0);
-    lv_obj_align(db_val_label, LV_ALIGN_RIGHT_MID, -10, 10);
+    lv_obj_set_style_text_font(db_val_label, &sony_20, 0);
+    lv_obj_align(db_val_label, LV_ALIGN_BOTTOM_MID, 0, -2);
     lv_obj_set_style_text_color(db_val_label, lv_color_white(), 0);
     lv_label_set_text(db_val_label, "");
     return obj;
