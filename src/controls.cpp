@@ -87,6 +87,15 @@ void controls_toggle_wf_mode(button_data_t *data) {
     toggle_param(cfg_sm.p_wf_mode);
 }
 
+/* Span +/- buttons: wider span = lower zoom (1/2/4/8) */
+void controls_span_wider(button_data_t *data) {
+    cfg_sm.p_mode_zoom.set(cfg_sm.p_mode_zoom.get() >> 1);
+}
+
+void controls_span_narrower(button_data_t *data) {
+    cfg_sm.p_mode_zoom.set(cfg_sm.p_mode_zoom.get() << 1);
+}
+
 void controls_cw_zap(button_data_t *data) {
     x6100_mode_t mode = (x6100_mode_t)(cfg_sm.cp_cur_mode.get());
     if ((mode != x6100_mode_cw) && (mode != x6100_mode_cwr)) {

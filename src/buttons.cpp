@@ -81,6 +81,8 @@ static const char * comp_label_getter();
 static const char * if_shift_label_getter();
 static const char * wf_ref_label_getter();
 static const char * wf_mode_label_getter();
+static const char * span_wider_label_getter();
+static const char * span_narrower_label_getter();
 
 static const char * vox_on_label_getter();
 
@@ -189,6 +191,14 @@ static button_data_t btn_wf_mode   = {.type            = BTN_TEXT_FN,
                                       .ctrl            = CTRL_WF_MODE,
                                       .encoder_allowed = true,
                                       .subj            = (Subject*)&cfg_sm.p_wf_mode};
+static button_data_t btn_span_wider    = {.type     = BTN_TEXT_FN,
+                                          .label_fn = span_wider_label_getter,
+                                          .press    = controls_span_wider,
+                                          .subj     = (Subject*)&cfg_sm.p_mode_zoom};
+static button_data_t btn_span_narrower = {.type     = BTN_TEXT_FN,
+                                          .label_fn = span_narrower_label_getter,
+                                          .press    = controls_span_narrower,
+                                          .subj     = (Subject*)&cfg_sm.p_mode_zoom};
 
 /* VOX */
 static button_data_t btn_vox_on    = {.type            = BTN_TEXT_FN,
@@ -370,7 +380,7 @@ static buttons_page_t page_mfk_2 = {
     {&btn_mfk_p2, &btn_agc, &btn_comp, &btn_if_shift, &btn_vox_on}
 };
 static buttons_page_t page_mfk_3 = {
-    {&btn_mfk_p3, &btn_wf_mode}
+    {&btn_mfk_p3, &btn_wf_mode, &btn_span_wider, &btn_span_narrower}
 };
 
 /* MEM pages */
@@ -872,6 +882,26 @@ static const char * wf_ref_label_getter() {
 
 static const char * wf_mode_label_getter() {
     return cfg_sm.p_wf_mode.get() ? "WF\nFixed" : "WF\nCenter";
+}
+
+/* Label shows the span the button selects */
+static const char * span_label(int32_t zoom) {
+    static char buf[2][24];
+    static int  n;
+
+    n ^= 1;
+    snprintf(buf[n], sizeof buf[n], "Span %s\n%g kHz", zoom < cfg_sm.p_mode_zoom.get() ? "+" : "-", 100.0 / zoom);
+    return buf[n];
+}
+
+static const char * span_wider_label_getter() {
+    int32_t z = cfg_sm.p_mode_zoom.get();
+    return z > 1 ? span_label(z >> 1) : "Span +\nmax";
+}
+
+static const char * span_narrower_label_getter() {
+    int32_t z = cfg_sm.p_mode_zoom.get();
+    return z < 8 ? span_label(z << 1) : "Span -\nmin";
 }
 
 const char *vox_on_label_getter() {
