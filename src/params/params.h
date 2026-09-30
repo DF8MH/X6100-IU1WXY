@@ -178,6 +178,7 @@ typedef struct {
     /* Theme */
 
     params_uint8_t       theme;
+    params_uint8_t       font;
 
     /* durty flags */
 

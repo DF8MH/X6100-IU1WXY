@@ -1957,6 +1957,22 @@ static uint8_t make_theme(uint8_t row) {
     return row + 1;
 }
 
+static uint8_t make_font(uint8_t row) {
+    lv_obj_t    *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "Font (restart)");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = dropdown_uint8(grid, &params.font, " Sony Sketch \n Roboto \n DejaVu");
+
+    lv_obj_set_size(obj, SMALL_6, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_center(obj);
+
+    return row + 1;
+}
+
 static uint8_t make_delimiter(uint8_t row) {
     row_dsc[row] = 10;
 
@@ -3230,6 +3246,7 @@ static void make_display_page() {
     row = make_mag(row);
     row = make_knob_info(row);
     row = make_theme(row);
+    row = make_font(row);
     card_end(row);
 }
 

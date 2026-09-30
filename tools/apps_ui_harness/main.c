@@ -26,6 +26,7 @@
 #include "clock.h"
 #include "tx_info.h"
 #include "pubsub_ids.h"
+#include "fonts/font_select.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -518,6 +519,7 @@ int main(int argc, char **argv) {
     EVENT_RADIO_RX = lv_event_register_id();
     EVENT_RADIO_TX = lv_event_register_id();
     EVENT_RADIO_RX = lv_event_register_id();
+    if (getenv("FONT")) { params.font.x = atoi(getenv("FONT")); fonts_apply(params.font.x); }
     styles_init(THEME_SIMPLE);
     lv_obj_t *scr = lv_scr_act();
     lv_obj_add_style(scr, &background_style, 0);

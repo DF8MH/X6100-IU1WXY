@@ -16,6 +16,7 @@
 #include "main.h"
 #include "main_screen.h"
 #include "styles.h"
+#include "fonts/font_select.h"
 #include "radio.h"
 #include "dsp.h"
 #include "util.h"
@@ -101,6 +102,7 @@ int main(void) {
     audio_set_rec_vol(params.rec_gain_db_f.x);
     mfk_init();
     vol_init();
+    fonts_apply(params.font.x);
     styles_init(params.theme.x);
 
     radio_init();

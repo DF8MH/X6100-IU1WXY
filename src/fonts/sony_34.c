@@ -1874,7 +1874,7 @@ static lv_font_fmt_txt_dsc_t font_dsc = {
 
 /*Initialize a public general font descriptor*/
 #if LV_VERSION_CHECK(8, 0, 0)
-const lv_font_t sony_34 = {
+lv_font_t sony_34 = {
 #else
 lv_font_t sony_34 = {
 #endif
