@@ -351,7 +351,7 @@ static void mode_label_update(Subject *subj, void *user_data) {
     if ((mode == x6100_mode_lsb_dig) || (mode == x6100_mode_usb_dig)) {
         lv_obj_set_style_text_color(items[INFO_MODE], lv_color_hex(COLOR_LIGHT_RED), 0);
     } else if (subject_i_get(mode_lock)) {
-        lv_obj_set_style_text_color(items[INFO_MODE], lv_color_hex(0xAAAAAA), 0);
+        lv_obj_set_style_text_color(items[INFO_MODE], lv_color_hex(styles_dim(0xAAAAAA)), 0);
     } else {
         lv_obj_set_style_text_color(items[INFO_MODE], lv_color_white(), 0);
     }
@@ -367,7 +367,7 @@ static void atu_label_update(Subject *subj, void * user_data) {
         lv_obj_set_style_bg_opa(items[INFO_ATU], LV_OPA_0, 0);
     } else {
         if (cfg_transverter_shift_for(freq)) {
-            lv_obj_set_style_text_color(items[INFO_ATU], lv_color_hex(0xAAAAAA), 0);
+            lv_obj_set_style_text_color(items[INFO_ATU], lv_color_hex(styles_dim(0xAAAAAA)), 0);
             lv_obj_set_style_bg_opa(items[INFO_ATU], LV_OPA_20, 0);
         } else {
             lv_obj_set_style_text_color(items[INFO_ATU], cfg_atu_is_loaded() ? lv_color_black() : lv_color_hex(0xFF0000), 0);

@@ -159,7 +159,7 @@ void channel_overlay_show(const char *name) {
 
         lv_obj_set_style_border_color(
             channel_overlay,
-            lv_color_hex(0x808080),
+            lv_color_hex(styles_dim(0x808080)),
             LV_PART_MAIN
         );
 
@@ -1670,7 +1670,7 @@ static void update_freq_boundaries(Subject *subj, void *user_data) {
     }
 
     int32_t     half_width = 50000;
-    uint32_t    color = subject_i_get(freq_lock) ? 0xBBBBBB : 0xFFFFFF;
+    uint32_t    color = subject_i_get(freq_lock) ? styles_dim(0xBBBBBB) : 0xFFFFFF;
 
     int32_t zoom = param_i_get(cfg_mode_zoom);
 

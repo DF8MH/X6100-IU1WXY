@@ -96,6 +96,7 @@ extern lv_style_t   dialog_item_edited_style;
 extern lv_style_t   dialog_dropdown_list_style;
 
 extern lv_style_t   cw_tune_style;
+extern lv_style_t   card_style;     /* Settings cards */
 
 extern lv_font_t    sony_14;
 extern lv_font_t    sony_16;
@@ -118,6 +119,10 @@ extern lv_font_t    sony_60;
 void styles_init(themes_t theme);
 
 void styles_set_theme(themes_t theme);
+
+/* Dim/secondary text colour: `color` as is, light grey in Outdoor */
+uint32_t styles_dim(uint32_t color);
+bool styles_outdoor(void);
 
 #ifdef __cplusplus
 }

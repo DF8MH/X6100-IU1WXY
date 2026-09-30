@@ -1023,7 +1023,7 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
         lv_obj_align(b->label, LV_ALIGN_TOP_MID, 0, 4);
         lv_label_set_text(b->value, nl + 1);
         lv_obj_clear_flag(b->value, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_style_bg_color(b->parent, lv_color_hex(0x0b1622), 0);
+        lv_obj_set_style_bg_color(b->parent, styles_outdoor() ? lv_color_black() : lv_color_hex(0x0b1622), 0);
         return;
     }
 
@@ -1039,10 +1039,11 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
         lv_label_set_text(b->label, text);
     }
     lv_obj_set_style_text_font(b->label, page ? &sony_28 : &sony_30, 0);
-    lv_obj_set_style_text_color(b->label, lv_color_hex(page ? 0xccddee : 0xffffff), 0);
+    lv_obj_set_style_text_color(b->label, lv_color_hex(page ? styles_dim(0xccddee) : 0xffffff), 0);
+    if (styles_outdoor() && !page) lv_obj_remove_local_style_prop(b->label, LV_STYLE_TEXT_COLOR, 0);   /* black on the yellow active button */
     lv_obj_center(b->label);
     lv_obj_add_flag(b->value, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_style_bg_color(b->parent, lv_color_hex(page ? 0x16232f : 0x0b1622), 0);
+    lv_obj_set_style_bg_color(b->parent, styles_outdoor() ? lv_color_black() : lv_color_hex(page ? 0x16232f : 0x0b1622), 0);
 }
 
 static void label_update_cb(Subject *subj, void *user_data) {

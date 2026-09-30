@@ -321,6 +321,10 @@ static void topbar(void) {
     lv_obj_report_style_change(NULL);
     pump(100);
     shot("topbar_3.ppm");
+    styles_set_theme(THEME_OUTDOOR);
+    lv_obj_report_style_change(NULL);
+    pump(100);
+    shot("topbar_outdoor.ppm");
     styles_set_theme(THEME_SIMPLE);
     lv_obj_report_style_change(NULL);
     /* Spectrum off: the row right under the strip; zoom x8 */
@@ -605,6 +609,12 @@ int main(int argc, char **argv) {
     buttons_load_page(&buttons_page_vol_1);
 
     const char *only = argc > 1 ? argv[1] : NULL;
+    if (only && !strcmp(only, "outdoor")) {   /* Settings in Outdoor: Display is settings_1_2 */
+        styles_set_theme(THEME_OUTDOOR);
+        lv_obj_report_style_change(NULL);
+        settings_demo();
+        return 0;
+    }
     if (only && !strcmp(only, "topbar")) {
         buttons_load_page(&buttons_page_vol_1);
         topbar();

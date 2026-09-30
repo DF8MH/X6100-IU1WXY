@@ -68,6 +68,7 @@ typedef enum {
 typedef enum {
     THEME_SIMPLE,
     THEME_LEGACY,
+    THEME_OUTDOOR,
 } themes_t;
 
 

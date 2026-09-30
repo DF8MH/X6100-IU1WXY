@@ -244,6 +244,14 @@ static void theme_update_cb(lv_event_t * e) {
 
     params_uint8_set(var, lv_dropdown_get_selected(obj));
     styles_set_theme((themes_t)var->x);
+
+    if (var->x == THEME_OUTDOOR) {
+        /* Sunlight: full backlight, once on selection */
+        params_lock();
+        params.brightness_normal = 9;
+        params_unlock(&params.dirty.brightness_normal);
+        backlight_set_brightness(9);
+    }
 }
 
 /* Shared create */
@@ -1974,7 +1982,7 @@ static uint8_t make_theme(uint8_t row) {
     lv_label_set_text(obj, "Theme");
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col++, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
-    obj = dropdown_uint8(grid, &params.theme, " Simple \n Legacy", theme_update_cb);
+    obj = dropdown_uint8(grid, &params.theme, " Simple \n Legacy \n Outdoor", theme_update_cb);
 
     lv_obj_set_size(obj, SMALL_6, 56);
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
@@ -2148,10 +2156,7 @@ static uint8_t card_begin(const char *icon, const char *title, lv_coord_t *cols 
     }
     lv_obj_clear_flag(grid, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_text_color(grid, lv_color_white(), 0);
-    lv_obj_set_style_bg_color(grid, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(grid, LV_OPA_10, 0);
-    lv_obj_set_style_border_width(grid, 1, 0);
-    lv_obj_set_style_border_color(grid, lv_color_hex(0x506070), 0);
+    lv_obj_add_style(grid, &card_style, 0);
     lv_obj_set_style_radius(grid, 10, 0);
     lv_obj_set_style_pad_hor(grid, 12, 0);
     lv_obj_set_style_pad_ver(grid, 6, 0);
@@ -2268,7 +2273,7 @@ static lv_obj_t * wl_button(uint8_t row, const char *text, lv_event_cb_t cb) {
 
 /* Note to the right of a 3-column control */
 static lv_obj_t * wl_note(uint8_t row) {
-    lv_obj_t *obj = wl_label(grid, &sony_18, 0x99aabb, 0);
+    lv_obj_t *obj = wl_label(grid, &sony_18, styles_dim(0x99aabb), 0);
 
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 4, 3, LV_GRID_ALIGN_CENTER, row, 1);
     return obj;
