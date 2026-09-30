@@ -1,78 +1,109 @@
-# X6100 custom firmware
+<h1 align="center">X6100 custom firmware</h1>
 
-Unofficial combined firmware for the Xiegu X6100 transceiver. It starts from
-the R1CBU GUI (0.34.2, maintained by gdyuldin), adds the SWL and digital
-mode apps of the 1KO125 fork and the JS8 app of randal007, and on top of that
-a DX Cluster with spots on the main screen, Bluetooth CAT, Bluetooth
-headphones for the RX audio, WiFi/Bluetooth settings on the radio and a web
+<p align="center"><b>A complete, fully featured SD-card firmware for the Xiegu X6100:
+digital modes, DX cluster on the waterfall, Bluetooth, wfview server and a web configurator.</b></p>
+
+<p align="center"><img src="docs/screenshots/main_screen.png" alt="Main screen with DX cluster spot tags on the waterfall" width="720"></p>
+
+<p align="center"><i>Main screen: S-meter, frequency strip, DX cluster tags and spot lines over the waterfall.
+All screenshots in this README are rendered on a PC with fake data.</i></p>
+
+Unofficial combined firmware for the Xiegu X6100. It starts from the R1CBU
+GUI (0.34.2, maintained by gdyuldin), adds the SWL and digital-mode apps of
+the 1KO125 fork and the JS8 app of randal007, and on top of that a DX
+Cluster shown on the main screen, Bluetooth CAT and headphones, WiFi and
+Bluetooth settings on the radio, a wfview (Icom LAN) server and a web
 configurator. It is a complete SD card image: everything else on the radio
 works as in the base firmware.
 
-![Main screen with DX cluster spots](docs/mockups/releases/round9/cluster_column_1.png)
-
-*Main screen: DX cluster tags and marker lines on the waterfall, and the
-cluster column at the right, centred on the VFO.*
+> **Baseband compatibility.** Some options depend on the radio's baseband
+> revision (TX audio, band output gain, TX filter, CESSB, FM emphasis). A
+> patched r12 baseband is recommended. The baseband version is shown in
+> Settings → Info.
 
 ## Contents
 
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [Install](#install)
 - [Usage](#usage)
-  - [Digital modes](#digital-modes)
-  - [JS8](#js8)
-  - [DX Cluster](#dx-cluster)
-  - [Bluetooth headphones](#bluetooth-headphones)
-  - [Bluetooth CAT](#bluetooth-cat)
-  - [Web configurator](#web-configurator)
-  - [Settings](#settings)
+- [Web configurator](#web-configurator)
+- [wfview server](#wfview-server)
 - [Reference](#reference)
-  - [Bluetooth CAT: connection](#bluetooth-cat-connection)
-  - [Supported CI-V commands](#supported-ci-v-commands)
-  - [btcat-ctl](#btcat-ctl)
-  - [btaudio-ctl](#btaudio-ctl)
-  - [Files on /mnt](#files-on-mnt)
 - [Build](#build)
 - [Credits](#credits)
 - [License](#license)
 
 ## Features
 
-**Display and interface**
+**Operating**
 
-- Main screen with a frequency strip (band, VFO frequency and mode, GPS
-  locator or saved QTH) and a spectrum/waterfall you can switch off
-- Three fonts (Sony Sketch, Roboto, DejaVu) and two themes (Simple, Legacy)
-- Settings reorganised in cards, with all tabs on two button pages
-- Boot logo IU1WXY
+- Band, VFO and mode strip with GPS locator (or saved QTH) always visible
+- Channel list and MEM 1-9 slots, editable from the web configurator
+- Long-press action on every button group: screenshot, recorder, mute, apps, QTH grid
+- SWR Scan, GPS view, Recorder and a CW decoder with WPM
+- Local time zone (Settings → Date / Time → Zone); logs stay in UTC
+- Fully editable band list and digital-mode frequencies
 
-**Digital modes and apps**
+**Digital modes and apps** (APP → **Modes**)
 
-- **Modes** menu on the APP buttons: RTTY, FT8, FT4, JS8, SSTV, WeFax, NavTex
-- JS8 on the radio itself: decoder, waterfall, inbox, log, APRS gateways
-- SSTV, WeFax and NavTex from the 1KO125 fork (WeFax, NavTex, channel list,
-  broadcast info)
-- Long-press actions for the apps (RTTY, FT8, JS8, SSTV, Cluster, WeFax,
-  NavTex, SWR Scan, GPS, Settings, Recorder)
+- FT8 and FT4 with logging in ADIF (`ft_log.adi`) and worked-before marks
+- JS8 (all four speeds at once): decoder, inbox, store and forward, log, APRS gateways
+- RTTY, SSTV, WeFax and NavTex (from the 1KO125 fork), with broadcast frequency lists
+- DX Cluster app: telnet client over WiFi, spots by frequency around the VFO, one-press tune, saved servers
 
-**DX Cluster**
+**Display**
 
-- Telnet DX cluster client over WiFi, running also while the app is closed
-- Cluster app: spots by frequency around the VFO, tune to a spot with one
-  press, server list
-- Main screen: spot tags on the waterfall and a cluster column at the right
+- Three themes: IU1WXY (default), Legacy and **Outdoor** (high contrast, black with white borders, sunlight waterfall palette)
+- DX cluster on the main screen: callsign tags and spot lines on the waterfall, plus a cluster column at the right (rotate the MFK to browse, long press to tune)
+- S-meter with thin bars, S-scale and dB value; bars above S9 fade from green to red
+- Waterfall mode **Centered** (VFO in the middle) or **Fixed** (span stays put, amber VFO line moves)
+- Three fonts (Sony Sketch, Roboto, DejaVu), settings in cards, spectrum on/off
 
-**Bluetooth headphones**
+**Connectivity and remote**
 
-- Radio RX audio to A2DP headphones, with volume and speaker mute
+- **wfview server**: Icom LAN protocol (UDP 50001-50003) with CI-V, RX audio and waterfall, appears as an IC-705
+- **Bluetooth CAT**: Icom CI-V shared between USB and up to 3 Bluetooth clients
+- **Bluetooth headphones**: RX audio over A2DP with volume and speaker mute
+- WiFi scan/connect and Bluetooth pairing on the radio, WiFi sets the clock
 
-**Bluetooth CAT**
+**Web configurator** (port 80)
 
-- The CAT port (Icom CI-V) shared between USB and up to 3 Bluetooth clients
+- Bands, digital modes, DX cluster servers, wfview login, memories and channels, files and time from any browser
 
-**Web configurator**
+**System**
 
-- Bands, digital mode frequencies, DX cluster servers, files and time, from a
-  browser
+- Buildroot SD card image, settings and logs on a DATA partition (`/mnt`)
+- ADIF import (`incoming_log.adi`) for worked-before marks
+- Boot logo IU1WXY, info screen with firmware and baseband version
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/cluster_column.png" alt="Cluster column"><br><sub><b>Cluster column</b> at the right of the waterfall</sub></td>
+    <td align="center"><img src="docs/screenshots/cluster_app.png" alt="Cluster app"><br><sub><b>DX Cluster app</b>: spots around the VFO, new spots marked</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/smeter.png" alt="S-meter"><br><sub><b>S-meter</b> with the green-to-red gradient above S9</sub></td>
+    <td align="center"><img src="docs/screenshots/theme_outdoor.png" alt="Outdoor theme"><br><sub><b>Outdoor theme</b> for direct sunlight</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/waterfall_fixed_mode.png" alt="Fixed waterfall"><br><sub><b>Fixed waterfall</b> with the amber VFO line</sub></td>
+    <td align="center"><img src="docs/screenshots/digital_modes_menu.png" alt="Modes menu"><br><sub><b>Modes menu</b> on the APP buttons</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/js8_app.png" alt="JS8 app"><br><sub><b>JS8</b> app</sub></td>
+    <td align="center"><img src="docs/screenshots/settings_general.png" alt="Settings"><br><sub><b>Settings</b>: station, date/time and time zone</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/settings_wfview.png" alt="wfview settings"><br><sub><b>wfview server</b> settings on the radio</sub></td>
+    <td align="center"><img src="docs/screenshots/web_wfview.png" alt="Web wfview page"><br><sub><b>wfview</b> page of the web configurator</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/screenshots/web_memories.png" alt="Web memories page" width="600"><br><sub><b>Memories</b> page of the web configurator: MEM slots and channels</sub></td>
+  </tr>
+</table>
 
 ## Install
 
@@ -88,7 +119,7 @@ cluster column at the right, centred on the VFO.*
 Settings persist on `/mnt`. Writing a new image replaces the whole card,
 DATA included: copy the DATA files to your PC first (at least `params.db`,
 `qso_log.db`, the `.adi` logs, `cluster.conf`, `btcat.conf`, `btaudio.conf`,
-`js8_*.txt`) and copy them back after the first start.
+`wfview.conf`, `js8_*.txt`) and copy them back after the first start.
 
 To import an ADIF log for the worked-before marks, copy it to the DATA
 partition as `incoming_log.adi`; it is imported at the next start.
@@ -125,11 +156,6 @@ Beta 3 of randal007's [X6100 JS8](https://github.com/randal007/x6100-js8):
 a JS8Call-compatible decoder and keyboard in the radio, with all four speeds
 (Normal, Fast, Turbo, Slow) decoded at once.
 
-![JS8 on the X6100](docs/screenshots/01_main.png)
-
-| Reply keyboard | Stations view |
-|---|---|
-| ![Replying](docs/screenshots/04_reply.png) | ![Stations](docs/screenshots/02_stations.png) |
 
 First steps:
 
@@ -186,7 +212,6 @@ Design notes: [docs/RESEARCH.md](docs/RESEARCH.md),
 
 ### DX Cluster
 
-![Cluster app](docs/screenshots/cluster.png)
 
 Needs WiFi (Settings → Wireless) and your callsign (Settings → General →
 STATION), used to log in. The client connects in the background as soon as
@@ -277,8 +302,9 @@ device exposes an outgoing COM/SPP port. Log files: `/tmp/btcat.log`,
 
 ### Web configurator
 
-A small web server (vendored in [webserver/](webserver/), Python/bottle)
-edits the radio's settings from a browser. Pages:
+A small web server (vendored in [webserver/](webserver/), Python/bottle) runs
+on the radio on port 80: open `http://<radio IP>/` from any browser on the
+same network. Pages:
 
 | Page | Does |
 |---|---|
@@ -286,17 +312,32 @@ edits the radio's settings from a browser. Pages:
 | Bands | edit the band list |
 | Digital modes | add, edit and delete digital mode frequencies |
 | Cluster | DX cluster servers: add, use, delete (writes `/mnt/cluster.conf`) |
+| wfview | enable the wfview server, set user and password |
+| Memories | MEM 1-9 slots and the named channel list |
 | Files | browse `/mnt` |
 | Time | local and server time, NTP sync, timezone |
 
-On the radio it listens on port 80: open `http://<radio IP>/` (options:
-`--host`, `--port`, `--db`,
-`--cluster-conf`, `--filebrowser-path`); see
+The radio picks up changes within a few seconds. Server options: `--host`,
+`--port`, `--db`, `--cluster-conf`, `--filebrowser-path`; see
 [webserver/README.md](webserver/README.md).
 
 | Cluster | Digital modes |
 |---|---|
 | ![Cluster page](docs/screenshots/web/cluster_desktop.png) | ![Digital modes page](docs/screenshots/web/digital_modes_desktop.png) |
+
+### wfview server
+
+The radio can act as an Icom IC-705 on the network, so
+[wfview](https://wfview.org) on a PC controls it with CI-V, RX audio and the
+waterfall.
+
+- **Off by default.** Enable it in Settings → Wireless (wfview card) or on
+  the web configurator's **wfview** page. Default login `x6100` / `x6100`:
+  change it in the same places (stored in `/mnt/wfview.conf`).
+- Ports: UDP **50001** (control), **50002** (CI-V), **50003** (audio).
+- In wfview add a network radio (IC-705 profile): radio IP, control port
+  50001, the user and password above, audio codec **LPCM 1ch 16bit**.
+- The Wireless card shows the connected client name.
 
 ### Settings
 
@@ -402,6 +443,7 @@ The DATA partition, readable on a PC.
 |---|---|
 | `params.db`, `qso_log.db` | the radio's settings and QSO database |
 | `cluster.conf` | DX cluster server in use and saved servers |
+| `wfview.conf` | wfview server on/off, user and password |
 | `btcat.conf` | Bluetooth power and Discoverable (CAT), written by `btcat-ctl` |
 | `btaudio.conf` | headphones settings (RX loopback, speaker mute, Connect at startup devices) |
 | `ft_log.adi`, `js8call_log.adi` | FT8/FT4 and JS8 logs (ADIF) |
@@ -422,6 +464,7 @@ Defaults for the Bluetooth bridge are in `/etc/default/btcat`
 (`BTCAT_ENABLE`, `BTCAT_BT`, `BTCAT_DISCOVERABLE`, `BTCAT_ALIAS`); the
 runtime state in `/mnt/btcat.conf` overrides them.
 
+
 ## Build
 
 **GitHub Actions** (`.github/workflows/main.yml`, *Build image*, about an
@@ -434,40 +477,45 @@ using this repository's GUI, the vendored `webserver/`, the boot logo
   the artifact `sdcard.<ref>.img.zip`.
 - Push a tag: the same image is attached to a GitHub Release.
 
-**Locally**: follow [docs/UPSTREAM_README.md](docs/UPSTREAM_README.md) (clone
-AetherX6100Buildroot and build with buildroot). The workflow's patch steps
-show what to change in the buildroot tree to use this repository
-(GUI and webserver from local sources, `boost` and `fftw-single` for JS8,
-RHVoice dropped, boot logo).
+**Locally**: follow [docs/UPSTREAM_README.md](docs/UPSTREAM_README.md): clone
+AetherX6100Buildroot next to this repository, configure it with
+`./br_config.sh` and `make` in its `build` directory, then run
+`buildroot/build.sh` from this repository. The workflow's patch steps show
+what to change in the buildroot tree to use this repository (GUI and
+webserver from local sources, `boost` and `fftw-single` for JS8, RHVoice
+dropped, boot logo).
 
 **Tests:** `./run_tests.sh` builds and runs the host tests in `tests/`
 (FT8 QSO, JS8, QTH, cluster).
 
 **UI harnesses:** [tools/apps_ui_harness](tools/apps_ui_harness) renders the
 app dialogs (FT8, JS8, SSTV, WeFax, NavTex, Cluster, Modes, Settings tabs,
-main screen) headless on a PC, with the real button bar and theme, for
-look-and-feel checks. [tools/js8_ui_harness](tools/js8_ui_harness) runs the
-JS8 app the same way under ASan/UBSan.
+main screen) headless on a PC, with the real button bar and theme; the
+screenshots in this README come from it. [tools/js8_ui_harness](tools/js8_ui_harness)
+runs the JS8 app the same way under ASan/UBSan.
 
-Design notes and screenshots of the UI mockups are in `docs/`
-(`docs/mockups/releases/`).
+Design notes and UI mockups are in `docs/` (`docs/mockups/releases/`).
 
 ## Credits
 
 - **R1CBU** GUI by Oleg Belousov R1CBU, maintained by Georgy Dyuldin R2RFE
   ([gdyuldin/x6100_gui](https://github.com/gdyuldin/x6100_gui), 0.34.2): the
-  base firmware and the buildroot image.
+  base firmware, the buildroot image and the web configurator
+  ([gdyuldin/x6100_webserver](https://github.com/gdyuldin/x6100_webserver)).
+- **Xiegu**: the X6100 hardware and original firmware.
 - **1KO125** by Hany El Imam ([TheMurusTeam/custom-r1cbu](https://github.com/TheMurusTeam/custom-r1cbu)):
   WeFax, NavTex, channel list, broadcast info, SSTV.
 - **JS8**: app by randal007 ([x6100-js8](https://github.com/randal007/x6100-js8)),
   on the engine of [JS8Call-improved/Android-port](https://github.com/JS8Call-improved/Android-port),
   a C++ port of [JS8Call](https://github.com/js8call/js8call) by Jordan Sherer
   KN4CRD and contributors.
+- **Libraries**: [LVGL](https://lvgl.io), cJSON, rapidxml, utf8cpp, FFTW,
+  bottle (web configurator), PulseAudio and BlueZ (Bluetooth).
 - **Fonts** in `src/fonts`: Roboto (Apache-2.0,
   [license](src/fonts/LICENSE-Roboto-Apache-2.0.txt)), DejaVu (Bitstream Vera
   license, [license](src/fonts/LICENSE-DejaVu-Bitstream-Vera.txt)) and the
   original Sony Sketch.
-- Boot logo IU1WXY.
+- Boot logo and IU1WXY theme: IU1WXY.
 
 ## License
 
