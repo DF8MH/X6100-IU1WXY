@@ -114,12 +114,13 @@ static void mute_timer_cb(lv_timer_t *t) {
         save_vol(cfg_sm.p_volume.get());
         cfg_sm.p_volume.set(hp_vol);
         vol_changed_cb(NULL, NULL);
+        radio_vol_refresh();
     } else if (!hp && saved_vol >= 0) {
         hp_on = false;
         cfg_sm.p_volume.set(saved_vol);
         save_vol(-1);
+        radio_vol_refresh();
     }
-    radio_vol_refresh();
 }
 
 void btaudio_init(void) {
