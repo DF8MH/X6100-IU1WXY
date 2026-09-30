@@ -67,7 +67,7 @@ works as in the base firmware.
 - **Bluetooth headphones**: RX audio over A2DP with volume and speaker mute
 - WiFi scan/connect and Bluetooth pairing on the radio, WiFi sets the clock
 
-**Web configurator** (port 80)
+**Web configurator** (port 80, HTTPS on 443)
 
 - Bands, digital modes, DX cluster servers, wfview login, memories and channels, files and time from any browser
 
@@ -314,11 +314,18 @@ same network. Pages:
 | Cluster | DX cluster servers: add, use, delete (writes `/mnt/cluster.conf`) |
 | wfview | enable the wfview server, set user and password |
 | Memories | MEM 1-9 slots and the named channel list |
+| Gallery | screen recordings, voice recordings and screenshots; convert AVI to MP4 in the browser or on the radio (ffmpeg) |
 | Files | browse `/mnt` |
 | Time | local and server time, NTP sync, timezone |
 
+The server also listens on HTTPS, port 443, with a self-signed certificate made
+on first start (valid 10 years, stored in `/mnt/https/`). The browser shows a
+certificate warning once; accept it. In-browser MP4 conversion in the Gallery
+only works on the HTTPS page (WebCodecs needs a secure context); "Convert on
+radio" works on both.
+
 The radio picks up changes within a few seconds. Server options: `--host`,
-`--port`, `--db`, `--cluster-conf`, `--filebrowser-path`; see
+`--port`, `--https-port` (0 = off), `--cert-dir`, `--db`, `--cluster-conf`, `--filebrowser-path`; see
 [webserver/README.md](webserver/README.md).
 
 | Cluster | Digital modes |

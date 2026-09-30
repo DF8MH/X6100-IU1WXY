@@ -29,6 +29,7 @@
 #include "panel.h"
 #include "rtty.h"
 #include "screenshot.h"
+#include "screen_rec.h"
 #include "keyboard.h"
 #include "dialog.h"
 #include "dialog_settings.h"
@@ -653,6 +654,10 @@ void main_screen_action(press_action_t action) {
             } else {
                 recorder_set_on(true);
             }
+            break;
+
+        case ACTION_SCREEN_REC:
+            screen_rec_toggle();
             break;
 
         case ACTION_MUTE:

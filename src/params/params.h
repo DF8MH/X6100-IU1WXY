@@ -41,6 +41,7 @@ typedef enum {
     ACTION_NR_TOGGLE,
     ACTION_NB_TOGGLE,
     ACTION_WF_MODE,     /* appended: waterfall Centered/Fixed toggle */
+    ACTION_SCREEN_REC,  /* appended after WF_MODE: screen + audio recording on/off */
 
     ACTION_APP_RTTY = 100,
     ACTION_APP_FT8,

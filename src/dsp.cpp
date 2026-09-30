@@ -25,6 +25,7 @@ extern "C" {
     #include "meter.h"
     #include "radio.h"
     #include "recorder.h"
+    #include "screen_rec.h"
     #include "rtty.h"
     #include "spectrum.h"
     #include "waterfall.h"
@@ -620,6 +621,8 @@ void dsp_put_audio_samples(size_t nsamples, int16_t *samples) {
 
     static float hilb_buf[2];
     static uint8_t hilb_i;
+
+    screen_rec_put_audio_samples(nsamples, samples);
 
     if (dialog_msg_voice_get_state() == MSG_VOICE_RECORD) {
         dialog_msg_voice_put_audio_samples(nsamples, samples);

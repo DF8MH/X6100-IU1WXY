@@ -8,8 +8,10 @@ import json
 import os
 import pathlib
 import re
+import shutil
 import sqlite3
 import subprocess
+import threading
 
 import bottle
 
@@ -548,6 +550,198 @@ def files(filepath=""):
             else:
                 files.append(item.relative_to(path))
         return bottle.template('files', dirs=dirs, files=files)
+
+# Gallery: screen recordings, audio recordings and screenshots
+
+GALLERY_DIRS = {"screenrec": ("screenrec", (".avi", ".mp4")), "rec": ("rec", (".mp3", ".wav")), "shots": ("", (".png",))}
+GALLERY_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._ -]*$')
+
+
+def gallery_path(kind, name):
+    """Real path of a gallery file, 404 for anything else (no separators, no dot dirs)."""
+    sub, exts = GALLERY_DIRS.get(kind, (None, ()))
+    if sub is None or not GALLERY_NAME.match(name) or not name.lower().endswith(exts):
+        raise bottle.HTTPError(404, "Not found")
+    root = os.path.realpath(os.path.join(settings.FILEBROWSER_PATH, sub))
+    path = os.path.realpath(os.path.join(root, name))
+    if os.path.dirname(path) != root or not os.path.isfile(path):
+        raise bottle.HTTPError(404, "Not found")
+    return root, path
+
+
+def avi_first_frame(path):
+    """First 00dc (JPEG) chunk of an AVI, or None."""
+    with open(path, 'rb') as f:
+        head = f.read(12)
+        if head[:4] != b'RIFF' or head[8:12] != b'AVI ':
+            return None
+        while True:
+            head = f.read(8)
+            if len(head) < 8:
+                return None
+            fourcc, size = head[:4], int.from_bytes(head[4:], 'little')
+            if fourcc == b'LIST':
+                if f.read(4) != b'movi':    # go into movi, skip hdrl
+                    f.seek(size - 4, os.SEEK_CUR)
+            elif fourcc == b'00dc':
+                return f.read(size)
+            else:
+                f.seek(size + (size & 1), os.SEEK_CUR)
+
+
+@app.route('/gallery')
+def gallery():
+    return bottle.template('gallery')
+
+
+@app.get('/api/gallery')
+def get_gallery():
+    items = []
+    for kind, (sub, exts) in GALLERY_DIRS.items():
+        folder = os.path.join(settings.FILEBROWSER_PATH, sub)
+        try:
+            names = os.listdir(folder)
+        except OSError:
+            continue
+        for name in names:
+            if not GALLERY_NAME.match(name) or not name.lower().endswith(exts):
+                continue
+            try:
+                st = os.stat(os.path.join(folder, name))
+            except OSError:
+                continue
+            items.append({"kind": kind, "name": name, "size": st.st_size, "mtime": int(st.st_mtime)})
+    items.sort(key=lambda x: x["mtime"], reverse=True)
+    bottle.response.content_type = 'application/json'
+    return json.dumps(items)
+
+
+@app.get('/gallery/file/<kind>/<name>')
+def gallery_file(kind, name):
+    root, path = gallery_path(kind, name)
+    os.sync()
+    response = bottle.static_file(name, root=root, download=bool(bottle.request.query.get('dl')))
+    response.set_header("Cache-Control", "private, no-cache, no-store")
+    return response
+
+
+@app.get('/gallery/thumb/<kind>/<name>')
+def gallery_thumb(kind, name):
+    root, path = gallery_path(kind, name)
+    if kind == "shots":
+        return bottle.static_file(name, root=root)
+    jpeg = avi_first_frame(path) if kind == "screenrec" else None
+    if not jpeg:
+        raise bottle.HTTPError(404, "No frame")
+    bottle.response.content_type = 'image/jpeg'
+    bottle.response.set_header("Cache-Control", "private, max-age=3600")
+    return jpeg
+
+
+@app.delete('/api/gallery/<kind>/<name>')
+def delete_gallery_file(kind, name):
+    root, path = gallery_path(kind, name)
+    os.remove(path)
+    return {"status": "OK"}
+
+
+# On-radio AVI -> MP4 conversion with ffmpeg: one background job at a time
+
+convert_lock = threading.Lock()
+convert_job = {"state": "idle", "name": "", "progress": 0.0, "message": ""}
+convert_proc = None
+
+
+def _hms(text):
+    h, m, s = text.split(":")
+    return int(h) * 3600 + int(m) * 60 + float(s)
+
+
+def run_convert(src, dst):
+    global convert_proc
+    part = dst + ".part"
+    cmd = ["nice", "-n", "19", "ffmpeg", "-y", "-nostdin", "-nostats", "-progress", "pipe:1",
+           "-i", src, "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-pix_fmt", "yuv420p",
+           "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", "-f", "mp4", part]
+    duration = 0.0
+    tail = []
+    try:
+        with convert_lock:
+            if convert_job["state"] == "cancelled":
+                return
+            convert_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+            proc = convert_proc
+            convert_job["state"] = "running"
+        for line in proc.stdout:
+            line = line.strip()
+            m = re.search(r'Duration: (\d+:\d+:\d+\.\d+)', line)
+            if m:
+                duration = _hms(m.group(1))
+            elif line.startswith("out_time_us=") or line.startswith("out_time_ms="):
+                try:
+                    t = int(line.split("=")[1]) / 1e6
+                except ValueError:
+                    continue
+                if duration > 0:
+                    convert_job["progress"] = max(0.0, min(0.99, t / duration))
+            elif "=" not in line:
+                tail = (tail + [line])[-4:]
+        code = proc.wait()
+        with convert_lock:
+            if convert_job["state"] == "cancelled":
+                pass
+            elif code == 0 and os.path.isfile(part):
+                os.replace(part, dst)
+                os.sync()
+                convert_job.update(state="done", progress=1.0, message="")
+            else:
+                convert_job.update(state="error", message=" ".join(tail) or "ffmpeg failed")
+    except Exception as e:
+        with convert_lock:
+            if convert_job["state"] != "cancelled":
+                convert_job.update(state="error", message=str(e))
+    finally:
+        convert_proc = None
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+
+
+@app.get('/api/gallery/convert')
+def get_convert():
+    bottle.response.content_type = 'application/json'
+    with convert_lock:
+        return json.dumps(dict(convert_job, ffmpeg=shutil.which("ffmpeg") is not None))
+
+
+@app.post('/api/gallery/convert/<name>')
+def start_convert(name):
+    if not name.lower().endswith(".avi"):
+        raise bottle.HTTPError(404, "Not found")
+    root, path = gallery_path("screenrec", name)
+    if not shutil.which("ffmpeg") or not shutil.which("nice"):
+        raise bottle.HTTPError(501, "ffmpeg is not installed on this radio")
+    dst = path[:-4] + ".mp4"
+    with convert_lock:
+        if convert_job["state"] in ("queued", "running"):
+            raise bottle.HTTPError(409, "A conversion is already running")
+        convert_job.update(state="queued", name=name, progress=0.0, message="")
+    threading.Thread(target=run_convert, args=(path, dst), daemon=True).start()
+    bottle.response.content_type = 'application/json'
+    return {"status": "OK"}
+
+
+@app.delete('/api/gallery/convert')
+def cancel_convert():
+    with convert_lock:
+        if convert_job["state"] not in ("queued", "running"):
+            raise bottle.HTTPError(409, "Nothing to cancel")
+        convert_job.update(state="cancelled", message="Cancelled")
+        if convert_proc:
+            convert_proc.kill()
+    return {"status": "OK"}
+
 
 # Timezone routes
 

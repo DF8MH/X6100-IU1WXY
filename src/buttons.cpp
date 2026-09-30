@@ -21,6 +21,7 @@
 extern "C" {
     #include "styles.h"
     #include "main_screen.h"
+    #include "screen_rec.h"
     #include "mfk.h"
     #include "vol.h"
     #include "msg.h"
@@ -81,6 +82,7 @@ static const char * comp_label_getter();
 static const char * if_shift_label_getter();
 static const char * wf_ref_label_getter();
 static const char * wf_mode_label_getter();
+static const char * screen_rec_label_getter();
 static const char * span_wider_label_getter();
 static const char * span_narrower_label_getter();
 
@@ -199,6 +201,10 @@ static button_data_t btn_span_narrower = {.type     = BTN_TEXT_FN,
                                           .label_fn = span_narrower_label_getter,
                                           .press    = controls_span_narrower,
                                           .subj     = (Subject*)&cfg_sm.p_mode_zoom};
+
+static button_data_t btn_screen_rec = {.type     = BTN_TEXT_FN,
+                                       .label_fn = screen_rec_label_getter,
+                                       .press    = [](button_data_t *) { screen_rec_toggle(); }};
 
 /* VOX */
 static button_data_t btn_vox_on    = {.type            = BTN_TEXT_FN,
@@ -381,7 +387,7 @@ static buttons_page_t page_mfk_2 = {
     {&btn_mfk_p2, &btn_agc, &btn_comp, &btn_if_shift, &btn_vox_on}
 };
 static buttons_page_t page_mfk_3 = {
-    {&btn_mfk_p3, &btn_wf_mode, &btn_span_wider, &btn_span_narrower}
+    {&btn_mfk_p3, &btn_wf_mode, &btn_span_wider, &btn_span_narrower, &btn_screen_rec}
 };
 
 /* MEM pages */
@@ -879,6 +885,16 @@ static const char * wf_ref_label_getter() {
     static char buf[22];
     sprintf(buf, "WF ref:\n%+i dB", cfg_sm.p_waterfall_ref.get());
     return buf;
+}
+
+static const char * screen_rec_label_getter() {
+    return screen_rec_is_on() ? "Stop\nrec" : "Screen\nrec";
+}
+
+void buttons_screen_rec_update() {
+    if (btn_screen_rec.disp_btn) {
+        buttons_refresh(&btn_screen_rec);
+    }
 }
 
 static const char * wf_mode_label_getter() {

@@ -15,6 +15,7 @@
 
 #include "main.h"
 #include "main_screen.h"
+#include "screen_rec.h"
 #include "styles.h"
 #include "fonts/font_select.h"
 #include "radio.h"
@@ -70,7 +71,7 @@ int main(void) {
     lv_disp_drv_init(&disp_drv);
 
     disp_drv.draw_buf   = &disp_buf;
-    disp_drv.flush_cb   = fbdev_flush;
+    disp_drv.flush_cb   = screen_rec_flush;
     // disp_drv.hor_res    = 480;
     // disp_drv.ver_res    = 800;
     disp_drv.hor_res    = 800;

@@ -23,6 +23,7 @@
 #include "cfg/db.h"
 #include "util.h"
 #include "dsp.h"
+#include "screen_rec.h"
 #include "params/params.h"
 #include "hkey.h"
 #include "tx_info.h"
@@ -415,6 +416,7 @@ x6100_vfo_t radio_toggle_vfo() {
 }
 
 void radio_poweroff() {
+    screen_rec_shutdown();
     if (params.charger.x == RADIO_CHARGER_SHADOW) {
         WITH_RADIO_LOCK(x6100_control_charger_set(true));
     }

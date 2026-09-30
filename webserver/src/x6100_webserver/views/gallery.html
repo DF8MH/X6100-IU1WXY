@@ -1,0 +1,258 @@
+% rebase('base.html', title='Gallery')
+<h2>Gallery</h2>
+<p class="sub">Screen recordings (AVI), voice recordings and screenshots stored on the radio. Screen recordings can be converted to MP4 in this browser or on the radio.</p>
+<div class="card" id="httpsnote" hidden><span class="meta">In-browser conversion needs a secure page. Open <a id="httpslink" href="#">the HTTPS version of this page</a>: the radio uses a self-signed certificate, so the browser shows a warning once. Accept it (Advanced, then Proceed) and the option appears. Converting on the radio works on both.</span></div>
+
+<div class="card" id="empty" hidden>No recordings or screenshots yet.</div>
+<div class="gallery" id="items"></div>
+<div class="actions"><span class="status" id="status_gallery"></span></div>
+
+<script src="/static/js/mp4-muxer.js"></script>
+<script>
+const KIND_LABEL = {screenrec: "Screen recording", rec: "Voice recording", shots: "Screenshot"};
+
+const showStatus = function(text, error=false) {
+  const el = $("#status_gallery");
+  el.toggleClass("error", error);
+  el.html('<span class="dot"></span>').append(document.createTextNode(text));
+}
+
+const fileUrl = function(x, part) {
+  return "/gallery/" + part + "/" + x.kind + "/" + encodeURIComponent(x.name);
+}
+
+const humanSize = function(n) {
+  return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " kB";
+}
+
+// Conversion needs WebCodecs, which browsers only offer on secure pages (HTTPS or localhost)
+const canConvert = function() {
+  return window.isSecureContext && typeof VideoEncoder !== "undefined" && typeof VideoFrame !== "undefined" && typeof createImageBitmap !== "undefined";
+}
+
+// AVI written by the radio: MJPEG video + PCM s16 audio. Returns frames (JPEG bytes) and PCM samples
+const parseAvi = function(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  const cc = function(o) { return String.fromCharCode(u8[o], u8[o + 1], u8[o + 2], u8[o + 3]); };
+  const avi = {fps: 8, width: 800, height: 480, rate: 44100, channels: 1, frames: [], audio: []};
+  if (cc(0) != "RIFF" || cc(8) != "AVI ") throw new Error("Not an AVI file");
+  const walk = function(o, end) {
+    while (o + 8 <= end) {
+      const id = cc(o), size = dv.getUint32(o + 4, true), data = o + 8;
+      if (id == "LIST") walk(data + 4, Math.min(data + size, end));
+      else if (id == "avih") { avi.fps = Math.round(1e6 / dv.getUint32(data, true)); avi.width = dv.getUint32(data + 32, true); avi.height = dv.getUint32(data + 36, true); }
+      else if (id == "strh" && cc(data) == "auds") { avi.rate = dv.getUint32(data + 24, true); }
+      else if (id == "strf" && size == 18 && dv.getUint16(data, true) == 1) { avi.channels = dv.getUint16(data + 2, true); avi.rate = dv.getUint32(data + 4, true); }
+      else if (id == "00dc") avi.frames.push(u8.subarray(data, Math.min(data + size, end)));
+      else if (id == "01wb") avi.audio.push(new Int16Array(buf.slice(data, data + (Math.min(size, end - data) & ~1))));
+      o = data + size + (size & 1);
+    }
+  };
+  walk(12, buf.byteLength);
+  if (!avi.frames.length) throw new Error("No video frames");
+  return avi;
+}
+
+const resample = function(pcm, from, to) {
+  const out = new Int16Array(Math.floor(pcm.length * to / from));
+  for (let i = 0; i < out.length; i++) {
+    const p = i * from / to, k = Math.floor(p), f = p - k;
+    out[i] = pcm[k] + ((pcm[Math.min(k + 1, pcm.length - 1)] - pcm[k]) * f);
+  }
+  return out;
+}
+
+const sleep = function(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+// Decode with createImageBitmap, encode with WebCodecs (H.264 + AAC, or Opus), mux with mp4-muxer
+const convert = async function(x, progress, warn) {
+  const res = await fetch(fileUrl(x, "file"));
+  if (!res.ok) throw new Error("Download failed");
+  const avi = parseAvi(await res.arrayBuffer());
+  const W = avi.width & ~1, H = avi.height & ~1;   // H.264 wants even sizes
+
+  let vcfg = null;
+  for (const codec of ["avc1.42001f", "avc1.4d001f"]) {
+    const c = {codec, width: W, height: H, bitrate: 1500000, framerate: avi.fps, avc: {format: "avc"}};
+    if ((await VideoEncoder.isConfigSupported(c)).supported) { vcfg = c; break; }
+  }
+  if (!vcfg) throw new Error("This browser cannot encode H.264");
+
+  let pcm = avi.audio.length ? new Int16Array(avi.audio.reduce(function(n, a) { return n + a.length; }, 0)) : null;
+  if (pcm) { let o = 0; avi.audio.forEach(function(a) { pcm.set(a, o); o += a.length; }); }
+  let acfg = null, arate = avi.rate;
+  if (pcm && typeof AudioEncoder !== "undefined" && avi.channels == 1) {
+    const list = [{codec: "mp4a.40.2", sampleRate: arate, numberOfChannels: 1, bitrate: 64000, name: "aac"},
+                  {codec: "opus", sampleRate: 48000, numberOfChannels: 1, bitrate: 48000, name: "opus"}];
+    for (const c of list) {
+      if ((await AudioEncoder.isConfigSupported(c)).supported) { acfg = c; break; }
+    }
+    if (acfg && acfg.sampleRate != arate) { pcm = resample(pcm, arate, acfg.sampleRate); arate = acfg.sampleRate; }
+  }
+  if (pcm && !acfg) warn("This browser cannot encode audio: the MP4 has no sound.");
+
+  const muxer = new Mp4Muxer.Muxer({
+    target: new Mp4Muxer.ArrayBufferTarget(),
+    video: {codec: "avc", width: W, height: H},
+    audio: acfg ? {codec: acfg.name == "aac" ? "aac" : "opus", numberOfChannels: 1, sampleRate: arate} : undefined,
+    fastStart: "in-memory",
+  });
+  let failure = null;
+  const fail = function(e) { failure = e; };
+  const venc = new VideoEncoder({output: function(chunk, meta) { muxer.addVideoChunk(chunk, meta); }, error: fail});
+  venc.configure(vcfg);
+
+  const total = avi.frames.length + (acfg ? 10 : 0);
+  const step = 1e6 / avi.fps;
+  for (let i = 0; i < avi.frames.length; i++) {
+    if (failure) throw failure;
+    const bmp = await createImageBitmap(new Blob([avi.frames[i]], {type: "image/jpeg"}));
+    const frame = new VideoFrame(bmp, {timestamp: Math.round(i * step), duration: Math.round(step)});
+    venc.encode(frame, {keyFrame: i % (avi.fps * 2) == 0});
+    frame.close();
+    bmp.close();
+    while (venc.encodeQueueSize > 6) await sleep(5);
+    progress(i / total);
+  }
+  await venc.flush();
+  venc.close();
+
+  if (acfg) {
+    const aenc = new AudioEncoder({output: function(chunk, meta) { muxer.addAudioChunk(chunk, meta); }, error: fail});
+    aenc.configure(acfg);
+    const n = 4096;
+    for (let o = 0; o < pcm.length; o += n) {
+      const part = pcm.subarray(o, Math.min(o + n, pcm.length));
+      const data = new AudioData({format: "s16", sampleRate: arate, numberOfFrames: part.length, numberOfChannels: 1,
+                                  timestamp: Math.round(o * 1e6 / arate), data: part});
+      aenc.encode(data);
+      data.close();
+      while (aenc.encodeQueueSize > 16) await sleep(2);
+      progress((avi.frames.length + 10 * o / pcm.length) / total);
+    }
+    await aenc.flush();
+    aenc.close();
+  }
+  if (failure) throw failure;
+  muxer.finalize();
+  progress(1);
+  return new Blob([muxer.target.buffer], {type: "video/mp4"});
+}
+
+const save = function(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function() { URL.revokeObjectURL(a.href); }, 60000);
+}
+
+// On-radio conversion: one job at a time, the radio reports it and the cards follow by polling
+const cards = {};   // AVI name -> {bar, note, btn, cancel}
+let polling = null, wasActive = false;
+
+const renderJob = function(job) {
+  Object.keys(cards).forEach(function(name) {
+    const c = cards[name], mine = job.name == name, active = job.state == "queued" || job.state == "running";
+    c.bar.prop("hidden", !(mine && active)).val(job.progress);
+    c.cancel.prop("hidden", !(mine && active));
+    c.btn.prop("disabled", active);
+    if (mine && job.state == "error") c.note.text("Conversion on the radio failed: " + job.message).prop("hidden", false);
+    else if (mine && active) c.note.prop("hidden", true);
+  });
+}
+
+const pollJob = function() {
+  $.getJSON("/api/gallery/convert").done(function(job) {
+    renderJob(job);
+    if (job.state == "queued" || job.state == "running") { wasActive = true; polling = setTimeout(pollJob, 1000); return; }
+    polling = null;
+    if (!wasActive) return;
+    wasActive = false;
+    if (job.state == "done") { showStatus("Converted " + job.name + " on the radio"); loadList(); }
+    else if (job.state == "cancelled") showStatus("Conversion cancelled");
+  }).fail(function() { polling = setTimeout(pollJob, 3000); });
+}
+
+const startPolling = function() { if (!polling) polling = setTimeout(pollJob, 300); }
+
+const makeCard = function(x) {
+  const isAvi = /\.avi$/i.test(x.name), isMp4 = /\.mp4$/i.test(x.name);
+  const card = $("<div class='card item'>");
+  const thumb = $("<div class='thumb'>");
+  if (x.kind == "rec") thumb.text("MP3");
+  else if (isMp4) thumb.text("MP4");
+  else thumb.append($("<img loading='lazy' alt=''>").attr("src", fileUrl(x, "thumb")).on("error", function() { $(this).remove(); thumb.text("AVI"); }));
+  card.append(thumb);
+  card.append($("<div class='name'>").text(x.name));
+  card.append($("<div class='meta'>").text(KIND_LABEL[x.kind] + (isMp4 ? " (MP4)" : "") + " · " + humanSize(x.size) + " · " + new Date(x.mtime * 1000).toLocaleString()));
+
+  const bar = $("<progress max='1' value='0' hidden>");
+  const note = $("<div class='meta note' hidden>");
+  const actions = $("<div class='actions'>");
+  actions.append($("<a class='btn' download>").attr("href", fileUrl(x, "file") + "?dl=1").text(isMp4 ? "Download" : "Download original"));
+
+  if (x.kind == "screenrec" && isAvi) {
+    if (canConvert()) {
+      const conv = $("<button class='primary'>").text("Convert to MP4 (in browser)");
+      conv.on("click", async function() {
+        conv.prop("disabled", true);
+        bar.prop("hidden", false).val(0);
+        note.prop("hidden", true);
+        try {
+          const blob = await convert(x, function(v) { bar.val(v); }, function(t) { note.text(t).prop("hidden", false); });
+          save(blob, x.name.replace(/\.avi$/i, ".mp4"));
+          showStatus("Converted " + x.name);
+        } catch (e) {
+          note.text("Conversion failed: " + (e.message || e) + ". Download the AVI instead.").prop("hidden", false);
+        }
+        bar.prop("hidden", true);
+        conv.prop("disabled", false);
+      });
+      actions.append(conv);
+    }
+    const radio = $("<button class='primary radio'>").text("Convert on radio");
+    const cancel = $("<button>").text("Cancel").prop("hidden", true).on("click", function() {
+      $.ajax({url: "/api/gallery/convert", method: "DELETE"}).always(startPolling);
+    });
+    radio.on("click", function() {
+      note.prop("hidden", true);
+      $.post("/api/gallery/convert/" + encodeURIComponent(x.name)).done(function() {
+        renderJob({name: x.name, state: "queued", progress: 0});
+        startPolling();
+      }).fail(function(r) {
+        note.text(r.status == 501 ? "This radio has no ffmpeg installed." : r.status == 409 ? "Another conversion is running, try again when it is done." : "Could not start the conversion.").prop("hidden", false);
+      });
+    });
+    cards[x.name] = {bar: bar, note: note, btn: radio, cancel: cancel};
+    actions.append(radio, cancel);
+  }
+
+  actions.append($("<button class='remove'>").text("Delete").on("click", function() {
+    if (!confirm("Delete " + x.name + "?")) return;
+    $.ajax({url: "/api/gallery/" + x.kind + "/" + encodeURIComponent(x.name), method: "DELETE"})
+      .done(function() { card.remove(); delete cards[x.name]; showStatus("Deleted " + x.name); })
+      .fail(function() { showStatus("Delete failed", true); });
+  }));
+  card.append(bar, note, actions);
+  return card;
+}
+
+const loadList = function() {
+  $.getJSON("/api/gallery").done(function(list) {
+    $("#empty").prop("hidden", list.length > 0);
+    $("#items").empty();
+    Object.keys(cards).forEach(function(k) { delete cards[k]; });
+    list.forEach(function(x) { $("#items").append(makeCard(x)); });
+    startPolling();
+  }).fail(function() { showStatus("Can't read the list", true); });
+}
+
+if (!window.isSecureContext) {
+  $("#httpslink").attr("href", "https://" + location.hostname + "/gallery");
+  $("#httpsnote").prop("hidden", false);
+}
+loadList();
+</script>

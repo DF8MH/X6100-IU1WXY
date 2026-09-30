@@ -775,6 +775,7 @@ static action_items_t long_action_items[] = {
     { .label = " None ", .action = ACTION_NONE },
     { .label = " Screenshot ", .action = ACTION_SCREENSHOT },
     { .label = " Recorder on/off ", .action = ACTION_RECORDER },
+    { .label = " Screen rec on/off ", .action = ACTION_SCREEN_REC },
     { .label = " Mute ", .action = ACTION_MUTE },
     { .label = " WF mode ", .action = ACTION_WF_MODE },
     { .label = " APP RTTY ", .action = ACTION_APP_RTTY },
@@ -909,6 +910,7 @@ static uint8_t make_long_action(uint8_t row) {
 static action_items_t hmic_action_items[] = {
     { .label = " None ", .action = ACTION_NONE },
     { .label = " Recorder on/off ", .action = ACTION_RECORDER },
+    { .label = " Screen rec on/off ", .action = ACTION_SCREEN_REC },
     { .label = " Mute ", .action = ACTION_MUTE },
     { .label = " Step up ", .action = ACTION_STEP_UP },
     { .label = " Step down ", .action = ACTION_STEP_DOWN },
