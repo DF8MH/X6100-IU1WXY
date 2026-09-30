@@ -2703,14 +2703,6 @@ static std::vector<std::string> split(const std::string &s, char sep) {
     return out;
 }
 
-static void bt_set_enabled(lv_obj_t *obj, bool on) {
-    if (on) {
-        lv_obj_clear_state(obj, LV_STATE_DISABLED);
-    } else {
-        lv_obj_add_state(obj, LV_STATE_DISABLED);
-    }
-}
-
 static void bt_update_view() {
     size_t n = bt.devs.size();
 
@@ -2752,15 +2744,12 @@ static void bt_list_done(const char *out, int status, void *user) {
     bt.listing = false;
     bt.devs.clear();
 
-    bool hp = false;
-
     for (auto &line : split(out, '\n')) {
         auto f = split(line, '\t');
 
         if (f[0] == "DEV" && f.size() >= 6) {
             bt.devs.push_back({f[1], f[5], f[2] == "1", f[3] == "hp", f[4] == "1", false});
         } else if (f[0] == "HP" && f.size() >= 3) {
-            hp = f[1] == "1";
             int vol = atoi(f[2].c_str());
 
             if (vol >= 0 && bt.vol_pending < 0 && !bt.vol_busy && !lv_obj_has_state(bt.vol, LV_STATE_EDITED)) {
@@ -2785,9 +2774,6 @@ static void bt_list_done(const char *out, int status, void *user) {
             bt.devs.push_back(d);
         }
     }
-    bt_set_enabled(bt.rx, hp);
-    bt_set_enabled(bt.vol, hp);
-    bt_set_enabled(bt.mute, hp);
     bt_update_view();
 }
 
@@ -2960,10 +2946,6 @@ static uint8_t make_headphones(uint8_t row) {
     bt.mute = bt_switch_cell(row, 1, btaudio_mute_get(), bt_mute_cb);
     lv_label_set_text(wl_note(row), "AF 0 while connected");
     row++;
-
-    bt_set_enabled(bt.rx, false);
-    bt_set_enabled(bt.vol, false);
-    bt_set_enabled(bt.mute, false);
     return row;
 }
 
@@ -2998,7 +2980,7 @@ static void grid_create() {
     lv_obj_set_style_pad_all(page, 6, 0);
     lv_obj_set_style_pad_row(page, 8, 0);
     lv_obj_set_style_pad_bottom(page, 40, 0);   /* room under the last row */
-    lv_obj_set_style_text_font(page, &sony_30, 0);  /* dialogs use 36 */
+    lv_obj_set_style_text_font(page, &sony_28, 0);  /* dialogs use 36 */
 
     lv_obj_center(page);
 }
