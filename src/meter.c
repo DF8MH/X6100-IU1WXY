@@ -59,6 +59,15 @@ static void update_db_label() {
     lv_label_set_text_fmt(db_val_label, "%.1f", meter_db_raw);
 }
 
+static lv_color_t bar_color(int16_t db) {
+    if (db >= S9) {
+        /* Green at S9 fading to red at +40 */
+        uint8_t mix = (db - S9) * 255 / (S9_40 - S9);
+        return lv_color_mix(lv_color_hex(0xE02020), lv_color_hex(0x20C040), mix);
+    }
+    return lv_color_hex(db <= noise_level ? 0x777777 : 0xAAAAAA);
+}
+
 static void meter_draw_cb(lv_event_t * e) {
     lv_obj_t            *obj = lv_event_get_target(e);
     lv_draw_ctx_t       *draw_ctx = lv_event_get_draw_ctx(e);
@@ -98,15 +107,7 @@ static void meter_draw_cb(lv_event_t * e) {
             peak_i = i;
         if (meter_db < db - 1.5f)
             continue;
-        if (db >= S9) {
-            /* Green at S9 fading to red at +40 */
-            uint8_t mix = (db - S9) * 255 / (S9_40 - S9);
-            rect_dsc.bg_color = lv_color_mix(lv_color_hex(0xE02020), lv_color_hex(0x20C040), mix);
-        } else if (db <= noise_level) {
-            rect_dsc.bg_color = lv_color_hex(0x777777);
-        } else {
-            rect_dsc.bg_color = lv_color_hex(0xAAAAAA);
-        }
+        rect_dsc.bg_color = bar_color(db);
         area.x1 = x1 + 30 + i * slice_w - slice_w / 2 + slice_spacing / 2;
         area.x2 = area.x1 + slice_w - slice_spacing;
 
@@ -117,8 +118,8 @@ static void meter_draw_cb(lv_event_t * e) {
     if (peak_i > 0 && meter_db < bar_db[peak_i] - 1.5f) {
         area.x1 = x1 + 30 - slice_w / 2 + slice_w * peak_i + slice_spacing / 2;
         area.x2 = area.x1 + slice_w - slice_spacing;
-        rect_dsc.bg_opa = LV_OPA_50;
-        rect_dsc.bg_color = lv_color_hex(0xAAAAAA);
+        rect_dsc.bg_opa = LV_OPA_COVER;    /* bright: gradient colour from S9, white below */
+        rect_dsc.bg_color = bar_db[peak_i] >= S9 ? bar_color(bar_db[peak_i]) : lv_color_white();
         lv_draw_rect(draw_ctx, &rect_dsc, &area);
     }
 
