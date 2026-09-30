@@ -49,6 +49,7 @@
 #include "dialog_modes.h"
 #include "freq_strip.h"
 #include "freq_scale.h"
+#include "spot_marks.h"
 #include "backlight.h"
 #include "buttons.h"
 #include "recorder.h"
@@ -1534,7 +1535,12 @@ lv_obj_t * main_screen() {
 
     freq_scale_init(obj, y);
 
+    lv_coord_t spot_tag_y = y + 36;
+
     y += freq_height;
+    if (param_i_get(cfg_cluster_spots_wf)) {
+        y += SPOT_MARKS_H;
+    }
 
     waterfall = waterfall_init(obj);
 
@@ -1543,6 +1549,9 @@ lv_obj_t * main_screen() {
     lv_obj_set_y(waterfall, y);
     waterfall_set_height(480 - y);
     freq_scale_lines_init(obj, y, 480 - y);
+    /* Cluster spots: tags under the frequency labels, lines at the bottom of
+     * the spectrum, or at the top of the waterfall when it is off */
+    spot_marks_init(obj, param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, 36, spot_tag_y);
 
     knobs_init(obj);
 
@@ -1652,6 +1661,7 @@ static void update_freq_boundaries(Subject *subj, void *user_data) {
 
     /* The waterfall is centred on the VFO minus the IF shift */
     freq_scale_update(f - param_i_get(cfg_band_if_shift), half_width, color);
+    spot_marks_update(f - param_i_get(cfg_band_if_shift), half_width);
 }
 
 static void update_zoom_on_if_shift_change(Subject *subj, void *user_data) {

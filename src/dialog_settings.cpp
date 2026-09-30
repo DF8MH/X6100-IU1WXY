@@ -1129,6 +1129,25 @@ static uint8_t make_spectrum_show(uint8_t row) {
     return row + 1;
 }
 
+static uint8_t make_cluster_spots_wf(uint8_t row) {
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "Cluster spots (restart)");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = lv_obj_create(grid);
+    lv_obj_set_size(obj, SMALL_3, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(obj);
+    obj = switch_bool(obj, cfg_sm.p_cluster_spots_wf);
+    lv_obj_set_width(obj, SMALL_3 - 30);
+
+    return row + 1;
+}
+
 static void auto_level_offset_update_cb(lv_event_t * e) {
     lv_obj_t *obj = lv_event_get_target(e);
     float val = lv_slider_get_value(obj) * AUTO_LEVEL_STEP;
@@ -3070,6 +3089,7 @@ static void make_display_page() {
     row = make_delimiter(row);
 
     row = make_spectrum_show(row);
+    row = make_cluster_spots_wf(row);
     row = make_auto_offset(row);
     row = make_spectrum_min_max(row);
     row = make_delimiter(row);

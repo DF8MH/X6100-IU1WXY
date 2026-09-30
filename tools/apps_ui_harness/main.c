@@ -16,6 +16,7 @@
 #include "dialog_modes.h"
 #include "freq_strip.h"
 #include "freq_scale.h"
+#include "spot_marks.h"
 #include "dialog_msg_voice.h"
 #include "dialog_msg_cw.h"
 #include "cluster/client.h"
@@ -246,12 +247,31 @@ static void topbar(void) {
     freq_scale_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96);
     lv_obj_t *wf = lv_obj_create(stack);
     lv_obj_remove_style_all(wf);
-    lv_obj_set_pos(wf, 0, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
+    lv_obj_set_pos(wf, 0, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H);
     lv_obj_set_size(wf, 800, 480);
     lv_obj_set_style_bg_color(wf, lv_color_hex(0x0a1a44), 0);
     lv_obj_set_style_bg_opa(wf, LV_OPA_COVER, 0);
-    freq_scale_lines_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36, 480);
+    freq_scale_lines_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H, 480);
     freq_scale_update(f, 50000, 0xffffff);
+    {   /* fake spots across 7.077-7.177 (age in min); the last ones crowd */
+        static const struct { const char *call; int khz10, age; } sp[] = {
+            {"IK1ABC", 70780, 1}, {"DL2XYZ", 70915, 5}, {"F5LMN", 71035, 20}, {"OK1AB", 71200, 45},
+            {"EA3QQ", 71350, 8}, {"SP9XX", 71490, 25}, {"OH2BH", 71500, 0}, {"9A1CC", 71520, 3},
+            {"HB9ZZ", 71540, 15}, {"LZ1ABC", 71555, 1}, {"OE3WXY", 71700, 2}, {"EA8/DL1AAA", 71760, 3},
+        };
+        time_t now = time(NULL);
+        for (unsigned i = 0; i < sizeof sp / sizeof sp[0]; i++) {
+            time_t t = now - sp[i].age * 60;
+            struct tm tm;
+            gmtime_r(&t, &tm);
+            char line[160];
+            snprintf(line, sizeof line, "DX de K1ABC:  %d.%d  %s  CW  %02d%02dZ", sp[i].khz10 / 10,
+                     sp[i].khz10 % 10, sp[i].call, tm.tm_hour, tm.tm_min);
+            cluster_client_feed_line(line);
+        }
+    }
+    spot_marks_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
+    spot_marks_update(f, 50000);
     lv_obj_move_background(stack);   /* created first in main_screen.c */
 
     extern bool harness_notify;
@@ -289,12 +309,22 @@ static void topbar(void) {
     /* Spectrum off: the row right under the strip; zoom x8 */
     lv_obj_add_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_y(stack, -96);
+    spot_marks_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H, 24, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36); /* lines: top of the waterfall */
     freq_scale_update(f, 50000 / 8, 0xffffff);
-    pump(100);
+    spot_marks_update(f, 50000 / 8);
+    pump(1100);
     shot("topbar_4.ppm");
+    freq_scale_update(f, 50000, 0xffffff);
+    spot_marks_update(f, 50000);
+    pump(100);
+    shot("topbar_4b.ppm");         /* spectrum off, zoom x1 */
+    freq_scale_update(f, 50000 / 8, 0xffffff);
+    spot_marks_update(f, 50000 / 8);
+    spot_marks_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
     lv_obj_clear_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_y(stack, 0);
     freq_scale_update(f, 50000, 0xffffff);
+    spot_marks_update(f, 50000);
     harness_gps_fix = true;
     pump(3100);
     lv_event_send(tx, EVENT_RADIO_TX, NULL);

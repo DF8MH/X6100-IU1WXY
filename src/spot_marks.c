@@ -1,0 +1,166 @@
+/*
+ *  SPDX-License-Identifier: LGPL-2.1-or-later
+ */
+
+#include "spot_marks.h"
+
+#include "cluster/client.h"
+#include "cfg/cfg_api.h"
+#include "styles.h"
+
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+#define WIDTH    800
+#define ROWS     2
+#define ROW_H    (SPOT_MARKS_H / ROWS)
+#define POOL     24
+#define GAP      6      /* between labels of a row */
+
+typedef struct {
+    lv_obj_t *label;
+    lv_obj_t *line;
+} mark_t;
+
+static mark_t         marks[POOL];
+static bool           ready;
+static lv_coord_t     line_y0, line_h0, tag_y0;
+static int32_t        span_center, span_half;
+static cluster_spot_t spots[CLUSTER_MAX_SPOTS];
+static int            spots_n;
+static uint32_t       spots_gen;
+static uint16_t       last_min = 0xFFFF;
+
+static uint16_t utc_now_min(void) {
+    time_t    now = time(NULL);
+    struct tm tm;
+
+    gmtime_r(&now, &tm);
+    return (uint16_t)(tm.tm_hour * 60 + tm.tm_min);
+}
+
+static uint32_t age_color(uint16_t age) {
+    if (age < 2)  return 0x7CFF7C;
+    if (age < 10) return 0xE8E070;
+    if (age < 30) return 0xC08A4A;
+    return 0x777777;
+}
+
+static void redraw(void) {
+    int      n = 0;
+    lv_coord_t end[ROWS][POOL];
+    lv_coord_t start[ROWS][POOL];
+    int      cnt[ROWS] = {0};
+    int32_t  left = span_center - span_half;
+    uint16_t now  = utc_now_min();
+
+    if (span_half > 0 && param_i_get(cfg_cluster_spots_wf)) {
+        /* Newest first: they win the free places */
+        for (int i = spots_n - 1; i >= 0 && n < POOL; i--) {
+            const cluster_spot_t *s = &spots[i];
+            int64_t   dx = (int64_t)(s->freq_hz - left) * WIDTH / (2 * span_half);
+            lv_coord_t x = dx, lx, w;
+            int       row;
+
+            if (dx < 0 || dx >= WIDTH) {
+                continue;
+            }
+            w  = lv_txt_get_width(s->dx, strlen(s->dx), &sony_18, 0, LV_TEXT_FLAG_NONE) + 4;
+            lx = (x + w > WIDTH) ? x - w + 1 : x;  /* right-aligned at the right edge */
+
+            for (row = 0; row < ROWS; row++) {
+                int k;
+                for (k = 0; k < cnt[row]; k++) {
+                    if (lx < end[row][k] + GAP && lx + w + GAP > start[row][k]) {
+                        break;
+                    }
+                }
+                if (k == cnt[row]) {
+                    break;
+                }
+            }
+            if (row == ROWS) {
+                continue;
+            }
+            start[row][cnt[row]] = lx;
+            end[row][cnt[row]++] = lx + w;
+
+            uint32_t color = age_color(cluster_age_min(s->utc_min, now));
+            mark_t  *m     = &marks[n++];
+
+            lv_label_set_text(m->label, s->dx);
+            lv_obj_set_pos(m->label, lx, tag_y0 + row * ROW_H);
+            lv_obj_set_style_text_color(m->label, lv_color_hex(color), 0);
+            lv_obj_clear_flag(m->label, LV_OBJ_FLAG_HIDDEN);
+
+            lv_obj_set_pos(m->line, x, line_y0);
+            lv_obj_set_style_bg_color(m->line, lv_color_hex(color), 0);
+            lv_obj_clear_flag(m->line, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    for (; n < POOL; n++) {
+        lv_obj_add_flag(marks[n].label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(marks[n].line, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+/* 1 Hz: new spots or a new minute (the colours age) */
+static void timer_cb(lv_timer_t *t) {
+    int      n   = cluster_client_snapshot(spots, CLUSTER_MAX_SPOTS, &spots_gen);
+    uint16_t min = utc_now_min();
+
+    if (n >= 0) {
+        spots_n = n;
+    }
+    if (n >= 0 || min != last_min) {
+        last_min = min;
+        redraw();
+    }
+}
+
+void spot_marks_layout(lv_coord_t line_y, lv_coord_t line_h, lv_coord_t tag_y) {
+    line_y0 = line_y;
+    line_h0 = line_h;
+    tag_y0  = tag_y;
+    if (ready) {
+        for (int i = 0; i < POOL; i++) {
+            lv_obj_set_height(marks[i].line, line_h);
+        }
+        redraw();
+    }
+}
+
+void spot_marks_init(lv_obj_t *parent, lv_coord_t line_y, lv_coord_t line_h, lv_coord_t tag_y) {
+    line_y0 = line_y;
+    line_h0 = line_h;
+    tag_y0  = tag_y;
+
+    for (int i = 0; i < POOL; i++) {
+        lv_obj_t *l = lv_obj_create(parent);
+        lv_obj_remove_style_all(l);
+        lv_obj_set_size(l, 1, line_h);
+        lv_obj_set_style_bg_opa(l, LV_OPA_COVER, 0);
+        lv_obj_clear_flag(l, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
+        marks[i].line = l;
+
+        l = lv_label_create(parent);
+        lv_obj_set_style_text_font(l, &sony_18, 0);
+        lv_obj_set_style_pad_hor(l, 2, 0);
+        lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
+        marks[i].label = l;
+    }
+    ready = true;
+    lv_timer_create(timer_cb, 1000, NULL);
+    timer_cb(NULL);
+}
+
+void spot_marks_update(int32_t center, int32_t half_width) {
+    if (!ready || (center == span_center && half_width == span_half)) {
+        return;
+    }
+    span_center = center;
+    span_half   = half_width;
+    redraw();
+}
