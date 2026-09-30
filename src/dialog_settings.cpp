@@ -2704,6 +2704,9 @@ static std::vector<std::string> split(const std::string &s, char sep) {
 }
 
 static void bt_update_view() {
+    if (!bt.scan_btn) {
+        return;     /* Audio page: no device list */
+    }
     size_t n = bt.devs.size();
 
     for (size_t i = 0; i < BT_ROWS; i++) {
@@ -2752,11 +2755,11 @@ static void bt_list_done(const char *out, int status, void *user) {
         } else if (f[0] == "HP" && f.size() >= 3) {
             int vol = atoi(f[2].c_str());
 
-            if (vol >= 0 && bt.vol_pending < 0 && !bt.vol_busy && !lv_obj_has_state(bt.vol, LV_STATE_EDITED)) {
+            if (bt.vol && vol >= 0 && bt.vol_pending < 0 && !bt.vol_busy && !lv_obj_has_state(bt.vol, LV_STATE_EDITED)) {
                 lv_slider_set_value(bt.vol, vol, LV_ANIM_OFF);
                 lv_label_set_text_fmt((lv_obj_t *)lv_obj_get_user_data(bt.vol), "%i %%", vol);
             }
-        } else if (f[0] == "RX" && f.size() >= 2) {
+        } else if (bt.rx && f[0] == "RX" && f.size() >= 2) {
             if (f[1] == "yes") {
                 lv_obj_add_state(bt.rx, LV_STATE_CHECKED);
             } else {
@@ -2790,7 +2793,9 @@ static void bt_action_done(const char *out, int status, void *user) {
         return;
     }
     bt.busy = false;
-    lv_label_set_text(bt.scan_note, "");
+    if (bt.scan_note) {
+        lv_label_set_text(bt.scan_note, "");
+    }
     if (status != 0 && *out) {
         msg_update_text_fmt("%s", split(out, '\n')[0].c_str());
     }
@@ -2802,7 +2807,9 @@ static void bt_action(const std::string &args, const std::string &note) {
         return;
     }
     bt.busy = true;
-    lv_label_set_text(bt.scan_note, note.c_str());
+    if (bt.scan_note) {
+        lv_label_set_text(bt.scan_note, note.c_str());
+    }
     btaudio_run(args.c_str(), bt_action_done, (void *)(intptr_t)wl_gen);
 }
 
@@ -2819,7 +2826,9 @@ static void bt_scan_done(const char *out, int status, void *user) {
             bt.found.push_back({f[1], f[2], false, true, false, true});
         }
     }
-    lv_label_set_text(bt.scan_note, bt.found.empty() ? "no headphones found" : "");
+    if (bt.scan_note) {
+        lv_label_set_text(bt.scan_note, bt.found.empty() ? "no headphones found" : "");
+    }
     bt_refresh();
 }
 
@@ -2828,7 +2837,9 @@ static void bt_scan_cb(lv_event_t *e) {
         return;
     }
     bt.scanning = true;
-    lv_label_set_text(bt.scan_note, "scanning 15 s, put the headphones in pairing");
+    if (bt.scan_note) {
+        lv_label_set_text(bt.scan_note, "scanning 15 s, put the headphones in pairing");
+    }
     btaudio_run("scan", bt_scan_done, (void *)(intptr_t)wl_gen);
 }
 
@@ -2956,8 +2967,19 @@ static void wl_timer_cb(lv_timer_t *t) {
     }
 }
 
+/* Objects die with the page: late callbacks must not touch them */
+static void bt_forget_objs() {
+    bt.scan_btn = bt.scan_note = bt.rx = bt.vol = bt.mute = NULL;
+}
+
+static void bt_audio_delete_cb(lv_event_t *e) {
+    wl_gen++;
+    bt_forget_objs();
+}
+
 static void wl_delete_cb(lv_event_t *e) {
     wl_gen++;
+    bt_forget_objs();
     lv_timer_del(wl_timer);
     wl_timer = NULL;
     wl_menu_back = NULL;
@@ -3281,6 +3303,17 @@ static void make_audio_page() {
     row = make_param_slider(row, "AGC knee", &agc_knee_slider);
     row = make_param_slider(row, "AGC slope", &agc_slope_slider);
     card_end(row);
+
+    row = card_begin(LV_SYMBOL_BLUETOOTH, "BT HEADPHONES");
+    row = make_headphones(row);
+    card_end(row);
+
+    /* Current state once; wl_gen drops the answer if the page is left */
+    lv_obj_add_event_cb(grid, bt_audio_delete_cb, LV_EVENT_DELETE, NULL);
+    bt.listing = bt.scanning = bt.busy = false;
+    bt.devs.clear();
+    bt.listing = true;
+    btaudio_run("list", bt_list_done, (void *)(intptr_t)wl_gen);
 }
 
 static void make_wireless_page() {
@@ -3300,10 +3333,6 @@ static void make_wireless_page() {
     row = card_begin(LV_SYMBOL_BLUETOOTH, "BLUETOOTH");
     row = make_bluetooth(row);
     row = make_bt_devices(row);
-    card_end(row);
-
-    row = card_begin(LV_SYMBOL_AUDIO, "HEADPHONES");
-    row = make_headphones(row);
     card_end(row);
 
     lv_obj_add_event_cb(grid, wl_delete_cb, LV_EVENT_DELETE, NULL);
