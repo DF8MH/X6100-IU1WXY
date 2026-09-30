@@ -67,6 +67,14 @@ void freq_scale_lines_init(lv_obj_t *parent, lv_coord_t y, lv_coord_t h) {
     }
 }
 
+void freq_scale_lines_set_y(lv_coord_t y) {
+    for (int i = 0; i < MAX_REFS; i++) {
+        if (lines[i]) {
+            lv_obj_set_y(lines[i], y);
+        }
+    }
+}
+
 void freq_scale_update(int32_t center, int32_t half_width, uint32_t color) {
     static const int32_t mult[] = {1, 2, 5};
     int32_t              left   = center - half_width;

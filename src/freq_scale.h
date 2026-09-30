@@ -22,6 +22,8 @@ void freq_scale_init(lv_obj_t *parent, lv_coord_t y);
 /* Dashed lines under the reference frequencies, over the waterfall */
 void freq_scale_lines_init(lv_obj_t *parent, lv_coord_t y, lv_coord_t h);
 
+void freq_scale_lines_set_y(lv_coord_t y);
+
 void freq_scale_update(int32_t center, int32_t half_width, uint32_t color);
 
 #ifdef __cplusplus

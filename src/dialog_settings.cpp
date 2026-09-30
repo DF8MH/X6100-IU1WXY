@@ -1139,7 +1139,7 @@ static uint8_t make_cluster_spots_wf(uint8_t row) {
     lv_obj_t *obj;
 
     obj = lv_label_create(grid);
-    lv_label_set_text(obj, "Cluster spots (restart)");
+    lv_label_set_text(obj, "Cluster spots");
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     obj = lv_obj_create(grid);

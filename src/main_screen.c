@@ -68,6 +68,7 @@
 
 static uint16_t     spectrum_height = 96;
 static uint16_t     freq_height = 36;
+static lv_coord_t   wf_y, spot_tag_y;    /* waterfall top without the spot tags */
 static lv_obj_t     *obj;
 static SubjectInt   *freq_lock;
 static bool         mode_lock = false;
@@ -1492,6 +1493,16 @@ void main_screen_set_freq(uint64_t freq) {
     cparam_i_set(cfg_fg_freq, freq);
     event_send(lv_scr_act(), EVENT_SCREEN_UPDATE, NULL);
 }
+/* The cluster spot tags get a band of their own under the frequency row:
+ * the waterfall moves down to make room, and back up without them. */
+static void on_cluster_spots_wf_change(Subject *subj, void *user_data) {
+    lv_coord_t y = wf_y + (param_i_get(cfg_cluster_spots_wf) ? SPOT_MARKS_H : 0);
+
+    lv_obj_set_y(waterfall, y);
+    freq_scale_lines_set_y(y);
+    spot_marks_layout(param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, 36, spot_tag_y);
+}
+
 
 lv_obj_t * main_screen() {
     broadcast_db_init();
@@ -1535,12 +1546,10 @@ lv_obj_t * main_screen() {
 
     freq_scale_init(obj, y);
 
-    lv_coord_t spot_tag_y = y + 36;
+    spot_tag_y = y + 36;
 
     y += freq_height;
-    if (param_i_get(cfg_cluster_spots_wf)) {
-        y += SPOT_MARKS_H;
-    }
+    wf_y = y;
 
     waterfall = waterfall_init(obj);
 
@@ -1552,6 +1561,7 @@ lv_obj_t * main_screen() {
     /* Cluster spots: tags under the frequency labels, lines at the bottom of
      * the spectrum, or at the top of the waterfall when it is off */
     spot_marks_init(obj, param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, 36, spot_tag_y);
+    subject_subscribe_delayed_and_notify((Subject*)cfg_cluster_spots_wf, on_cluster_spots_wf_change, NULL);
 
     knobs_init(obj);
 
