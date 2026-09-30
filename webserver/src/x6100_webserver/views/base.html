@@ -35,7 +35,7 @@
           <div>X6100 <small>{{call + ' · ' if call else ''}}configurator</small></div>
         </a>
         <nav>
-          % for href, label in [('/', 'General'), ('/bands', 'Bands'), ('/digital_modes', 'Digital modes'), ('/cluster', 'Cluster'), ('/files/', 'Files'), ('/time', 'Time')]:
+          % for href, label in [('/', 'General'), ('/bands', 'Bands'), ('/digital_modes', 'Digital modes'), ('/cluster', 'Cluster'), ('/wfview', 'wfview'), ('/files/', 'Files'), ('/time', 'Time')]:
           % current = request.path == href or (href != '/' and request.path.startswith(href))
           <a href="{{href}}"{{!' aria-current="page"' if current else ''}}>{{label}}</a>
           % end

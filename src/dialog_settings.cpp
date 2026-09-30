@@ -16,6 +16,7 @@
 #include <thread>
 #include <string>
 #include <cstdio>
+#include <cstring>
 #include <functional>
 
 extern "C" {
@@ -34,6 +35,7 @@ extern "C" {
     #include "msg.h"
     #include "textarea_window.h"
     #include "station.h"
+    #include "wfview_server.h"
 
     #include "lvgl/lvgl.h"
     #include <sys/time.h>
@@ -86,7 +88,8 @@ static int          card_n;
 
 static bool         datetime_changed;
 static time_t       now;
-struct tm           ts;
+struct tm           ts;         /* local time fields */
+struct tm           ts_utc;     /* same instant in UTC, for the RTC */
 
 static lv_obj_t     *day;
 static lv_obj_t     *month;
@@ -363,7 +366,10 @@ static void change_bg_opa_cb(lv_event_t *e) {
 
 /* Datetime */
 
+static bool zone_refresh;   /* spinboxes being reloaded: not a user edit */
+
 static void datetime_update_cb(lv_event_t * e) {
+    if (zone_refresh) return;
     ts.tm_mday = lv_spinbox_get_value(day);
     ts.tm_mon = lv_spinbox_get_value(month) - 1;
     ts.tm_year = lv_spinbox_get_value(year) - 1900;
@@ -377,7 +383,8 @@ static void datetime_update_cb(lv_event_t * e) {
 
     struct timespec tp;
 
-    tp.tv_sec = mktime(&ts);
+    ts.tm_isdst = -1;
+    tp.tv_sec = mktime(&ts);   /* fields are local time, system clock is UTC */
     tp.tv_nsec = 0;
 
     int res = clock_settime(CLOCK_REALTIME, &tp);
@@ -386,7 +393,7 @@ static void datetime_update_cb(lv_event_t * e) {
         LV_LOG_ERROR("Can't set system time: %s\n", strerror(errno));
         return;
     }
-
+    gmtime_r(&tp.tv_sec, &ts_utc);
 }
 
 static void datetime_set_rtc_cb(lv_event_t * e) {
@@ -398,7 +405,7 @@ static void datetime_set_rtc_cb(lv_event_t * e) {
         int rtc = open("/dev/rtc1", O_WRONLY);
 
         if (rtc > 0) {
-            int res = ioctl(rtc, RTC_SET_TIME, &ts);
+            int res = ioctl(rtc, RTC_SET_TIME, &ts_utc);
             if (res != 0)
             {
                 LV_LOG_ERROR("Can't set RTC time: %s\n", strerror(errno));
@@ -2979,8 +2986,105 @@ static uint8_t make_headphones(uint8_t row) {
     return row;
 }
 
+/* WFView server: on/off, login (edited with the on-screen keyboard), client */
+
+#define WV_USER 1
+#define WV_PASS 2
+
+static int wv_which;    /* keyboard open for WV_USER / WV_PASS */
+static struct {
+    lv_obj_t *sw;
+    lv_obj_t *user;
+    lv_obj_t *pass;
+    lv_obj_t *pill;
+    lv_obj_t *client;
+} wv;
+
+static void wv_update() {
+    const char *name = wfview_server_client();
+
+    /* The web configurator may change the settings while the page is open */
+    if (!wl_kbd) {
+        if (wfview_server_get_enabled() != lv_obj_has_state(wv.sw, LV_STATE_CHECKED)) {
+            if (wfview_server_get_enabled()) lv_obj_add_state(wv.sw, LV_STATE_CHECKED);
+            else lv_obj_clear_state(wv.sw, LV_STATE_CHECKED);
+        }
+        lv_label_set_text(lv_obj_get_child(wv.user, 0), wfview_server_user());
+        lv_label_set_text(lv_obj_get_child(wv.pass, 0), std::string(strlen(wfview_server_pass()), '*').c_str());
+    }
+
+    wl_pill(wv.pill, name ? "connected" : NULL, 0x1f4a24, 0x88ff88);
+    lv_label_set_text(wv.client, name ? name : "no client");
+    lv_obj_set_style_text_color(wv.client, lv_color_hex(name ? 0xffffff : 0x66707a), 0);
+}
+
+static void wv_power_cb(lv_event_t *e) {
+    wfview_server_set_enabled(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
+    wv_update();
+}
+
+static bool wv_kbd_ok() {
+    const char *val = textarea_window_get();
+
+    if (wv_which == WV_USER) {
+        wfview_server_set_credentials(val, wfview_server_pass());
+    } else {
+        wfview_server_set_credentials(wfview_server_user(), val);
+    }
+    return wl_kbd_close();
+}
+
+static void wv_open_cb(lv_event_t *e) {
+    wv_which = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_current_target(e));
+    wl_kbd = true;
+    lv_group_remove_all_objs(keyboard_group);
+    textarea_window_open(wv_kbd_ok, wl_kbd_close);
+    lv_textarea_set_max_length(textarea_window_text(), 15);
+    lv_textarea_set_placeholder_text(textarea_window_text(), wv_which == WV_USER ? "User" : "Password");
+    textarea_window_set(wv_which == WV_USER ? wfview_server_user() : wfview_server_pass());
+}
+
+static uint8_t make_wfview_field(uint8_t row, const char *label, int which, lv_obj_t **btn) {
+    std::string val = which == WV_USER ? wfview_server_user() : std::string(strlen(wfview_server_pass()), '*');
+
+    wl_row_label(row, label);
+
+    lv_obj_t *obj = wl_button(row, val.empty() ? "-" : val.c_str(), wv_open_cb);
+    lv_obj_set_size(obj, 150, 48);
+    lv_obj_set_user_data(obj, (void *)(intptr_t)which);
+    *btn = obj;
+    return row + 1;
+}
+
+static uint8_t make_wfview(uint8_t row) {
+    lv_obj_t *obj;
+
+    wl_row_label(row, "Server");
+    wv.sw = bt_switch_cell(row, 1, wfview_server_get_enabled(), wv_power_cb);
+    row = make_delimiter(row + 1);
+
+    row = make_wfview_field(row, "User", WV_USER, &wv.user);
+    row = make_wfview_field(row, "Password", WV_PASS, &wv.pass);
+
+    wl_row_label(row, "Port / Status");
+    obj = lv_obj_create(grid);
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(obj, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(obj, 12, 0);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_label_set_text(wl_label(obj, &sony_22, 0x99aabb, 0), "UDP 50001");
+    wv.pill = wl_pill_create(obj, 0);
+    wv.client = wl_label(obj, &sony_22, 0xffffff, 0);
+    lv_obj_set_width(wv.client, 180);
+    lv_label_set_long_mode(wv.client, LV_LABEL_LONG_DOT);
+    return row + 1;
+}
+
 static void wl_timer_cb(lv_timer_t *t) {
     wifi_update();
+    wv_update();
     if (++wl_ticks % 5 == 0) {
         bt_refresh();
     }
@@ -3197,6 +3301,68 @@ static uint8_t make_mic(uint8_t row) {
     return row + 1;
 }
 
+/* Time zone: POSIX TZ strings, applied at once (see clock_tz_set) */
+
+static const struct { const char *label; const char *posix; } zones[] = {
+    { "UTC",                              "UTC0" },
+    { "Europe/London (GMT/BST)",          "GMT0BST,M3.5.0/1,M10.5.0" },
+    { "Europe/Rome (CET/CEST)",           "CET-1CEST,M3.5.0,M10.5.0/3" },
+    { "Europe/Athens (EET/EEST)",         "EET-2EEST,M3.5.0/3,M10.5.0/4" },
+    { "Europe/Moscow (MSK)",              "MSK-3" },
+    { "America/New_York (EST/EDT)",       "EST5EDT,M3.2.0,M11.1.0" },
+    { "America/Chicago (CST/CDT)",        "CST6CDT,M3.2.0,M11.1.0" },
+    { "America/Denver (MST/MDT)",         "MST7MDT,M3.2.0,M11.1.0" },
+    { "America/Los_Angeles (PST/PDT)",    "PST8PDT,M3.2.0,M11.1.0" },
+    { "Asia/Tokyo (JST)",                 "JST-9" },
+    { "Australia/Sydney (AEST/AEDT)",     "AEST-10AEDT,M10.1.0,M4.1.0/3" },
+};
+#define ZONES_NUM   (sizeof(zones) / sizeof(zones[0]))
+
+static void zone_update_cb(lv_event_t *e) {
+    clock_tz_set(zones[lv_dropdown_get_selected(lv_event_get_target(e))].posix);
+
+    now = time(NULL);
+    localtime_r(&now, &ts);
+    zone_refresh = true;
+    lv_spinbox_set_value(day, ts.tm_mday);
+    lv_spinbox_set_value(month, ts.tm_mon + 1);
+    lv_spinbox_set_value(year, ts.tm_year + 1900);
+    lv_spinbox_set_value(hour, ts.tm_hour);
+    lv_spinbox_set_value(min, ts.tm_min);
+    lv_spinbox_set_value(sec, ts.tm_sec);
+    zone_refresh = false;
+}
+
+static uint8_t make_zone(uint8_t row) {
+    lv_obj_t    *obj;
+    std::string  options;
+    const char  *tz = getenv("TZ");
+    uint16_t     sel = 0;
+
+    wl_row_label(row, "Zone");
+
+    for (size_t i = 0; i < ZONES_NUM; i++) {
+        options += std::string(i ? "\n " : " ") + zones[i].label + " ";
+        if (tz && !strcmp(tz, zones[i].posix)) {
+            sel = i;
+        }
+    }
+
+    obj = lv_dropdown_create(grid);
+    dialog_item(&dialog, obj);
+    lv_obj_set_style_text_font(obj, &sony_22, 0);
+    lv_obj_add_style(lv_dropdown_get_list(obj), &dialog_dropdown_list_style, 0);
+    lv_obj_set_style_text_font(lv_dropdown_get_list(obj), &sony_22, 0);
+    lv_dropdown_set_options(obj, options.c_str());
+    lv_dropdown_set_symbol(obj, NULL);
+    lv_dropdown_set_selected(obj, sel);
+    lv_obj_add_event_cb(obj, zone_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_size(obj, 270, 56);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+
+    return row + 1;
+}
+
 static void make_general_page() {
     grid_delete();
     grid_create();
@@ -3218,6 +3384,7 @@ static void make_general_page() {
     row = card_begin(LV_SYMBOL_BELL, "DATE / TIME", col_datetime);
     row = make_date(row);
     row = make_time(row);
+    row = make_zone(row);
     card_end(row);
     band_end();
 
@@ -3355,10 +3522,15 @@ static void make_wireless_page() {
     row = make_bt_devices(row);
     card_end(row);
 
+    row = card_begin(LV_SYMBOL_UPLOAD, "WFVIEW SERVER");
+    row = make_wfview(row);
+    card_end(row);
+
     lv_obj_add_event_cb(grid, wl_delete_cb, LV_EVENT_DELETE, NULL);
     wl_ticks = 0;
     wl_timer = lv_timer_create(wl_timer_cb, 1000, NULL);
     wifi_update();
+    wv_update();
     bt_update_view();
     bt_refresh();
 }

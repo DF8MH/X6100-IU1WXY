@@ -205,6 +205,55 @@ def cluster_save(host, port, servers):
     return cluster_state()
 
 
+# wfview server routes
+# Same file and format as the radio GUI (src/wfview_server.c): enabled=0|1, user=, pass=
+WFVIEW_DEFAULTS = {"enabled": "0", "user": "x6100", "pass": "x6100"}
+
+
+def read_wfview_conf():
+    conf = dict(WFVIEW_DEFAULTS)
+    try:
+        with open(settings.WFVIEW_CONF, errors="replace") as f:
+            for line in f:
+                key, sep, val = line.rstrip("\r\n").partition("=")
+                if sep and key in conf:
+                    conf[key] = val
+    except OSError:
+        pass
+    return {"enabled": conf["enabled"] == "1", "user": conf["user"], "pass": conf["pass"]}
+
+
+@app.route('/wfview')
+def wfview():
+    return bottle.template('wfview')
+
+
+@app.get('/api/wfview')
+def get_wfview():
+    return read_wfview_conf()
+
+
+@app.post('/api/wfview')
+def set_wfview():
+    data = bottle.request.json or {}
+    user = str(data.get("user", "")).strip()
+    passwd = str(data.get("pass", ""))
+    # The GUI keeps 15 characters; login fields are 16 bytes
+    for val, what in ((user, "user"), (passwd, "password")):
+        if not re.fullmatch(r"[ -~]{1,15}", val) or "=" in val:
+            bottle.response.status = 400
+            return {"status": "error", "msg": f"Invalid {what}: 1-15 printable characters, no '='"}
+    try:
+        tmp = settings.WFVIEW_CONF + ".tmp"
+        with open(tmp, "w") as f:
+            f.write(f"enabled={1 if data.get('enabled') else 0}\nuser={user}\npass={passwd}\n")
+        os.rename(tmp, settings.WFVIEW_CONF)
+    except OSError as e:
+        bottle.response.status = 500
+        return {"status": "error", "msg": f"Can't save: {e}"}
+    return read_wfview_conf()
+
+
 @app.route('/cluster')
 def cluster():
     return bottle.template('cluster')

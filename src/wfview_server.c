@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -51,6 +52,7 @@ static port_t   ports[P_NUM];
 static char     user[16], pass[16];
 static uint8_t  tokrequest[2], token[4], guid[16];
 static char     client_name[16];
+static bool     enabled, logged;
 static uint64_t last_rx_ms;
 static volatile bool     streaming;
 static volatile uint32_t rx_rate;
@@ -159,6 +161,7 @@ static void send_conninfo(bool busy) {
 
 static void disconnect_all() {
     streaming = false;
+    logged    = false;
     for (int i = 0; i < P_NUM; i++)
         ports[i].connected = false;
     LV_LOG_USER("wfview: client disconnected");
@@ -178,6 +181,7 @@ static void on_login(const uint8_t *req) {
         token[i] = rand();
     memcpy(client_name, req + 0x60, 16);
     client_name[15] = 0;
+    logged = ok;
 
     token_block(pkt, sizeof(pkt), 0x01, 0x00, req);
     put32le(pkt + 0x30, ok ? 0 : 0xFEFFFFFF);
@@ -253,6 +257,11 @@ static void on_packet(int n, const uint8_t *pkt, uint16_t len, struct sockaddr_i
     uint16_t type = get16le(pkt + 4);
     uint16_t seq  = get16le(pkt + 6);
 
+    if (!enabled) {
+        if (ports[P_CTRL].connected)
+            disconnect_all();
+        return;
+    }
     if (len < 0x10 || get32le(pkt) != len)
         return;
     /* CI-V and audio only from the logged-in client's address */
@@ -377,10 +386,25 @@ static void *audio_thread(void *arg) {
     return NULL;
 }
 
+static void load_conf();
+
+/* Reload the config when the web configurator rewrites it */
+static void check_conf() {
+    static time_t mtime;
+    struct stat   st;
+
+    if (stat(CONF_FILE, &st) || st.st_mtime == mtime)
+        return;
+    mtime = st.st_mtime;
+    load_conf();
+    if (!enabled && ports[P_CTRL].connected)
+        disconnect_all();
+}
+
 static void *net_thread(void *arg) {
     struct pollfd pfd[P_NUM];
     uint8_t       buf[PKT_MAX];
-    uint64_t      next_idle = 0;
+    uint64_t      next_idle = 0, next_conf = 0;
 
     for (int i = 0; i < P_NUM; i++)
         pfd[i] = (struct pollfd){.fd = ports[i].fd, .events = POLLIN};
@@ -399,6 +423,10 @@ static void *net_thread(void *arg) {
         uint64_t now = now_ms();
         if (ports[P_CTRL].connected && now - last_rx_ms > STALE_MS)
             disconnect_all();
+        if (now >= next_conf) {
+            next_conf = now + 2000;
+            check_conf();
+        }
         if (now >= next_idle) {
             next_idle = now + 100;
             for (int i = P_CTRL; i <= P_CIV; i++)
@@ -415,6 +443,7 @@ static void load_conf() {
 
     strcpy(user, "x6100");
     strcpy(pass, "x6100");
+    enabled = false;
     if (!f)
         return;
     while (fgets(line, sizeof(line), f)) {
@@ -423,8 +452,48 @@ static void load_conf() {
             snprintf(user, sizeof(user), "%s", line + 5);
         else if (!strncmp(line, "pass=", 5))
             snprintf(pass, sizeof(pass), "%s", line + 5);
+        else if (!strncmp(line, "enabled=", 8))
+            enabled = line[8] == '1';
     }
     fclose(f);
+}
+
+static void save_conf() {
+    FILE *f = fopen(CONF_FILE, "w");
+
+    if (!f)
+        return;
+    fprintf(f, "enabled=%d\nuser=%s\npass=%s\n", enabled, user, pass);
+    fclose(f);
+}
+
+bool wfview_server_get_enabled(void) {
+    return enabled;
+}
+
+void wfview_server_set_enabled(bool on) {
+    enabled = on;
+    if (!on)
+        disconnect_all();
+    save_conf();
+}
+
+void wfview_server_set_credentials(const char *u, const char *p) {
+    snprintf(user, sizeof(user), "%s", u);
+    snprintf(pass, sizeof(pass), "%s", p);
+    save_conf();
+}
+
+const char *wfview_server_user(void) {
+    return user;
+}
+
+const char *wfview_server_pass(void) {
+    return pass;
+}
+
+const char *wfview_server_client(void) {
+    return enabled && logged && ports[P_CTRL].connected ? client_name : NULL;
 }
 
 void wfview_server_init() {

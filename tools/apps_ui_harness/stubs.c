@@ -30,6 +30,13 @@ int32_t cparam_i_get(const void *p) {
     return 1;
 }
 void cparam_i_set(void *p, int32_t v) { if (p == cfg_fg_freq) harness_fg_freq = v; }
+/* wfview server: enabled, one fake client logged in */
+bool wfview_server_get_enabled(void) { return true; }
+void wfview_server_set_enabled(bool on) { (void)on; }
+void wfview_server_set_credentials(const char *u, const char *p) { (void)u; (void)p; }
+const char *wfview_server_user(void) { return "x6100"; }
+const char *wfview_server_pass(void) { return "x6100"; }
+const char *wfview_server_client(void) { return "DESKTOP-wfview"; }
 wifi_status_t wifi_get_status(void) { return WIFI_CONNECTED; }
 
 /* Settings -> Wireless: fake networks and Bluetooth devices */
