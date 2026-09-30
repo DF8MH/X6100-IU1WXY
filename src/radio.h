@@ -55,6 +55,7 @@ uint16_t radio_change_vol(int16_t df);
 bool radio_change_spmode(int16_t df);
 
 void radio_change_mute();
+void radio_vol_refresh();
 
 void radio_set_pwr(float d);
 /* Radio only, not saved: settings keep cfg_tx_filter_low/high. */
