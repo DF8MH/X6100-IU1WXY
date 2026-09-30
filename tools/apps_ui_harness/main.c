@@ -308,7 +308,7 @@ static void topbar(void) {
     lv_obj_t *tx = tx_info_init(scr);
     freq_strip_set_label("", 0);   /* refresh: the harness subscriptions do nothing */
     for (int i = 0; i < 20; i++) {
-        meter_update(-78.2f, 0.5f);
+        meter_update(getenv("METER_DB") ? atof(getenv("METER_DB")) : -78.2f, 0.5f);
         pump(10);
     }
     buttons_load_page(&buttons_page_vol_1);
@@ -487,6 +487,12 @@ static void wireless_demo(void) {
     for (int i = 0; i < 6; i++) lv_group_focus_next(g);   /* down to the audio rows */
     pump(500);
     shot("wireless_7.ppm");
+    for (int i = 0; i < 14; i++) lv_group_focus_next(g);   /* down to WFVIEW SERVER */
+    lv_group_focus_next(g);   /* Password, last row: scroll to the end */
+    pump(300);
+    for (lv_obj_t *o = lv_group_get_focused(g); o; o = lv_obj_get_parent(o)) if (lv_obj_get_scroll_bottom(o) > 0) { lv_obj_scroll_by(o, 0, -lv_obj_get_scroll_bottom(o), LV_ANIM_OFF); break; }
+    pump(500);
+    shot("wireless_8.ppm");
     dialog_destruct();
     pump(200);
 }

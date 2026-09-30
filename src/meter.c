@@ -98,14 +98,14 @@ static void meter_draw_cb(lv_event_t * e) {
             peak_i = i;
         if (meter_db < db - 1.5f)
             continue;
-        if (db <= noise_level) {
+        if (db >= S9) {
+            /* Green at S9 fading to red at +40 */
+            uint8_t mix = (db - S9) * 255 / (S9_40 - S9);
+            rect_dsc.bg_color = lv_color_mix(lv_color_hex(0xE02020), lv_color_hex(0x20C040), mix);
+        } else if (db <= noise_level) {
             rect_dsc.bg_color = lv_color_hex(0x777777);
-        } else if (db <= -73) {
-            rect_dsc.bg_color = lv_color_hex(0xAAAAAA);
-        } else if (db <= -53) {
-            rect_dsc.bg_color = lv_color_hex(0xAAAA00);
         } else {
-            rect_dsc.bg_color = lv_color_hex(0xAA0000);
+            rect_dsc.bg_color = lv_color_hex(0xAAAAAA);
         }
         area.x1 = x1 + 30 + i * slice_w - slice_w / 2 + slice_spacing / 2;
         area.x2 = area.x1 + slice_w - slice_spacing;
