@@ -717,10 +717,10 @@ static void settings_demo(void) {
     }
     pump(500);
     shot("wf_mode_settings.ppm");
-    /* Display scrolled to the Band plan switch (third switch: spectrum, cluster spots, band plan) */
+    /* Display scrolled to the Band plan switch (MAIN SCREEN card: the 8th switch of the page) */
     pg->items[2]->press(pg->items[2]);
     pump(300);
-    for (int i = 0, n = 0; i < 40 && n < 3; i++) {
+    for (int i = 0, n = 0; i < 60 && n < 8; i++) {
         lv_group_focus_next(keyboard_group);
         if (lv_obj_check_type(lv_group_get_focused(keyboard_group), &lv_switch_class)) n++;
     }
