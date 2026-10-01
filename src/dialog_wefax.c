@@ -12,6 +12,7 @@
 #include "styles.h"
 #include "radio.h"
 #include "events.h"
+#include "app_frame.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -29,7 +30,7 @@
  * LCD preview dimensions.
  */
 #define PREVIEW_WIDTH       750
-#define PREVIEW_HEIGHT      (DIALOG_H - 30)
+#define PREVIEW_HEIGHT      (APP_FRAME_BODY_H - 2)    /* the body of the common app look */
 #define PREVIEW_HEIGHT_MAX  (DIALOG_H_MAX - 30)   /* static buffers */
 
 /*
@@ -235,6 +236,7 @@ static wefax_zoom_t zoom_mode = WEFAX_ZOOM_SMALL;
 static void render_zoomed_fax(void);
 static void rerender_preview(void);
 static void apply_zoom_geometry(void);
+static app_frame_t frame;      /* header and status line, BIG and FULL */
 static lv_timer_t *preview_timer = NULL;
 static lv_timer_t *test_timer = NULL;
 static lv_timer_t *save_fax_timer = NULL;
@@ -366,7 +368,7 @@ static button_data_t btn_tilt = {
 
 static button_data_t btn_zoom = {
     .type = BTN_TEXT,
-    .label = "View\nSmall",
+    .label = "View\nBig",
     .press = zoom_cb
 };
 
@@ -943,7 +945,8 @@ static const freq_list_item_t wefax_freqs[] = {
 static void construct_cb(lv_obj_t *parent)
 {
     app_parent = parent;
-    zoom_mode = WEFAX_ZOOM_SMALL;
+    zoom_mode = WEFAX_ZOOM_BIG;     /* the common app look; Small shows the waterfall */
+    btn_zoom.label = "View\nBig";
     btn_zoom.label = "View\nSmall";
 
     align_mfk_active = false;
@@ -1085,6 +1088,9 @@ static void construct_cb(lv_obj_t *parent)
     lv_obj_clear_flag(fax_frame, LV_OBJ_FLAG_CLICKABLE);
 
 
+    app_frame_create(&frame, dialog.obj);
+    lv_label_set_text(frame.status, "MFK: align   Freq.: stations   View: Small shows the waterfall");
+
     /*
      * Give the WEFAX dialog an LVGL key target for MFK events.
      */
@@ -1159,6 +1165,7 @@ static void destruct_cb(void)
     fax_viewport = NULL;
     small_top_mask = NULL;
     fax_frame = NULL;
+    frame.head_left = NULL;     /* deleted with the dialog */
 
 
     if (decoder) {
@@ -1222,6 +1229,15 @@ static void apply_zoom_geometry(void)
         lv_obj_set_size(fax_viewport, PREVIEW_WIDTH, 152);
         lv_obj_align(fax_viewport, LV_ALIGN_CENTER, 0, 0);
         lv_obj_clear_flag(fax_viewport, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_opa(fax_viewport, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_border_width(fax_viewport, 0, LV_PART_MAIN);
+
+        /* The panel of the old look: the waterfall stays visible above */
+        lv_obj_set_style_bg_img_src(dialog.obj, NULL, LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(dialog.obj, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_add_flag(frame.head_left, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(frame.head_right, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(frame.status, LV_OBJ_FLAG_HIDDEN);
 
         lv_obj_set_size(fax_canvas, PREVIEW_WIDTH, PREVIEW_HEIGHT);
         lv_obj_align(fax_canvas, LV_ALIGN_BOTTOM_MID, 0, 0);
@@ -1236,18 +1252,22 @@ static void apply_zoom_geometry(void)
         lv_obj_set_size(dialog.obj, 795, DIALOG_H);
         lv_obj_align(dialog.obj, LV_ALIGN_TOP_MID, 0, DIALOG_Y);
 
-        lv_obj_set_size(fax_viewport, 795, DIALOG_H);
-        lv_obj_center(fax_viewport);
+        /* Common app look: the dialog's own background, header, the fax
+         * in the black body, status line */
+        lv_obj_remove_local_style_prop(dialog.obj, LV_STYLE_BG_IMG_SRC, LV_PART_MAIN);
+        lv_obj_remove_local_style_prop(dialog.obj, LV_STYLE_BG_OPA, LV_PART_MAIN);
+        lv_obj_clear_flag(frame.head_left, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(frame.head_right, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(frame.status, LV_OBJ_FLAG_HIDDEN);
+
+        app_frame_body(fax_viewport);
         lv_obj_clear_flag(fax_viewport, LV_OBJ_FLAG_HIDDEN);
 
         lv_obj_set_size(fax_canvas, PREVIEW_WIDTH, PREVIEW_HEIGHT);
         lv_obj_align(fax_canvas, LV_ALIGN_CENTER, 0, 0);
 
         if (fax_frame) {
-            lv_obj_set_size(fax_frame, 795, DIALOG_H);
-            lv_obj_center(fax_frame);
-            lv_obj_clear_flag(fax_frame, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_move_background(fax_frame);
+            lv_obj_add_flag(fax_frame, LV_OBJ_FLAG_HIDDEN);
         }
     }
 }
@@ -2668,7 +2688,7 @@ static void fax_browser_build(void)
      * entering editor mode only appeared to fix it because
      * apply_zoom_geometry() made the frame visible again.
      */
-    if (fax_frame) {
+    if (fax_frame && zoom_mode == WEFAX_ZOOM_SMALL) {   /* BIG/FULL: the common look has no frame */
         lv_obj_clear_flag(fax_frame, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_background(fax_frame);
     }
@@ -2686,9 +2706,9 @@ static void fax_browser_build(void)
         lv_obj_set_size(fax_browser_table, PREVIEW_WIDTH, 142);
         lv_obj_align(fax_browser_table, LV_ALIGN_TOP_MID, 0, 20);
     } else {
-        /* Preserve the existing BIG/FULL browser geometry exactly. */
-        lv_obj_set_size(fax_browser_table, PREVIEW_WIDTH, 270);
-        lv_obj_align(fax_browser_table, LV_ALIGN_TOP_MID, 0, 40);
+        /* BIG/FULL: inside the body of the common app look */
+        lv_obj_set_size(fax_browser_table, PREVIEW_WIDTH, APP_FRAME_BODY_H - 16);
+        lv_obj_set_pos(fax_browser_table, APP_FRAME_X + (APP_FRAME_W - PREVIEW_WIDTH) / 2, APP_FRAME_BODY_Y + 8);
     }
 
     lv_table_set_col_cnt(fax_browser_table, 1);
@@ -3618,10 +3638,37 @@ static void row_cb(
  *
  * Runs in GUI/LVGL context.
  */
+/* Station and frequency on the left, receiver state on the right */
+static void header_update(void)
+{
+    char         l[64], r[48];
+    int32_t      f = cparam_i_get(cfg_fg_freq) + WEFAX_CENTER_HZ;   /* USB */
+    const char  *name = "WeFax";
+
+    for (size_t i = 0; i < sizeof(wefax_freqs) / sizeof(wefax_freqs[0]); i++) {
+        if (!wefax_freqs[i].group && wefax_freqs[i].freq_hz == f)
+            name = wefax_freqs[i].name;
+    }
+    snprintf(l, sizeof(l), "%s   %.1f kHz", name, f / 1000.0);
+    if (test_running) {
+        snprintf(r, sizeof(r), "#ffd24a Test WAV#");
+    } else {
+        snprintf(r, sizeof(r), "%s", decoder && wefax_decoder_get_mode(decoder) == WEFAX_MODE_CONT ? "RX Cont" : "RX Auto");
+    }
+    if (strcmp(l, lv_label_get_text(frame.head_left)))
+        lv_label_set_text(frame.head_left, l);
+    if (strcmp(r, lv_label_get_text(frame.head_right)))
+        lv_label_set_text(frame.head_right, r);
+}
+
 static void update_preview_cb(
     lv_timer_t *timer)
 {
     (void)timer;
+
+    if (frame.head_left) {
+        header_update();
+    }
 
     /* Consume asynchronous PNG completion in LVGL context. */
     check_async_save_completion();

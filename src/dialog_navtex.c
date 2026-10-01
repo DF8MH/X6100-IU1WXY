@@ -12,6 +12,9 @@
 #include "mfk.h"
 #include "events.h"
 #include "freq_list.h"
+#include "app_frame.h"
+#include "cfg/cfg_api.h"
+#include "dsp.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -48,6 +51,7 @@ static navtex_decoder_t *decoder = NULL;
 static lv_obj_t *scroll = NULL;
 static lv_obj_t *label = NULL;
 static lv_timer_t *ui_timer = NULL;
+static app_frame_t frame;
 
 static pthread_mutex_t text_mutex = PTHREAD_MUTEX_INITIALIZER;
 static char pending[NAVTEX_PENDING_MAX];
@@ -375,9 +379,31 @@ static void stop_test(void)
 }
 
 
+/* Station and frequency on the left, receiver state on the right */
+static void header_update(void)
+{
+    char         l[64], r[32];
+    int32_t      f = cparam_i_get(cfg_fg_freq) + 1000;     /* USB, decoder centred on 1000 Hz */
+    const char  *name = "NAVTEX";
+
+    for (size_t i = 0; i < sizeof(navtex_freqs) / sizeof(navtex_freqs[0]); i++) {
+        if (!navtex_freqs[i].group && navtex_freqs[i].freq_hz == f)
+            name = navtex_freqs[i].name;
+    }
+    snprintf(l, sizeof(l), "%s   %.1f kHz", name, f / 1000.0);
+    snprintf(r, sizeof(r), "%s", test_mode ? "#ffd24a Test WAV#" : "RX");
+    if (strcmp(l, lv_label_get_text(frame.head_left)))
+        lv_label_set_text(frame.head_left, l);
+    if (strcmp(r, lv_label_get_text(frame.head_right)))
+        lv_label_set_text(frame.head_right, r);
+}
+
 static void ui_timer_cb(lv_timer_t *timer)
 {
     (void)timer;
+
+    if (scroll)
+        header_update();
 
     /* The worker never touches LVGL or destroys the decoder.  When a test
      * reaches EOF, finish the thread here in the UI context and return to
@@ -429,20 +455,19 @@ static void construct_cb(lv_obj_t *parent)
 
     reset_decoder();
 
-    /*
-     * Use exactly the same visual container as the built-in RTTY/CW panel.
-     * panel_style supplies the same geometry, panel image for the selected
-     * theme, padding and sony_24 font used by panel.cpp.
-     *
-     * Unlike the RTTY panel this object remains vertically scrollable,
-     * because NAVTEX keeps a much longer text history.
-     */
-    scroll = lv_obj_create(parent);
+    /* Full screen in the common app look; the main waterfall is hidden */
+    dialog.obj = dialog_init(parent);
+    dsp_set_waterfall_enabled(false);
+    dsp_set_spectrum_enabled(false);
+    app_frame_create(&frame, dialog.obj);
+    lv_label_set_text(frame.status, "SITOR-B 100 Bd / 170 Hz   MFK: scroll   Freq.: stations");
+
+    scroll = lv_obj_create(dialog.obj);
     lv_obj_remove_style_all(scroll);
-    lv_obj_add_style(scroll, &panel_style, 0);
+    app_frame_body(scroll);
+    lv_obj_set_style_pad_all(scroll, 8, 0);
     lv_obj_set_scroll_dir(scroll, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_AUTO);
-    dialog.obj = scroll;
 
     label = lv_label_create(scroll);
     /* panel_style has just been attached and LVGL may not have run a
@@ -455,7 +480,7 @@ static void construct_cb(lv_obj_t *parent)
     lv_obj_set_style_bg_opa(label, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(label, 0, 0);
     lv_obj_set_style_pad_all(label, 0, 0);
-    lv_obj_set_style_text_font(label, &sony_24, 0);
+    lv_obj_set_style_text_font(label, &sony_22, 0);
     lv_obj_set_style_text_color(label, lv_color_white(), 0);
     lv_label_set_text(label, "NAVTEX ready - 100 baud / 170 Hz shift\n");
 
@@ -468,6 +493,7 @@ static void construct_cb(lv_obj_t *parent)
     lv_group_set_editing(keyboard_group, true);
 
     ui_timer = lv_timer_create(ui_timer_cb, NAVTEX_UI_TIMER_MS, NULL);
+    header_update();
 }
 
 static void destruct_cb(void)
@@ -493,6 +519,8 @@ static void destruct_cb(void)
 
     label = NULL;
     scroll = NULL;
+    dsp_set_waterfall_enabled(true);
+    dsp_set_spectrum_enabled(true);
 }
 
 static void audio_cb(unsigned int n, float *samples)

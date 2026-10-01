@@ -17,6 +17,7 @@
 
 #include "dialog_wspr.h"
 
+#include "app_frame.h"
 #include "audio.h"
 #include "buttons.h"
 #include "cfg/cfg_api.h"
@@ -56,16 +57,8 @@
 #define PREPARE_S       116.0   /* next cycle chosen and synthesised */
 #define MAX_PWR         TX_PLAYER_MAX_PWR_W
 
-#define WIDTH           771
-#define HEADER_H        34
-#define BAR_Y           (10 + HEADER_H)
-#define TABLE_Y         (BAR_Y + 10)
-#define STATUS_H        30
-#define TABLE_H         (DIALOG_H - TABLE_Y - STATUS_H - 8)
 #define MAX_ROWS        60
 #define MAX_SPOTS       32
-#define COLOR_HEAD      0x90f0d0
-#define COLOR_DIM       0x90a0b0
 
 typedef enum {
     ST_WAIT,        /* opened mid-cycle: waits for the next one */
@@ -129,7 +122,8 @@ static dialog_t dialog = {
 
 dialog_t *dialog_wspr = &dialog;
 
-static lv_obj_t   *head_left, *head_right, *bar, *table, *status;
+static app_frame_t frame;
+static lv_obj_t   *table;
 static lv_timer_t *timer;
 
 static row_t       rows[MAX_ROWS];
@@ -420,23 +414,21 @@ static void timer_cb(lv_timer_t *t) {
     int    st  = atomic_load(&state);
     float  pwr = fminf(param_f_get(cfg_pwr), MAX_PWR);
 
-    lv_label_set_text_fmt(head_left, "%s   %.4f MHz", cfg_digital_label_get(), cparam_i_get(cfg_fg_freq) / 1e6);
+    lv_label_set_text_fmt(frame.head_left, "%s   %.4f MHz", cfg_digital_label_get(), cparam_i_get(cfg_fg_freq) / 1e6);
 
     switch (st) {
         case ST_RX:
-            lv_label_set_text_fmt(head_right, "RX  %d:%02d", (int)s / 60, (int)s % 60);
+            lv_label_set_text_fmt(frame.head_right, "RX  %d:%02d", (int)s / 60, (int)s % 60);
             break;
         case ST_TX:
-            lv_label_set_text_fmt(head_right, "#ff6060 TX#  %d:%02d", (int)s / 60, (int)s % 60);
+            lv_label_set_text_fmt(frame.head_right, "#ff6060 TX#  %d:%02d", (int)s / 60, (int)s % 60);
             break;
         default:
-            lv_label_set_text_fmt(head_right, "%s  %d:%02d", atomic_load(&decoding) ? "Decoding" : "Wait",
+            lv_label_set_text_fmt(frame.head_right, "%s  %d:%02d", atomic_load(&decoding) ? "Decoding" : "Wait",
                                   (int)(CYCLE_S - s) / 60, (int)(CYCLE_S - s) % 60);
             break;
     }
-    lv_bar_set_value(bar, (int32_t)(s * 1000 / CYCLE_S), LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(st == ST_TX ? 0xff4040 : st == ST_RX ? 0x40c060 : 0x607080),
-                              LV_PART_INDICATOR);
+    app_frame_bar(&frame, (int)(s * 1000 / CYCLE_S), st == ST_TX ? 0xff4040 : st == ST_RX ? 0x40c060 : 0x607080);
 
     char up[48] = "Upload off";
 
@@ -455,7 +447,7 @@ static void timer_cb(lv_timer_t *t) {
     if (last_n >= 0) {
         snprintf(last, sizeof(last), "Last: %d spot%s (%.1f s)   ", last_n, last_n == 1 ? "" : "s", last_secs);
     }
-    lv_label_set_text_fmt(status, "%sTX %d%% at %d Hz, %.1f W = %d dBm   %s", last, param_i_get(cfg_wspr_tx_pct),
+    lv_label_set_text_fmt(frame.status, "%sTX %d%% at %d Hz, %.1f W = %d dBm   %s", last, param_i_get(cfg_wspr_tx_pct),
                           param_i_get(cfg_wspr_tx_freq), pwr, wspr_dbm(pwr), up);
 }
 
@@ -564,16 +556,6 @@ static void key_cb(lv_event_t *e) {
     }
 }
 
-static lv_obj_t *make_label(const lv_font_t *font, uint32_t color) {
-    lv_obj_t *l = lv_label_create(dialog.obj);
-
-    lv_obj_set_style_text_font(l, font, 0);
-    lv_obj_set_style_text_color(l, lv_color_hex(color), 0);
-    lv_label_set_recolor(l, true);
-    lv_label_set_long_mode(l, LV_LABEL_LONG_CLIP);
-    return l;
-}
-
 static void construct_cb(lv_obj_t *parent) {
     static const char      *heads[] = {"UTC", "dB", "DT", "Hz", "Dr", "Call", "Grid", "dBm", "km"};
     static const lv_coord_t widths[] = {75, 55, 60, 90, 50, 150, 95, 70, 120};
@@ -596,31 +578,11 @@ static void construct_cb(lv_obj_t *parent) {
     subject_i_set(tx_next_subj, false);
     buttons_load_page(&btn_page_1);
 
-    head_left = make_label(&sony_22, COLOR_HEAD);
-    lv_obj_set_pos(head_left, 18, 10);
-    lv_obj_set_width(head_left, 480);
-    head_right = make_label(&sony_22, COLOR_HEAD);
-    lv_obj_set_width(head_right, 260);
-    lv_obj_set_style_text_align(head_right, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(head_right, 796 - 18 - 260, 10);
-
-    bar = lv_bar_create(dialog.obj);
-    lv_obj_set_size(bar, WIDTH, 4);
-    lv_obj_set_pos(bar, 13, BAR_Y);
-    lv_bar_set_range(bar, 0, 1000);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(0x304050), LV_PART_MAIN);
-    lv_obj_set_style_radius(bar, 2, LV_PART_MAIN);
-    lv_obj_set_style_radius(bar, 2, LV_PART_INDICATOR);
+    app_frame_create(&frame, dialog.obj);
 
     table = lv_table_create(dialog.obj);
     lv_obj_remove_style(table, NULL, LV_STATE_ANY | LV_PART_MAIN);
-    lv_obj_set_size(table, WIDTH, TABLE_H);
-    lv_obj_set_pos(table, 13, TABLE_Y);
-    lv_obj_set_style_bg_opa(table, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(table, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_border_width(table, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(table, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_border_opa(table, 96, LV_PART_MAIN);
+    app_frame_body(table);
     lv_obj_set_style_border_width(table, 0, LV_PART_ITEMS);
     lv_obj_set_style_bg_opa(table, LV_OPA_TRANSP, LV_PART_ITEMS);
     lv_obj_set_style_text_font(table, &sony_22, LV_PART_ITEMS);
@@ -634,9 +596,6 @@ static void construct_cb(lv_obj_t *parent) {
     }
     table_fill();
 
-    status = make_label(&sony_20, COLOR_DIM);
-    lv_obj_set_pos(status, 18, DIALOG_H - STATUS_H - 4);
-    lv_obj_set_width(status, 760);
 
     lv_group_add_obj(keyboard_group, dialog.obj);
     lv_obj_add_event_cb(dialog.obj, key_cb, LV_EVENT_KEY, NULL);

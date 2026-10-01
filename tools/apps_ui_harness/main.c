@@ -213,13 +213,13 @@ static void app(const char *name, dialog_t *d, int pages) {
 extern int32_t harness_fg_freq;
 
 /* The frequency bookmarks of an app: the Freq. button is the 2nd on page 1. */
-static void bookmarks(const char *name, dialog_t *d, int32_t freq) {
+static void bookmarks(const char *name, dialog_t *d, int32_t freq, int btn) {
     char p[64];
     harness_fg_freq = freq;
     dialog_construct(d, lv_scr_act());
     pump(300);
     buttons_page_t *pg = buttons_get_cur_page();
-    pg->items[1]->press(pg->items[1]);
+    pg->items[btn]->press(pg->items[btn]);   /* Freq. */
     pump(100);
     snprintf(p, sizeof p, "%s_freq.ppm", name);
     shot(p);
@@ -1022,8 +1022,9 @@ int main(int argc, char **argv) {
     if (!only || !strcmp(only, "wireless")) wireless_demo();
     if (only && !strcmp(only, "settings_nav")) settings_nav();
     if (!only || !strcmp(only, "bookmarks")) {
-        bookmarks("navtex", dialog_navtex, 517000);
-        bookmarks("wefax", dialog_wefax, 7878500);
+        bookmarks("navtex", dialog_navtex, 517000, 1);
+        bookmarks("wefax", dialog_wefax, 7878500, 1);
+        bookmarks("sstv", dialog_sstv, 14230000, 4);
     }
     return 0;
 }

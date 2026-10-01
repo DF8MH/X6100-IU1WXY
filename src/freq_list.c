@@ -39,7 +39,7 @@ static int32_t                 audio_hz;
 static void                    (*on_close)(void);
 
 static int32_t dial_of(int i) {
-    return items[i].freq_hz - audio_hz;
+    return items[i].lsb ? items[i].freq_hz + audio_hz : items[i].freq_hz - audio_hz;
 }
 
 static bool is_current(int i) {
@@ -64,7 +64,7 @@ static void step(int dir) {
 static void tune(void) {
     if (sel < 0 || items[sel].group) return;
     main_screen_set_freq(dial_of(sel));
-    cparam_i_set(cfg_cur_mode, x6100_mode_usb);
+    cparam_i_set(cfg_cur_mode, items[sel].lsb ? x6100_mode_lsb : x6100_mode_usb);
     /* The station stays named in the frequency strip while decoding */
     char label[64];
     if (items[sel].note)

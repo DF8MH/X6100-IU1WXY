@@ -17,6 +17,7 @@ typedef struct {
     int32_t     freq_hz;
     const char *name;
     const char *note;
+    bool        lsb;   /* tuned in LSB (SSTV below 10 MHz), else USB */
 } freq_list_item_t;
 
 /* Opens the list on parent. audio_hz is the decoder's audio centre: the

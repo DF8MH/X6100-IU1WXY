@@ -40,7 +40,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     cw_tune_ui.c adif.c qso_log.c scheduler.cpp
     dialog_wifi.c wifi.cpp btaudio.cpp controls.cpp usb_devices.cpp
     knobs.cpp
-    dialog_wspr.c
+    dialog_wspr.c app_frame.c
 )
 
 add_subdirectory(fonts)

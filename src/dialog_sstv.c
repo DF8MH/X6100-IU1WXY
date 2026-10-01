@@ -12,6 +12,9 @@
 #include "sstv/encoder.h"
 #include "radio.h"
 #include "events.h"
+#include "app_frame.h"
+#include "freq_list.h"
+#include "cfg/cfg_api.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -29,18 +32,18 @@
 #include "audio.h"
 
 /* The image fills the dialog height, 4:3 */
-#define SSTV_CANVAS_H (DIALOG_H - 20)
+#define SSTV_CANVAS_H (APP_FRAME_BODY_H - 2)   /* the body of the common app look */
 #define SSTV_CANVAS_W (SSTV_CANVAS_H * 4 / 3)
 #define SSTV_TEST_WAV "/mnt/sstv.wav"
 #define SSTV_DEBUG_WAV "/mnt/sstv-debug.wav"
 #define SSTV_SAVE_DIR "/mnt/sstv"
 #define SSTV_IMAGE_H SSTV_CANVAS_H
 #define SSTV_IMAGE_W SSTV_CANVAS_W
-#define SSTV_IMAGE_X 10
-#define SSTV_IMAGE_Y 10
+#define SSTV_IMAGE_X (APP_FRAME_X + 1)
+#define SSTV_IMAGE_Y (APP_FRAME_BODY_Y + 1)
 #define SSTV_BROWSER_MAX_FILES 128
 #define SSTV_BROWSER_W 710
-#define SSTV_BROWSER_H 320
+#define SSTV_BROWSER_H (APP_FRAME_BODY_H - 4)
 /* Image position is calculated from the mode detected by VIS. */
 
 static void construct_cb(lv_obj_t *parent);
@@ -81,7 +84,25 @@ static void set_receiver_ui_decoding(const char *mode_name);
 static lv_obj_t *sstv_frame = NULL;
 static lv_obj_t *sstv_canvas = NULL;
 static lv_obj_t *status_label = NULL;
-static lv_obj_t *progress_bar = NULL;
+static lv_obj_t *progress_bar = NULL;  /* the bar of the common app look */
+static app_frame_t frame;
+
+/* SSTV calling frequencies; LSB below 10 MHz as usual on the air */
+static const freq_list_item_t sstv_freqs[] = {
+    { .group = "LSB" },
+    { .freq_hz = 3735000,  .name = "SSTV 80m", .note = "Europe", .lsb = true },
+    { .freq_hz = 3845000,  .name = "SSTV 80m", .note = "Americas", .lsb = true },
+    { .freq_hz = 7165000,  .name = "SSTV 40m", .note = "Europe", .lsb = true },
+    { .freq_hz = 7171000,  .name = "SSTV 40m", .note = "Americas", .lsb = true },
+    { .group = "USB" },
+    { .freq_hz = 14230000, .name = "SSTV 20m", .note = "calling" },
+    { .freq_hz = 14233000, .name = "SSTV 20m" },
+    { .freq_hz = 18160000, .name = "SSTV 17m" },
+    { .freq_hz = 21340000, .name = "SSTV 15m" },
+    { .freq_hz = 24975000, .name = "SSTV 12m" },
+    { .freq_hz = 28680000, .name = "SSTV 10m" },
+    { .freq_hz = 50510000, .name = "SSTV 6m" },
+};
 static volatile bool saved_overlay_pending = false;
 static char saved_overlay_name[96];
 static lv_color_t sstv_buffer[((DIALOG_H_MAX - 20) * 4 / 3) * (DIALOG_H_MAX - 20)];
@@ -229,6 +250,37 @@ static void update_rx_controls(void)
 static void set_status(const char *text)
 {
     if (status_label) lv_label_set_text(status_label, text ? text : "");
+
+    /* The first line, without the full stop, as the state in the header */
+    if (frame.head_right && text) {
+        char   state[48];
+        size_t n = strcspn(text, "\n");
+
+        snprintf(state, sizeof(state), "%.*s", (int)n, text);
+        n = strlen(state);
+        if (n && state[n - 1] == '.') state[n - 1] = 0;
+        lv_label_set_text(frame.head_right, state);
+    }
+}
+
+static void header_update(void)
+{
+    int32_t     f = cparam_i_get(cfg_fg_freq);
+    char        l[64];
+
+    snprintf(l, sizeof(l), "SSTV   %.3f MHz", f / 1e6);
+    if (strcmp(l, lv_label_get_text(frame.head_left)))
+        lv_label_set_text(frame.head_left, l);
+}
+
+static void freq_cb(button_data_t *data)
+{
+    (void)data;
+    if (freq_list_is_open())
+        freq_list_close();
+    else
+        freq_list_open(dialog_sstv->obj, "SSTV - calling frequencies", sstv_freqs,
+                       sizeof(sstv_freqs) / sizeof(sstv_freqs[0]), 0, NULL);
 }
 
 static void set_receiver_ui_stopped(void)
@@ -410,13 +462,14 @@ static button_data_t btn_browser = { .type = BTN_TEXT, .label = "SSTV\nBrowser",
 static button_data_t btn_delete_picture = { .type = BTN_TEXT, .label = "Delete\npicture", .press = delete_picture_cb };
 static button_data_t btn_close = { .type = BTN_TEXT, .label = "Close", .press = close_cb };
 static button_data_t btn_test_tx = { .type = BTN_TEXT, .label = "Test TX", .press = test_tx_cb };
+static button_data_t btn_freq = { .type = BTN_TEXT, .label = "Freq.", .press = freq_cb };
 static button_data_t btn_test = { .type = BTN_TEXT, .label = "Test RX", .press = test_cb };
 
 static buttons_page_t btn_page_1 = {
-    .items = { &btn_sstv_page_1, &btn_start, &btn_cont_start, &btn_cont_mode, &btn_close }
+    .items = { &btn_sstv_page_1, &btn_start, &btn_cont_start, &btn_cont_mode, &btn_freq }
 };
 static buttons_page_t btn_page_2 = {
-    .items = { &btn_sstv_page_2, &btn_browser, &btn_delete_picture, &btn_test_tx, &btn_test }
+    .items = { &btn_sstv_page_2, &btn_browser, &btn_delete_picture, &btn_close, &btn_test }
 };
 
 static dialog_t dialog = {
@@ -436,10 +489,15 @@ static void construct_cb(lv_obj_t *parent)
     dialog.obj = dialog_init(parent);
     lv_obj_set_size(dialog.obj, 795, DIALOG_H);   /* at DIALOG_Y (dialog_style) */
 
-    /* Same BIG geometry/background treatment as WEFAX. */
-    lv_obj_set_style_bg_img_src(dialog.obj, NULL, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(dialog.obj, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(dialog.obj, 0, LV_PART_MAIN);
+    /* Common app look: header, picture and state in the black body, status line */
+    app_frame_create(&frame, dialog.obj);
+    lv_label_set_text(frame.status, "Freq.: calling frequencies   Pictures in /mnt/sstv");
+    header_update();
+
+    lv_obj_t *body = lv_obj_create(dialog.obj);
+    lv_obj_remove_style_all(body);
+    app_frame_body(body);
+    lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     sstv_canvas = lv_canvas_create(dialog.obj);
     lv_canvas_set_buffer(
@@ -452,24 +510,9 @@ static void construct_cb(lv_obj_t *parent)
     lv_obj_set_size(sstv_canvas, SSTV_CANVAS_W, SSTV_CANVAS_H);
     lv_canvas_fill_bg(sstv_canvas, lv_color_hex(0x182028), LV_OPA_COVER);
 
-    /* Pixel-identical frame setup copied from WEFAX BIG. */
-    sstv_frame = lv_obj_create(dialog.obj);
-    lv_obj_remove_style_all(sstv_frame);
-    lv_obj_add_style(sstv_frame, &panel_style, 0);
-    lv_obj_set_style_bg_img_src(sstv_frame, NULL, LV_PART_MAIN);
-    lv_obj_set_size(sstv_frame, 795, DIALOG_H);
-    lv_obj_center(sstv_frame);
-    lv_obj_set_style_bg_color(sstv_frame, lv_color_hex(0x182028), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(sstv_frame, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(sstv_frame, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(sstv_frame, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_border_opa(sstv_frame, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_radius(sstv_frame, 8, LV_PART_MAIN);
-    lv_obj_clear_flag(sstv_frame, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(sstv_frame, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_move_background(sstv_frame);
+    lv_obj_move_background(body);
 
-    /* White image sheet: maximum 4:3 SSTV area, 10 px from left/top/bottom. */
+    /* White image sheet: maximum 4:3 SSTV area, at the left of the body */
     lv_obj_align(sstv_canvas, LV_ALIGN_TOP_LEFT, SSTV_IMAGE_X, SSTV_IMAGE_Y);
     lv_obj_set_size(sstv_canvas, SSTV_IMAGE_W, SSTV_IMAGE_H);
     lv_canvas_fill_bg(sstv_canvas, lv_color_white(), LV_OPA_COVER);
@@ -477,15 +520,13 @@ static void construct_cb(lv_obj_t *parent)
     status_label = lv_label_create(dialog.obj);
     lv_label_set_text(status_label, "Stand by.\nPress Start Auto RX to start Autodecoder.\nPress Start Manual RX to start Manual decoder, press Mode button to cycle all available modes for the Manual decoder.");
     lv_obj_set_style_text_color(status_label, lv_color_white(), 0);
-    lv_obj_set_style_text_font(status_label, &sony_28, 0);
-    lv_obj_set_width(status_label, 300);
-    lv_obj_set_pos(status_label, 475, 105);
+    lv_obj_set_style_text_font(status_label, &sony_22, 0);
+    lv_obj_set_width(status_label, APP_FRAME_W - SSTV_IMAGE_W - 30);
+    lv_obj_set_pos(status_label, SSTV_IMAGE_X + SSTV_IMAGE_W + 15, APP_FRAME_BODY_Y + 10);
     lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_LEFT, 0);
 
-    progress_bar = lv_bar_create(dialog.obj);
-    lv_obj_set_size(progress_bar, 250, 16);
-    lv_obj_set_pos(progress_bar, 500, 155);
-    lv_bar_set_range(progress_bar, 0, 1000);
+    progress_bar = frame.bar;
+    lv_obj_set_style_bg_color(progress_bar, lv_color_hex(0x40c060), LV_PART_INDICATOR);
     lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
     lv_obj_add_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
     set_receiver_ui_stopped();
@@ -589,6 +630,8 @@ static void destruct_cb(void)
     sstv_frame = NULL;
     status_label = NULL;
     progress_bar = NULL;
+    frame.head_left = frame.head_right = NULL;  /* deleted with the dialog */
+    freq_list_close();
 }
 
 static void *test_thread_cb(void *arg)
@@ -713,6 +756,8 @@ static void *cont_decode_thread_cb(void *arg)
 
 static void ui_timer_cb(lv_timer_t *timer)
 {
+    if (frame.head_left)
+        header_update();
     (void)timer;
 
     /* audio_cb() runs outside the LVGL/UI context.  It only requests the
@@ -1279,7 +1324,7 @@ static bool sstv_browser_open_png(const char *filename)
                              SSTV_BROWSER_W, SSTV_BROWSER_H,
                              LV_IMG_CF_TRUE_COLOR);
         lv_obj_set_size(sstv_browser_canvas, SSTV_BROWSER_W, SSTV_BROWSER_H);
-        lv_obj_align(sstv_browser_canvas, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_set_pos(sstv_browser_canvas, APP_FRAME_X + (APP_FRAME_W - SSTV_BROWSER_W) / 2, APP_FRAME_BODY_Y + 2);
         lv_obj_add_event_cb(sstv_browser_canvas,
                             sstv_browser_preview_pressed_cb,
                             LV_EVENT_PRESSED, NULL);
@@ -1399,9 +1444,9 @@ static void sstv_browser_build(void)
     sstv_browser_table = lv_table_create(dialog.obj);
     lv_obj_set_style_border_width(sstv_browser_table, 0, LV_PART_MAIN);
 
-    /* Pixel-for-pixel WEFAX BIG browser geometry. */
-    lv_obj_set_size(sstv_browser_table, 700, 270);
-    lv_obj_align(sstv_browser_table, LV_ALIGN_TOP_MID, 0, 40);
+    /* Inside the body of the common app look, like the WEFAX browser */
+    lv_obj_set_size(sstv_browser_table, 700, APP_FRAME_BODY_H - 16);
+    lv_obj_set_pos(sstv_browser_table, APP_FRAME_X + (APP_FRAME_W - 700) / 2, APP_FRAME_BODY_Y + 8);
     lv_table_set_col_cnt(sstv_browser_table, 1);
     lv_table_set_col_width(sstv_browser_table, 0, 690);
 
