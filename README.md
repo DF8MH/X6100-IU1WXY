@@ -253,9 +253,9 @@ fill the screen in the same look as WSPR and **Freq.** opens the list to
 tune from (the MFK chooses, a press tunes). The header shows the station or
 frequency and the receiver state; leaving the app gives the VFO back.
 
-- **NavTex**: NAVTEX 518 / 490 kHz, NAVTEX HF 4209.5 kHz and the HF MSI
-  frequencies; the MFK scrolls the text. The radio tunes down to 500 kHz, so
-  490 kHz is out of its range.
+- **NavTex**: NAVTEX 518 kHz, NAVTEX HF 4209.5 kHz and the HF MSI
+  frequencies; the MFK scrolls the text. (490 kHz is below the radio's
+  500 kHz limit, so it is not in the list.)
 - **WeFax**: DWD, Northwood and Athens stations. **View** (page 2) chooses
   Big (default), Full (the whole fax) or Small, the old low panel that keeps
   the main waterfall visible above it.

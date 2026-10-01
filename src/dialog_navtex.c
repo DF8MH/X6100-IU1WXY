@@ -117,7 +117,6 @@ dialog_t *dialog_navtex = &dialog;
 static const freq_list_item_t navtex_freqs[] = {
     { .group = "NAVTEX" },
     { .freq_hz = 518000,   .name = "NAVTEX",    .note = "International, English" },
-    { .freq_hz = 490000,   .name = "NAVTEX",    .note = "National language" },
     { .freq_hz = 4209500,  .name = "NAVTEX HF", .note = "Tropical areas" },
     { .group = "HF MSI (NBDP)" },
     { .freq_hz = 8416500,  .name = "HF MSI" },
