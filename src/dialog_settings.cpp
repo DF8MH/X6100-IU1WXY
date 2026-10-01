@@ -779,20 +779,22 @@ static action_items_t long_action_items[] = {
     { .label = " Screen rec on/off ", .action = ACTION_SCREEN_REC },
     { .label = " Mute ", .action = ACTION_MUTE },
     { .label = " WF mode ", .action = ACTION_WF_MODE },
+    /* Digital modes, in the order of the Modes menu */
     { .label = " APP RTTY ", .action = ACTION_APP_RTTY },
     { .label = " APP FT8 ", .action = ACTION_APP_FT8 },
+    { .label = " APP WSPR ", .action = ACTION_APP_WSPR },
     { .label = " APP JS8 ", .action = ACTION_APP_JS8 },
     { .label = " APP SSTV ", .action = ACTION_APP_SSTV },
-    { .label = " APP Cluster ", .action = ACTION_APP_CLUSTER },
     { .label = " APP WeFax ", .action = ACTION_APP_WEFAX },
     { .label = " APP NavTex ", .action = ACTION_APP_NAVTEX },
+    /* Tools */
+    { .label = " APP Cluster ", .action = ACTION_APP_CLUSTER },
+    { .label = " APP CW Trainer ", .action = ACTION_APP_CWTRAINER },
+    { .label = " APP RX recorder ", .action = ACTION_APP_RECORDER },
     { .label = " APP SWR Scan ", .action = ACTION_APP_SWRSCAN },
     { .label = " APP GPS ", .action = ACTION_APP_GPS },
-    { .label = " APP Settings", .action = ACTION_APP_SETTINGS },
-    { .label = " APP RX recorder", .action = ACTION_APP_RECORDER },
-    { .label = " APP CW Trainer", .action = ACTION_APP_CWTRAINER },
-    { .label = " APP WSPR ", .action = ACTION_APP_WSPR },
-    { .label = " QTH Grid", .action = ACTION_APP_QTH },
+    { .label = " APP QTH grid ", .action = ACTION_APP_QTH },
+    { .label = " APP Settings ", .action = ACTION_APP_SETTINGS },
     { .label = NULL, .action = ACTION_NONE }
 };
 
@@ -838,12 +840,12 @@ static void long_action_update_cb(lv_event_t * e) {
 
 static uint8_t make_long_action(uint8_t row) {
     const char        *labels[] = {
-        "GEN long press",
-        "APP long press",
-        "KEY long press",
-        "MSG long press",
-        "DFN long press",
-        "DFL long press",
+        "GEN",
+        "APP",
+        "KEY",
+        "MSG",
+        "DFN",
+        "DFL",
     };
     lv_obj_t    *obj;
 
@@ -954,10 +956,10 @@ static void hmic_action_update_cb(lv_event_t * e) {
 
 static uint8_t make_hmic_action(uint8_t row) {
     struct {const char *label; uint8_t param;} items[] = {
-        {"HMic F1 press", params.press_f1},
-        {"HMic F2 press", params.press_f2},
-        {"HMic F1 long press", params.long_f1},
-        {"HMic F2 long press", params.long_f2}
+        {"F1", params.press_f1},
+        {"F2", params.press_f2},
+        {"F1 long", params.long_f1},
+        {"F2 long", params.long_f2}
     };
     size_t items_len = sizeof(items) / sizeof(items[0]);
     lv_obj_t    *obj;
@@ -1038,7 +1040,7 @@ static uint8_t make_audio_gain(uint8_t row) {
 
     cell = lv_label_create(grid);
 
-    lv_label_set_text(cell, "Play,Rec gain");
+    lv_label_set_text(cell, "Play, Rec gain");
     lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     cell = lv_obj_create(grid);
@@ -1081,7 +1083,7 @@ static uint8_t make_transverter(uint8_t row, ParamInt &from, ParamInt &to, Param
 
     obj = lv_label_create(grid);
 
-    lv_label_set_text_fmt(obj, "Transverter %i", from.context_id() + 1);
+    lv_label_set_text_fmt(obj, "%i: from, to, shift", from.context_id() + 1);
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col++, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     /* From */
@@ -1573,7 +1575,7 @@ static uint8_t make_comp_th_makeup(uint8_t row) {
 
     cell = lv_label_create(grid);
 
-    lv_label_set_text(cell, "Comp threshold, makeup");
+    lv_label_set_text(cell, "Compressor, makeup");
     lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     cell = lv_obj_create(grid);
@@ -1635,7 +1637,7 @@ static uint8_t make_tx_offset(uint8_t row) {
 
     cell = lv_label_create(grid);
 
-    lv_label_set_text(cell, "TX IQ offsets");
+    lv_label_set_text(cell, "IQ offsets");
     lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     cell = lv_obj_create(grid);
@@ -1692,7 +1694,7 @@ static uint8_t make_codec_gain(uint8_t row) {
 
     cell = lv_label_create(grid);
 
-    lv_label_set_text(cell, "TX codec gain");
+    lv_label_set_text(cell, "Codec gain");
     lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     cell = lv_obj_create(grid);
@@ -1735,7 +1737,7 @@ static uint8_t band_out_gain_correction(uint8_t row) {
 
     cell = lv_label_create(grid);
 
-    lv_label_set_text(cell, "Band output gain corr");
+    lv_label_set_text(cell, "Band output gain");
     lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     cell = lv_obj_create(grid);
@@ -1802,7 +1804,7 @@ uint8_t make_tx_filter(uint8_t row) {
 
     cell = lv_label_create(grid);
 
-    lv_label_set_text(cell, "TX filter low");
+    lv_label_set_text(cell, "Filter low");
     lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     cell = lv_obj_create(grid);
@@ -1820,7 +1822,7 @@ uint8_t make_tx_filter(uint8_t row) {
 
     cell = lv_label_create(grid);
 
-    lv_label_set_text(cell, "TX filter high");
+    lv_label_set_text(cell, "Filter high");
     lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     cell = lv_obj_create(grid);
@@ -3025,7 +3027,7 @@ static uint8_t make_headphones(uint8_t row) {
     bt.rx = bt_switch_cell(row, 1, false, bt_rx_cb);
     row++;
 
-    wl_row_label(row, "Headphone volume");
+    wl_row_label(row, "Volume");
     obj = lv_obj_create(grid);
     lv_obj_set_size(obj, SMALL_6, ROW_H);
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
@@ -3341,7 +3343,7 @@ static void mic_update_cb(lv_event_t *e) {
 static uint8_t make_mic(uint8_t row) {
     lv_obj_t *obj;
 
-    wl_row_label(row, "Microphone");
+    wl_row_label(row, "Input");
 
     obj = lv_dropdown_create(grid);
     dialog_item(&dialog, obj);
@@ -3444,9 +3446,15 @@ static void make_general_page() {
     card_end(row);
     band_end();
 
-    row = card_begin(LV_SYMBOL_LIST, "CONTROLS");
+    row = card_begin(LV_SYMBOL_LIST, "LONG PRESS");
     row = make_long_action(row);
+    card_end(row);
+
+    row = card_begin(LV_SYMBOL_AUDIO, "HAND MIC KEYS");
     row = make_hmic_action(row);
+    card_end(row);
+
+    row = card_begin(LV_SYMBOL_SETTINGS, "CONTROLS");
     row = make_freq_accel(row);
     row = make_charger(row);
     card_end(row);
@@ -3536,21 +3544,21 @@ static void make_audio_page() {
 
     row = card_begin(LV_SYMBOL_AUDIO, "MICROPHONE");
     row = make_mic(row);
-    row = make_param_slider(row, "Hand mic gain", &hmic_slider);
-    row = make_param_slider(row, "Built-in mic gain", &imic_slider);
+    row = make_param_slider(row, "Hand mic", &hmic_slider);
+    row = make_param_slider(row, "Built-in", &imic_slider);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_PLAY, "VOX");
-    row = make_param_switch(row, "VOX", cfg_sm.p_vox_en);
-    row = make_param_slider(row, "VOX gain", &vox_gain_slider);
+    row = make_param_switch(row, "On", cfg_sm.p_vox_en);
+    row = make_param_slider(row, "Gain", &vox_gain_slider);
     row = make_param_slider(row, "Anti-VOX", &vox_ag_slider);
-    row = make_param_slider(row, "VOX delay", &vox_delay_slider);
+    row = make_param_slider(row, "Delay", &vox_delay_slider);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_LOOP, "AGC");
-    row = make_param_switch(row, "AGC hang", cfg_sm.p_agc_hang);
-    row = make_param_slider(row, "AGC knee", &agc_knee_slider);
-    row = make_param_slider(row, "AGC slope", &agc_slope_slider);
+    row = make_param_switch(row, "Hang", cfg_sm.p_agc_hang);
+    row = make_param_slider(row, "Knee", &agc_knee_slider);
+    row = make_param_slider(row, "Slope", &agc_slope_slider);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_BLUETOOTH, "BT HEADPHONES");
