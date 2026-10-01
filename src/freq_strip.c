@@ -20,6 +20,7 @@
 
 #define QTH_POLL_MS 3000
 
+static char      app[16];
 static lv_obj_t *strip, *band_label, *freq_label, *mode_label, *qth_dot, *qth_label;
 static char      note[64];
 static int32_t   note_freq;
@@ -39,7 +40,14 @@ static void update_cb(Subject *subj, void *user_data) {
     } else {
         lv_label_set_text_fmt(freq_label, "%i.%03i.%03i", mhz, khz, hz);
     }
-    lv_label_set_text(band_label, note[0] && f == note_freq ? note : cluster_band_name(cluster_band_of(f)));
+    const char *band = note[0] && f == note_freq ? note : cluster_band_name(cluster_band_of(f));
+
+    /* The open app in front of the band, so it's clear where the keys go */
+    if (app[0]) {
+        lv_label_set_text_fmt(band_label, "#ffd24a %s# %s", app, band);
+    } else {
+        lv_label_set_text(band_label, band);
+    }
     lv_label_set_text(mode_label, info_params_mode_label_get());
 }
 
@@ -72,6 +80,7 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_clear_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
 
     band_label = make_label(strip, LV_ALIGN_LEFT_MID, 14, &sony_24, 0x90f0d0);
+    lv_label_set_recolor(band_label, true);
     /* Centre: frequency, then the mode */
     lv_obj_t *mid = lv_obj_create(strip);
     lv_obj_remove_style_all(mid);
@@ -114,6 +123,11 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
 void freq_strip_set_label(const char *text, int32_t freq_hz) {
     snprintf(note, sizeof(note), "%s", text);
     note_freq = freq_hz;
+    if (strip) update_cb(NULL, NULL);
+}
+
+void freq_strip_set_app(const char *name) {
+    snprintf(app, sizeof(app), "%s", name ? name : "");
     if (strip) update_cb(NULL, NULL);
 }
 

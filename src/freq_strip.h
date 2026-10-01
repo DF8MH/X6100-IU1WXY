@@ -22,6 +22,8 @@ void      freq_strip_set_label(const char *text, int32_t freq_hz);
 
 /* Shows dial + offset_hz (FT8 TX audio offset) as the frequency; offset_hz < 0 = plain dial. */
 void      freq_strip_set_offset(int32_t offset_hz);
+/* Name of the open app, shown before the band (NULL: none) */
+void      freq_strip_set_app(const char *name);
 
 #ifdef __cplusplus
 }

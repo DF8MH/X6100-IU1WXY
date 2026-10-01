@@ -592,6 +592,7 @@ static void mode_ft4_ft8_cb(struct button_data_t *btn_data) {
         proto = FTX_PROTOCOL_FT8;
     }
     param_i_set(cfg_ft8_protocol, proto);
+    freq_strip_set_app(proto == FTX_PROTOCOL_FT4 ? "FT4" : "FT8");
     subject_i_set(cq_enabled, false);
 
     worker_done();

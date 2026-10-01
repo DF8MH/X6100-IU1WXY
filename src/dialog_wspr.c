@@ -86,6 +86,7 @@ typedef struct {
     unsigned    gen;
     time_t      cycle;
     uint32_t    dial_hz;
+    float       secs;           /* decode time */
     int         n;
     wspr_spot_t spots[MAX_SPOTS];
 } decoded_t;
@@ -134,6 +135,8 @@ static lv_timer_t *timer;
 static row_t       rows[MAX_ROWS];
 static int         rows_n;
 static double      my_lat, my_lon;
+static int         last_n = -1;    /* spots of the last decode, -1 none yet */
+static float       last_secs;
 static bool        my_pos;
 
 /* Shared with the threads */
@@ -175,7 +178,10 @@ static void *decode_thread(void *arg) {
     decode_job_t *job = arg;
     decoded_t     res = {.gen = job->gen, .cycle = job->cycle, .dial_hz = job->dial_hz};
 
-    res.n = wspr_decode_iq(job->i, job->q, job->n, job->dial_hz, res.spots, MAX_SPOTS);
+    double t0 = now_s();
+
+    res.n    = wspr_decode_iq(job->i, job->q, job->n, job->dial_hz, res.spots, MAX_SPOTS);
+    res.secs = now_s() - t0;
     free(job->i);
     free(job->q);
     atomic_store(&decoding, 0);
@@ -362,6 +368,8 @@ static void decoded_cb(void *arg) {
     if (!dialog.run || res->gen != atomic_load(&gen)) {
         return;
     }
+    last_n    = res->n;
+    last_secs = res->secs;
     if (res->n == 0) {
         return;
     }
@@ -442,7 +450,12 @@ static void timer_cb(lv_timer_t *t) {
             snprintf(up, sizeof(up), "Uploaded %d", atomic_load(&uploaded));
         }
     }
-    lv_label_set_text_fmt(status, "TX %d%% at %d Hz, %.1f W = %d dBm   %s", param_i_get(cfg_wspr_tx_pct),
+    char last[40] = "";
+
+    if (last_n >= 0) {
+        snprintf(last, sizeof(last), "Last: %d spot%s (%.1f s)   ", last_n, last_n == 1 ? "" : "s", last_secs);
+    }
+    lv_label_set_text_fmt(status, "%sTX %d%% at %d Hz, %.1f W = %d dBm   %s", last, param_i_get(cfg_wspr_tx_pct),
                           param_i_get(cfg_wspr_tx_freq), pwr, wspr_dbm(pwr), up);
 }
 
@@ -659,6 +672,7 @@ static void construct_cb(lv_obj_t *parent) {
     if (!bb) {
         bb = wspr_bb_create(SAMPLE_RATE);
     }
+    last_n = -1;
     atomic_store(&uploaded, 0);
     atomic_store(&upload_failed, 0);
     atomic_fetch_add(&gen, 1);

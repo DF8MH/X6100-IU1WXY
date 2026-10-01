@@ -10,6 +10,7 @@
 
 #include "styles.h"
 #include "main_screen.h"
+#include "freq_strip.h"
 #include "keyboard.h"
 #include "events.h"
 #include "waterfall.h"
@@ -40,6 +41,7 @@ void dialog_construct(dialog_t *dialog, lv_obj_t *parent) {
 }
 
 void dialog_destruct() {
+    freq_strip_set_app(NULL);
     if (current_dialog && current_dialog->run) {
         knobs_display(true);
         waterfall_refresh_reset();

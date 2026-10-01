@@ -51,6 +51,7 @@
 #include "dialog_cw_trainer.h"
 #include "dialog_wspr.h"
 #include "freq_strip.h"
+#include <ft8lib/constants.h>
 #include "freq_scale.h"
 #include "spot_marks.h"
 #include "band_plan.h"
@@ -561,8 +562,30 @@ static void next_freq_step(bool up) {
     msg_update_text_fmt("Freq step: %i Hz", new_step);
 }
 
+/* Shown in the frequency strip while the app is open */
+static const char *app_name(press_action_t a) {
+    switch (a) {
+        case ACTION_APP_RTTY:       return "RTTY";
+        case ACTION_APP_FT8:        return param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT4 ? "FT4" : "FT8";
+        case ACTION_APP_SWRSCAN:    return "SWR Scan";
+        case ACTION_APP_GPS:        return "GPS";
+        case ACTION_APP_SETTINGS:   return "Settings";
+        case ACTION_APP_RECORDER:   return "Recorder";
+        case ACTION_APP_WIFI:       return "WiFi";
+        case ACTION_APP_WEFAX:      return "WeFax";
+        case ACTION_APP_NAVTEX:     return "NavTex";
+        case ACTION_APP_JS8:        return "JS8";
+        case ACTION_APP_SSTV:       return "SSTV";
+        case ACTION_APP_CLUSTER:    return "Cluster";
+        case ACTION_APP_CWTRAINER:  return "CW Trainer";
+        case ACTION_APP_WSPR:       return "WSPR";
+        default:                    return NULL;    /* Modes menu: a menu, not an app */
+    }
+}
+
 static void apps_disable() {
     dialog_destruct();
+    freq_strip_set_app(NULL);
 
     rtty_set_state(RTTY_OFF);
     panel_update_visibility(false);
@@ -642,6 +665,7 @@ void main_screen_start_app(press_action_t app_action) {
         default:
             break;
     }
+    freq_strip_set_app(app_name(app_action));
 }
 
 void main_screen_action(press_action_t action) {
