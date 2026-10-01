@@ -13,16 +13,14 @@
 #include <cstddef>
 #include <functional>
 #include <string_view>
-#include <string>
 
 #include "cw_config.h"
 
 namespace cw {
 
 // Morse binary-tree state machine. Consumes timing Tokens and emits decoded
-// text through EmitTextFn. Accumulated text is flushed through a small internal
-// buffer, so a future C caller can pass e.g. `void panel_add_text(const char*)`
-// as the callback.
+// text through EmitTextFn, one character, prosign or space per call (the CW
+// trainer counts the decoded characters by calls; unknown codes are "<?>").
 class MorseDecoder {
   public:
     using EmitTextFn = std::function<void(const char *)>;
@@ -30,7 +28,6 @@ class MorseDecoder {
     explicit MorseDecoder(EmitTextFn emit);
 
     void handle_token(Token token);
-    void reset();
 
   private:
     static constexpr std::array<char, 63> morse_tree = {
@@ -54,13 +51,12 @@ class MorseDecoder {
 
     void append(char c);
     void append(const std::string_view &s);
-    void flush();
+    void decode_pending();
 
     bool check_and_handle_exceptions();
 
     EmitTextFn  emit_;
     size_t      tree_index_ = 0;
-    std::string text_buffer_{};
 
     // Buffer for raw elements
     std::array<char, 12> raw_buffer_{};
@@ -75,7 +71,8 @@ class MorseDecoder {
         std::string_view text_out;
     };
 
-    static constexpr std::string_view ERR = "<ERR>";
+    static constexpr std::string_view ERR     = "<ERR>";
+    static constexpr std::string_view UNKNOWN = "<?>";
 
     static constexpr std::array<ExceptionPair, 26> exceptions_ = {{
         {"--..--", ","},

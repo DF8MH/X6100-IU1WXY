@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
+#include <vector>
 
 #include "morse_decoder.h"
 
@@ -86,14 +87,16 @@ TEST_CASE("morse decoder: element spaces and CW_NONE are ignored") {
     REQUIRE(f.out == "I");
 }
 
-TEST_CASE("morse decoder: reset discards the pending tree index") {
-    DecoderFixture f;
+TEST_CASE("morse decoder: one call per character, unknown codes are <?>") {
+    std::vector<std::string> calls;
+    cw::MorseDecoder         dec{[&calls](const char *text) { calls.emplace_back(text); }};
 
-    f.token(cw::CW_DOT);
-    f.dec.reset();
-    f.token(cw::CW_LETTER_SPACE);
+    for (cw::Token t : {cw::CW_DASH, cw::CW_DOT, cw::CW_DASH, cw::CW_WORD_SPACE,        // K + space
+                        cw::CW_DOT, cw::CW_DOT, cw::CW_DASH, cw::CW_DASH, cw::CW_LETTER_SPACE, // ..-- (none)
+                        cw::CW_DOT, cw::CW_DASH, cw::CW_DOT, cw::CW_DASH, cw::CW_DOT, cw::CW_WORD_SPACE}) // <AR>
+        dec.handle_token(t);
 
-    REQUIRE(f.out.empty());
+    REQUIRE(calls == std::vector<std::string>{"K", " ", "<?>", "<AR>", " "});
 }
 
 TEST_CASE("morse decoder: exceptions decoding") {

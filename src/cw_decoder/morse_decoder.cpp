@@ -4,11 +4,14 @@
  *  Xiegu X6100 LVGL GUI
  *
  *  CW decoder ported from upstream x6100_gui (gdyuldin/x6100_gui,
- *  src/cw_decoder/morse_decoder.cpp, b27bbe5).
+ *  src/cw_decoder/morse_decoder.cpp, b27bbe5). Here every character is
+ *  emitted by its own call.
  */
 
 #include "morse_decoder.h"
 
+#include <algorithm>
+#include <cstring>
 #include <utility>
 
 namespace cw {
@@ -21,19 +24,19 @@ void MorseDecoder::append(char c) {
         return;
     }
     last_char = c;
-    text_buffer_.push_back(c);
+    const char text[2] = {c, '\0'};
+    if (emit_)
+        emit_(text);
 }
 
 void MorseDecoder::append(const std::string_view &s) {
-    text_buffer_ += s;
-}
-
-void MorseDecoder::flush() {
-    if (text_buffer_.length() == 0)
-        return;
+    last_char = s.back();
+    char text[16];
+    const size_t n = std::min(s.size(), sizeof(text) - 1);
+    std::memcpy(text, s.data(), n);
+    text[n] = '\0';
     if (emit_)
-        emit_(text_buffer_.data());
-    text_buffer_.clear();
+        emit_(text);
 }
 
 bool MorseDecoder::check_and_handle_exceptions()  {
@@ -46,6 +49,20 @@ bool MorseDecoder::check_and_handle_exceptions()  {
         }
     }
     return false; // No exception in vocab
+}
+
+// Emits the character collected so far (if any) and starts a new one.
+void MorseDecoder::decode_pending() {
+    if (buffer_len_ > 0 && !check_and_handle_exceptions()) {
+        char c = (tree_index_ > 0 && tree_index_ < morse_tree.size()) ? morse_tree[tree_index_] : ' ';
+        if (c == ' ') {
+            append(UNKNOWN);
+        } else {
+            append(c);
+        }
+    }
+    tree_index_ = 0;
+    buffer_len_ = 0;
 }
 
 void MorseDecoder::handle_token(Token token) {
@@ -67,41 +84,13 @@ void MorseDecoder::handle_token(Token token) {
             break;
 
         case CW_LETTER_SPACE:
-            if (buffer_len_ > 0) {
-                if (!check_and_handle_exceptions()) {
-                    if (tree_index_ > 0 && tree_index_ < morse_tree.size()) {
-                        char c = morse_tree[tree_index_];
-                        if (c == ' ') {
-                            append(ERR);
-                        } else {
-                            append(morse_tree[tree_index_]);
-                        }
-                    } else {
-                        append(ERR);
-                    }
-                }
-            }
-            tree_index_ = 0; // Reset to accumulate the next character
-            buffer_len_ = 0;
+            decode_pending();
             break;
 
         case CW_WORD_SPACE:
             // Word pause. First flush a pending letter (if any).
-            if (buffer_len_ > 0) {
-                if (!check_and_handle_exceptions()) {
-                    if (tree_index_ > 0 && tree_index_ < morse_tree.size()) {
-                        char c = morse_tree[tree_index_];
-                        if (c == ' ') {
-                            append(ERR);
-                        } else {
-                            append(morse_tree[tree_index_]);
-                        }
-                    }
-                }
-            }
+            decode_pending();
             append(' '); // Print the inter-word space
-            tree_index_ = 0;
-            buffer_len_ = 0;
             break;
 
         case CW_ELEMENT_SPACE:
@@ -110,13 +99,6 @@ void MorseDecoder::handle_token(Token token) {
             // Intra-character pauses and empty tokens are ignored by the tree
             break;
     }
-    flush();
-}
-
-void MorseDecoder::reset() {
-    tree_index_ = 0;
-    buffer_len_ = 0;
-    text_buffer_.clear();
 }
 
 } // namespace cw
