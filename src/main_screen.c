@@ -1543,14 +1543,19 @@ static void on_cluster_spots_wf_change(Subject *subj, void *user_data) {
     lv_obj_set_y(waterfall, y);
     freq_scale_lines_set_y(y);
     spot_marks_layout(param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, 36, spot_tag_y);
-    cluster_column_layout(y);
     if (!param_i_get(cfg_spectrum_show)) {
         band_plan_set_y(y);
+        /* The cluster column starts under the band plan strip, not over it */
+        if (param_i_get(cfg_band_plan)) {
+            y += BAND_PLAN_H;
+        }
     }
+    cluster_column_layout(y);
 }
 
 static void on_band_plan_change(Subject *subj, void *user_data) {
     band_plan_refresh();
+    on_cluster_spots_wf_change(NULL, NULL);
 }
 
 static void on_cluster_column_change(Subject *subj, void *user_data) {
