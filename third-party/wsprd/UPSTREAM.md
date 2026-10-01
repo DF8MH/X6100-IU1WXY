@@ -18,3 +18,5 @@ Each one is its own commit on top of the pristine import.
   working directory on every decode).
 - `wsprd.c`: the coarse time search skips symbols before the start of the
   recording instead of reading before the start of the spectrum rows.
+- `wsprd.c`: DT is 0 for a signal starting 1 s into the recording, as in
+  WSJT-X (rtlsdr-wsprd subtracts 2 s for the delay of its own pipeline).

@@ -802,7 +802,7 @@ int wspr_decode(float  *idat,
 
                     decodes[uniques - 1].sync   = candidates[j].sync;
                     decodes[uniques - 1].snr    = candidates[j].snr;
-                    decodes[uniques - 1].dt     = shift * DT - 2.0;
+                    decodes[uniques - 1].dt     = shift * DT - 1.0;
                     decodes[uniques - 1].freq   = freq_print;
                     decodes[uniques - 1].drift  = drift;
                     decodes[uniques - 1].cycles = cycles;
