@@ -11,7 +11,8 @@ digital modes, DX cluster on the waterfall, Bluetooth, wfview server and a web c
 All screenshots in this README are rendered on a PC with fake data.</i></p>
 
 Unofficial combined firmware for the Xiegu X6100. It starts from the R1CBU
-GUI (0.34.2, maintained by gdyuldin), adds the SWL and digital-mode apps of
+GUI (0.34.2, maintained by gdyuldin, with the bug fixes of 1.0.1 ported:
+CAT replies, memory leaks, low-battery power-off, baseband start), adds the SWL and digital-mode apps of
 the 1KO125 fork and the JS8 app of randal007, and on top of that a DX
 Cluster shown on the main screen, Bluetooth CAT and headphones, WiFi and
 Bluetooth settings on the radio, a wfview (Icom LAN) server and a web
@@ -20,8 +21,10 @@ works as in the base firmware.
 
 > **Baseband compatibility.** Some options depend on the radio's baseband
 > revision (TX audio, band output gain, TX filter, CESSB, FM emphasis). A
-> patched r12 baseband is recommended. The baseband version is shown in
-> Settings → Info.
+> patched baseband ([x6100_base_patch](https://github.com/gdyuldin/x6100_base_patch))
+> r12 or newer is recommended; r13 only improves the battery percentage and
+> the codec clock, nothing to change on the GUI side. The baseband version is
+> shown in Settings → Info.
 
 ## Contents
 
@@ -42,7 +45,7 @@ works as in the base firmware.
 
 - Band, VFO and mode strip with GPS locator (or saved QTH) always visible
 - Channel list and MEM 1-9 slots, editable from the web configurator
-- Long-press action on every button group: screenshot, recorder, mute, apps, QTH grid
+- Long-press action on every button group and actions for the hand mic F1/F2 keys (Settings → **Keys**): screenshot, recorders, mute, any app, QTH grid
 - SWR Scan, GPS view, Recorder and a CW decoder with WPM
 - CW trainer: Learn (Koch, weak characters come up more often, per-character stats), Practice (paddle to screen, no TX) and Calls (RufzXP-style callsign trainer with score)
 - Local time zone (Settings → Date / Time → Zone); logs stay in UTC
@@ -53,7 +56,9 @@ works as in the base firmware.
 - FT8 and FT4 with logging in ADIF (`ft_log.adi`) and worked-before marks
 - JS8 (all four speeds at once): decoder, inbox, store and forward, log, APRS gateways
 - WSPR: decoder (wsprd, as in WSJT-X), beacon TX at most 5 W with a TX % chance, optional upload of the spots to WSPRnet
-- RTTY, SSTV, WeFax and NavTex (from the 1KO125 fork), with broadcast frequency lists
+- RTTY, SSTV, WeFax and NavTex (from the 1KO125 fork), with station and calling-frequency lists (**Freq.**)
+- The fixed-frequency apps (WSPR, NavTex, WeFax, SSTV) share one full-screen look: station and frequency at the top, state on the right, the content in a black panel, a status line at the bottom
+- The open app is named in the frequency strip (e.g. `WSPR 20m`); leaving an app gives the VFO, mode and band back
 - DX Cluster app: telnet client over WiFi, spots by frequency around the VFO, one-press tune, saved servers, mode/age/spotter filters and callsign alerts with a popup
 
 **Display**
@@ -61,9 +66,10 @@ works as in the base firmware.
 - Three themes: IU1WXY (default), Legacy and **Outdoor** (high contrast, black with white borders, sunlight waterfall palette)
 - DX cluster on the main screen: callsign tags and spot lines on the waterfall, plus a cluster column at the right (rotate the MFK to browse, long press to tune)
 - S-meter with thin bars, S-scale and dB value; bars above S9 fade from green to red
-- IARU Region 1 **band plan** strip (CW, DIG, SSB, beacons) at the bottom of the spectrum, or at the top of the waterfall when the spectrum is off (Settings → Display → Band plan)
+- IARU Region 1 **band plan** strip (CW, DIG, SSB, beacons) at the bottom of the spectrum, or at the top of the waterfall when the spectrum is off, above the cluster column (Settings → Display → MAIN SCREEN → Band plan)
 - Waterfall mode **Centered** (VFO in the middle) or **Fixed** (span stays put, amber VFO line moves)
-- Three fonts (Sony Sketch, Roboto, DejaVu), settings in cards, spectrum on/off
+- Three fonts (Sony Sketch, Roboto, DejaVu), spectrum on/off
+- Compact settings in cards; the MFK stops on the first and last item of a page instead of jumping round
 
 **Connectivity and remote**
 
@@ -142,15 +148,18 @@ APP buttons:
 | Page | Buttons |
 |---|---|
 | 1 | Modes, Cluster, SWR Scan, GPS |
-| 2 | Recorder, Settings |
+| 2 | Recorder, Settings, CW Trainer |
 
 Your callsign and QTH locator are set in Settings → General → **STATION**.
-Callsign is needed by JS8, FT8 and the DX Cluster.
+Callsign is needed by JS8, FT8, WSPR (TX and upload) and the DX Cluster.
 
 **Long press:** each button group (GEN, APP, KEY, MSG, DFN, DFL) has a
-long-press action, chosen in Settings → General → **CONTROLS**: none,
-screenshot, recorder on/off, mute, an app (RTTY, FT8, JS8, SSTV, Cluster,
-WeFax, NavTex, SWR Scan, GPS, Settings, Recorder) or the QTH grid.
+long-press action, chosen in Settings → **Keys** → FRONT KEYS, LONG PRESS:
+none, screenshot, RX recorder or screen recording on/off, mute, waterfall
+mode, a digital mode app (RTTY, FT8, WSPR, JS8, SSTV, WeFax, NavTex), a tool
+(Cluster, CW Trainer, RX recorder, SWR Scan, GPS, QTH grid, Settings). The
+hand mic F1 and F2 keys (short and long press) are set in the same tab,
+under HAND MIC KEYS.
 
 Each app has its own button pages, named like `(JS8 1:6)`; press the first
 button to go to the next page.
@@ -233,6 +242,25 @@ second (GPS or NTP).
 - The main knob moves the TX audio offset (1410 - 1590 Hz).
 - **Upload**: the spots of each cycle go to WSPRnet (plain HTTP over WiFi);
   the status line counts what was sent and what failed.
+
+### SSTV, WeFax and NavTex
+
+These apps work on known frequencies, so they don't need the waterfall: they
+fill the screen in the same look as WSPR and **Freq.** opens the list to
+tune from (the MFK chooses, a press tunes). The header shows the station or
+frequency and the receiver state; leaving the app gives the VFO back.
+
+- **NavTex**: NAVTEX 518 / 490 kHz, NAVTEX HF 4209.5 kHz and the HF MSI
+  frequencies; the MFK scrolls the text. The radio tunes down to 500 kHz, so
+  490 kHz is out of its range.
+- **WeFax**: DWD, Northwood and Athens stations. **View** (page 2) chooses
+  Big (default), Full (the whole fax) or Small, the old low panel that keeps
+  the main waterfall visible above it.
+- **SSTV**: calling frequencies, LSB on 80 and 40 m (3.735, 3.845, 7.165,
+  7.171 MHz) and USB above (14.230, 14.233, 18.160, 21.340, 24.975, 28.680,
+  50.510 MHz). The picture is on the left, the decoder state on the right and
+  the decoding progress in the thin bar under the header. **Close** is on
+  page 2 (ESC also closes).
 
 ### DX Cluster
 
@@ -385,14 +413,15 @@ waterfall.
 ### Settings
 
 APP (page 2) → **Settings**. Tabs on two button pages: General, Display,
-Audio, Wireless, and Info (page 2: app and base versions).
+Audio, Wireless (page 1), Keys and Info (page 2).
 
 | Tab | Cards |
 |---|---|
-| General | STATION (callsign, QTH locator), DATE / TIME, CONTROLS (long-press actions, hand mic, frequency acceleration, charger), TX CALIBRATION, TRANSVERTERS |
-| Display | BACKLIGHT, SPECTRUM (spectrum on/off, cluster spots, cluster column, auto level, min/max, fill, peaks), WATERFALL, INTERFACE (magnification, knob info, theme, font) |
-| Audio | RX AUDIO, TX AUDIO, MICROPHONE, VOX, AGC, BT HEADPHONES |
+| General | STATION (callsign, QTH locator), DATE / TIME, CONTROLS (frequency acceleration, charger), TX CALIBRATION (IQ offsets, band output gain), TRANSVERTERS (from, to, shift) |
+| Display | BACKLIGHT, SPECTRUM (show, auto level, manual min/max, fill and peaks, peak hold), WATERFALL (mode, line and zoom, smooth scroll), MAIN SCREEN (band plan, cluster spots, cluster column), INTERFACE (popups, knob info, theme, font) |
+| Audio | RX AUDIO, TX AUDIO (codec gain, compressor, filter, CESSB, FM emphasis), MICROPHONE, VOX, AGC, BT HEADPHONES |
 | Wireless | WIFI (scan, connect, IP), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones) |
+| Keys | FRONT KEYS, LONG PRESS (GEN, APP, KEY, MSG, DFN, DFL), HAND MIC KEYS (F1, F2, F1 long, F2 long) |
 | Info | app and base firmware versions |
 
 Some options say *(restart)*: Spectrum on/off and Font apply at the next
@@ -530,10 +559,10 @@ webserver from local sources, `boost` and `fftw-single` for JS8, RHVoice
 dropped, boot logo).
 
 **Tests:** `./run_tests.sh` builds and runs the host tests in `tests/`
-(FT8 QSO, JS8, QTH, cluster).
+(FT8 QSO, JS8, QTH, cluster, WSPR round trip down to -27 dB).
 
 **UI harnesses:** [tools/apps_ui_harness](tools/apps_ui_harness) renders the
-app dialogs (FT8, JS8, SSTV, WeFax, NavTex, Cluster, Modes, Settings tabs,
+app dialogs (FT8, JS8, WSPR, SSTV, WeFax, NavTex, Cluster, Modes, Settings tabs,
 main screen) headless on a PC, with the real button bar and theme; the
 screenshots in this README come from it. [tools/js8_ui_harness](tools/js8_ui_harness)
 runs the JS8 app the same way under ASan/UBSan.
