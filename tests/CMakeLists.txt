@@ -30,3 +30,15 @@ add_subdirectory(../src/cluster ${CMAKE_BINARY_DIR}/src/cluster)
 add_executable(test_cluster test_cluster.cpp)
 target_link_libraries(test_cluster PRIVATE CLUSTER Catch2::Catch2WithMain)
 add_test(NAME test_cluster COMMAND $<TARGET_FILE:test_cluster> --colour-mode=ansi )
+
+# liquid-dsp is not a host package: the UI harness deps have it
+find_package(Threads REQUIRED)
+find_library(LIQUID_LIB liquid HINTS ${CMAKE_SOURCE_DIR}/tools/js8_ui_harness/deps/lib)
+add_library(liquid UNKNOWN IMPORTED)
+set_target_properties(liquid PROPERTIES IMPORTED_LOCATION ${LIQUID_LIB}
+    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/tools/js8_ui_harness/deps/include)
+add_subdirectory(../third-party/wsprd ${CMAKE_BINARY_DIR}/third-party/wsprd)
+add_subdirectory(../src/wspr ${CMAKE_BINARY_DIR}/src/wspr)
+add_executable(test_wspr test_wspr.cpp)
+target_link_libraries(test_wspr PRIVATE WSPR Catch2::Catch2WithMain)
+add_test(NAME test_wspr COMMAND $<TARGET_FILE:test_wspr> --colour-mode=ansi )
