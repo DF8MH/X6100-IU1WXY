@@ -42,11 +42,12 @@ static void wait_new_device() {
 			dev = udev_monitor_receive_device(mon);
             if (dev) {
                 const char* action = udev_device_get_action(dev);
-                if (strcmp(action, "add") == 0) {
+                if (action && strcmp(action, "add") == 0) {
                     scheduler_put_noargs(notify_device_added);
-                } else if (strcmp(action, "remove") == 0) {
+                } else if (action && strcmp(action, "remove") == 0) {
                     scheduler_put_noargs(notify_device_removed);
                 }
+                udev_device_unref(dev);
             }
 			// if (dev && (strcmp(udev_device_get_action(dev), "add") == 0)) {
 			// 	/* free dev */

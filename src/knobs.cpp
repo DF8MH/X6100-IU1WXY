@@ -55,10 +55,12 @@ struct Control {
 
   protected:
     static std::string float_to_str(float val, std::string fmt) {
-        size_t len = snprintf(nullptr, 0, fmt.c_str(), val);
-        char  *buf = (char *)malloc(len + 1);
-        sprintf(buf, fmt.c_str(), val);
-        return std::string(buf);
+        /* No malloc: it leaked on every redraw of a float knob */
+        size_t      len = snprintf(nullptr, 0, fmt.c_str(), val);
+        std::string buf(len + 1, '\0');
+        snprintf(buf.data(), buf.size(), fmt.c_str(), val);
+        buf.resize(len);
+        return buf;
     }
 };
 
