@@ -46,7 +46,7 @@ works as in the base firmware.
 - Band, VFO and mode strip with GPS locator (or saved QTH) always visible
 - Channel list and MEM 1-9 slots, editable from the web configurator
 - Long-press action on every button group and actions for the hand mic F1/F2 keys (Settings → **Keys**): screenshot, recorders, mute, any app, QTH grid
-- SWR Scan, GPS view, Recorder and a CW decoder with WPM
+- SWR Scan, GPS view, Recorder and a **CW decoder** with WPM (gdyuldin 1.0.1 receiver: copies down to about -3 dB SNR, stays quiet on noise)
 - CW trainer: Learn (Koch, weak characters come up more often, per-character stats), Practice (paddle to screen, no TX) and Calls (RufzXP-style callsign trainer with score)
 - Local time zone (Settings → Date / Time → Zone); logs stay in UTC
 - Fully editable band list and digital-mode frequencies
@@ -268,6 +268,28 @@ frequency and the receiver state; leaving the app gives the VFO back.
   50.510 MHz). The picture is on the left, the decoder state on the right and
   the decoding progress in the thin bar under the header. **Close** is on
   page 2 (ESC also closes).
+
+### CW decoder
+
+In CW mode the decoder buttons are on the CW pages (**CW 1:2**, **2:2**):
+**Decoder** on/off, **Tuner** (tuning indicator), **Dec SNR**, **CW peak** and
+**CW peak Q**. Text and speed (WPM) appear in the panel over the waterfall.
+
+- The receiver comes from gdyuldin x6100_gui 1.0.1: a coherent tone tracker
+  that follows the station inside the CW filter, a detector with a noise
+  floor, and a time classifier that learns the speed. On test signals it copies
+  98-100% from 20 dB down to 0 dB SNR (in 2.5 kHz) and still 97-100% at -3 dB;
+  the old decoder stopped at about +5 dB. The WPM reading is within about 0.5 WPM.
+- **Dec SNR** (5-30 dB, default 8) is how far over the noise floor a mark must
+  be. Lower copies weaker signals but can print noise; it starts at 8 for
+  everyone after this update.
+- No characters from noise: lone blips, clicks and steady carriers (birdies) on
+  the tone are not decoded and do not change the speed estimate.
+- A letter shows when the next one starts; the last one after a short pause.
+  For 1 s after the decoder is reset (first use, CW peak or key tone change)
+  nothing is decoded. A key-down longer than 8 dots (tune-up) is ignored.
+- Upstream bugs fixed here: a strong station slightly off tune was never
+  decoded, and a dash cut by a retune came out as a dot.
 
 ### DX Cluster
 
@@ -597,6 +619,7 @@ Design notes and UI mockups are in `docs/` (`docs/mockups/releases/`).
   on the engine of [JS8Call-improved/Android-port](https://github.com/JS8Call-improved/Android-port),
   a C++ port of [JS8Call](https://github.com/js8call/js8call) by Jordan Sherer
   KN4CRD and contributors.
+- **CW decoder**: the receiver of gdyuldin x6100_gui 1.0.1, with fixes.
 - **WSPR**: the wsprd decoder of [WSJT-X](https://wsjt.sourceforge.io) by
   Joe Taylor K1JT and Steven Franke K9AN, as packaged by Guenael Jouchet
   VA2GKA in [rtlsdr-wsprd](https://github.com/Guenael/rtlsdr-wsprd).
