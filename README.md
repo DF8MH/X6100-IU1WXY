@@ -63,12 +63,15 @@ works as in the base firmware.
 
 **Display**
 
-- Three themes: IU1WXY (default), Legacy and **Outdoor** (high contrast, black with white borders, sunlight waterfall palette)
-- DX cluster on the main screen: callsign tags and spot lines on the waterfall, plus a cluster column at the right (rotate the MFK to browse, long press to tune)
+- IU1WXY theme (Legacy and Outdoor are kept in the code but out of the menu for now)
+- Waterfall only: the spectrum is disabled (always off, even if an old setting says otherwise)
+- DX cluster on the main screen: cyan spot lines and callsigns written on the waterfall, plus a cluster column at the right (rotate the MFK to browse, long press to tune)
+- **Spot snap**: turning the VFO slowly, it stops on a cluster spot it passes, like a light magnetic click; hold and speed adjustable (Settings → Display → MAIN SCREEN)
 - S-meter with thin bars, S-scale and dB value; bars above S9 fade from green to red
-- IARU Region 1 **band plan** strip (CW, DIG, SSB, beacons) at the bottom of the spectrum, or at the top of the waterfall when the spectrum is off, above the cluster column (Settings → Display → MAIN SCREEN → Band plan)
+- IARU Region 1 **band plan** strip (CW, DIG, SSB, beacons), semi-transparent at the top of the waterfall, above the cluster column (Settings → Display → MAIN SCREEN → Band plan)
 - Waterfall mode **Centered** (VFO in the middle) or **Fixed** (span stays put, amber VFO line moves)
-- Three fonts (Sony Sketch, Roboto, DejaVu), spectrum on/off
+- Three fonts (DejaVu by default, Sony Sketch, Roboto)
+- Display settings checked at every start: values that would break the screen are put right and logged
 - Compact settings in cards; the MFK stops on the first and last item of a page instead of jumping round
 
 **Connectivity and remote**
@@ -97,7 +100,7 @@ works as in the base firmware.
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/smeter.png" alt="S-meter"><br><sub><b>S-meter</b> with the green-to-red gradient above S9</sub></td>
-    <td align="center"><img src="docs/screenshots/theme_outdoor.png" alt="Outdoor theme"><br><sub><b>Outdoor theme</b> for direct sunlight</sub></td>
+    <td align="center"><img src="docs/screenshots/theme_outdoor.png" alt="Outdoor theme"><br><sub><b>Outdoor theme</b> (out of the menu for now)</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/waterfall_fixed_mode.png" alt="Fixed waterfall"><br><sub><b>Fixed waterfall</b> with the amber VFO line</sub></td>
@@ -300,15 +303,21 @@ asks for the latest 50 spots (`sh/dx`).
   tag and are never filtered out; a new one pops up on the main screen for
   10 s (MFK press tunes it).
 
-**Main screen** (Settings → Display → SPECTRUM):
+**Main screen** (Settings → Display → MAIN SCREEN):
 
-- **Cluster spots**: callsign tags in two staggered rows under the frequency
-  labels and a marker line at each spot frequency on the waterfall.
+- **Cluster spots**: a short cyan line at each spot frequency at the top of
+  the waterfall (across the band plan strip) and the callsign under it, in
+  two staggered rows on a dark see-through background; alert calls are pink.
+  The waterfall does not move.
+- **Spot snap hold** (0-5, 0 = off) and **Spot snap speed** (1-5): with the
+  cluster spots shown, turning the main knob slowly (at most *speed* detents
+  at a time) stops the VFO on a spot it passes for *hold* more detents.
+  Turning fast goes past. Without the cluster spots there is no snap.
 - **Cluster column**: a box at the right of the waterfall with the spots of
-  the band (kHz, callsign, age) around the VFO marker row.
+  the band (kHz, callsign, age) around the VFO marker row, coloured by age:
+  green under 2 minutes, yellow under 10, amber under 30, grey older.
 
-Both are coloured by age: green under 2 minutes, yellow under 10, amber
-under 30, grey older. Both use the same client as the app.
+Both use the same client as the app.
 
 **Servers:** if `/mnt/cluster.conf` has no `server=` lines the app lists ten
 public clusters (VE7CC, W3LPL, K1TTT, NC7J, W1NR, WA9PIE, K4ZR, DB0SUE,
@@ -418,13 +427,13 @@ Audio, Wireless (page 1), Keys and Info (page 2).
 | Tab | Cards |
 |---|---|
 | General | STATION (callsign, QTH locator), DATE / TIME, CONTROLS (frequency acceleration, charger), TX CALIBRATION (IQ offsets, band output gain), TRANSVERTERS (from, to, shift) |
-| Display | BACKLIGHT, SPECTRUM (show, auto level, manual min/max, fill and peaks, peak hold), WATERFALL (mode, line and zoom, smooth scroll), MAIN SCREEN (band plan, cluster spots, cluster column), INTERFACE (popups, knob info, theme, font) |
+| Display | BACKLIGHT, WATERFALL (mode, auto level, manual min/max, line and zoom, smooth scroll), MAIN SCREEN (band plan, cluster spots, spot snap hold and speed, cluster column), INTERFACE (popups, knob info, font) |
 | Audio | RX AUDIO, TX AUDIO (codec gain, compressor, filter, CESSB, FM emphasis), MICROPHONE, VOX, AGC, BT HEADPHONES |
 | Wireless | WIFI (scan, connect, IP), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones) |
 | Keys | FRONT KEYS, LONG PRESS (GEN, APP, KEY, MSG, DFN, DFL), HAND MIC KEYS (F1, F2, F1 long, F2 long) |
 | Info | app and base firmware versions |
 
-Some options say *(restart)*: Spectrum on/off and Font apply at the next
+Some options say *(restart)*: Font applies at the next
 start. Some cards depend on the base firmware revision (TX AUDIO, band output
 gain, TX filter, CESSB, FM emphasis).
 
