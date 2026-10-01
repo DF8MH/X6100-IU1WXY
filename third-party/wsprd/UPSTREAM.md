@@ -1,0 +1,15 @@
+# wsprd (vendored)
+
+WSPR decoder by K1JT and K9AN (WSJT-X `lib/wsprd`), as made into a library
+by VA2GKA for rtlsdr-wsprd.
+
+Source: https://github.com/Guenael/rtlsdr-wsprd
+Commit: `1ca9b83dd2562ce9ef2453aacdd5bc3aab982c7d` (2026-03-05)
+License: GPLv3 (see `LICENSE`)
+
+Copied from that commit: `wsprd/*` and `LICENSE`.
+`CMakeLists.txt` and this file are ours.
+
+## Local patches
+
+Each one is its own commit on top of the pristine import.
