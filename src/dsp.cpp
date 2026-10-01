@@ -723,7 +723,8 @@ static void dsp_update_min_max(float *psd_lin, uint16_t size) {
         break;
     }
 
-    // Convert to db
+    // Convert to db; a zero minimum gave -inf and the noise level stayed there
+    min = LV_MAX(1e-12f, min);
     min = 10.0f * log10f(min) + DB_OFFSET + offset;
 
     lpf(&noise_level, min, 0.8f, S_MIN);
