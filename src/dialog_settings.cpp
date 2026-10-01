@@ -66,12 +66,14 @@ static void make_display_page();
 static void make_audio_page();
 static void make_wireless_page();
 static void make_info_page();
+static void make_keys_page();
 
 static void load_general_page(button_data_t *btn_data);
 static void load_display_page(button_data_t *btn_data);
 static void load_audio_page(button_data_t *btn_data);
 static void load_wireless_page(button_data_t *btn_data);
 static void load_info_page(button_data_t *btn_data);
+static void load_keys_page(button_data_t *btn_data);
 
 static void construct_cb(lv_obj_t *parent);
 static void destruct_cb();
@@ -137,6 +139,12 @@ static button_data_t btn_wireless = {
     .press = load_wireless_page,
 };
 
+static button_data_t btn_keys = {
+    .type  = BTN_TEXT,
+    .label = "Keys",
+    .press = load_keys_page,
+};
+
 static button_data_t btn_info = {
     .type  = BTN_TEXT,
     .label = "Info",
@@ -156,6 +164,7 @@ buttons_page_t btn_page = {
 static buttons_page_t btn_page_2 = {
     {
      &btn_p2,
+     &btn_keys,
      &btn_info,
      }
 };
@@ -202,6 +211,11 @@ static void load_wireless_page(button_data_t *btn_data) {
 
 static void load_info_page(button_data_t *btn_data) {
     make_info_page();
+    mark_tab(btn_data);
+}
+
+static void load_keys_page(button_data_t *btn_data) {
+    make_keys_page();
     mark_tab(btn_data);
 }
 
@@ -3446,14 +3460,6 @@ static void make_general_page() {
     card_end(row);
     band_end();
 
-    row = card_begin(LV_SYMBOL_LIST, "LONG PRESS");
-    row = make_long_action(row);
-    card_end(row);
-
-    row = card_begin(LV_SYMBOL_AUDIO, "HAND MIC KEYS");
-    row = make_hmic_action(row);
-    card_end(row);
-
     row = card_begin(LV_SYMBOL_SETTINGS, "CONTROLS");
     row = make_freq_accel(row);
     row = make_charger(row);
@@ -3470,6 +3476,21 @@ static void make_general_page() {
     row = card_begin(LV_SYMBOL_SHUFFLE, "TRANSVERTERS");
     row = make_transverter(row, cfg_sm.p_transverter_0_from, cfg_sm.p_transverter_0_to, cfg_sm.p_transverter_0_shift);
     row = make_transverter(row, cfg_sm.p_transverter_1_from, cfg_sm.p_transverter_1_to, cfg_sm.p_transverter_1_shift);
+    card_end(row);
+}
+
+/* What the front keys (long press) and the hand mic keys do */
+static void make_keys_page() {
+    grid_delete();
+    grid_create();
+    uint8_t row;
+
+    row = card_begin(LV_SYMBOL_LIST, "FRONT KEYS, LONG PRESS");
+    row = make_long_action(row);
+    card_end(row);
+
+    row = card_begin(LV_SYMBOL_AUDIO, "HAND MIC KEYS");
+    row = make_hmic_action(row);
     card_end(row);
 }
 

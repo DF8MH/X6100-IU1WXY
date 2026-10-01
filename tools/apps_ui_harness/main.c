@@ -777,8 +777,15 @@ static void settings_demo(void) {
         pg->items[0]->press(pg->items[0]);
         pump(100);
     }
-    /* Display scrolled to the Waterfall mode row (the second dropdown) */
+    /* Keys (page 2) scrolled to the end: the MFK stops on the last row */
     buttons_page_t *pg = buttons_get_cur_page();
+    buttons_page_t *pg2 = pg->items[0]->next;
+    pg2->items[1]->press(pg2->items[1]);
+    pump(300);
+    for (int i = 0; i < 60; i++) lv_group_focus_next(keyboard_group);
+    pump(500);
+    shot("settings_keys_end.ppm");
+    /* Display scrolled to the Waterfall mode row (the second dropdown) */
     pg->items[2]->press(pg->items[2]);
     pump(300);
     for (int i = 0, n = 0; i < 40 && n < 2; i++) {
@@ -796,10 +803,10 @@ static void settings_demo(void) {
     }
     pump(500);
     shot("band_plan_settings.ppm");
-    /* Audio scrolled to the end (the MFK wraps to the last row) */
+    /* Audio scrolled to the end (the MFK stops on the last row) */
     pg->items[3]->press(pg->items[3]);
     pump(300);
-    lv_group_focus_prev(keyboard_group);
+    for (int i = 0; i < 60; i++) lv_group_focus_next(keyboard_group);
     pump(500);
     shot("settings_audio_end.ppm");
     for (int i = 0; i < 6; i++) lv_group_focus_prev(keyboard_group);
@@ -885,10 +892,11 @@ static void settings_nav(void) {
         buttons_page_t *pg = buttons_get_cur_page();
         pg->items[t]->press(pg->items[t]);
         pump(500);
-        lv_obj_t *first = lv_group_get_focused(keyboard_group);
+        lv_obj_t *prev = NULL;
         int last_scroll = -1, n_shot = 0, n = 0;
         do {
             lv_obj_t *f = lv_group_get_focused(keyboard_group);
+            prev = f;
             lv_area_t a;
             lv_obj_get_coords(f, &a);
             int scroll = 0;
@@ -903,7 +911,7 @@ static void settings_nav(void) {
             lv_group_focus_next(keyboard_group);
             pump(400);
             n++;
-        } while (lv_group_get_focused(keyboard_group) != first && n < 80);
+        } while (lv_group_get_focused(keyboard_group) != prev && n < 80);   /* the MFK stops on the last control */
         printf("[nav] %s: %d controls\n", tabs[t], n);
     }
     dialog_destruct();
@@ -940,6 +948,7 @@ int main(int argc, char **argv) {
     lv_obj_t *scr = lv_scr_act();
     lv_obj_add_style(scr, &background_style, 0);
     keyboard_group = lv_group_create();
+    lv_group_set_wrap(keyboard_group, false);   /* as keyboard_init() */
     strcpy(params.callsign.x, "IU1WXY");
     strcpy(params.qth.x, "JN35");
 

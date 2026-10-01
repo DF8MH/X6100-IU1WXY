@@ -91,6 +91,8 @@ static void on_usb_device_change(void * s, lv_msg_t * msg) {
 
 void keyboard_init() {
     keyboard_group = lv_group_create();
+    /* The MFK stops at the first and last item of a page instead of jumping round */
+    lv_group_set_wrap(keyboard_group, false);
 
     lv_msg_subscribe(MSG_USB_DEVICE_CHANGED, on_usb_device_change, NULL);
 
