@@ -4,78 +4,107 @@
  *  Xiegu X6100 LVGL GUI
  *
  *  Copyright (c) 2022-2023 Belousov Oleg aka R1CBU
+ *
+ *  CW decoding with the receiver ported from upstream x6100_gui
+ *  (src/cw_decoder/): FFT tone search, coherent tone tracker, adaptive
+ *  detector, histogram timing and Morse tree.
  */
+
+// First: the decoder headers include <complex>, which liquid.h (via cw.h)
+// needs to see to use std::complex.
+#include "cw_decoder/audio_resampler.h"
+
 #include "cw.h"
 
 #include "cfg/settings_manager.h"
 
-#include <math.h>
-#include <complex.h>
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <cmath>
 
 extern "C" {
     #include "lvgl/lvgl.h"
     #include "cw_decoder.h"
-    #include "panel.h"
-    #include "meter.h"
     #include "cw_tune_ui.h"
-    #include "pubsub_ids.h"
 }
 
-typedef struct {
-    uint16_t    n;
-    float       val;
-} fft_item_t;
+/* Frames (8 ms) between updates of the tune indicator */
+#define TUNE_UPDATE_FRAMES  12
 
 static bool ready = false;
 
-static CWDetector *cw_detector;
-
-static float min_db = 50.0f;
-static float max_db = 50.0f;
-static float ema_sig_db = S1;
-static float ema_noise_db = S9;
-static float threshold_pulse;
-static float threshold_silence;
-static bool  peak_on = false;
-static bool  trainer = false;
-static size_t samples_counter = 0;
-static float tone_freq;
-
-static int32_t key_tone = 0;
-static float   cw_decoder_snr;
-static float   cw_decoder_snr_gist;
+/* Written on the LVGL thread, read on the audio thread */
+static bool    trainer = false;
 static bool    cw_decoder;
 static bool    cw_tune;
+static int32_t key_tone = 0;
 static int32_t filter_low;
 static int32_t filter_high;
 
-static void on_key_tone_change(Subject *subj, void *user_data);
-static void on_val_float_change(Subject *subj, void *user_data);
-static void on_val_bool_change(Subject *subj, void *user_data);
-static void on_low_filter_change(Subject *subj, void *user_data);
-static void on_high_filter_change(Subject *subj, void *user_data);
+/* Receiver settings: stored by the subscriptions (LVGL thread), applied by
+ * the audio thread before the next block */
+static std::atomic<float> rx_threshold;
+static std::atomic<float> rx_hpf;
+static std::atomic<float> rx_lpf;
+static std::atomic<bool>  rx_peak_on;
+static std::atomic<float> rx_peak_tone;
+static std::atomic<float> rx_peak_q;
+static std::atomic<bool>  rx_dirty{false};
 
+/* Audio thread */
+static cw::CwReceiver     *receiver;
+static cw::AudioResampler *resampler;
+static bool                keyed = false;
+static float               tone_freq;
+static std::array<float, 3> freq_hist;
+static size_t              freq_hist_w = 0;
+static size_t              freq_hist_n = 0;
+static uint8_t             frame_counter = 0;
+static int                 wpm_sent = 0;
+
+static void on_val_bool_change(Subject *subj, void *user_data);
+static void on_rx_param_change(Subject *subj, void *user_data);
+
+static void on_text(const char *text);
+static void on_keyed(bool on);
+static void on_frame();
 
 void cw_init() {
-    cfg_sm.p_key_tone.subscribe_and_notify(on_key_tone_change);
-    tone_freq = key_tone;
-    cfg_sm.p_cw_decoder_snr.subscribe_and_notify(on_val_float_change, (void*)&cw_decoder_snr);
-    cfg_sm.p_cw_decoder_snr_gist.subscribe_and_notify(on_val_float_change, (void*)&cw_decoder_snr_gist);
     cfg_sm.p_cw_decoder.subscribe_and_notify(on_val_bool_change, (void*)&cw_decoder);
     cfg_sm.p_cw_tune.subscribe_and_notify(on_val_bool_change, (void*)&cw_tune);
 
-    cw_detector = new CWDetector((float)SAMPLE_RATE, 0.01f, 0.8f);
-    cw_detector->set_f0(cfg_sm.p_key_tone.get());
+    cfg_sm.p_key_tone.subscribe(on_rx_param_change);
+    cfg_sm.p_cw_decoder_snr.subscribe(on_rx_param_change);
+    cfg_sm.p_cw_peak_on.subscribe(on_rx_param_change);
+    cfg_sm.p_cw_peak_q.subscribe(on_rx_param_change);
+    cfg_sm.cp_cur_filter_low.subscribe(on_rx_param_change);
+    cfg_sm.cp_cur_filter_high.subscribe_and_notify(on_rx_param_change);
+    tone_freq = key_tone;
 
-    cfg_sm.cp_cur_filter_low.subscribe_and_notify(on_low_filter_change);
-    cfg_sm.cp_cur_filter_high.subscribe_and_notify(on_high_filter_change);
+    receiver = new cw::CwReceiver(on_text, on_keyed, on_frame);
+    resampler = new cw::AudioResampler((float)AUDIO_CAPTURE_RATE / AUDIO_DECIM);
 
     ready = true;
 }
 
-static void update_peak_freq(float freq) {
-    if (peak_on) {
-        cw_tune_set_freq(freq);
+static void apply_rx_params() {
+    static bool  peak_on;
+    static float peak_tone, peak_q;
+
+    if (!rx_dirty.exchange(false)) {
+        return;
+    }
+    receiver->change_threshold(rx_threshold);
+    receiver->change_hpf_hz(rx_hpf);
+    receiver->change_lpf_hz(rx_lpf);
+
+    /* Changing the peak filter re-seeds the noise floor: only on a change */
+    if (peak_on != rx_peak_on || peak_tone != rx_peak_tone || peak_q != rx_peak_q) {
+        peak_on = rx_peak_on;
+        peak_tone = rx_peak_tone;
+        peak_q = rx_peak_q;
+        receiver->change_peak_filter(peak_on, peak_tone, peak_q);
     }
 }
 
@@ -86,73 +115,57 @@ void cw_put_audio_samples(unsigned int n, float *samples) {
     if ((!cw_decoder) && (!cw_tune) && (!trainer)) {
         return;
     }
+    apply_rx_params();
+    resampler->process(n, samples, *receiver);
+}
 
-    for (size_t i = 0; i < n; i++)
-    {
-        float avg_freq, sig_db, noise_db, sig_to_noise;
-        cw_detector->put(samples[i]);
-        if (cw_detector->get_signal_noise(&sig_db, &noise_db)) {
+/* Decoded text: to the panel or the trainer, with the WPM when it changes */
+static void on_text(const char *text) {
+    if ((!cw_decoder) && (!trainer)) {
+        return;
+    }
+    cw_decoder_text(text);
 
-            ema_sig_db += (sig_db - ema_sig_db) * 0.5f;
+    int wpm = lroundf(receiver->get_measured_wpm());
+    if (wpm != wpm_sent) {
+        wpm_sent = wpm;
+        cw_decoder_wpm(wpm);
+    }
+}
 
-            // track average noise level
-            ema_noise_db += (noise_db - ema_noise_db) * 0.05f;
+static void on_keyed(bool on) {
+    keyed = on;
+}
 
-            float aligned_sig = ema_sig_db - ema_noise_db;
-
-            // track lower bound of the aligned signal
-            float k;
-            if (min_db > aligned_sig) {
-                k = 0.05f;
-            } else {
-                k = 0.001f;
+/* Every 8 ms: follow the tone while keyed (median of 3, then smoothed) */
+static void on_frame() {
+    if (keyed) {
+        float freq = receiver->get_tone_freq();
+        if ((freq >= filter_low) && (freq <= filter_high)) {
+            freq_hist[freq_hist_w] = freq;
+            freq_hist_w = (freq_hist_w + 1) % freq_hist.size();
+            if (freq_hist_n < freq_hist.size()) {
+                freq_hist_n++;
             }
-            min_db += (aligned_sig - min_db)*k;
-
-            // track upper bound of the aligned signal
-            k;
-            if (max_db < aligned_sig) {
-                k = 0.05f;
-            } else {
-                k = 0.001f;
+            if (freq_hist_n == freq_hist.size()) {
+                std::array<float, 3> s = freq_hist;
+                std::sort(s.begin(), s.end());
+                tone_freq += 0.5f * (s[1] - tone_freq);
             }
-            max_db += (aligned_sig - max_db)*k;
-
-            // threshold_pulse = min_db + cw_decoder_snr;
-            threshold_pulse = LV_MAX(min_db + cw_decoder_snr, (min_db + max_db) * 0.5f);
-            threshold_silence = threshold_pulse - cw_decoder_snr_gist;
-
-            // Detect tones/silence
-            if (peak_on) {
-                if (aligned_sig < threshold_silence) {
-                    peak_on = false;
-                }
-            } else {
-                if (aligned_sig > threshold_pulse) {
-                    peak_on = true;
-                }
-            }
-            cw_decoder_signal(peak_on, samples_counter * 1000.0f / SAMPLE_RATE);
-            samples_counter = 0;
         }
-        samples_counter++;
+    } else {
+        freq_hist_n = 0;
+    }
 
-        if (cw_detector->get_freq(&avg_freq)) {
-            tone_freq = avg_freq;
-            avg_freq = LV_CLAMP(filter_low, avg_freq, filter_high);
-            update_peak_freq(key_tone - avg_freq);
+    if (++frame_counter >= TUNE_UPDATE_FRAMES) {
+        frame_counter = 0;
+        if (keyed) {
+            cw_tune_set_freq(key_tone - tone_freq);
         }
     }
 }
 
-/* The peak filter is r = 0.8 (about 700 Hz wide at 11 kHz); r = 0.95 is about
- * 175 Hz wide around the sidetone and still follows a 60 ms dit. */
 void cw_trainer_set(bool on) {
-    if (!ready) {
-        return;
-    }
-    cw_detector->set_r(on ? 0.95f : 0.8f);
-    cw_detector->set_f0(key_tone);
     trainer = on;
 }
 
@@ -160,114 +173,20 @@ float cw_get_tone_freq(void) {
     return tone_freq;
 }
 
-static void on_key_tone_change(Subject *subj, void *user_data) {
-    key_tone = cfg_sm.p_key_tone.get();
-}
-
-static void on_val_float_change(Subject *subj, void *user_data) {
-    *(float*)user_data = static_cast<SubjectT<float>*>(subj)->get();
-}
-
 static void on_val_bool_change(Subject *subj, void *user_data) {
     *(bool*)user_data = static_cast<SubjectT<int32_t>*>(subj)->get();
 }
 
-
-static void on_low_filter_change(Subject *subj, void *user_data) {
+static void on_rx_param_change(Subject *subj, void *user_data) {
+    key_tone = cfg_sm.p_key_tone.get();
     filter_low = cfg_sm.cp_cur_filter_low.get();
-}
-
-static void on_high_filter_change(Subject *subj, void *user_data) {
     filter_high = cfg_sm.cp_cur_filter_high.get();
-}
 
-/**
- * ChunkedAverage
- */
-
-template <std::size_t N> void ChunkedAverage<N>::put(float val) {
-    data[w] = val;
-    w = (w + 1) % data.size();
-}
-
-template <std::size_t N> bool ChunkedAverage<N>::ready(void) {
-    return w == 0;
-}
-
-template <std::size_t N> float ChunkedAverage<N>::get(void) {
-    float sum = 0.0f;
-    for (auto &i : data) {
-        sum += i;
-    }
-    return sum / data.size();
-}
-
-/**
- * CWDetector
- */
-
-CWDetector::CWDetector(float fs, float mu, float r): fs(fs), mu(mu), r(r) {
-    r2 = r * r;
-}
-
-void CWDetector::set_f0(int16_t tone) {
-    f0 = tone;
-    // perhaps, we should not change it
-    a = -2.0f * cosf(2.0 * M_PIf * f0 / fs);
-}
-
-void CWDetector::set_r(float r) {
-    this->r = r;
-    this->r2 = r * r;
-}
-
-void CWDetector::put(float sample) {
-    // Get notch output
-    float y_notch = sample + a * x1 + x2 - r * a * y_notch1 - r2 * y_notch2;
-    float y_peak = (r - 1) * a * x1 + (r2 - 1) * x2 - r * a * y_peak1 - r2 * y_peak2;
-
-    auto psi = x1 - r * y_notch1;
-
-    // Update k using LMS rule
-    a = a - mu * y_notch * psi;
-    a = LV_CLAMP(-1.999f, a, 1.999f); // Stability boundary
-    // Exact analytical frequency extraction
-    float w = acosf(-a / 2.0f);
-
-    // Update states
-    x2 = x1;
-    x1 = sample;
-    y_notch2 = y_notch1;
-    y_notch1 = y_notch;
-    y_peak2 = y_peak1;
-    y_peak1 = y_peak;
-
-    // Store freq
-    float freq = w * fs / (2 * M_PIf);
-    avg_freq.put(freq);
-
-    // Store signal
-    avg_signal.put(y_peak * y_peak);
-    avg_noise.put(y_notch * y_notch);
-}
-
-
-bool CWDetector::get_freq(float *freq) {
-    if (avg_freq.ready()) {
-        *freq = avg_freq.get();
-        return true;
-    } else {
-        return false;
-    }
-}
-
-bool CWDetector::get_signal_noise(float *sig_db, float *noise_db) {
-    if (avg_signal.ready()) {
-        float sig = avg_signal.get();
-        *sig_db = 10.0f * log10f(LV_MAX(sig, 1e-12));
-        float noise = avg_noise.get();
-        *noise_db = 10.0f * log10f(LV_MAX(noise, 1e-12));
-        return true;
-    }
-    return false;
+    rx_threshold = cfg_sm.p_cw_decoder_snr.get();
+    rx_hpf = filter_low;
+    rx_lpf = filter_high;
+    rx_peak_on = cfg_sm.p_cw_peak_on.get();
+    rx_peak_tone = key_tone;
+    rx_peak_q = cfg_sm.p_cw_peak_q.get();
+    rx_dirty = true;
 }

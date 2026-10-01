@@ -110,7 +110,6 @@ extern ParamInt   *cfg_cwt_group;           // p_cwt_group
 extern ParamInt   *cfg_cw_decoder;         // p_cw_decoder
 extern ParamInt   *cfg_cw_tune;            // p_cw_tune
 extern ParamFloat *cfg_cw_decoder_snr;     // p_cw_decoder_snr
-extern ParamFloat *cfg_cw_decoder_snr_gist; // p_cw_decoder_snr_gist
 
 // AGC
 extern ParamInt *cfg_agc_hang;  // p_agc_hang

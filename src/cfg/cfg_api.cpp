@@ -70,7 +70,6 @@ ParamInt         *cfg_cw_peak_q           = nullptr;
 ParamInt         *cfg_cw_decoder          = nullptr;
 ParamInt         *cfg_cw_tune             = nullptr;
 ParamFloat       *cfg_cw_decoder_snr      = nullptr;
-ParamFloat       *cfg_cw_decoder_snr_gist = nullptr;
 ParamInt         *cfg_agc_hang            = nullptr;
 ParamInt         *cfg_agc_knee            = nullptr;
 ParamInt         *cfg_agc_slope           = nullptr;
@@ -201,7 +200,6 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_cw_decoder       = &cfg_sm.p_cw_decoder;
     cfg_cw_tune          = &cfg_sm.p_cw_tune;
     cfg_cw_decoder_snr   = reinterpret_cast<ParamFloat *>(&cfg_sm.p_cw_decoder_snr);
-    cfg_cw_decoder_snr_gist = reinterpret_cast<ParamFloat *>(&cfg_sm.p_cw_decoder_snr_gist);
     cfg_agc_hang         = &cfg_sm.p_agc_hang;
     cfg_agc_knee         = &cfg_sm.p_agc_knee;
     cfg_agc_slope        = &cfg_sm.p_agc_slope;

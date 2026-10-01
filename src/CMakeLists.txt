@@ -52,6 +52,7 @@ add_subdirectory(qth)
 add_subdirectory(cluster)
 add_subdirectory(wspr)
 add_subdirectory(cfg)
+add_subdirectory(cw_decoder)
 
 include_directories(utf8)
 include_directories(${CMAKE_SYSROOT}/usr/include/ft8lib/)
@@ -69,6 +70,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 PkgConfig::deps
 FT8 QTH CLUSTER
 WSPR
+CW_DECODER
 JS8
 cfg
 Threads::Threads

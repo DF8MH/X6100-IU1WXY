@@ -184,7 +184,6 @@ TEST_CASE("cfg_api_init wires the extended global param handles", "[cfg_api]") {
     // Float globals.
     REQUIRE(cfg_key_ratio != nullptr);
     REQUIRE(cfg_cw_decoder_snr != nullptr);
-    REQUIRE(cfg_cw_decoder_snr_gist != nullptr);
     REQUIRE(cfg_comp_threshold_offset != nullptr);
     REQUIRE(cfg_comp_makeup_offset != nullptr);
     REQUIRE(cfg_output_gain != nullptr);

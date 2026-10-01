@@ -204,9 +204,9 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_cw_tune{"cw_tune", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
-    Parameter<float, int32_t, 10> p_cw_decoder_snr{"cw_decoder_snr_2", 5.0f, 3.0f, 30.0f,
-        StorageType::GLOBAL, pending_writes_, &global_params_};
-    Parameter<float, int32_t, 10> p_cw_decoder_snr_gist{"cw_decoder_snr_gist", 1.0f, 0.0f, 30.0f,
+    // Detection floor of the decoder (SNR in its ~60 Hz detection bandwidth).
+    // New key: the old "cw_decoder_snr_2" value had another meaning.
+    Parameter<float, int32_t, 10> p_cw_decoder_snr{"cw_decoder_snr_3", 8.0f, 5.0f, 30.0f,
         StorageType::GLOBAL, pending_writes_, &global_params_};
 
     // AGC
