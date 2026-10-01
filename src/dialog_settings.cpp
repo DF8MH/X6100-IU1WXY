@@ -253,6 +253,12 @@ static void uint8_dropdown_update_cb(lv_event_t * e) {
     params_uint8_set(var, lv_dropdown_get_selected(obj));
 }
 
+/* The fonts are swapped at start only (fonts_apply()) */
+static void font_update_cb(lv_event_t * e) {
+    uint8_dropdown_update_cb(e);
+    msg_update_text_fmt("Font: from the next start");
+}
+
 static void theme_update_cb(lv_event_t * e) {
     lv_obj_t        *obj = lv_event_get_target(e);
     params_uint8_t  *var = (params_uint8_t*)lv_event_get_user_data(e);
@@ -731,7 +737,7 @@ static uint8_t make_mag(uint8_t row) {
 
     obj = lv_label_create(grid);
 
-    lv_label_set_text(obj, "Popups: Freq, Info, ALC");
+    lv_label_set_text(obj, "Popups Freq/Info/ALC");
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col++, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     /* Freq */
@@ -2066,20 +2072,14 @@ static uint8_t make_font(uint8_t row) {
     lv_obj_t    *obj;
 
     obj = lv_label_create(grid);
-    lv_label_set_text(obj, "Font (restart)");
+    lv_label_set_text(obj, "Font");
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
-    obj = dropdown_uint8(grid, &params.font, " Sony Sketch \n Roboto \n DejaVu");
+    obj = dropdown_uint8(grid, &params.font, " Sony Sketch \n Roboto \n DejaVu", font_update_cb);
 
     lv_obj_set_size(obj, SMALL_6, ROW_H);
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
     lv_obj_center(obj);
-
-    return row + 1;
-}
-
-static uint8_t make_delimiter(uint8_t row) {
-    row_dsc[row] = 10;
 
     return row + 1;
 }
@@ -2381,7 +2381,7 @@ static void wl_row_create(wl_row_t *r, lv_obj_t *list, lv_event_cb_t cb, int i) 
     lv_group_add_obj(keyboard_group, obj);
 
     r->obj = obj;
-    r->name = wl_label(obj, &sony_24, 0xffffff, 10);
+    r->name = wl_label(obj, &sony_22, 0xffffff, 14);     /* lined up with the row labels */
     lv_obj_set_width(r->name, 270);
     lv_label_set_long_mode(r->name, LV_LABEL_LONG_DOT);
 }
@@ -2724,7 +2724,7 @@ static uint8_t make_wifi(uint8_t row) {
 
     wl_row_label(row, "WiFi/BT power");
     bt_switch_cell(row, 1, params.wifi_enabled.x, wifi_power_cb);
-    row = make_delimiter(row + 1);
+    row++;
 
     wl_row_label(row, "Status");
     obj = lv_obj_create(grid);
@@ -2743,8 +2743,7 @@ static uint8_t make_wifi(uint8_t row) {
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
     wf.ip = wl_label(grid, &sony_22, 0x99aabb, 0);
     lv_obj_set_grid_cell(wf.ip, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
-    row_dsc[row] = 36;
-    row = make_delimiter(row + 1);
+    row++;
 
     wl_row_label(row, "Networks");
     wf.scan_btn = wl_button(row, "Scan", wifi_scan_cb);
@@ -3137,7 +3136,7 @@ static uint8_t make_wfview(uint8_t row) {
 
     wl_row_label(row, "Server");
     wv.sw = bt_switch_cell(row, 1, wfview_server_get_enabled(), wv_power_cb);
-    row = make_delimiter(row + 1);
+    row++;
 
     row = make_wfview_field(row, "User", WV_USER, &wv.user);
     row = make_wfview_field(row, "Password", WV_PASS, &wv.pass);
