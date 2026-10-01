@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cmath>
+
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -207,7 +209,12 @@ class Parameter : public SubjectT<ValueType>, public ParamBase {
         } else {
             // Scale is a compile-time constant (NTTP), so the multiply is
             // folded to an immediate operand with no runtime overhead.
-            return static_cast<DbType>(v * Scale);
+            // Rounded, not truncated: 0.3 * 10 is 2.9999 in float.
+            if constexpr (std::is_floating_point_v<ValueType>) {
+                return static_cast<DbType>(std::lround(v * Scale));
+            } else {
+                return static_cast<DbType>(v * Scale);
+            }
         }
     }
 
