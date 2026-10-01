@@ -13,3 +13,6 @@ Copied from that commit: `wsprd/*` and `LICENSE`.
 ## Local patches
 
 Each one is its own commit on top of the pristine import.
+
+- `wsprd.c`: no FFTW wisdom file (it was read from and written to the
+  working directory on every decode).

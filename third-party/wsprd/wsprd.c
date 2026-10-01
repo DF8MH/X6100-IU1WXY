@@ -499,13 +499,6 @@ int wspr_decode(float  *idat,
     fftout = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex) * FFT_SIZE);
     PLAN   = fftwf_plan_dft_1d(FFT_SIZE, fftin, fftout, FFTW_FORWARD, PATIENCE);
 
-    /* Recover FFTW optimization settings */
-    FILE *fp_fftw_wisdom_file;
-    if ((fp_fftw_wisdom_file = fopen("fftw_wisdom.dat", "r"))) {  // Open FFTW wisdom
-        fftwf_import_wisdom_from_file(fp_fftw_wisdom_file);
-        fclose(fp_fftw_wisdom_file);
-    }
-
     /* Hann function */
     float hann[FFT_SIZE];
     for (int i = 0; i < FFT_SIZE; i++) {
@@ -831,11 +824,6 @@ int wspr_decode(float  *idat,
 
     fftwf_free(fftin);
     fftwf_free(fftout);
-
-    if ((fp_fftw_wisdom_file = fopen("fftw_wisdom.dat", "w"))) {
-        fftwf_export_wisdom_to_file(fp_fftw_wisdom_file);
-        fclose(fp_fftw_wisdom_file);
-    }
 
     fftwf_destroy_plan(PLAN);
 
