@@ -236,6 +236,8 @@ TEST_CASE("cw receiver: a weak station after a strong one is still decoded") {
     constexpr float STRONG_AMP = 30.0f; // power ratio 900
     constexpr float WEAK_AMP   = 8.0f;  // -11.5 dB from STRONG_AMP
 
+    feed_ms(rx, false, 1200); // nothing is detected in the first second
+
     // Strong station: 20 WPM, symmetric 60 ms marks / spaces.
     for (int rep = 0; rep < 25; ++rep) {
         feed_ms(rx, true, 60, TONE_BIN, STRONG_AMP);

@@ -131,8 +131,8 @@ TEST_CASE("time classifier: on_retune keeps the state but keeps the speed") {
 // classifier reports one word space after the word gap to flush the decoder.
 TEST_CASE("time classifier: a long silence reports one word space") {
     Stream s;
-    s.on(6); // dot
-    REQUIRE(close_mark(s, 0) == cw::CW_DOT);
+    s.on(6); // dot, alone: held until the silence shows it is a word (E)
+    REQUIRE(close_mark(s, 0) == cw::CW_NONE);
 
     // 960 ms of silence, well over the ~600 ms word gap at the default speed.
     int words = 0;
@@ -141,6 +141,35 @@ TEST_CASE("time classifier: a long silence reports one word space") {
             ++words;
     }
     REQUIRE(words == 1);
+    REQUIRE(s.tokens == std::vector<cw::Token>{cw::CW_DOT, cw::CW_WORD_SPACE});
+}
+
+// Noise peaks and clicks in an idle channel come alone: a lone mark much
+// shorter than an element, or one not clearly above the detection floor, is
+// dropped and not learned. In a message the same short mark is kept.
+TEST_CASE("time classifier: a lone blip is dropped, a lone E is kept") {
+    Stream s;
+    s.on(3); // 24 ms at 20 WPM (60 ms dot): a blip
+    s.off(120);
+    REQUIRE(s.tokens == std::vector<cw::Token>{cw::CW_WORD_SPACE});
+
+    s.tokens.clear();
+    s.on(6); // a dot, but barely over the floor
+    s.tc.feed(-1, 0.0f, false);
+    s.state = false;
+    s.off(120);
+    REQUIRE(s.tokens == std::vector<cw::Token>{cw::CW_WORD_SPACE});
+    REQUIRE(cw::TimeClassifierTestAccess::hist_samples(s.tc) == 0); // nothing learned
+
+    s.tokens.clear();
+    s.on(3); // the first of two 24 ms dots: kept (50 WPM "I")
+    s.off(3);
+    s.on(3);
+    s.off(120);
+    REQUIRE(s.tokens.size() >= 3);
+    REQUIRE(s.tokens[0] == cw::CW_DOT);
+    REQUIRE(s.tokens[1] == cw::CW_ELEMENT_SPACE);
+    REQUIRE(s.tokens[2] == cw::CW_DOT);
 }
 
 // Regression: dash-heavy text at 30 WPM used to drag the dot/dash boundary to
@@ -294,6 +323,17 @@ TEST_CASE("time classifier: stretched mark and shortened space compensate") {
     REQUIRE(s.tc.get_current_wpm() == Approx(20.0f).margin(2.0f));
 }
 
+// A dash and a letter space first, so the mark under test is not a lone mark
+// (held, not learned); their histogram mass is far from the tested bins.
+static void prime_not_lone(cw::TimeClassifier &tc) {
+    tc.feed(+1, 0.0f);
+    for (int i = 0; i < 20; ++i)
+        tc.feed(0, 0.0f);
+    tc.feed(-1, 0.0f);
+    for (int i = 0; i < 20; ++i)
+        tc.feed(0, 0.0f);
+}
+
 // A crossing frame carries the offset behind the start of the reporting hop:
 // the closing interval gives the post-crossing part back and the new interval
 // opens with it, so each hop is counted exactly once.
@@ -303,6 +343,7 @@ TEST_CASE("time classifier: the transition hop is split at the crossing offset")
     Access::clear_histograms(tc);
     constexpr float DT = 3.0f; // crossing 3 ms before the hop boundary
 
+    prime_not_lone(tc);
     tc.feed(+1, 0.0f);
     for (int i = 0; i < 2; ++i)
         tc.feed(0, 0.0f);
@@ -329,6 +370,7 @@ TEST_CASE("time classifier: a zero crossing offset is a full hop") {
     cw::TimeClassifier tc;
     Access::clear_histograms(tc);
 
+    prime_not_lone(tc);
     tc.feed(+1, 0.0f);
     for (int i = 0; i < 3; ++i)
         tc.feed(0, 0.0f);

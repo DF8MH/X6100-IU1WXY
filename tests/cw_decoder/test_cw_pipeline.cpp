@@ -92,15 +92,77 @@ TEST_CASE("cw pipeline: noise, jitter and drift") {
     }
 }
 
-TEST_CASE("cw pipeline: noise alone decodes nothing") {
-    std::mt19937                     rng(7);
-    std::normal_distribution<float> noise(0.0f, 0.05f);
-    std::vector<float>               audio(static_cast<size_t>(RATE) * 60);
-    for (float &x : audio)
-        x = noise(rng);
-    Result r = run(audio);
-    INFO("decoded '" << r.text << "'");
-    CHECK(cw_synth::normalize(r.text).size() <= 1);
+// No signal, 60 s each: nothing may be decoded. The radio with no antenna
+// printed an E every few seconds (noise peaks and clicks taken as dots).
+TEST_CASE("cw pipeline: no signal decodes nothing") {
+    const size_t                    n = static_cast<size_t>(RATE) * 60;
+    std::mt19937                    rng(7);
+    std::normal_distribution<float> n01(0.0f, 1.0f);
+    std::uniform_real_distribution<float> u01(0.0f, 1.0f);
+    const float lsb = 1.0f / 32768.0f;
+    auto quantize = [lsb](float x) { return std::round(x / lsb) * lsb; };
+    // Steady carrier at the given level over the noise, in 60 Hz (the
+    // coherent detection bandwidth): A^2/2 = sigma^2 * 60 / (RATE / 2) * level
+    auto birdie = [&](std::vector<float> &a, float sigma, float hz, float level_db) {
+        const float amp = std::sqrt(2.0f * sigma * sigma * 60.0f / (RATE / 2.0f) * std::pow(10.0f, level_db / 10.0f));
+        for (size_t i = 0; i < a.size(); ++i)
+            a[i] += amp * std::sin(2.0f * static_cast<float>(M_PI) * hz * static_cast<float>(i) / RATE);
+    };
+
+    struct Case {
+        const char        *name;
+        std::vector<float> audio;
+    };
+    std::vector<Case> cases;
+    {
+        std::vector<float> a(n);
+        for (float &x : a)
+            x = 0.05f * n01(rng);
+        cases.push_back({"white noise", a});
+    }
+    {
+        std::vector<float> a(n);
+        for (float &x : a)
+            x = quantize(3.0f * lsb * n01(rng));
+        cases.push_back({"very low noise, 3 LSB rms", a});
+    }
+    {
+        std::vector<float> a(n);
+        for (float &x : a)
+            x = quantize(0.7f * lsb * n01(rng));
+        cases.push_back({"quantized near-silence, 0.7 LSB rms", a});
+    }
+    {
+        std::vector<float> a(n);
+        for (size_t i = 0; i < n; ++i) {
+            a[i] = 3.0f * lsb * n01(rng);
+            if (u01(rng) < 1.0f / (RATE * 5.0f)) // a click every ~5 s
+                for (size_t k = 0; k < 6 && i + k < n; ++k)
+                    a[i + k] += 0.02f * ((k % 2) ? -1.0f : 1.0f) * std::exp(-static_cast<float>(k) / 1.5f);
+        }
+        cases.push_back({"sparse clicks on low noise", a});
+    }
+    for (float level : {0.0f, 6.0f, 15.0f}) {
+        std::vector<float> a(n);
+        for (float &x : a)
+            x = 0.01f * n01(rng);
+        birdie(a, 0.01f, 700.0f, level);
+        cases.push_back({level == 0.0f ? "birdie 700 Hz at the noise level" : level == 6.0f ? "birdie 700 Hz +6 dB" : "birdie 700 Hz +15 dB", a});
+    }
+    {
+        std::vector<float> a(n);
+        for (float &x : a)
+            x = 0.01f * n01(rng);
+        birdie(a, 0.01f, 830.0f, 6.0f);
+        cases.push_back({"birdie 830 Hz +6 dB", a});
+    }
+
+    for (auto &c : cases) {
+        Result r = run(c.audio);
+        INFO(c.name << ": decoded '" << r.text << "', " << r.wpm << " WPM");
+        CHECK(cw_synth::normalize(r.text).empty());
+        CHECK(r.wpm == 20.0f); // nothing learned: still the default speed
+    }
 }
 
 TEST_CASE("cw pipeline: CPU cost per second of audio") {

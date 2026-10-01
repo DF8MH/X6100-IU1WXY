@@ -240,19 +240,50 @@ Token TimeClassifier::classify_and_update(bool closed_on, float closed_duration_
     return token;
 }
 
-Token TimeClassifier::feed(int edge, float dt) {
-    Token token = CW_NONE;
+Token TimeClassifier::feed(int edge, float dt, bool strong) {
+    // A token held back one hop (two came due at once, see below).
+    Token token = queued_;
+    queued_     = CW_NONE;
     if (edge != 0) {
         // The crossing sits dt before the start of this hop: the closing
         // interval ends there (giving dt back) and the new one opens with one
         // full hop plus dt. dt is 0 for a crossing at the hop boundary.
-        // Skip closing the OFF interval when the end-of-message word space has
-        // already been reported for it; it was accounted for below.
-        if (is_now_on_ || !idle_reported_) {
-            current_duration_ms_ -= dt;
-            if (current_duration_ms_ < 0.0f)
-                current_duration_ms_ = 0.0f;
-            token = classify_and_update(is_now_on_, current_duration_ms_, !truncated_);
+        current_duration_ms_ -= dt;
+        if (current_duration_ms_ < 0.0f)
+            current_duration_ms_ = 0.0f;
+
+        if (edge > 0 && held_ && held_strong_) {
+            // The held mark is followed by more keying: a normal mark.
+            held_   = false;
+            token   = classify_and_update(true, held_ms_, held_learn_);
+            queued_ = classify_and_update(false, current_duration_ms_, !truncated_);
+            lone_   = false;
+        } else if (edge > 0 && held_) {
+            // Too weak to open a message: dropped, and the new mark is the
+            // first one again.
+            held_ = false;
+        } else if (edge < 0 && current_duration_ms_ > MAX_MARK_K * unit_ms_) {
+            // Far longer than a dash: a carrier (a birdie the noise floor has
+            // not caught up with yet, a tune-up), not keying.
+            lone_ = true;
+        } else if (edge < 0 && lone_) {
+            // A mark alone in the silence: hold it until the next mark.
+            held_       = true;
+            held_ms_    = current_duration_ms_;
+            held_learn_  = !truncated_;
+            held_strong_ = strong;
+        } else if (is_now_on_ || !idle_reported_) {
+            // Skip closing the OFF interval when the end-of-message word space
+            // has already been reported for it; it was accounted for below.
+            Token closed = classify_and_update(is_now_on_, current_duration_ms_, !truncated_);
+            if (token == CW_NONE)
+                token = closed;
+            else
+                queued_ = closed;
+            if (edge > 0)
+                lone_ = (closed == CW_WORD_SPACE);
+        } else {
+            lone_ = true; // after the end of a message
         }
         truncated_           = false;
         is_now_on_           = (edge > 0);
@@ -264,6 +295,16 @@ Token TimeClassifier::feed(int edge, float dt) {
         current_duration_ms_ += static_cast<float>(BIN_SIZE_MS);
     }
 
+    // The held mark stays alone: a one-element word (E, T) if it has the
+    // length of an element at the tracked speed, else a noise blip (dropped).
+    // Never learned: blips would drag the speed up, and blips that pass at a
+    // higher speed would then feed on themselves.
+    if (held_ && current_duration_ms_ >= threshold_letter_word_) {
+        held_ = false;
+        if (held_strong_ && held_ms_ >= LONE_MARK_K * unit_ms_)
+            token = classify_and_update(true, held_ms_, false);
+    }
+
     // No following mark has closed this OFF stretch: report the end of the
     // message once, after the word gap, so the decoder emits the last character.
     if (!is_now_on_ && !idle_reported_) {
@@ -271,7 +312,10 @@ Token TimeClassifier::feed(int edge, float dt) {
         if (current_duration_ms_ >= limit) {
             idle_reported_       = true;
             current_duration_ms_ = 0.0f;
-            token                = CW_WORD_SPACE;
+            if (token == CW_NONE)
+                token = CW_WORD_SPACE;
+            else
+                queued_ = CW_WORD_SPACE;
         }
     }
     return token;

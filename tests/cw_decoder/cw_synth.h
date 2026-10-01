@@ -23,7 +23,8 @@ struct Params {
     float jitter      = 0.0f;  // std dev of each element/gap length, fraction of it
     float snr_db      = 20.0f; // tone power / noise power in 2500 Hz
     float amplitude   = 0.1f;  // tone peak (full scale 1.0)
-    float lead_s      = 1.0f;  // noise before and after the text
+    float lead_s      = 2.0f;  // noise before and after the text (the receiver
+                               // detects nothing in its first second)
     uint32_t seed     = 1;
 };
 

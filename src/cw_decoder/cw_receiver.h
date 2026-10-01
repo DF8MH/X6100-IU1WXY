@@ -85,6 +85,13 @@ class CwReceiver {
     RegionScratch       percentile_scratch_{};
     float               noise_bin_smoothed_    = -1.0f; // per-bin noise, < 0 => not seeded
     float               noise_integr_          = -1.0f; // aligned to the coherent integrator
+    static constexpr int BATCH_HOPS = 125;            // 1 s of coherent hops
+    std::array<float, BATCH_HOPS> batch_r_{};
+    int                 batch_hops_            = 0;     // hops of the carrier floor batch
+    bool                muted_                 = true;  // no detection until the first batch
+    float               floor_q_               = 0.0f;  // carrier floor (power/noise percentile)
+    int                 on_hops_               = 0;     // hops the detector has been ON
+    float               mark_peak_             = 0.0f;  // peak power/noise of the current mark
     int                 prev_peak_bin_         = -1;    // last strong frame's peak bin
     int                 stable_frames_         = 0;     // consecutive strong frames near it
     float               current_freq_hz_       = 0.0f;

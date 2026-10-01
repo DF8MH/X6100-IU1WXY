@@ -39,6 +39,15 @@ constexpr float LETTER_WORD_TH_K = 5.0f;
 // Histogram leak; measured by tests/cw_decoder/tools/hist_forget_sweep.cpp.
 constexpr float HIST_FORGET = 0.9f;
 
+// A mark with a word gap (or more) on both sides is a one-element word (E,
+// T) or a noise blip: noise peaks and clicks come alone, 16-40 ms long. It is
+// kept only if it lasts LONE_MARK_K units at the tracked speed and is clearly
+// above the detection floor (noise peaks barely cross it).
+constexpr float LONE_MARK_K  = 0.7f;
+constexpr float LONE_MARK_DB = 3.0f; // and peak this far above the detection floor
+// A mark longer than this many units is a carrier, not keying: dropped.
+constexpr float MAX_MARK_K = 8.0f;
+
 // Splits a keyed envelope into Morse intervals. The ON/OFF decision (level,
 // hysteresis, glitch merge) is owned by the Detector; the classifier only
 // times the intervals it is given. The hop that contains a level crossing is
@@ -54,7 +63,9 @@ class TimeClassifier {
     // `edge` is the Detector's crossing for this frame: +1 OFF->ON, -1 ON->OFF,
     // 0 held. `dt` (ms) is the crossing offset behind the start of the
     // reporting hop (>= 0); it is used only when `edge != 0`.
-    Token feed(int edge, float dt);
+    // `strong` (with edge -1): the closing mark peaked LONE_MARK_DB above the
+    // detection floor; a mark alone in the silence must.
+    Token feed(int edge, float dt, bool strong = true);
     float get_current_wpm() const;
     bool  is_signal_active() const;
 
@@ -84,10 +95,19 @@ class TimeClassifier {
 
     // Latches the one-shot end-of-message word space so a long silence flushes
     // the last character once; re-armed by the next mark.
-    bool idle_reported_ = false;
+    bool idle_reported_ = true; // nothing to close before the first mark
 
     // The in-flight interval was cut by a retune: its length is not learned.
     bool truncated_ = false;
+
+    // The current mark follows a word gap or the end of a message; when it
+    // ends it is held until the next mark (see LONE_MARK_K).
+    bool  lone_       = true;
+    bool  held_       = false;
+    float held_ms_    = 0.0f;
+    bool  held_learn_ = false;
+    bool  held_strong_ = false;
+    Token queued_     = CW_NONE; // token due on the next hop
 
     float unit_ms_ = UNIT_MS_DEFAULT;
     // Fast re-lock: a candidate far from the current unit is committed after it

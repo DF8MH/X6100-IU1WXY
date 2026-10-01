@@ -19,6 +19,9 @@ constexpr float db_to_lin(float db) {
     return powf(10.0f, db * 0.1f);
 }
 
+// OFF hops (400 ms, about a word gap) after which a mark needs one more hop.
+constexpr size_t LONG_OFF_HOPS = 50;
+
 // One hop's decision.
 // `edge` names the level crossing this hop confirmed:
 //   +1 = OFF -> ON, -1 = ON -> OFF, 0 = held (no crossing in this hop).
@@ -41,6 +44,7 @@ class Detector {
     size_t n_off_ = 2;
     size_t cnt_on_ = 0;
     size_t cnt_off_ = 0;
+    size_t off_hops_ = 0; // hops in the OFF state
 
     // Absolute detection floor, set by the user (dB SNR). It only shifts the
     // absolute floors below; the relative margins stay fixed.
@@ -74,14 +78,20 @@ public:
         int edge = 0;
         bool pending_flip = false;
         if (state_ == false) {
+            // After a silence a mark must hold one hop longer: noise peaks and
+            // clicks in an idle channel last two hops. The extra hop is given
+            // back to the crossing offset.
+            const size_t n_on = (off_hops_ >= LONG_OFF_HOPS) ? n_on_ + 1 : n_on_;
+            off_hops_++;
             if (r > t_on_) {
                 pending_flip = true;
                 if (!cnt_on_) {
                     r_after_ = r;
                 }
                 cnt_on_++;
-                if (cnt_on_ >= n_on_) {
-                    crossing_offset = -interpolate_dt();
+                if (cnt_on_ >= n_on) {
+                    crossing_offset = -interpolate_dt() + static_cast<float>((n_on - n_on_) * COHERENT_INTEGRATOR_HOP);
+                    off_hops_ = 0;
                     state_  = true;
                     cnt_on_ = 0;
                     edge    = +1;
@@ -139,6 +149,8 @@ public:
 
     // Current Schmitt levels, as linear power/noise ratios (same unit as feed()).
     float on_threshold_lin() const { return t_on_; }
+    float floor_db() const { return user_floor_db_; }
+    bool  is_on() const { return state_; }
     float off_threshold_lin() const { return t_off_; }
 };
 

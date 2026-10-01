@@ -15,6 +15,24 @@
 
 namespace cw {
 
+namespace {
+
+// Carrier floor at the NCO: a steady carrier (birdie) on the tone lifts the
+// low percentile of power/noise, which is ~0.051 (5th percentile) for noise
+// alone. Above FLOOR_K times that, the noise reference is raised with it, so
+// the carrier is not keyed by its own noise. CW keying leaves the 5th
+// percentile in its gaps. A batch estimate over the first second after a
+// reset or a retune, then multiplicative tracking steps; a detector held ON
+// longer than any dash raises it quickly.
+constexpr float FLOOR_PCT     = 0.05f;
+constexpr float FLOOR_Q_NOISE = 0.05129f; // -ln(1 - FLOOR_PCT)
+constexpr float FLOOR_K       = 2.0f;
+constexpr float FLOOR_STEP    = 0.02f;
+constexpr int   CARRIER_HOPS  = 60;    // 480 ms, longer than a 10 WPM dash
+constexpr float CARRIER_RISE  = 1.05f; // per hop
+
+} // namespace
+
 CwReceiver::CwReceiver(EmitTextFn emit_text, EmitOnOffFn emit_on_off, FrameFn on_frame)
     : decoder_(std::move(emit_text)), emit_on_off(std::move(emit_on_off)), on_frame_(std::move(on_frame)) {
     update_search_region();
@@ -46,6 +64,9 @@ void CwReceiver::change_peak_filter(bool on, float key_tone_hz, float q) {
     // detector does not mix pre- and post-filter estimates.
     noise_bin_smoothed_ = -1.0f;
     noise_integr_       = -1.0f;
+    batch_hops_         = 0;
+    muted_              = true;
+    floor_q_            = 0.0f;
 }
 
 FrameObservation CwReceiver::analyze_frame(const ComplexSpectrum &fft_output) {
@@ -153,6 +174,7 @@ void CwReceiver::process_audio_frame(size_t n, float *samples) {
                 tone_tracker_.set_noise(noise_integr_);
                 if (tone_tracker_.consider_retune(obs)) {
                     classifier_.on_retune();
+                    batch_hops_ = 0; // a new tone: estimate its carrier floor again
                     retuned = true;
                 }
             }
@@ -160,8 +182,36 @@ void CwReceiver::process_audio_frame(size_t n, float *samples) {
 
         float power = tone_tracker_.process(samples[i]);
         if (power >= 0.0f && noise_integr_ > 0.0f) {
-            auto res = detector_.feed(power, noise_integr_);
-            Token token = classifier_.feed(res.edge, res.dt);
+            const float r = power / noise_integr_;
+            if (batch_hops_ < BATCH_HOPS) {
+                // A batch estimate of the carrier floor over the first second
+                // (after a reset or a retune), then tracking from there.
+                batch_r_[batch_hops_++] = r;
+                if (batch_hops_ == BATCH_HOPS) {
+                    auto q = batch_r_.begin() + static_cast<long>(FLOOR_PCT * BATCH_HOPS);
+                    std::nth_element(batch_r_.begin(), q, batch_r_.end());
+                    floor_q_ = std::max({floor_q_, *q, 1e-3f * FLOOR_Q_NOISE});
+                    muted_   = false;
+                }
+            }
+            if (muted_) {
+                // After a reset the noise floors settle: nothing is detected.
+                power = 0.0f;
+            } else if (on_hops_ > CARRIER_HOPS) {
+                // Keyed far longer than a dash: a carrier. Catch up quickly.
+                floor_q_ *= CARRIER_RISE;
+            } else {
+                floor_q_ *= (r > floor_q_) ? (1.0f + FLOOR_STEP * FLOOR_PCT) : (1.0f - FLOOR_STEP * (1.0f - FLOOR_PCT));
+                floor_q_ = std::max(floor_q_, 1e-3f * FLOOR_Q_NOISE); // never stuck at 0
+            }
+            const float noise = noise_integr_ * std::max(1.0f, floor_q_ / (FLOOR_K * FLOOR_Q_NOISE));
+            auto res = detector_.feed(power, noise);
+            if (res.edge > 0)
+                mark_peak_ = power / noise;
+            else if (detector_.is_on() || res.edge < 0)
+                mark_peak_ = std::max(mark_peak_, power / noise);
+            const bool strong = mark_peak_ >= db_to_lin(detector_.floor_db() + LONE_MARK_DB);
+            Token token = classifier_.feed(res.edge, res.dt, strong);
             if (token != CW_NONE) {
                 decoder_.handle_token(token);
             }
@@ -169,6 +219,7 @@ void CwReceiver::process_audio_frame(size_t n, float *samples) {
                 is_signal_detected = (res.edge > 0);
                 emit_on_off(is_signal_detected);
             }
+            on_hops_ = is_signal_detected ? on_hops_ + 1 : 0;
 
             // Diagnostics for the offline inspector; written after the detector
             // and classifier have run, so the reported state is already the new
