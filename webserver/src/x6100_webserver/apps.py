@@ -145,7 +145,8 @@ def delete_digital_mode(mode_id, dbcon):
 # Same file and format as the radio GUI (src/cluster/client.c): "host=..."
 # and "port=..." lines are the server in use, "server=name|host|port" lines
 # the saved ones. The GUI reloads the server when the file's mtime changes.
-# Filters and alerts are more lines: filter_modes=CW,SSB,DIG,AMFM, max_age=MIN,
+# Filters and alerts are more lines: filter_modes=CW,SSB,DIG,AMFM, filter_bands=40,20,
+# filter_activity=POTA,SOTA, max_age=MIN,
 # skip_spotters=A,B, alert=PATTERN|bands|mode, alert_popup=0|1, alert_beep=0|1.
 
 CLUSTER_DEFAULT_HOST = "dxc.ve7cc.net"
@@ -167,6 +168,7 @@ CLUSTER_MAX_SERVERS = 16
 CLUSTER_MAX_ALERTS = 50
 CLUSTER_MODES = ["CW", "SSB", "DIG", "AMFM"]
 CLUSTER_BANDS = [160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6]
+CLUSTER_ACTIVITY = ["POTA", "SOTA"]
 # Written by the radio GUI: pattern|freq_hz|HH:MM of the last spot that matched
 CLUSTER_ALERTS_SEEN = "/tmp/cluster_alerts_seen"
 
@@ -199,7 +201,7 @@ def read_cluster_conf():
 
 def read_cluster_options():
     """Filters and alerts of cluster.conf (same rules as the GUI: missing = no filter)."""
-    opts = {"modes": list(CLUSTER_MODES), "max_age": 0, "skip": "", "alerts": [], "popup": False, "beep": False}
+    opts = {"modes": list(CLUSTER_MODES), "bands": [], "activity": [], "max_age": 0, "skip": "", "alerts": [], "popup": False, "beep": False}
     try:
         with open(settings.CLUSTER_CONF, errors="replace") as f:
             lines = f.read().splitlines()
@@ -210,6 +212,12 @@ def read_cluster_options():
             modes = [m.strip().upper() for m in line[13:].split(",")]
             modes = [m for m in CLUSTER_MODES if m in modes]
             opts["modes"] = modes or list(CLUSTER_MODES)
+        elif line.startswith("filter_bands="):
+            bands = {int(b) for b in re.findall(r"\d+", line[13:])}
+            opts["bands"] = [b for b in CLUSTER_BANDS if b in bands]
+        elif line.startswith("filter_activity="):
+            act = [a.strip().upper() for a in line[16:].split(",")]
+            opts["activity"] = [a for a in CLUSTER_ACTIVITY if a in act]
         elif line.startswith("max_age="):
             m = re.match(r"\s*[+-]?\d+", line[8:])  # atoi()
             opts["max_age"] = int(m.group()) if m and 0 < int(m.group()) < 1440 else 0
@@ -230,6 +238,10 @@ def cluster_option_lines(opts):
     lines = []
     if set(opts["modes"]) != set(CLUSTER_MODES):
         lines.append("filter_modes=" + ",".join(opts["modes"]))
+    if opts["bands"] and set(opts["bands"]) != set(CLUSTER_BANDS):
+        lines.append("filter_bands=" + ",".join(str(b) for b in opts["bands"]))
+    if opts["activity"]:
+        lines.append("filter_activity=" + ",".join(opts["activity"]))
     if opts["max_age"]:
         lines.append(f"max_age={opts['max_age']}")
     if opts["skip"]:
@@ -277,7 +289,7 @@ def cluster_state():
         a["seen"] = seen.get(a["pattern"], "")
     return {"host": host, "port": port,
             "servers": [{"name": n, "host": h, "port": p} for n, h, p in servers],
-            "filters": {"modes": opts["modes"], "max_age": opts["max_age"], "skip": opts["skip"]},
+            "filters": {"modes": opts["modes"], "bands": opts["bands"], "activity": opts["activity"], "max_age": opts["max_age"], "skip": opts["skip"]},
             "alerts": opts["alerts"], "popup": opts["popup"], "beep": opts["beep"]}
 
 
@@ -694,9 +706,16 @@ def set_cluster_filters():
     skip = ",".join(w.strip() for w in str(data.get("skip", "")).split(",") if w.strip())
     if not cluster_text_ok(skip, 120) or not re.fullmatch(r"[A-Za-z0-9/*#@,-]*", skip):
         return cluster_error(400, "Invalid spotters: letters, digits, '*', '#', '-', '/' separated by commas")
+    bands = data.get("bands", [])
+    activity = data.get("activity", [])
+    if not isinstance(bands, list) or any(not isinstance(b, int) or b not in CLUSTER_BANDS for b in bands):
+        return cluster_error(400, "Invalid bands")
+    if not isinstance(activity, list) or any(a not in CLUSTER_ACTIVITY for a in activity):
+        return cluster_error(400, "Invalid activity")
     host, port, servers = read_cluster_conf()
     opts = read_cluster_options()
-    opts.update(modes=[m for m in CLUSTER_MODES if m in modes], max_age=max_age, skip=skip)
+    opts.update(modes=[m for m in CLUSTER_MODES if m in modes], max_age=max_age, skip=skip,
+                bands=[b for b in CLUSTER_BANDS if b in bands], activity=[a for a in CLUSTER_ACTIVITY if a in activity])
     return cluster_save(host, port, servers, opts)
 
 

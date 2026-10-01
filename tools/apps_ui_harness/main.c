@@ -902,6 +902,31 @@ static void wireless_demo(void) {
     pump(200);
 }
 
+/* Settings -> Cluster with some filters on, then a toggle and the file it writes */
+static void cluster_filters_demo(void) {
+    FILE *conf = fopen("cluster.conf", "w");
+    fputs("host=dxc.ve7cc.net\nport=23\nfilter_modes=CW,SSB\nfilter_bands=40,20,15\nfilter_activity=POTA\n", conf);
+    fclose(conf);
+    dialog_construct(dialog_settings, lv_scr_act());
+    pump(300);
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[0]->press(pg->items[0]);
+    pg = buttons_get_cur_page();
+    pg->items[2]->press(pg->items[2]);
+    pump(300);
+    shot("cluster_filters_1.ppm");
+    for (int i = 0; i < 8; i++) lv_group_focus_next(keyboard_group);   /* 30 m */
+    lv_event_send(lv_group_get_focused(keyboard_group), LV_EVENT_RELEASED, NULL);   /* as the MFK press: toggles */
+    pump(300);
+    shot("cluster_filters_2.ppm");
+    char line[128];
+    conf = fopen("cluster.conf", "r");
+    while (fgets(line, sizeof line, conf)) printf("[conf] %s", line);
+    fclose(conf);
+    dialog_destruct();
+    pump(200);
+}
+
 /* Settings: walk the focus through every control of each tab, report the ones
  * that end up outside the visible area, shot each time the scroll moves. */
 static void settings_nav(void) {
@@ -1059,6 +1084,7 @@ int main(int argc, char **argv) {
     if (!only || !strcmp(only, "settings")) settings_demo();
     if (!only || !strcmp(only, "wireless")) wireless_demo();
     if (only && !strcmp(only, "settings_nav")) settings_nav();
+    if (only && !strcmp(only, "cluster_filters")) cluster_filters_demo();
     if (!only || !strcmp(only, "bookmarks")) {
         bookmarks("navtex", dialog_navtex, 517000, 1);
         bookmarks("wefax", dialog_wefax, 7878500, 1);

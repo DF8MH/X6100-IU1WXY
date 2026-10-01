@@ -28,13 +28,25 @@
 
 <div class="card">
   <h3>Filters</h3>
-  <p class="sub">Spots hidden here disappear from APP Cluster, the cluster column and the waterfall marks.</p>
+  <p class="sub">Spots hidden here disappear from APP Cluster, the cluster column and the waterfall marks. Modes, bands and activity are also on the radio: Settings → Cluster.</p>
   <label>Modes</label>
   <div class="actions" id="modes">
     <label><input type="checkbox" value="CW"> CW</label>
     <label><input type="checkbox" value="SSB"> SSB</label>
     <label><input type="checkbox" value="DIG"> Digital</label>
     <label><input type="checkbox" value="AMFM"> AM/FM</label>
+  </div>
+  <label>Bands</label>
+  <div class="actions" id="fbands"></div>
+  <p class="sub">No band ticked = all bands.</p>
+  <label for="activity">Activity</label>
+  <div class="actions">
+    <select id="activity">
+      <option value="">All spots</option>
+      <option value="POTA">POTA</option>
+      <option value="SOTA">SOTA</option>
+      <option value="POTA,SOTA">POTA + SOTA</option>
+    </select>
   </div>
   <div class="grid" style="grid-template-columns:160px 1fr">
     <div><label for="max_age">Max age</label>
@@ -93,6 +105,7 @@
 <script>
 var bandList = [160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6];
 bandList.forEach(function(b) { $("#bands").append($("<option>").val(b).text(b + " m")); });
+bandList.forEach(function(b) { $("#fbands").append($("<label>").append($("<input type='checkbox'>").val(b), " " + b + " m")); });
 
 var showStatus = function(text, error=false, sel="#status") {
   const el = $(sel);
@@ -116,6 +129,8 @@ var render = function(data) {
 
   const f = data.filters;
   $("#modes input").each(function() { $(this).prop("checked", f.modes.indexOf(this.value) >= 0); });
+  $("#fbands input").each(function() { $(this).prop("checked", f.bands.indexOf(Number(this.value)) >= 0); });
+  $("#activity").val(f.activity.join(","));
   $("#max_age").val(String(f.max_age));
   if ($("#max_age").val() === null) $("#max_age").append($("<option>").val(f.max_age).text(f.max_age + " min")).val(String(f.max_age));
   $("#skip").val(f.skip.split(",").join(", "));
@@ -158,7 +173,9 @@ $("#add").on("submit", function(e) {
 $("#save-filters").on("click", function() {
   const modes = $("#modes input:checked").map(function() { return this.value; }).get();
   call("POST", "/api/cluster/filters",
-       {modes: modes, max_age: Number($("#max_age").val()), skip: $("#skip").val().trim()}, "#fstatus");
+       {modes: modes, max_age: Number($("#max_age").val()), skip: $("#skip").val().trim(),
+        bands: $("#fbands input:checked").map(function() { return Number(this.value); }).get(),
+        activity: $("#activity").val() ? $("#activity").val().split(",") : []}, "#fstatus");
 });
 
 $("#add-alert").on("submit", function(e) {

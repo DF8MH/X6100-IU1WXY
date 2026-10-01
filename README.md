@@ -59,7 +59,7 @@ works as in the base firmware.
 - RTTY, SSTV, WeFax and NavTex (from the 1KO125 fork), with station and calling-frequency lists (**Freq.**)
 - The fixed-frequency apps (WSPR, NavTex, WeFax, SSTV) share one full-screen look: station and frequency at the top, state on the right, the content in a black panel, a status line at the bottom
 - The open app is named in the frequency strip (e.g. `WSPR 20m`); leaving an app gives the VFO, mode and band back
-- DX Cluster app: telnet client over WiFi, spots by frequency around the VFO, one-press tune, saved servers, mode/age/spotter filters and callsign alerts with a popup
+- DX Cluster app: telnet client over WiFi, spots by frequency around the VFO, one-press tune, saved servers, mode/band/POTA-SOTA filters on the radio (Settings → **Cluster**), age/spotter filters and callsign alerts with a popup
 
 **Display**
 
@@ -117,6 +117,10 @@ works as in the base firmware.
   <tr>
     <td align="center"><img src="docs/screenshots/settings_wfview.png" alt="wfview settings"><br><sub><b>wfview server</b> settings on the radio</sub></td>
     <td align="center"><img src="docs/screenshots/web_wfview.png" alt="Web wfview page"><br><sub><b>wfview</b> page of the web configurator</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/settings_cluster.png" alt="Cluster filters"><br><sub><b>Cluster filters</b>: modes, bands, POTA/SOTA</sub></td>
+    <td></td>
   </tr>
   <tr>
     <td colspan="2" align="center"><img src="docs/screenshots/web_memories.png" alt="Web memories page" width="600"><br><sub><b>Memories</b> page of the web configurator: MEM slots and channels</sub></td>
@@ -320,10 +324,17 @@ asks for the latest 50 spots (`sh/dx`).
   connected", "Connecting...", "cluster connected", or the error and
   "retrying").
 
-**Filters and alerts** (web configurator → Cluster, saved in `/mnt/cluster.conf`):
+**Filters and alerts** (saved in `/mnt/cluster.conf`, shared by the radio and the web configurator):
 
-- **Filters**: modes shown (CW, SSB, Digital, AM/FM), maximum age, spotters
-  to skip (`*` wildcard). They apply to the app, the column and the waterfall.
+- **On the radio** (Settings → **Cluster**): modes (CW, SSB, DIG, AM/FM),
+  bands (160-6 m, all on = no filter) and activity (All spots, POTA, SOTA,
+  POTA + SOTA). One mode and one band always stay on. A change applies at once.
+- **POTA / SOTA** come from the spot comment: the word POTA or SOTA, a park
+  reference (`US-1234`, `IT-0123`) or a summit reference (`I/LO-123`,
+  `W7W/KG-001`). WWFF references (`IFF-0123`) are not taken as POTA.
+- **Web configurator → Cluster**: the same modes, bands and activity, plus
+  maximum age and spotters to skip (`*` wildcard).
+- The filters apply to the app, the column and the waterfall.
 - **Alerts**: callsigns or prefixes (`3B8M`, `VP8*`, `*/MM`), optionally
   only on some bands or one mode. Matching spots are magenta with an `ALERT`
   tag and are never filtered out; a new one pops up on the main screen for
@@ -448,7 +459,7 @@ waterfall.
 ### Settings
 
 APP (page 2) → **Settings**. Tabs on two button pages: General, Display,
-Audio, Wireless (page 1), Keys and Info (page 2).
+Audio, Wireless (page 1), Keys, Cluster and Info (page 2).
 
 | Tab | Cards |
 |---|---|
@@ -457,6 +468,7 @@ Audio, Wireless (page 1), Keys and Info (page 2).
 | Audio | RX AUDIO, TX AUDIO (codec gain, compressor, filter, CESSB, FM emphasis), MICROPHONE, VOX, AGC, BT HEADPHONES |
 | Wireless | WIFI (power, status, IP, networks), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones), WFVIEW SERVER (on/off, user, password, port and client) |
 | Keys | FRONT KEYS, LONG PRESS (GEN, APP, KEY, MSG, DFN, DFL), HAND MIC KEYS (F1, F2, F1 long, F2 long) |
+| Cluster | CLUSTER FILTERS (modes, bands, POTA/SOTA activity) |
 | Info | app and base firmware versions |
 
 The MFK walks the controls and stops at the first and last one; there the

@@ -28,6 +28,8 @@ add_subdirectory(cfg)
 
 add_subdirectory(../src/cluster ${CMAKE_BINARY_DIR}/src/cluster)
 add_executable(test_cluster test_cluster.cpp)
+target_compile_definitions(CLUSTER PRIVATE CLUSTER_CONF="test_cluster.conf")
+target_compile_definitions(test_cluster PRIVATE CLUSTER_CONF="test_cluster.conf")
 target_link_libraries(test_cluster PRIVATE CLUSTER Catch2::Catch2WithMain)
 add_test(NAME test_cluster COMMAND $<TARGET_FILE:test_cluster> --colour-mode=ansi )
 

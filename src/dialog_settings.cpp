@@ -36,6 +36,8 @@ extern "C" {
     #include "textarea_window.h"
     #include "station.h"
     #include "wfview_server.h"
+    #include "cluster/client.h"
+    #include "cluster/spots.h"
 
     #include "lvgl/lvgl.h"
     #include <sys/time.h>
@@ -67,6 +69,7 @@ static void make_audio_page();
 static void make_wireless_page();
 static void make_info_page();
 static void make_keys_page();
+static void make_cluster_page();
 
 static void load_general_page(button_data_t *btn_data);
 static void load_display_page(button_data_t *btn_data);
@@ -74,6 +77,7 @@ static void load_audio_page(button_data_t *btn_data);
 static void load_wireless_page(button_data_t *btn_data);
 static void load_info_page(button_data_t *btn_data);
 static void load_keys_page(button_data_t *btn_data);
+static void load_cluster_page(button_data_t *btn_data);
 
 static void construct_cb(lv_obj_t *parent);
 static void destruct_cb();
@@ -145,6 +149,12 @@ static button_data_t btn_keys = {
     .press = load_keys_page,
 };
 
+static button_data_t btn_cluster = {
+    .type  = BTN_TEXT,
+    .label = "Cluster",
+    .press = load_cluster_page,
+};
+
 static button_data_t btn_info = {
     .type  = BTN_TEXT,
     .label = "Info",
@@ -165,6 +175,7 @@ static buttons_page_t btn_page_2 = {
     {
      &btn_p2,
      &btn_keys,
+     &btn_cluster,
      &btn_info,
      }
 };
@@ -216,6 +227,11 @@ static void load_info_page(button_data_t *btn_data) {
 
 static void load_keys_page(button_data_t *btn_data) {
     make_keys_page();
+    mark_tab(btn_data);
+}
+
+static void load_cluster_page(button_data_t *btn_data) {
+    make_cluster_page();
     mark_tab(btn_data);
 }
 
@@ -3223,12 +3239,14 @@ static void focus_cb(lv_group_t *g) {
     lv_obj_t **first = (lv_obj_t **)_lv_ll_get_head(&g->obj_ll);
     lv_obj_t **last  = (lv_obj_t **)_lv_ll_get_tail(&g->obj_ll);
 
-    if (last && *last == obj) {
-        lv_obj_scroll_by(page, 0, -lv_obj_get_scroll_bottom(page), LV_ANIM_OFF);
+    if (first && *first == obj) {   /* also the only one while the page is built */
+        lv_obj_scroll_to_y(page, 0, LV_ANIM_OFF);
         return;
     }
-    if (first && *first == obj) {
-        lv_obj_scroll_by(page, 0, lv_obj_get_scroll_top(page), LV_ANIM_OFF);
+    if (last && *last == obj) {
+        lv_coord_t below = lv_obj_get_scroll_bottom(page);
+
+        if (below > 0) lv_obj_scroll_by(page, 0, -below, LV_ANIM_OFF);
         return;
     }
     lv_obj_get_coords(obj, &a);
@@ -3510,6 +3528,139 @@ static void make_keys_page() {
 
     row = card_begin(LV_SYMBOL_AUDIO, "HAND MIC KEYS");
     row = make_hmic_action(row);
+    card_end(row);
+}
+
+/* Cluster: which spots the app, the column and the waterfall show. Saved in
+ * cluster.conf next to the web configurator's filters and alerts. */
+
+#define CF_MODES 4
+
+static const uint8_t cf_mode_bit[CF_MODES]  = { CLUSTER_FM_CW, CLUSTER_FM_SSB, CLUSTER_FM_DIG, CLUSTER_FM_AMFM };
+static const char   *cf_mode_name[CF_MODES] = { "CW", "SSB", "DIG", "AM/FM" };
+
+static struct {
+    lv_obj_t *mode[CF_MODES];
+    lv_obj_t *band[16];
+    int       band_n;
+    lv_obj_t *activity;
+} cf;
+
+static void cf_save() {
+    uint8_t  modes = 0;
+    uint16_t bands = 0;
+    int      on    = 0;
+
+    for (int i = 0; i < CF_MODES; i++) {
+        if (lv_obj_has_state(cf.mode[i], LV_STATE_CHECKED)) modes |= cf_mode_bit[i];
+    }
+    for (int b = 0; b < cf.band_n; b++) {
+        if (lv_obj_has_state(cf.band[b], LV_STATE_CHECKED)) {
+            bands |= 1u << b;
+            on++;
+        }
+    }
+    if (on == cf.band_n) bands = 0;     /* all of them: no filter */
+    cluster_filter_save(modes, bands, (uint8_t)lv_dropdown_get_selected(cf.activity));
+}
+
+static void cf_toggle_cb(lv_event_t *e) {
+    lv_obj_t  *obj  = lv_event_get_target(e);
+    lv_obj_t **list = (lv_obj_t **)lv_event_get_user_data(e);
+    int        n    = list == cf.mode ? CF_MODES : cf.band_n;
+    bool       any  = false;
+
+    for (int i = 0; i < n; i++) any |= lv_obj_has_state(list[i], LV_STATE_CHECKED);
+    if (!any) {
+        lv_obj_add_state(obj, LV_STATE_CHECKED);    /* one at least: none would hide every spot */
+        return;
+    }
+    cf_save();
+}
+
+static void cf_activity_cb(lv_event_t *e) {
+    cf_save();
+}
+
+static lv_obj_t * cf_toggle(uint8_t row, int col, const char *text, bool on, lv_obj_t **list) {
+    lv_obj_t *obj = lv_btn_create(grid);
+
+    lv_obj_remove_style_all(obj);
+    dialog_item(&dialog, obj);
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_CHECKABLE);
+    lv_obj_set_style_radius(obj, 8, 0);
+    lv_obj_set_style_border_width(obj, 2, 0);
+    lv_obj_set_style_border_color(obj, lv_color_hex(0x8a8a8a), 0);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(obj, lv_color_hex(0x2196f3), LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(obj, lv_color_white(), LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(obj, lv_color_hex(0x7cc4ff), LV_STATE_CHECKED | LV_STATE_FOCUSED);
+    lv_obj_set_style_text_color(obj, lv_color_black(), LV_STATE_CHECKED | LV_STATE_FOCUSED);
+    lv_obj_set_size(obj, SMALL_1, ROW_H - 4);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 1, LV_GRID_ALIGN_CENTER, row, 1);
+    if (on) lv_obj_add_state(obj, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(obj, cf_toggle_cb, LV_EVENT_VALUE_CHANGED, list);
+
+    lv_obj_t *label = lv_label_create(obj);
+    lv_obj_set_style_text_font(label, &sony_18, 0);
+    lv_label_set_text(label, text);
+    lv_obj_center(label);
+    return obj;
+}
+
+static void make_cluster_page() {
+    const cluster_filter_t *f = cluster_filter();
+    uint8_t                 row;
+    lv_obj_t               *obj;
+
+    grid_delete();
+    grid_create();
+
+    row = card_begin(LV_SYMBOL_EYE_OPEN, "CLUSTER FILTERS");
+
+    wl_row_label(row, "Modes");
+    for (int i = 0; i < CF_MODES; i++) {
+        cf.mode[i] = cf_toggle(row, 3 + i, cf_mode_name[i], f->modes & cf_mode_bit[i], cf.mode);
+    }
+    row++;
+
+    /* Two rows of bands, the second right-aligned */
+    cf.band_n = 0;
+    while (cf.band_n < 16 && cluster_band_name(cf.band_n)[0]) cf.band_n++;
+    int first = (cf.band_n + 1) / 2;
+
+    wl_row_label(row, "Bands (m)");
+    for (int b = 0; b < cf.band_n; b++) {
+        char name[8];
+        int  r   = b < first ? row : row + 1;
+        int  col = b < first ? 1 + b + (6 - first) : 1 + (b - first) + (6 - (cf.band_n - first));
+
+        snprintf(name, sizeof(name), "%d", atoi(cluster_band_name(b)));
+        cf.band[b] = cf_toggle(r, col, name, !f->bands || (f->bands & (1u << b)), cf.band);
+    }
+    row += 2;
+
+    wl_row_label(row, "Activity");
+    obj = lv_dropdown_create(grid);
+    dialog_item(&dialog, obj);
+    lv_obj_add_style(lv_dropdown_get_list(obj), &dialog_dropdown_list_style, 0);
+    /* Same order as the CLUSTER_ACT_* bits */
+    lv_dropdown_set_options(obj, " All spots \n POTA \n SOTA \n POTA + SOTA ");
+    lv_dropdown_set_symbol(obj, NULL);
+    lv_dropdown_set_selected(obj, f->activity & (CLUSTER_ACT_POTA | CLUSTER_ACT_SOTA));
+    lv_obj_add_event_cb(obj, cf_activity_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_size(obj, SMALL_3, ROW_H);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 4, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    cf.activity = obj;
+    row++;
+
+    obj = wl_label(grid, &sony_18, styles_dim(0x99aabb), 0);
+    lv_label_set_text(obj, "For the app, the column and the waterfall. Alerts always show.\n"
+                           "Max age, spotters and alerts: web configurator, Cluster page.");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 7, LV_GRID_ALIGN_CENTER, row, 1);
+    row_dsc[row] = LV_GRID_CONTENT;
+    row++;
+
     card_end(row);
 }
 

@@ -144,8 +144,8 @@ int cluster_servers_load(cluster_server_t *out, int max) {
 
 /* Sets the server in use; the saved servers, filters and alerts are kept. */
 bool cluster_config_save(const char *host, int port) {
-    static const char *keep[] = {"server=", "filter_modes=", "max_age=", "skip_spotters=",
-                                 "alert=",  "alert_popup=", "alert_beep="};
+    static const char *keep[] = {"server=", "filter_modes=", "filter_bands=", "filter_activity=", "max_age=",
+                                 "skip_spotters=", "alert=", "alert_popup=", "alert_beep="};
     static char        servers[24 * 1024];
     servers[0] = '\0';
     FILE *in   = fopen(CLUSTER_CONF, "r");
@@ -239,9 +239,77 @@ static uint16_t parse_bands(char *list) {
     return bits;
 }
 
+/* "POTA,SOTA" -> CLUSTER_ACT_* bits; unknown words are ignored */
+static uint8_t parse_activity(char *list) {
+    uint8_t bits = 0;
+    for (char *w = strtok(list, ","); w; w = strtok(NULL, ",")) {
+        w = trim(w);
+        if (strcasecmp(w, "POTA") == 0) bits |= CLUSTER_ACT_POTA;
+        if (strcasecmp(w, "SOTA") == 0) bits |= CLUSTER_ACT_SOTA;
+    }
+    return bits;
+}
+
+static bool all_digits(const char *p, size_t n) {
+    for (size_t i = 0; i < n; i++)
+        if (!isdigit((unsigned char)p[i])) return false;
+    return n > 0;
+}
+
+static bool prefix_ok(const char *p, size_t n) {
+    bool letter = false;
+    if (n < 1 || n > 4) return false;
+    for (size_t i = 0; i < n; i++) {
+        if (!isalnum((unsigned char)p[i])) return false;
+        letter |= isalpha((unsigned char)p[i]) != 0;
+    }
+    return letter;
+}
+
+/* US-1234, IT-0123, K-12345 (not a WWFF IFF-0123) */
+static bool park_ref(const char *w) {
+    const char *dash = strchr(w, '-');
+    if (!dash || strchr(w, '/')) return false;
+    size_t n = (size_t)(dash - w);
+    if (!prefix_ok(w, n) || (n >= 2 && strncmp(dash - 2, "FF", 2) == 0)) return false;
+    size_t d = strlen(dash + 1);
+    return d >= 4 && d <= 5 && all_digits(dash + 1, d);
+}
+
+/* I/LO-123, W7W/KG-001, HB/BE-150 */
+static bool summit_ref(const char *w) {
+    const char *slash = strchr(w, '/');
+    if (!slash || !prefix_ok(w, (size_t)(slash - w))) return false;
+    const char *r = slash + 1;
+    return isalnum((unsigned char)r[0]) && isalnum((unsigned char)r[1]) && r[2] == '-' &&
+           strlen(r + 3) == 3 && all_digits(r + 3, 3);
+}
+
+uint8_t cluster_spot_activity(const cluster_spot_t *s) {
+    char    text[sizeof(s->comment)];
+    uint8_t bits = 0;
+
+    for (size_t i = 0; i < sizeof(text); i++) {
+        text[i] = (char)toupper((unsigned char)s->comment[i]);
+        if (!text[i]) break;
+    }
+    text[sizeof(text) - 1] = '\0';
+    if (strstr(text, "POTA")) bits |= CLUSTER_ACT_POTA;
+    if (strstr(text, "SOTA")) bits |= CLUSTER_ACT_SOTA;
+    for (char *w = strtok(text, " ,;:()[]!?\t"); w; w = strtok(NULL, " ,;:()[]!?\t")) {
+        if (park_ref(w)) bits |= CLUSTER_ACT_POTA;
+        if (summit_ref(w)) bits |= CLUSTER_ACT_SOTA;
+    }
+    return bits;
+}
+
 static void filter_line(cluster_filter_t *f, char *line) {
     if (strncmp(line, "filter_modes=", 13) == 0) {
         f->modes = parse_modes(line + 13);
+    } else if (strncmp(line, "filter_bands=", 13) == 0) {
+        f->bands = parse_bands(line + 13);
+    } else if (strncmp(line, "filter_activity=", 16) == 0) {
+        f->activity = parse_activity(line + 16);
     } else if (strncmp(line, "max_age=", 8) == 0) {
         int v      = atoi(line + 8);
         f->max_age = (uint16_t)(v > 0 && v < 1440 ? v : 0);
@@ -282,13 +350,69 @@ void cluster_filter_load(cluster_filter_t *f) {
     if (!f->modes) f->modes = CLUSTER_FM_ALL; /* a list with no known mode is not "hide everything" */
 }
 
+static time_t filter_loaded = -1;
+
+bool cluster_filter_save(uint8_t modes, uint16_t bands, uint8_t activity) {
+    static const char *drop[] = {"filter_modes=", "filter_bands=", "filter_activity="};
+    static char        rest[24 * 1024];
+    char               line[512];
+
+    rest[0]  = '\0';
+    FILE *in = fopen(CLUSTER_CONF, "r");
+    while (in && fgets(line, sizeof(line), in)) {
+        line[strcspn(line, "\r\n")] = '\0';
+        bool skip = !line[0];
+        for (size_t i = 0; i < sizeof(drop) / sizeof(drop[0]); i++)
+            skip |= strncmp(line, drop[i], strlen(drop[i])) == 0;
+        if (!skip && strlen(rest) + strlen(line) + 2 < sizeof(rest)) {
+            strcat(rest, line);
+            strcat(rest, "\n");
+        }
+    }
+    if (in) fclose(in);
+
+    FILE *f = fopen(CLUSTER_CONF ".tmp", "w");
+    if (!f) return false;
+    fputs(rest, f);
+    modes &= CLUSTER_FM_ALL;
+    if (modes && modes != CLUSTER_FM_ALL) {
+        static const char *names[] = {"CW", "SSB", "DIG", "AMFM"};
+        const char        *sep     = "";
+        fputs("filter_modes=", f);
+        for (int i = 0; i < 4; i++)
+            if (modes & (1 << i)) {
+                fprintf(f, "%s%s", sep, names[i]);
+                sep = ",";
+            }
+        fputs("\n", f);
+    }
+    if (bands) {
+        const char *sep = "";
+        fputs("filter_bands=", f);
+        for (int b = 0; b < 16; b++)
+            if (bands & (1u << b) && atoi(cluster_band_name(b)) > 0) {
+                fprintf(f, "%s%d", sep, atoi(cluster_band_name(b)));
+                sep = ",";
+            }
+        fputs("\n", f);
+    }
+    if (activity) {
+        fprintf(f, "filter_activity=%s%s%s\n", activity & CLUSTER_ACT_POTA ? "POTA" : "",
+                activity == (CLUSTER_ACT_POTA | CLUSTER_ACT_SOTA) ? "," : "", activity & CLUSTER_ACT_SOTA ? "SOTA" : "");
+    }
+    bool ok = fflush(f) == 0 && fsync(fileno(f)) == 0;
+    ok      = fclose(f) == 0 && ok;
+    ok      = ok && rename(CLUSTER_CONF ".tmp", CLUSTER_CONF) == 0;
+    filter_loaded = -1; /* read again even within the same second */
+    return ok;
+}
+
 const cluster_filter_t *cluster_filter(void) {
     static cluster_filter_t f;
-    static time_t           loaded = -1;
-    time_t                  m      = cluster_config_mtime();
+    time_t                  m = cluster_config_mtime();
 
-    if (m != loaded) {
-        loaded = m;
+    if (m != filter_loaded) {
+        filter_loaded = m;
         cluster_filter_load(&f);
     }
     return &f;
@@ -314,6 +438,11 @@ int cluster_alert_match(const cluster_filter_t *f, const cluster_spot_t *s) {
 bool cluster_filter_pass(const cluster_filter_t *f, const cluster_spot_t *s, uint16_t now_utc_min) {
     if (cluster_alert_match(f, s) >= 0) return true;
     if (!(f->modes & cluster_spot_mode_class(s))) return false;
+    if (f->bands) {
+        int band = cluster_band_of(s->freq_hz);
+        if (band < 0 || !(f->bands & (1u << band))) return false;
+    }
+    if (f->activity && !(f->activity & cluster_spot_activity(s))) return false;
     if (f->max_age) {
         uint16_t age = cluster_age_min(s->utc_min, now_utc_min);
         if (age > f->max_age && age < 1440 - 5) return false;

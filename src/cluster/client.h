@@ -57,6 +57,8 @@ time_t cluster_config_mtime(void);
  *   filter_modes=CW,SSB,DIG,AMFM  modes shown (missing: all)
  *   max_age=30                    minutes (0 or missing: the store's own limit)
  *   skip_spotters=K1TTT-#,*-3     spotter calls hidden, * matches any run
+ *   filter_bands=40,20,6          bands shown (missing: all)
+ *   filter_activity=POTA,SOTA     only these activations (missing: all spots)
  *   alert=PATTERN|bands|mode      e.g. VP8*|20,17,15|CW (bands, mode: empty = any)
  *   alert_popup=1, alert_beep=1
  * Matching is case-insensitive; an alert pattern must match the whole call. */
@@ -66,6 +68,8 @@ time_t cluster_config_mtime(void);
 #define CLUSTER_FM_DIG     (1 << 2)
 #define CLUSTER_FM_AMFM    (1 << 3)
 #define CLUSTER_FM_ALL     0xF
+#define CLUSTER_ACT_POTA   (1 << 0)
+#define CLUSTER_ACT_SOTA   (1 << 1)
 
 typedef struct {
     char     pattern[32];
@@ -75,6 +79,8 @@ typedef struct {
 
 typedef struct {
     uint8_t         modes;
+    uint16_t        bands;    /* bit per cluster_band_of() index, 0 = all */
+    uint8_t         activity; /* CLUSTER_ACT_* bits, 0 = all spots */
     uint16_t        max_age;
     char            skip[128];
     cluster_alert_t alerts[CLUSTER_MAX_ALERTS];
@@ -85,6 +91,14 @@ typedef struct {
 
 /* Mode class (CLUSTER_FM_*) of a spot */
 uint8_t cluster_spot_mode_class(const cluster_spot_t *s);
+
+/* CLUSTER_ACT_* of a spot, from its comment: "POTA" or a park reference
+ * (US-1234, IT-0123), "SOTA" or a summit reference (I/LO-123, W7W/KG-001). */
+uint8_t cluster_spot_activity(const cluster_spot_t *s);
+
+/* Sets the modes, bands and activity filters in CLUSTER_CONF, keeping the
+ * other lines (CLUSTER_FM_ALL / 0 / 0 = no filter). LVGL thread only. */
+bool cluster_filter_save(uint8_t modes, uint16_t bands, uint8_t activity);
 
 /* Reads the filters from CLUSTER_CONF (defaults when missing). */
 void cluster_filter_load(cluster_filter_t *f);

@@ -1,5 +1,6 @@
 extern "C" {
     #include "../src/cluster/spots.h"
+    #include "../src/cluster/client.h"
 }
 
 #include <catch2/catch_test_macros.hpp>
@@ -54,7 +55,7 @@ TEST_CASE("Cluster other lines", "[cluster]") {
 TEST_CASE("Cluster store keeps the newest, sorted by time", "[cluster]") {
     static cluster_store_t st;
     cluster_spot_t         s;
-    cluster_store_clear(&st);
+    memset(&st, 0, sizeof(st));
     /* sh/dx replies come newest first */
     cluster_parse_line("14030.0  K1AAA   29-Sep-2026 1240Z  CW  <W1AW>", &s);
     cluster_store_add(&st, &s);
@@ -69,7 +70,7 @@ TEST_CASE("Cluster store keeps the newest, sorted by time", "[cluster]") {
     REQUIRE(std::string(st.spots[1].comment) == "CW");
 
     /* full: the oldest goes */
-    cluster_store_clear(&st);
+    memset(&st, 0, sizeof(st));
     for (int i = 0; i < CLUSTER_MAX_SPOTS + 1; i++) {
         s         = {};
         s.freq_hz = 1800000 + i * 2000;
@@ -84,7 +85,7 @@ TEST_CASE("Cluster store keeps the newest, sorted by time", "[cluster]") {
 TEST_CASE("Cluster store", "[cluster]") {
     static cluster_store_t st;
     cluster_spot_t         s;
-    cluster_store_clear(&st);
+    memset(&st, 0, sizeof(st));
     cluster_parse_line("DX de A:  14023.5  VP8LP  CW  1238Z", &s);
     cluster_store_add(&st, &s);
     cluster_parse_line("DX de B:  14024.0  VP8LP  CW  1240Z", &s);
@@ -121,4 +122,62 @@ TEST_CASE("Cluster bands and modes", "[cluster]") {
     REQUIRE(cluster_guess_mode(&s) == CLUSTER_MODE_USB);
     strcpy(s.comment, "CW 599");
     REQUIRE(cluster_guess_mode(&s) == CLUSTER_MODE_CW);
+}
+
+static const cluster_spot_t *spot(const char *line) {
+    static cluster_spot_t s;
+    REQUIRE(cluster_parse_line(line, &s));
+    return &s;
+}
+
+TEST_CASE("POTA and SOTA from the comment", "[cluster]") {
+    REQUIRE(cluster_spot_activity(spot("DX de K1ABC:  14062.0  W1XYZ  POTA US-1234 CQ  1240Z")) == CLUSTER_ACT_POTA);
+    REQUIRE(cluster_spot_activity(spot("DX de K1ABC:  14062.0  IU1ABC  IT-0123 cq  1240Z")) == CLUSTER_ACT_POTA);
+    REQUIRE(cluster_spot_activity(spot("DX de K1ABC:  14062.0  W7ABC  W7W/KG-001  1240Z")) == CLUSTER_ACT_SOTA);
+    REQUIRE(cluster_spot_activity(spot("DX de K1ABC:  7032.0  I1ABC  sota I/LO-123  1240Z")) == CLUSTER_ACT_SOTA);
+    REQUIRE(cluster_spot_activity(spot("DX de K1ABC:  7032.0  I1ABC  SOTA+POTA  1240Z")) == (CLUSTER_ACT_POTA | CLUSTER_ACT_SOTA));
+    REQUIRE(cluster_spot_activity(spot("DX de K1ABC:  7032.0  I1ABC  WWFF IFF-0123  1240Z")) == 0);
+    REQUIRE(cluster_spot_activity(spot("DX de K1ABC:  7032.0  I1ABC  CW 599 TNX  1240Z")) == 0);
+    REQUIRE(cluster_spot_activity(spot("DX de K1ABC:  7032.0  I1ABC  FT8 -12 dB  1240Z")) == 0);
+}
+
+TEST_CASE("Band and activity filters", "[cluster]") {
+    remove(CLUSTER_CONF);
+    FILE *f = fopen(CLUSTER_CONF, "w");
+    fputs("host=dxc.example\nport=7300\nserver=Ex|dxc.example|7300\nfilter_modes=CW\nalert=VP8*||\n", f);
+    fclose(f);
+
+    REQUIRE(cluster_filter_save(CLUSTER_FM_CW | CLUSTER_FM_SSB, (1u << cluster_band_of(7030000)) | (1u << cluster_band_of(14030000)),
+                                CLUSTER_ACT_POTA));
+    cluster_filter_t flt = {};
+    cluster_filter_load(&flt);
+    REQUIRE(flt.modes == (CLUSTER_FM_CW | CLUSTER_FM_SSB));
+    REQUIRE(flt.activity == CLUSTER_ACT_POTA);
+    REQUIRE(flt.alert_count == 1);
+
+    char host[64];
+    int  port = 0;
+    cluster_config_load(host, sizeof(host), &port);
+    REQUIRE(std::string(host) == "dxc.example");
+    REQUIRE(port == 7300);
+
+    REQUIRE(cluster_filter_pass(&flt, spot("DX de K1ABC:  14062.0  W1XYZ  POTA US-1234  1240Z"), 12 * 60 + 41));
+    REQUIRE_FALSE(cluster_filter_pass(&flt, spot("DX de K1ABC:  21062.0  W1XYZ  POTA US-1234  1240Z"), 12 * 60 + 41)); /* 15m */
+    REQUIRE_FALSE(cluster_filter_pass(&flt, spot("DX de K1ABC:  14062.0  W1XYZ  CW 599  1240Z"), 12 * 60 + 41));       /* no park */
+    REQUIRE(cluster_filter_pass(&flt, spot("DX de K1ABC:  21062.0  VP8LP  CW  1240Z"), 12 * 60 + 41));                  /* alert */
+
+    /* the server choice keeps the new filters */
+    REQUIRE(cluster_config_save("dxc.other", 23));
+    cluster_filter_load(&flt);
+    REQUIRE(flt.activity == CLUSTER_ACT_POTA);
+    REQUIRE(flt.bands != 0);
+
+    /* all = no lines */
+    REQUIRE(cluster_filter_save(CLUSTER_FM_ALL, 0, 0));
+    cluster_filter_load(&flt);
+    REQUIRE(flt.modes == CLUSTER_FM_ALL);
+    REQUIRE(flt.bands == 0);
+    REQUIRE(flt.activity == 0);
+    REQUIRE(flt.alert_count == 1);
+    remove(CLUSTER_CONF);
 }
