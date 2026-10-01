@@ -16,3 +16,5 @@ Each one is its own commit on top of the pristine import.
 
 - `wsprd.c`: no FFTW wisdom file (it was read from and written to the
   working directory on every decode).
+- `wsprd.c`: the coarse time search skips symbols before the start of the
+  recording instead of reading before the start of the spectrum rows.

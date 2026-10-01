@@ -647,7 +647,7 @@ int wspr_decode(float  *idat,
                         for (int k = 0; k < NSYM; k++) {  // Sum over symbols
                             int ifd = ifr + ((float)k - (float)NBITS) / (float)NBITS * ((float)idrift) / DF;
                             int kindex = k0 + 2 * k;
-                            if (kindex < blocks) {
+                            if (kindex >= 0 && kindex < blocks) {
                                 float p0 = sqrtf(ps[ifd - 3][kindex]);
                                 float p1 = sqrtf(ps[ifd - 1][kindex]);
                                 float p2 = sqrtf(ps[ifd + 1][kindex]);
