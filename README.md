@@ -7,7 +7,7 @@ digital modes, DX cluster on the waterfall, Bluetooth, wfview server and a web c
 
 <p align="center"><img src="docs/screenshots/main_screen.png" alt="Main screen with DX cluster spot tags on the waterfall" width="720"></p>
 
-<p align="center"><i>Main screen: S-meter, frequency strip, DX cluster tags and spot lines over the waterfall.
+<p align="center"><i>Main screen: S-meter, frequency strip, band plan, cyan DX cluster spot lines and callsigns on the waterfall.
 All screenshots in this README are rendered on a PC with fake data.</i></p>
 
 Unofficial combined firmware for the Xiegu X6100. It starts from the R1CBU
@@ -95,20 +95,24 @@ works as in the base firmware.
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/cluster_column.png" alt="Cluster column"><br><sub><b>Cluster column</b> at the right of the waterfall</sub></td>
+    <td align="center"><img src="docs/screenshots/cluster_column.png" alt="Cluster column"><br><sub><b>Cluster column</b> at the right of the waterfall, under the band plan</sub></td>
     <td align="center"><img src="docs/screenshots/cluster_app.png" alt="Cluster app"><br><sub><b>DX Cluster app</b>: spots around the VFO, new spots marked</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/smeter.png" alt="S-meter"><br><sub><b>S-meter</b> with the green-to-red gradient above S9</sub></td>
-    <td align="center"><img src="docs/screenshots/theme_outdoor.png" alt="Outdoor theme"><br><sub><b>Outdoor theme</b> (out of the menu for now)</sub></td>
+    <td align="center"><img src="docs/screenshots/wspr_app.png" alt="WSPR app"><br><sub><b>WSPR</b>: decoded spots with distance, TX chance and upload state</sub></td>
+    <td align="center"><img src="docs/screenshots/navtex_app.png" alt="NavTex app"><br><sub><b>NavTex</b> in the common look of the fixed-frequency apps</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/waterfall_fixed_mode.png" alt="Fixed waterfall"><br><sub><b>Fixed waterfall</b> with the amber VFO line</sub></td>
+    <td align="center"><img src="docs/screenshots/sstv_freqs.png" alt="SSTV calling frequencies"><br><sub><b>SSTV</b> calling frequencies (<b>Freq.</b>)</sub></td>
     <td align="center"><img src="docs/screenshots/digital_modes_menu.png" alt="Modes menu"><br><sub><b>Modes menu</b> on the APP buttons</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/js8_app.png" alt="JS8 app"><br><sub><b>JS8</b> app</sub></td>
+    <td align="center"><img src="docs/screenshots/smeter.png" alt="S-meter"><br><sub><b>S-meter</b> with the green-to-red gradient above S9</sub></td>
+  </tr>
+  <tr>
     <td align="center"><img src="docs/screenshots/settings_general.png" alt="Settings"><br><sub><b>Settings</b>: station, date/time and time zone</sub></td>
+    <td align="center"><img src="docs/screenshots/settings_keys.png" alt="Keys settings"><br><sub><b>Keys</b>: long press of the front keys and hand mic keys</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/settings_wfview.png" alt="wfview settings"><br><sub><b>wfview server</b> settings on the radio</sub></td>
@@ -429,12 +433,14 @@ Audio, Wireless (page 1), Keys and Info (page 2).
 | General | STATION (callsign, QTH locator), DATE / TIME, CONTROLS (frequency acceleration, charger), TX CALIBRATION (IQ offsets, band output gain), TRANSVERTERS (from, to, shift) |
 | Display | BACKLIGHT, WATERFALL (mode, auto level, manual min/max, line and zoom, smooth scroll), MAIN SCREEN (band plan, cluster spots, spot snap hold and speed, cluster column), INTERFACE (popups, knob info, font) |
 | Audio | RX AUDIO, TX AUDIO (codec gain, compressor, filter, CESSB, FM emphasis), MICROPHONE, VOX, AGC, BT HEADPHONES |
-| Wireless | WIFI (scan, connect, IP), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones) |
+| Wireless | WIFI (power, status, IP, networks), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones), WFVIEW SERVER (on/off, user, password, port and client) |
 | Keys | FRONT KEYS, LONG PRESS (GEN, APP, KEY, MSG, DFN, DFL), HAND MIC KEYS (F1, F2, F1 long, F2 long) |
 | Info | app and base firmware versions |
 
-Some options say *(restart)*: Font applies at the next
-start. Some cards depend on the base firmware revision (TX AUDIO, band output
+The MFK walks the controls and stops at the first and last one; there the
+page shows its top or its end, so status rows below the last control are
+always in view. A new Font applies at the next start (the screen says so when
+you change it). Some cards depend on the base firmware revision (TX AUDIO, band output
 gain, TX filter, CESSB, FM emphasis).
 
 ## Reference

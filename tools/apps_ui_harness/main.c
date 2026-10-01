@@ -414,12 +414,12 @@ static void topbar(void) {
             cluster_client_feed_line(line);
         }
     }
-    cluster_column_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H);
     band_plan_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 - BAND_PLAN_H);
     band_plan_update(f, 50000);
     spot_marks_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
     spot_marks_update(f, 50000);
     band_plan_update(f, 50000);
+    cluster_column_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H);   /* over the spot calls, as main_screen.c */
     lv_obj_move_background(stack);   /* created first in main_screen.c */
 
     extern bool harness_notify;
@@ -583,6 +583,30 @@ static void topbar(void) {
     cluster_column_refresh();
     shot("cluster_column_4.ppm");
     pump(100);
+    /* As main_screen.c with the spectrum off (the only layout now): band plan
+     * on top of the waterfall, spot lines under it, calls on the waterfall */
+    {
+        lv_coord_t y = FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36;   /* stack coords, stack at -96 */
+
+        lv_obj_add_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_y(stack, -96);
+        lv_obj_set_y(wf, y);
+        freq_scale_lines_set_y(y);
+        band_plan_set_y(y);
+        spot_marks_layout(y, BAND_PLAN_H + 8, y + BAND_PLAN_H + 8);
+        harness_cluster_column = 1;
+        cluster_column_layout(y + BAND_PLAN_H);
+        cluster_column_refresh();
+        freq_scale_update(7127000, 50000, 0xffffff);
+        spot_marks_update(7127000, 50000);
+        band_plan_update(7127000, 50000);
+        pump(1100);
+        shot("main_readme.ppm");
+        harness_cluster_column = 0;
+        cluster_column_refresh();
+        pump(1100);
+        shot("main_readme_nocol.ppm");
+    }
 }
 
 /* CW trainer: the decoder is fed by hand (harness_decode) with what the
