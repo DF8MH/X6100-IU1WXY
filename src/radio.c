@@ -156,8 +156,18 @@ void radio_init() {
     if (!x6100_flow_init())
         return;
 
+    /* Back off (0.1 .. 25.6 s) and, once, after about 6 s without an answer,
+     * pulse the baseband reset pin instead of waiting forever (upstream 37f3894) */
+    uint8_t cnt = 0;
+
     while (!x6100_control_init()) {
-        usleep(100000);
+        usleep(100000 << cnt);
+        if (cnt < 8) cnt++;
+        if (cnt == 6) {
+            fprintf(stderr, "Baseband not answering, reset\n");
+            radio_bb_reset();
+            usleep(1000000);
+        }
     }
 }
 
