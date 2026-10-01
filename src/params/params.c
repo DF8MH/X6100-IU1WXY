@@ -111,7 +111,7 @@ params_t params = {
     .wifi_enabled           = { .x = false, .name="wifi_enabled" },
 
     .theme                  = { .x = THEME_SIMPLE, .name="theme"},
-    .font                   = { .x = 0, .name="font"},
+    .font                   = { .x = 2, .name="font"},     /* FONT_DEJAVU */
 };
 
 

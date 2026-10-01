@@ -8,6 +8,7 @@
 
 #include "lvgl/lvgl.h"
 #include "lv_drivers/display/fbdev.h"
+#include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
@@ -26,6 +27,7 @@
 #include "waterfall.h"
 #include "keypad.h"
 #include "params/params.h"
+#include "cfg/cfg_api.h"
 #include "audio.h"
 #include "cw.h"
 #include "panel.h"
@@ -57,6 +59,38 @@ static lv_disp_draw_buf_t   disp_buf;
 static lv_disp_drv_t        disp_drv;
 
 void * tick_thread (void *args);
+
+/* Display settings that would break the screen are put right at every start
+ * (an old or hand-edited params.db, a backup restored from another version):
+ * the spectrum is disabled in this firmware, the theme is IU1WXY, the font
+ * must exist and the legacy spectrum values must stay in their ranges. */
+static void fix_uint8(params_uint8_t *p) {
+    if (p->max > p->min && (p->x < p->min || p->x > p->max)) {
+        uint8_t v = p->x < p->min ? p->min : p->max;
+
+        fprintf(stderr, "Settings: %s %u out of range, set to %u\n", p->name, p->x, v);
+        params_uint8_set(p, v);
+    }
+}
+
+static void display_settings_check(void) {
+    if (param_i_get(cfg_spectrum_show)) {
+        fprintf(stderr, "Settings: spectrum_show on, set off (the spectrum is disabled)\n");
+        param_i_set(cfg_spectrum_show, 0);
+    }
+    /* Only the IU1WXY theme for now (Legacy and Outdoor are out of the menu) */
+    if (params.theme.x != THEME_SIMPLE) {
+        fprintf(stderr, "Settings: theme %u, set to IU1WXY\n", params.theme.x);
+        params_uint8_set(&params.theme, THEME_SIMPLE);
+    }
+    if (params.font.x > FONT_DEJAVU) {
+        fprintf(stderr, "Settings: font %u unknown, set to the default\n", params.font.x);
+        params_uint8_set(&params.font, FONT_SONY);
+    }
+    fix_uint8(&params.spectrum_beta);
+    fix_uint8(&params.spectrum_peak_hold);
+    fix_uint8(&params.spectrum_peak_speed);
+}
 
 int main(void) {
     clock_tz_init();
@@ -103,6 +137,7 @@ int main(void) {
     vol->state = VOL_STATE_EDIT;
 
     params_init();
+    display_settings_check();
     audio_set_play_vol(params.play_gain_db_f.x);
     audio_set_rec_vol(params.rec_gain_db_f.x);
     mfk_init();

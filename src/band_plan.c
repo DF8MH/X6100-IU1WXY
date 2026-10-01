@@ -12,7 +12,7 @@
 
 #define WIDTH   800
 #define POOL    12      /* segments in view: a span is 100 kHz at most */
-#define OPA     LV_OPA_90
+#define OPA     LV_OPA_60     /* the waterfall shows through, the labels stay readable */
 
 extern lv_font_t sony_18;
 

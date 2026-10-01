@@ -48,6 +48,8 @@ ParamInt         *cfg_ft8_protocol        = nullptr;
 ParamInt         *cfg_ft8_auto            = nullptr;
 ParamInt         *cfg_ft8_hold_freq       = nullptr;
 ParamInt         *cfg_wspr_tx_pct         = nullptr;
+ParamInt         *cfg_spot_snap_hold      = nullptr;
+ParamInt         *cfg_spot_snap_slow      = nullptr;
 ParamInt         *cfg_wspr_tx_freq        = nullptr;
 ParamInt         *cfg_wspr_upload         = nullptr;
 ParamInt         *cfg_ft8_max_repeats     = nullptr;
@@ -177,6 +179,8 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_ft8_auto         = &cfg_sm.p_ft8_auto;
     cfg_ft8_hold_freq    = &cfg_sm.p_ft8_hold_freq;
     cfg_wspr_tx_pct      = &cfg_sm.p_wspr_tx_pct;
+    cfg_spot_snap_hold   = &cfg_sm.p_spot_snap_hold;
+    cfg_spot_snap_slow   = &cfg_sm.p_spot_snap_slow;
     cfg_wspr_tx_freq     = &cfg_sm.p_wspr_tx_freq;
     cfg_wspr_upload      = &cfg_sm.p_wspr_upload;
     cfg_ft8_max_repeats  = &cfg_sm.p_ft8_max_repeats;

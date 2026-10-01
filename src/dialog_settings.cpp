@@ -1154,7 +1154,9 @@ static uint8_t make_transverter(uint8_t row, ParamInt &from, ParamInt &to, Param
 
 /* Spectrum above the waterfall on/off; the waterfall takes its place */
 
-static uint8_t make_spectrum_show(uint8_t row) {
+/* Not in the menu any more (the spectrum is always off); kept with the other
+ * spectrum rows for when it comes back */
+__attribute__((unused)) static uint8_t make_spectrum_show(uint8_t row) {
     lv_obj_t *obj;
 
     obj = lv_label_create(grid);
@@ -2040,7 +2042,9 @@ static uint8_t make_freq_accel(uint8_t row) {
     return row + 1;
 }
 
-static uint8_t make_theme(uint8_t row) {
+/* Not in the menu for now: only the IU1WXY theme (display_settings_check()
+ * in main.c); kept for when the others come back */
+__attribute__((unused)) static uint8_t make_theme(uint8_t row) {
     lv_obj_t    *obj;
     uint8_t     col = 0;
 
@@ -3307,6 +3311,8 @@ static param_slider_t vox_ag_slider    = {&cfg_sm.p_vox_ag, 0, 100, 1, "%i"};
 static param_slider_t vox_delay_slider = {&cfg_sm.p_vox_delay, 100, 2000, 50, "%i ms"};
 static param_slider_t agc_knee_slider  = {&cfg_sm.p_agc_knee, -100, 0, 1, "%i dB"};
 static param_slider_t agc_slope_slider = {&cfg_sm.p_agc_slope, 0, 10, 1, "%i dB"};
+static param_slider_t snap_hold_slider = {&cfg_sm.p_spot_snap_hold, 0, 5, 1, "%i"};
+static param_slider_t snap_slow_slider = {&cfg_sm.p_spot_snap_slow, 1, 5, 1, "%i"};
 
 static void param_slider_cb(lv_event_t *e) {
     lv_obj_t       *obj = lv_event_get_target(e);
@@ -3503,16 +3509,12 @@ static void make_display_page() {
     row = make_backlight(row);
     card_end(row);
 
-    row = card_begin(LV_SYMBOL_IMAGE, "SPECTRUM");
-    row = make_spectrum_show(row);
-    row = make_auto_offset(row);
-    row = make_spectrum_min_max(row);
-    row = make_spectrum_fill_peak(row);
-    row = make_spectrum_beta_peak_hold_speed(row);
-    card_end(row);
-
+    /* The spectrum is always off (display_settings_check() in main.c): only
+     * the waterfall levels are left of its settings */
     row = card_begin(LV_SYMBOL_DOWNLOAD, "WATERFALL");
     row = make_waterfall_mode(row);
+    row = make_auto_offset(row);
+    row = make_spectrum_min_max(row);
     row = make_waterfall_line_zoom(row);
     row = make_waterfall_smooth_scroll(row);
     card_end(row);
@@ -3521,13 +3523,14 @@ static void make_display_page() {
     row = card_begin(LV_SYMBOL_LIST, "MAIN SCREEN");
     row = make_band_plan(row);
     row = make_cluster_spots_wf(row);
+    row = make_param_slider(row, "Spot snap hold", &snap_hold_slider);
+    row = make_param_slider(row, "Spot snap speed", &snap_slow_slider);
     row = make_cluster_column(row);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_SETTINGS, "INTERFACE");
     row = make_mag(row);
     row = make_knob_info(row);
-    row = make_theme(row);
     row = make_font(row);
     card_end(row);
 }

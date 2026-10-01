@@ -9,6 +9,7 @@
 #include "styles.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -17,6 +18,7 @@
 #define ROW_H    (SPOT_MARKS_H / ROWS)
 #define POOL     24
 #define GAP      6      /* between labels of a row */
+#define SPOT_COLOR 0x40E8FF   /* cyan */
 
 typedef struct {
     lv_obj_t *label;
@@ -24,6 +26,8 @@ typedef struct {
 } mark_t;
 
 static mark_t         marks[POOL];
+static int32_t        shown_hz[POOL];   /* the spots drawn now, for the tuning snap */
+static int            shown_n;
 static bool           ready;
 static lv_coord_t     line_y0, line_h0, tag_y0;
 static int32_t        span_center, span_half;
@@ -39,13 +43,6 @@ static uint16_t utc_now_min(void) {
 
     gmtime_r(&now, &tm);
     return (uint16_t)(tm.tm_hour * 60 + tm.tm_min);
-}
-
-static uint32_t age_color(uint16_t age) {
-    if (age < 2)  return 0x7CFF7C;
-    if (age < 10) return 0xE8E070;
-    if (age < 30) return 0xC08A4A;
-    return 0x777777;
 }
 
 static void redraw(void) {
@@ -90,7 +87,8 @@ static void redraw(void) {
             start[row][cnt[row]] = lx;
             end[row][cnt[row]++] = lx + w;
 
-            uint32_t color = cluster_alert_match(flt, s) >= 0 ? 0xFF4FC0 : age_color(cluster_age_min(s->utc_min, now));
+            /* Cyan on the waterfall; an alert call stays pink */
+            uint32_t color = cluster_alert_match(flt, s) >= 0 ? 0xFF4FC0 : SPOT_COLOR;
             mark_t  *m     = &marks[n++];
 
             lv_label_set_text(m->label, s->dx);
@@ -98,11 +96,13 @@ static void redraw(void) {
             lv_obj_set_style_text_color(m->label, lv_color_hex(color), 0);
             lv_obj_clear_flag(m->label, LV_OBJ_FLAG_HIDDEN);
 
+            shown_hz[n - 1] = s->freq_hz;
             lv_obj_set_pos(m->line, x, line_y0);
             lv_obj_set_style_bg_color(m->line, lv_color_hex(color), 0);
             lv_obj_clear_flag(m->line, LV_OBJ_FLAG_HIDDEN);
         }
     }
+    shown_n = n;
     for (; n < POOL; n++) {
         lv_obj_add_flag(marks[n].label, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(marks[n].line, LV_OBJ_FLAG_HIDDEN);
@@ -152,12 +152,31 @@ void spot_marks_init(lv_obj_t *parent, lv_coord_t line_y, lv_coord_t line_h, lv_
         l = lv_label_create(parent);
         lv_obj_set_style_text_font(l, &sony_18, 0);
         lv_obj_set_style_pad_hor(l, 2, 0);
+        /* Readable on the waterfall too */
+        lv_obj_set_style_bg_color(l, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(l, LV_OPA_50, 0);
         lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
         marks[i].label = l;
     }
     ready = true;
     lv_timer_create(timer_cb, 1000, NULL);
     timer_cb(NULL);
+}
+
+bool spot_marks_crossed(int32_t from, int32_t to, int32_t *spot_hz) {
+    bool found = false;
+
+    for (int i = 0; i < shown_n; i++) {
+        int32_t f = shown_hz[i];
+        bool    past = to > from ? (f > from && f <= to) : (f < from && f >= to);
+
+        /* The first one on the way */
+        if (past && (!found || abs(f - from) < abs(*spot_hz - from))) {
+            *spot_hz = f;
+            found    = true;
+        }
+    }
+    return found;
 }
 
 void spot_marks_update(int32_t center, int32_t half_width) {

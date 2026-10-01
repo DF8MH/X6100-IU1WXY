@@ -1349,14 +1349,37 @@ static uint16_t freq_accel(uint16_t diff) {
     return 1;
 }
 
+/* Cluster spots on the waterfall: turning slowly (at most spot_snap_slow
+ * detents per event), the VFO stops on a spot it passes and stays there for
+ * spot_snap_hold more detents, a light magnetic click (hold 0: off). Turning
+ * fast goes straight past. Settings → Display → MAIN SCREEN. */
+static int32_t snap_hz;
+static int     snap_hold;
+
 static void freq_shift(int16_t diff) {
     if (subject_i_get(freq_lock)) {
         return;
     }
 
-    int32_t freq = cparam_i_get(cfg_fg_freq);
+    int32_t old  = cparam_i_get(cfg_fg_freq);
+    int32_t freq = old;
+    int32_t spot;
+    int     hold = param_i_get(cfg_spot_snap_hold);
+    bool    slow = hold > 0 && abs(diff) <= param_i_get(cfg_spot_snap_slow);
+
+    if (slow && snap_hold > 0 && old == snap_hz) {
+        snap_hold--;
+        return;
+    }
+    snap_hold = 0;
+
     int32_t df = diff * param_i_get(cfg_mode_freq_step) * freq_accel(abs(diff));
     freq = align_int(freq + df, abs(df));
+    if (slow && spot_marks_crossed(old, freq, &spot)) {
+        freq      = spot;
+        snap_hz   = spot;
+        snap_hold = hold;
+    }
     cparam_i_set(cfg_fg_freq, freq);
 }
 
@@ -1566,20 +1589,29 @@ void main_screen_set_freq(uint64_t freq) {
     cparam_i_set(cfg_fg_freq, freq);
     event_send(lv_scr_act(), EVENT_SCREEN_UPDATE, NULL);
 }
-/* The cluster spot tags get a band of their own under the frequency row:
- * the waterfall moves down to make room, and back up without them. */
-static void on_cluster_spots_wf_change(Subject *subj, void *user_data) {
-    lv_coord_t y = wf_y + (param_i_get(cfg_cluster_spots_wf) ? SPOT_MARKS_H : 0);
+/* Spectrum off: the cluster spots go on the waterfall itself, a short line at
+ * its top (across the band plan strip) and the call under it; the waterfall
+ * stays where it is. With the spectrum on the tags keep a band of their own
+ * under the frequency row and the waterfall moves down to make room. */
+#define SPOT_LINE_H 8
 
-    lv_obj_set_y(waterfall, y);
-    freq_scale_lines_set_y(y);
-    spot_marks_layout(param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, 36, spot_tag_y);
-    if (!param_i_get(cfg_spectrum_show)) {
+static void on_cluster_spots_wf_change(Subject *subj, void *user_data) {
+    lv_coord_t y = wf_y;
+
+    if (param_i_get(cfg_spectrum_show)) {
+        y += param_i_get(cfg_cluster_spots_wf) ? SPOT_MARKS_H : 0;
+        lv_obj_set_y(waterfall, y);
+        freq_scale_lines_set_y(y);
+        spot_marks_layout(spot_tag_y - 36 - 36, 36, spot_tag_y);
+    } else {
+        lv_coord_t strip = param_i_get(cfg_band_plan) ? BAND_PLAN_H : 0;
+
+        lv_obj_set_y(waterfall, y);
+        freq_scale_lines_set_y(y);
         band_plan_set_y(y);
+        spot_marks_layout(y, strip + SPOT_LINE_H, y + strip + SPOT_LINE_H);
         /* The cluster column starts under the band plan strip, not over it */
-        if (param_i_get(cfg_band_plan)) {
-            y += BAND_PLAN_H;
-        }
+        y += strip;
     }
     cluster_column_layout(y);
 }

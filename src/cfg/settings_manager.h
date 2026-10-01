@@ -116,6 +116,12 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_band_plan{"band_plan", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Tuning snap to the cluster spots on the waterfall: detents held on a
+    // spot (0 = off) and the most detents per event that still snap (slow)
+    Parameter<int32_t> p_spot_snap_hold{"spot_snap_hold", 2, 0, 5,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_spot_snap_slow{"spot_snap_slow", 2, 1, 5,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_cluster_column{"cluster_column", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_waterfall_ref{"waterfall_ref", 0, -40, 20,

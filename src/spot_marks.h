@@ -26,6 +26,10 @@ void spot_marks_layout(lv_coord_t line_y, lv_coord_t line_h, lv_coord_t tag_y);
 /* Span shown: center - half_width .. center + half_width */
 void spot_marks_update(int32_t center, int32_t half_width);
 
+/* A spot drawn on the waterfall on the way from `from` (excluded) to `to`
+ * (included), the nearest to `from`: the tuning snap (main_screen.c) */
+bool spot_marks_crossed(int32_t from, int32_t to, int32_t *spot_hz);
+
 #ifdef __cplusplus
 }
 #endif
