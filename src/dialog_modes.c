@@ -21,7 +21,7 @@
 #include <stdint.h>
 
 #define BOX_W  420
-#define ROW_H  37
+#define ROW_H  33
 #define HEAD_H 38
 #define HINT_H 28
 #define BOX_Y  (TOP_BAR_HEIGHT + 4)
@@ -39,6 +39,7 @@ static const struct {
     {"RTTY", "45 bd", ACTION_APP_RTTY, -1},
     {"FT8", "15 s", ACTION_APP_FT8, FTX_PROTOCOL_FT8},
     {"FT4", "7.5 s", ACTION_APP_FT8, FTX_PROTOCOL_FT4},
+    {"WSPR", "2 min", ACTION_APP_WSPR, -1},
     {"JS8", "", ACTION_APP_JS8, -1},
     {"SSTV", "", ACTION_APP_SSTV, -1},
     {"WeFax", "", ACTION_APP_WEFAX, -1},
@@ -47,7 +48,7 @@ static const struct {
 
 #define MODES_N ((int)(sizeof(modes) / sizeof(modes[0])))
 
-/* 80 + 333 = 413: stays clear of the buttons (480 - BUTTONS_H_MAX = 418). */
+/* 80 + 338 = 418: stays clear of the buttons (480 - BUTTONS_H_MAX = 418). */
 _Static_assert(BOX_Y + BOX_H <= 480 - BUTTONS_H_MAX, "Modes menu overlaps the buttons");
 
 static lv_obj_t *rows[MODES_N];
@@ -166,7 +167,7 @@ static void construct_cb(lv_obj_t *parent) {
         lv_obj_add_event_cb(row, row_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
 
         lv_obj_t *name = lv_label_create(row);
-        lv_obj_set_style_text_font(name, &sony_28, 0);
+        lv_obj_set_style_text_font(name, &sony_26, 0);
         lv_label_set_text(name, modes[i].name);
         lv_obj_align(name, LV_ALIGN_LEFT_MID, 22, 0);
 

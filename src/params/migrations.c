@@ -161,6 +161,40 @@ static int _5_add_ghostnet_presets() {
     return 0;
 }
 
+/* WSPR dial frequencies (WSJT-X's defaults) */
+static int _6_add_wspr_presets() {
+    int rc;
+    char *query;
+    rc = asprintf(&query,
+        "INSERT OR IGNORE INTO digital_modes(label, freq, mode, type) "
+        "SELECT column1, column2, 3, %u FROM (VALUES "
+            "('WSPR 160m', 1836600),"
+            "('WSPR 80m', 3568600),"
+            "('WSPR 60m', 5287200),"
+            "('WSPR 40m', 7038600),"
+            "('WSPR 30m', 10138700),"
+            "('WSPR 20m', 14095600),"
+            "('WSPR 17m', 18104600),"
+            "('WSPR 15m', 21094600),"
+            "('WSPR 12m', 24924600),"
+            "('WSPR 10m', 28124600),"
+            "('WSPR 6m', 50293000)"
+        ")",
+        CFG_DIG_TYPE_WSPR
+    );
+    if (rc == -1) {
+        printf("Cannot allocate SQL query\n");
+        return 1;
+    }
+    rc = sqlite3_exec(db, query, NULL, NULL, NULL);
+    free(query);
+    if (rc != SQLITE_OK) {
+        printf("Cannot add WSPR presets: %s\n", sqlite3_errmsg(db));
+        return 1;
+    }
+    return 0;
+}
+
 static int (*migrations[])() = {
     _0_init_migrations,
     _1_create_ftx_table,
@@ -168,6 +202,7 @@ static int (*migrations[])() = {
     _3_update_spectrum_peak_hold,
     _4_add_js8_presets,
     _5_add_ghostnet_presets,
+    _6_add_wspr_presets,
 };
 
 int migrations_apply(void) {

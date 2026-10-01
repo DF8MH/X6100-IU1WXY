@@ -791,6 +791,7 @@ static action_items_t long_action_items[] = {
     { .label = " APP Settings", .action = ACTION_APP_SETTINGS },
     { .label = " APP RX recorder", .action = ACTION_APP_RECORDER },
     { .label = " APP CW Trainer", .action = ACTION_APP_CWTRAINER },
+    { .label = " APP WSPR ", .action = ACTION_APP_WSPR },
     { .label = " QTH Grid", .action = ACTION_APP_QTH },
     { .label = NULL, .action = ACTION_NONE }
 };

@@ -9,7 +9,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 add_compile_definitions(LV_DRAW_NEON=0 CLUSTER_CONF="cluster.conf")
 add_compile_options(-g -O1 -fno-omit-frame-pointer -w)
-include_directories(${X} ${X}/src ${X}/src/qth ${X}/third-party/rapidxml ${X}/third-party/utf8)
+include_directories(${X} ${X}/src ${X}/src/qth ${X}/third-party/wsprd ${X}/third-party/rapidxml ${X}/third-party/utf8)
 include_directories(SYSTEM ${D}/src ${D}/include /usr/include/glib-2.0 /usr/lib/x86_64-linux-gnu/glib-2.0/include /usr/include/libnm)
 add_subdirectory(${D}/src/lvgl lvgl)
 add_subdirectory(${X}/third-party/js8core js8core)
@@ -28,6 +28,8 @@ add_library(apps OBJECT
     ${X}/src/dialog_navtex.c ${X}/src/navtex/decoder.cpp ${X}/src/navtex/navtex_rx.cpp ${X}/src/navtex/fftfilt.cxx
     ${X}/src/dialog_ft8.c ${X}/src/ft8/table_view.c ${X}/src/ft8/utils.c ${X}/src/ft8/qso.cpp
     ${X}/src/dialog_settings.cpp
+    ${X}/src/dialog_wspr.c ${X}/src/wspr/wspr.c ${X}/src/wspr/wsprnet.c
+    ${X}/third-party/wsprd/fano.c ${X}/third-party/wsprd/nhash.c ${X}/third-party/wsprd/tab.c ${X}/third-party/wsprd/wsprd.c ${X}/third-party/wsprd/wsprd_utils.c ${X}/third-party/wsprd/wsprsim_utils.c
     ${X}/src/dialog_cluster.c ${X}/src/cluster/spots.c ${X}/src/cluster/client.c ${X}/src/freq_list.c ${X}/src/dialog_modes.c ${X}/src/dialog_cw_trainer.c ${X}/src/cJSON.c ${X}/src/freq_strip.c ${X}/src/freq_scale.c ${X}/src/spot_marks.c ${X}/src/band_plan.c ${X}/src/cluster_column.c
     ${X}/src/dialog_msg_voice.c ${X}/src/dialog_msg_cw.c ${X}/src/cw_encoder.c
     ${X}/src/info.c ${X}/src/meter.c ${X}/src/clock.c ${X}/src/tx_info.c

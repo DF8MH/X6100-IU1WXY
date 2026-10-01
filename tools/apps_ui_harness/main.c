@@ -22,6 +22,8 @@
 #include "dialog_msg_voice.h"
 #include "dialog_msg_cw.h"
 #include "dialog_cw_trainer.h"
+#include "dialog_wspr.h"
+#include "wspr/wspr.h"
 #include "cw_encoder.h"
 #include "cluster/client.h"
 #include "textarea_window.h"
@@ -121,6 +123,74 @@ static void voicekeyer(void) {
     shot("voice_keyer_3.ppm");                 /* page 2, interval 45 s */
     dialog_destruct();
     pump(200);
+}
+
+/* WSPR: empty, then three beacons through the real RX chain (synth, noise,
+ * baseband recorder, wsprd) shown in the table, then the TX % button. */
+static void wspr_demo(void) {
+    static const struct { const char *call, *grid; int dbm; float hz, snr; } tx[] = {
+        {"IU1WXY", "JN35", 37, 1450.0f, -12.0f},
+        {"K1ABC", "FN42", 30, 1530.0f, -22.0f},
+        {"DL2XYZ", "JO62", 23, 1575.0f, -26.0f},
+    };
+    const int   rate = 11025, len = rate * 116;
+    float      *audio = calloc(len, sizeof(float));
+    float      *i = malloc(sizeof(float) * WSPR_SAMPLES), *q = malloc(sizeof(float) * WSPR_SAMPLES);
+    wspr_spot_t spots[16];
+
+    extern int32_t harness_fg_freq;
+    harness_fg_freq = 14095600;
+    dialog_construct(dialog_wspr, lv_scr_act());
+    pump(400);
+    shot("wspr_1.ppm");
+
+    srand(7);
+    for (int k = 0; k < len; k++) {     /* unit noise (Box-Muller) */
+        float u1 = (rand() + 1.0f) / (RAND_MAX + 2.0f), u2 = rand() / (float)RAND_MAX;
+        audio[k] = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
+    }
+    for (size_t t = 0; t < sizeof(tx) / sizeof(tx[0]); t++) {
+        uint8_t  sym[WSPR_SYMBOLS];
+        uint32_t n;
+        /* SNR in 2500 Hz from unit noise over the 5512 Hz audio band */
+        float    a = sqrtf(2.0f) * powf(10.0f, tx[t].snr / 20.0f) / sqrtf(rate / 2 / 2500.0f);
+
+        wspr_encode(tx[t].call, tx[t].grid, tx[t].dbm, sym);
+        int16_t *s = wspr_synth(sym, tx[t].hz, rate, &n);
+        for (uint32_t k = 0; k < n && k + rate < (uint32_t)len; k++) {
+            audio[k + rate] += a * s[k] / (32767.0f * 0.8f);
+        }
+        free(s);
+    }
+    wspr_bb_t *bb = wspr_bb_create(rate);
+    for (int k = 0; k < len; k += 441) {
+        wspr_bb_feed(bb, audio + k, len - k < 441 ? len - k : 441);
+    }
+    unsigned ns = wspr_bb_take(bb, i, q);
+    int      n  = wspr_decode_iq(i, q, ns, 14095600, spots, 16);
+    printf("wspr: %d decoded\n", n);
+    for (int k = 0; k < n; k++) {
+        printf("  %s %s %d dBm, %d dB, %.0f Hz\n", spots[k].call, spots[k].loc, spots[k].dbm, spots[k].snr, spots[k].freq_hz);
+    }
+    dialog_wspr_show_spots(spots, n);
+    pump(300);
+    shot("wspr_2.ppm");
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[1]->press(pg->items[1]);  /* TX 0% -> 10% */
+    pg->items[3]->press(pg->items[3]);  /* Upload on */
+    pump(300);
+    shot("wspr_3.ppm");
+    pg->items[1]->press(pg->items[1]);
+    pg->items[1]->press(pg->items[1]);
+    pg->items[1]->press(pg->items[1]);
+    pg->items[1]->press(pg->items[1]);  /* 50% -> 0% */
+    pg->items[3]->press(pg->items[3]);
+    dialog_destruct();
+    pump(200);
+    wspr_bb_destroy(bb);
+    free(audio);
+    free(i);
+    free(q);
 }
 
 static void app(const char *name, dialog_t *d, int pages) {
@@ -947,6 +1017,7 @@ int main(int argc, char **argv) {
         pump(200);
     }
     if (only && !strcmp(only, "cwtrainer")) cwtrainer_demo();
+    if (!only || !strcmp(only, "wspr")) wspr_demo();
     if (!only || !strcmp(only, "settings")) settings_demo();
     if (!only || !strcmp(only, "wireless")) wireless_demo();
     if (only && !strcmp(only, "settings_nav")) settings_nav();

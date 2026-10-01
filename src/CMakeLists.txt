@@ -40,6 +40,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     cw_tune_ui.c adif.c qso_log.c scheduler.cpp
     dialog_wifi.c wifi.cpp btaudio.cpp controls.cpp usb_devices.cpp
     knobs.cpp
+    dialog_wspr.c
 )
 
 add_subdirectory(fonts)
@@ -49,6 +50,7 @@ add_subdirectory(widgets)
 add_subdirectory(params)
 add_subdirectory(qth)
 add_subdirectory(cluster)
+add_subdirectory(wspr)
 add_subdirectory(cfg)
 
 include_directories(utf8)
@@ -66,6 +68,7 @@ pkg_check_modules(deps REQUIRED IMPORTED_TARGET
 target_link_libraries(${PROJECT_NAME} PRIVATE
 PkgConfig::deps
 FT8 QTH CLUSTER
+WSPR
 JS8
 cfg
 Threads::Threads

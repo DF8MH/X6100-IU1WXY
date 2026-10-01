@@ -75,7 +75,13 @@ int32_t harness_cluster_column;
 /* CW trainer: level, group and keyer speed are kept here, train is on */
 extern void *cfg_cwt_level, *cfg_cwt_group, *cfg_key_speed, *cfg_key_train;
 int32_t harness_cwt_level = 2, harness_cwt_group = 1, harness_key_speed = 15;
+/* WSPR app settings, kept here */
+extern void *cfg_wspr_tx_pct, *cfg_wspr_tx_freq, *cfg_wspr_upload;
+int32_t harness_wspr_tx_pct = 0, harness_wspr_tx_freq = 1500, harness_wspr_upload = 0;
 void param_i_set(void *p, int32_t v) {
+    if (p == cfg_wspr_tx_pct) harness_wspr_tx_pct = v;
+    if (p == cfg_wspr_tx_freq) harness_wspr_tx_freq = v;
+    if (p == cfg_wspr_upload) harness_wspr_upload = v;
     if (p == cfg_cwt_level) harness_cwt_level = v;
     if (p == cfg_cwt_group) harness_cwt_group = v;
     if (p == cfg_key_speed) harness_key_speed = v;
@@ -87,6 +93,9 @@ void cw_decoder_set_sink(void (*text)(const char *), void (*wpm)(int)) { sink_te
 void harness_decode_wpm(int w) { if (sink_wpm) sink_wpm(w); }
 void harness_decode(const char *t) { if (sink_text) sink_text(t); }
 int32_t param_i_get(const void *p) {
+    if (p == cfg_wspr_tx_pct) return harness_wspr_tx_pct;
+    if (p == cfg_wspr_tx_freq) return harness_wspr_tx_freq;
+    if (p == cfg_wspr_upload) return harness_wspr_upload;
     if (p == cfg_cwt_level) return harness_cwt_level;
     if (p == cfg_cwt_group) return harness_cwt_group;
     if (p == cfg_key_speed) return harness_key_speed;

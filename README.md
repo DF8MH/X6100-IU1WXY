@@ -52,6 +52,7 @@ works as in the base firmware.
 
 - FT8 and FT4 with logging in ADIF (`ft_log.adi`) and worked-before marks
 - JS8 (all four speeds at once): decoder, inbox, store and forward, log, APRS gateways
+- WSPR: decoder (wsprd, as in WSJT-X), beacon TX at most 5 W with a TX % chance, optional upload of the spots to WSPRnet
 - RTTY, SSTV, WeFax and NavTex (from the 1KO125 fork), with broadcast frequency lists
 - DX Cluster app: telnet client over WiFi, spots by frequency around the VFO, one-press tune, saved servers, mode/age/spotter filters and callsign alerts with a popup
 
@@ -132,7 +133,7 @@ partition as `incoming_log.adi`; it is imported at the next start.
 
 ### Digital modes
 
-APP (page 1) → **Modes** opens a menu: RTTY, FT8, FT4, JS8, SSTV, WeFax,
+APP (page 1) → **Modes** opens a menu: RTTY, FT8, FT4, WSPR, JS8, SSTV, WeFax,
 NavTex. Turn the **MFK** to choose, press to open; the last used mode is
 marked. Pressing **Modes** again closes the menu.
 
@@ -213,6 +214,25 @@ waterfall stands still while JS8 is open.
 Design notes: [docs/RESEARCH.md](docs/RESEARCH.md),
 [docs/TX_PLAN.md](docs/TX_PLAN.md), [docs/T6_PLAN.md](docs/T6_PLAN.md),
 [docs/SPOTS_PLAN.md](docs/SPOTS_PLAN.md).
+
+### WSPR
+
+APP → **Modes** → **WSPR**. The radio tunes the nearest WSPR dial frequency
+(USB-D, WSJT-X's list); the band keys step through the others. Cycles are
+two minutes from the even UTC minute, so the clock must be right to about a
+second (GPS or NTP).
+
+- **RX**: every cycle not used for TX is decoded at 1:54; the spots go to the
+  top of the table (UTC, SNR, DT, audio Hz, drift, call, grid, dBm, km from
+  your QTH).
+- **TX %** (0, 10, 20, 33, 50): the chance that a cycle is a beacon, chosen at
+  random as in WSJT-X. **TX next** sends one beacon in the next cycle (press
+  again to stop it, also on the air). The message is the callsign, the first
+  4 characters of the locator and the power (Settings, at most 5 W, rounded
+  to a WSPR level). Compound calls with a `/` can't be sent.
+- The main knob moves the TX audio offset (1410 - 1590 Hz).
+- **Upload**: the spots of each cycle go to WSPRnet (plain HTTP over WiFi);
+  the status line counts what was sent and what failed.
 
 ### DX Cluster
 
@@ -533,6 +553,9 @@ Design notes and UI mockups are in `docs/` (`docs/mockups/releases/`).
   on the engine of [JS8Call-improved/Android-port](https://github.com/JS8Call-improved/Android-port),
   a C++ port of [JS8Call](https://github.com/js8call/js8call) by Jordan Sherer
   KN4CRD and contributors.
+- **WSPR**: the wsprd decoder of [WSJT-X](https://wsjt.sourceforge.io) by
+  Joe Taylor K1JT and Steven Franke K9AN, as packaged by Guenael Jouchet
+  VA2GKA in [rtlsdr-wsprd](https://github.com/Guenael/rtlsdr-wsprd).
 - **Libraries**: [LVGL](https://lvgl.io), cJSON, rapidxml, utf8cpp, FFTW,
   bottle (web configurator), PulseAudio and BlueZ (Bluetooth).
 - **Fonts** in `src/fonts`: Roboto (Apache-2.0,
@@ -544,6 +567,6 @@ Design notes and UI mockups are in `docs/` (`docs/mockups/releases/`).
 ## License
 
 The GUI is LGPL-2.1-or-later ([LICENSE](LICENSE)). The vendored js8core
-(`third-party/js8core`) is GPLv3, so the firmware image is distributed under
-GPLv3. The web configurator has its own license in
+(`third-party/js8core`) and wsprd (`third-party/wsprd`) are GPLv3, so the
+firmware image is distributed under GPLv3. The web configurator has its own license in
 [webserver/LICENSE](webserver/LICENSE).

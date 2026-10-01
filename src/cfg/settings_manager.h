@@ -151,6 +151,14 @@ class SettingsManager {
     Parameter<int32_t> p_ft8_max_repeats{"ft8_max_repeats", 6, {},
         StorageType::GLOBAL, pending_writes_, {}, &global_params_};
 
+    // WSPR
+    Parameter<int32_t> p_wspr_tx_pct{"wspr_tx_pct", 0, 0, 50,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_wspr_tx_freq{"wspr_tx_freq", 1500, 1410, 1590,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_wspr_upload{"wspr_upload", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+
     // SWR scan
     Parameter<int32_t> p_swrscan_linear{"swrscan_linear", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};

@@ -65,6 +65,7 @@ TEST_CASE("WSPR round trip: encode, audio, baseband, decode", "[wspr]") {
     REQUIRE(spots[0].dbm == 37);
     REQUIRE(std::fabs(spots[0].freq_hz - (14095600 + 1530)) < 2.0);
     REQUIRE(std::abs(spots[0].snr + 20) <= 3);
+    REQUIRE(std::fabs(spots[0].dt) < 0.3);     /* started on time, 1 s into the cycle */
 }
 
 TEST_CASE("WSPR weak signal near the limit still decodes", "[wspr]") {
