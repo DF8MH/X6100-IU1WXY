@@ -70,7 +70,7 @@ class TimeClassifier {
     void  decay_histogram(std::array<float, HIST_BINS> &hist);
     void  add_sample(float duration_ms);
     float estimate_unit() const;
-    Token classify_and_update(bool closed_on, float closed_duration_ms);
+    Token classify_and_update(bool closed_on, float closed_duration_ms, bool learn);
 
     std::array<float, HIST_BINS> hist_{};
 
@@ -85,6 +85,9 @@ class TimeClassifier {
     // Latches the one-shot end-of-message word space so a long silence flushes
     // the last character once; re-armed by the next mark.
     bool idle_reported_ = false;
+
+    // The in-flight interval was cut by a retune: its length is not learned.
+    bool truncated_ = false;
 
     float unit_ms_ = UNIT_MS_DEFAULT;
     // Fast re-lock: a candidate far from the current unit is committed after it

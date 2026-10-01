@@ -32,9 +32,20 @@ constexpr int   ALIVE_DECIM    = 4;      // integrators per alive/PLL update
 constexpr float ALIVE_EMA      = 0.125f; // power EMA, ~256 ms
 constexpr float VETO_THRESHOLD = 4.0f;   // ema_power4_ / noise4_ above which alive
 constexpr int   VETO_LENGTH    = 32;     // windows below threshold => retune allowed (1 s)
+// Only a tone alive for VETO_MIN_AGE windows holds the veto: a station that has
+// just started (seen by the coherent detector a frame or two before the FFT
+// peak is stable) must not lock the NCO off its frequency.
+constexpr int   VETO_MIN_AGE   = 8;      // windows (256 ms)
 constexpr float PLL_WEIGHT_LO  = 2.0f;   // r4 at which the PLL weight is 0
 constexpr float PLL_WEIGHT_HI  = 5.0f;  // r4 at which the PLL weight is 1
 constexpr float RETUNE_BINS    = 2.0f;   // retune hysteresis vs the FFT bin
+// The alive veto is lifted when, over the strong FFT frames, the NCO bin stays
+// OWN_REL below the peak (score +1 per such frame, -2 otherwise: a keying edge
+// splatters into the NCO bin for a frame or two): the "alive" power is then the
+// leak of a strong station off the NCO (e.g. 50 Hz away at 20 dB SNR), not a
+// station at the NCO, and without this the tracker never retunes to it.
+constexpr float OWN_REL           = 0.063f; // -12 dB
+constexpr int   OWN_ABSENT_FRAMES = 32;     // score, ~0.5 s of key-down
 
 // Coherent CW tone tracker: down-converts the newest audio hop to baseband with
 // an NCO, low-passes and averages it, and locks the NCO to the tone phase with
@@ -54,6 +65,8 @@ class CoherentToneTracker {
     float ema_power4_    = 0.0f;
     bool  ema_seeded_    = false;
     int   alive_counter_ = VETO_LENGTH; // veto starts expired: the first lock may retune
+    int   alive_age_     = 0;           // alive windows since the veto last expired
+    int   own_absent_    = 0;           // score of strong frames without a station at the NCO
     bool  was_alive_     = false;
 
     // Advances the liveness/PLL state on the mean of ALIVE_DECIM integrators.
@@ -76,8 +89,11 @@ class CoherentToneTracker {
 
         if (alive) {
             alive_counter_ = 0;
+            alive_age_     = std::min(alive_age_ + 1, VETO_MIN_AGE);
         } else if (alive_counter_ < VETO_LENGTH) {
             alive_counter_++;
+            if (alive_counter_ == VETO_LENGTH)
+                alive_age_ = 0;
         }
 
         if (power4 > 1e-8f) {
@@ -174,6 +190,8 @@ class CoherentToneTracker {
         prev_avg_   = {};
         ema_seeded_ = false;
         was_alive_  = false;
+        alive_age_  = 0;
+        own_absent_ = 0;
     }
 
     // Frequency policy: retune to the observed peak once it has been stable for
@@ -184,10 +202,13 @@ class CoherentToneTracker {
         if (!nco) {
             return false;
         }
+        if (obs.stable_frames > 0) { // a strong frame
+            own_absent_ = std::clamp(own_absent_ + ((obs.nco_rel < OWN_REL) ? 1 : -2), 0, OWN_ABSENT_FRAMES);
+        }
         if (obs.stable_frames < STABLE_FRAMES_MIN) {
             return false;
         }
-        if (alive_counter_ < VETO_LENGTH) {
+        if (alive_counter_ < VETO_LENGTH && alive_age_ >= VETO_MIN_AGE && own_absent_ < OWN_ABSENT_FRAMES) {
             return false;
         }
         const float bin_hz = SAMPLE_RATE / static_cast<float>(FFT_SIZE);

@@ -64,6 +64,7 @@ struct FrameObservation {
     float freq_hz;       // peak frequency, parabolic interpolation
     float snr_lin;       // peak power / per-bin noise power
     int   stable_frames; // consecutive strong frames with the peak near the same bin
+    float nco_rel;       // power at the NCO bin / peak power (0 if outside the region)
 };
 
 // Spectrum types shared by SpgramReal, CwReceiver and the tests.

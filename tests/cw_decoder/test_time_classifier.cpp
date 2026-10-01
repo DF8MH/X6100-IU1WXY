@@ -112,14 +112,19 @@ TEST_CASE("time classifier: on_retune keeps the state but keeps the speed") {
     REQUIRE(s.tc.get_current_wpm() == Approx(25.0f).margin(2.0f));
 
     // Mid-mark retune: the level stays committed so the classifier keeps step
-    // with the detector, which reports the next crossing itself. Only the
-    // in-flight interval is dropped, so the mark is re-measured from here.
-    s.on(6);
+    // with the detector, which reports the next crossing itself. The in-flight
+    // mark keeps its length (this fork: upstream re-measured it from here).
+    s.on(3);
     s.tc.on_retune();
     REQUIRE(s.tc.is_signal_active());
     REQUIRE(s.tc.get_current_wpm() == Approx(25.0f).margin(2.0f));
+    REQUIRE(close_mark(s, 3) == cw::CW_DOT); // 48 ms
 
-    REQUIRE(close_mark(s, 6) == cw::CW_DOT);
+    s.off(6);
+    s.on(9);
+    s.tc.on_retune();
+    REQUIRE(close_mark(s, 9) == cw::CW_DASH); // 144 ms, cut by the retune
+    REQUIRE(s.tc.get_current_wpm() == Approx(25.0f).margin(2.0f));
 }
 
 // The end of a message has no following mark to close the OFF interval, so the

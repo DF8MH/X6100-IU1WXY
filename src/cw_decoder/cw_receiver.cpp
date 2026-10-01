@@ -127,11 +127,19 @@ FrameObservation CwReceiver::analyze_frame(const ComplexSpectrum &fft_output) {
         prev_peak_bin_ = -1;
     }
 
+    // Is the station at the NCO in this frame, or only the leak of a stronger
+    // one elsewhere? (see CoherentToneTracker::consider_retune)
+    float nco_rel = 0.0f;
+    const long nco_bin = std::lround(tone_tracker_.get_freq_hz() * static_cast<float>(FFT_SIZE) / SAMPLE_RATE);
+    if (nco_bin >= static_cast<long>(region_from_) && nco_bin <= static_cast<long>(region_to_) && max_val > 0.0f) {
+        nco_rel = power_spectrum_[nco_bin] / max_val;
+    }
+
     diag_peak_freq_hz_  = current_freq_hz_;
     diag_snr_lin_       = snr_lin;
     diag_stable_frames_ = stable_frames_;
 
-    return {.freq_hz = current_freq_hz_, .snr_lin = snr_lin, .stable_frames = stable_frames_};
+    return {.freq_hz = current_freq_hz_, .snr_lin = snr_lin, .stable_frames = stable_frames_, .nco_rel = nco_rel};
 }
 
 void CwReceiver::process_audio_frame(size_t n, float *samples) {
