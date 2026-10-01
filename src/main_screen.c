@@ -520,6 +520,7 @@ void mem_save(uint16_t id) {
 }
 
 static void low_power_timer_cb(lv_timer_t * timer) {
+    low_power_timer = NULL;     /* one-shot: LVGL deletes it */
     msg_update_text_fmt("Power off");
     radio_set_charger(true);
     radio_poweroff();

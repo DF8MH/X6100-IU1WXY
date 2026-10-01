@@ -33,6 +33,7 @@
 #include "btaudio.h"
 #include "audio.h"
 #include "pubsub_ids.h"
+#include "scheduler.h"
 
 /*********************
  *      DEFINES
@@ -44,6 +45,11 @@
 #define FILTER_2_OFFSET 60
 #define FILTER_2_OFFSET_IN 20
 #define FILTER_2_OFFSET_OUT (FILTER_2_OFFSET - FILTER_2_OFFSET_IN)
+
+/* Battery voltage in 0.1 V units; LOW + HYSTERESIS = HIGH (upstream 21c2b93) */
+#define LOW_BATTERY_VBAT_LOW     60
+#define LOW_BATTERY_HYSTERESIS   2
+#define LOW_BATTERY_VBAT_HIGH    (LOW_BATTERY_VBAT_LOW + LOW_BATTERY_HYSTERESIS)
 
 /**********************
  *      MACROS
@@ -112,6 +118,7 @@ static void * radio_thread(void *arg);
 
 static radio_rx_tx_change_t notify_rx_tx;
 static void(*low_power_cb)(bool) = NULL;
+static bool low_power = false;
 
 static pthread_mutex_t  control_mux;
 
@@ -289,6 +296,13 @@ void radio_start() {
 
 void radio_set_rx_tx_notify_fn(radio_rx_tx_change_t cb) {
     notify_rx_tx = cb;
+}
+
+/* On the LVGL thread: low_power_cb creates and deletes timers */
+static void low_power_ui_cb(void *arg) {
+    if (low_power_cb) {
+        low_power_cb(*(bool *)arg);
+    }
 }
 
 void radio_set_low_power_cb(void (*cb)(bool)) {
@@ -739,8 +753,14 @@ static bool radio_tick() {
         if (delay++ > 10) {
             delay = 0;
             clock_update_power(pack->vext * 0.1f, pack->vbat*0.1f, pack->batcap, pack->flag.charging);
-            if (low_power_cb) {
-                low_power_cb(!pack->flag.vext && (pack->vbat <= 60));
+            /* Only on a change, with hysteresis: around 6.0 V the 30 s
+             * power-off timer was started and stopped over and over */
+            bool enter_low = !pack->flag.vext && (pack->vbat <= LOW_BATTERY_VBAT_LOW);
+            bool leave_low = pack->flag.vext || (pack->vbat >= LOW_BATTERY_VBAT_HIGH);
+
+            if ((!low_power && enter_low) || (low_power && leave_low)) {
+                low_power = !low_power;
+                scheduler_put(low_power_ui_cb, &low_power, sizeof(low_power));
             }
         }
         flow_info_t flow_info = pack->flow_info;
