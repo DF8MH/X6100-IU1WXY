@@ -871,9 +871,7 @@ static void wireless_demo(void) {
     pump(500);
     shot("wireless_7.ppm");
     for (int i = 0; i < 14; i++) lv_group_focus_next(g);   /* down to WFVIEW SERVER */
-    lv_group_focus_next(g);   /* Password, last row: scroll to the end */
-    pump(300);
-    for (lv_obj_t *o = lv_group_get_focused(g); o; o = lv_obj_get_parent(o)) if (lv_obj_get_scroll_bottom(o) > 0) { lv_obj_scroll_by(o, 0, -lv_obj_get_scroll_bottom(o), LV_ANIM_OFF); break; }
+    lv_group_focus_next(g);   /* Password, last control: the page shows its end */
     pump(500);
     shot("wireless_8.ppm");
     dialog_destruct();
@@ -883,28 +881,29 @@ static void wireless_demo(void) {
 /* Settings: walk the focus through every control of each tab, report the ones
  * that end up outside the visible area, shot each time the scroll moves. */
 static void settings_nav(void) {
-    static const char *tabs[] = { "", "general", "display", "audio", "wireless" };
     char p[64];
     params.wifi_enabled.x = true;
     dialog_construct(dialog_settings, lv_scr_act());
     pump(500);
-    for (int t = 1; t <= 4; t++) {
-        buttons_page_t *pg = buttons_get_cur_page();
+    for (int pg_n = 0; pg_n < 2; pg_n++) {
+      buttons_page_t *pg = buttons_get_cur_page();
+      for (int t = 1; t < BUTTONS && pg->items[t]; t++) {
         pg->items[t]->press(pg->items[t]);
         pump(500);
         lv_obj_t *prev = NULL;
         int last_scroll = -1, n_shot = 0, n = 0;
         do {
             lv_obj_t *f = lv_group_get_focused(keyboard_group);
+            if (!f) break;
             prev = f;
             lv_area_t a;
             lv_obj_get_coords(f, &a);
             int scroll = 0;
             for (lv_obj_t *o = f; o; o = lv_obj_get_parent(o)) scroll += lv_obj_get_scroll_y(o);
-            printf("[nav] %s #%d y=%d..%d x=%d..%d%s\n", tabs[t], n, a.y1, a.y2, a.x1, a.x2,
+            printf("[nav] %d_%d #%d y=%d..%d x=%d..%d%s\n", pg_n + 1, t, n, a.y1, a.y2, a.x1, a.x2,
                    (a.y1 < 130 || a.y2 > 420 || a.x1 < 0 || a.x2 > 800) ? "  OUTSIDE" : "");
             if (scroll != last_scroll) {
-                snprintf(p, sizeof p, "settings_b_%s_%d.ppm", tabs[t], ++n_shot);
+                snprintf(p, sizeof p, "settings_b_%d_%d_%d.ppm", pg_n + 1, t, ++n_shot);
                 shot(p);
                 last_scroll = scroll;
             }
@@ -912,7 +911,13 @@ static void settings_nav(void) {
             pump(400);
             n++;
         } while (lv_group_get_focused(keyboard_group) != prev && n < 80);   /* the MFK stops on the last control */
-        printf("[nav] %s: %d controls\n", tabs[t], n);
+        lv_obj_t *pg_obj = prev;
+        while (pg_obj && !lv_obj_has_flag(pg_obj, LV_OBJ_FLAG_SCROLLABLE)) pg_obj = lv_obj_get_parent(pg_obj);
+        int hidden = pg_obj ? lv_obj_get_scroll_bottom(pg_obj) : 0;
+        printf("[nav] %d_%d: %d controls, %d px below the last one%s\n", pg_n + 1, t, n, hidden, hidden > 1 ? "  HIDDEN" : "");
+      }
+      pg->items[0]->press(pg->items[0]);
+      pump(100);
     }
     dialog_destruct();
     pump(200);

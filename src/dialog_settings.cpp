@@ -3152,7 +3152,7 @@ static uint8_t make_wfview(uint8_t row) {
     lv_label_set_text(wl_label(obj, &sony_22, 0x99aabb, 0), "UDP 50001");
     wv.pill = wl_pill_create(obj, 0);
     wv.client = wl_label(obj, &sony_22, 0xffffff, 0);
-    lv_obj_set_width(wv.client, 180);
+    lv_obj_set_size(wv.client, 130, lv_font_get_line_height(&sony_22));   /* one line, then dots */
     lv_label_set_long_mode(wv.client, LV_LABEL_LONG_DOT);
     return row + 1;
 }
@@ -3217,6 +3217,20 @@ static void focus_cb(lv_group_t *g) {
     lv_coord_t margin = 24;
 
     lv_obj_update_layout(page);
+
+    /* Rows without controls above the first or below the last one (status
+     * lines, card ends) would never come into view: show the page ends */
+    lv_obj_t **first = (lv_obj_t **)_lv_ll_get_head(&g->obj_ll);
+    lv_obj_t **last  = (lv_obj_t **)_lv_ll_get_tail(&g->obj_ll);
+
+    if (last && *last == obj) {
+        lv_obj_scroll_by(page, 0, -lv_obj_get_scroll_bottom(page), LV_ANIM_OFF);
+        return;
+    }
+    if (first && *first == obj) {
+        lv_obj_scroll_by(page, 0, lv_obj_get_scroll_top(page), LV_ANIM_OFF);
+        return;
+    }
     lv_obj_get_coords(obj, &a);
     lv_obj_get_coords(page, &p);
     if (a.y2 + margin > p.y2) {
