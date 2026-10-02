@@ -76,6 +76,30 @@ button.remove:hover{color:var(--err);border-color:var(--err)}
 .item progress{width:100%}
 a.btn{border:1px solid var(--line);border-radius:8px;padding:10px 18px;font-size:15px;font-weight:600;color:var(--text);text-decoration:none}
 a.btn:hover{border-color:var(--dim)}
+.folders{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:18px}
+.folders[hidden]{display:none}
+a.folder{margin:0;padding:16px 18px;display:flex;flex-direction:column;gap:2px;color:var(--text);text-decoration:none}
+a.folder:hover{border-color:var(--accent)}
+.crumb{margin:0 0 14px;font-size:17px;font-weight:600}
+.crumb a{text-decoration:none}
+.selbar{position:sticky;top:0;z-index:5;padding:12px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.selbar button{padding:7px 12px;font-size:14px}
+button:disabled{opacity:.5;cursor:default}
+.gallery .item{position:relative;cursor:pointer;-webkit-user-select:none;user-select:none}
+.item.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.item .pick{position:absolute;top:22px;left:22px;width:22px;height:22px;margin:0;z-index:1;cursor:pointer}
+.drop{border:2px dashed var(--line);border-radius:8px;padding:22px;text-align:center;color:var(--dim)}
+.drop.over{border-color:var(--accent);color:var(--text)}
+.upl{display:grid;grid-template-columns:1fr 100px minmax(0,1fr);gap:12px;align-items:center;margin-top:8px;font-size:14px}
+.upl .name{word-break:break-all}
+@media (max-width:640px){
+  .gallery{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .item{padding:10px}
+  .item .pick{top:16px;left:16px}
+  .item .actions button,.item a.btn{padding:6px 10px;font-size:13px}
+  .upl{grid-template-columns:1fr 80px}
+  .upl .meta{grid-column:1/-1}
+}
 
 /* Time */
 .time-now{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}

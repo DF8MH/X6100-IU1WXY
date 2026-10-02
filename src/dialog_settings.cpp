@@ -331,6 +331,7 @@ lv_obj_t *slider_with_text(lv_obj_t *cell, T val, T min, T max, T step, size_t w
     lv_slider_set_range(obj, min / step, max / step);
     lv_slider_set_value(obj, val / step, LV_ANIM_OFF);
     lv_obj_set_width(obj, width);
+    lv_obj_align(obj, LV_ALIGN_LEFT_MID, 0, 0);   /* in the middle of the box, as its value */
 
     /*Create a label below the slider*/
     lv_obj_t *slider_label = lv_label_create(cell);
@@ -3265,13 +3266,14 @@ static uint8_t make_param_slider(uint8_t row, const char *label, param_slider_t 
 
     wl_row_label(row, label);
 
+    /* As the other sliders: the right half, value at the right */
     obj = lv_obj_create(grid);
-    lv_obj_set_size(obj, SMALL_6, ROW_H);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_size(obj, SMALL_3, ROW_H);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 4, 3, LV_GRID_ALIGN_CENTER, row, 1);
     lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_center(obj);
-    slider_with_text(obj, p->param->get(), p->min, p->max, p->step, SMALL_6 - 120, p->fmt, param_slider_cb, p);
+    slider_with_text(obj, p->param->get(), p->min, p->max, p->step, SMALL_3 - 120, p->fmt, param_slider_cb, p);
 
     return row + 1;
 }

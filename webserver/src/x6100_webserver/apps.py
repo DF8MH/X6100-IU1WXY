@@ -22,6 +22,7 @@ import tarfile
 import tempfile
 import threading
 import time
+import zipfile
 
 import bottle
 
@@ -961,6 +962,103 @@ def delete_gallery_file(kind, name):
     return {"status": "OK"}
 
 
+GALLERY_BULK_MAX = 1000
+
+
+def gallery_selection(kind, names, items):
+    """[(kind, name)] from kind + names and/or items ("kind/name"); ValueError when malformed.
+    Names themselves are checked by gallery_path."""
+    if not isinstance(names, list) or not isinstance(items, list) or not all(isinstance(x, str) for x in names + items):
+        raise ValueError("Invalid request")
+    if names and kind not in GALLERY_DIRS:
+        raise ValueError("Invalid kind")
+    if any("/" not in x for x in items):
+        raise ValueError("Invalid item")
+    pairs = list(dict.fromkeys([(kind, n) for n in names] + [tuple(x.split("/", 1)) for x in items]))
+    if not 0 < len(pairs) <= GALLERY_BULK_MAX:
+        raise ValueError(f"Select 1 to {GALLERY_BULK_MAX} files")
+    return pairs
+
+
+@app.post('/api/gallery/delete')
+def delete_gallery_files():
+    """JSON {"kind", "names": [...]} or {"items": ["kind/name", ...]}; results per file."""
+    try:
+        data = bottle.request.json
+        if not isinstance(data, dict):
+            raise ValueError("Invalid request")
+        pairs = gallery_selection(data.get("kind"), data.get("names", []), data.get("items", []))
+    except ValueError as e:
+        return api_error(400, str(e))
+    deleted, failed = [], []
+    for kind, name in pairs:
+        try:
+            os.remove(gallery_path(kind, name)[1])
+            deleted.append({"kind": kind, "name": name})
+        except bottle.HTTPError:
+            failed.append({"kind": kind, "name": name, "msg": "Not found"})
+        except OSError as e:
+            failed.append({"kind": kind, "name": name, "msg": e.strerror or str(e)})
+    return {"status": "OK", "deleted": deleted, "failed": failed}
+
+
+class ZipSink:
+    """Write-only file for zipfile: no seek, so it writes data descriptors and the
+    zip can be sent while it's made (nothing in RAM or on the SD card)."""
+
+    def __init__(self):
+        self.parts = []
+
+    def write(self, data):
+        self.parts.append(bytes(data))
+        return len(data)
+
+    def flush(self):
+        pass
+
+    def take(self):
+        data, self.parts = b"".join(self.parts), []
+        return data
+
+
+def zip_stream(files):
+    """Stored (the files are already compressed) zip of [(name in the zip, path)], in pieces."""
+    sink = ZipSink()
+    with zipfile.ZipFile(sink, "w") as zf:
+        for arcname, path in files:
+            info = zipfile.ZipInfo.from_file(path, arcname, strict_timestamps=False)   # radio clock may be 1970
+            with open(path, "rb") as src, zf.open(info, "w") as dst:
+                for chunk in iter(lambda: src.read(65536), b""):
+                    dst.write(chunk)
+                    yield sink.take()
+    yield sink.take()
+
+
+@app.route('/api/gallery/zip', method=['GET', 'POST'])
+def zip_gallery_files():
+    """Fields kind + names (repeated) and/or items ("kind/name", repeated); files gone meanwhile are skipped."""
+    params = bottle.request.params
+    try:
+        pairs = gallery_selection(params.get("kind"), params.getall("names"), params.getall("items"))
+    except ValueError as e:
+        return api_error(400, str(e))
+    files = []
+    for kind, name in pairs:
+        try:
+            files.append((kind, name, gallery_path(kind, name)[1]))
+        except bottle.HTTPError:
+            pass
+    if not files:
+        return api_error(404, "Not found")
+    one = len({k for k, _, _ in files}) == 1
+    os.sync()
+    zip_name = f"x6100-{files[0][0] if one else 'all'}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
+    bottle.response.content_type = "application/zip"
+    bottle.response.set_header("Content-Disposition", f'attachment; filename="{zip_name}"')
+    bottle.response.set_header("Cache-Control", "private, no-cache, no-store")
+    return zip_stream([(name if one else f"{kind}/{name}", path) for kind, name, path in files])
+
+
 SSTV_TX_MAX = 4 * 1024 * 1024
 
 
@@ -990,11 +1088,16 @@ def upload_tx_pic(kind):
         return api_error(400, "Not a PNG")
     folder = os.path.join(settings.FILEBROWSER_PATH, GALLERY_DIRS[kind][0])
     os.makedirs(folder, exist_ok=True)
+    if bottle.request.query.get("unique"):   # the gallery page: keep an existing file, name-1.png, name-2.png...
+        # ponytail: check then replace, two uploads of the same name at the same moment can still clash
+        stem, n = name[:-4], 1
+        while os.path.exists(os.path.join(folder, name)):
+            name, n = f"{stem}-{n}.png", n + 1
     tmp = os.path.join(folder, "." + name + ".tmp")   # hidden: the radio and the gallery skip it
     with open(tmp, "wb") as f:
         f.write(data)
     os.replace(tmp, os.path.join(folder, name))
-    return {"status": "OK"}
+    return {"status": "OK", "name": name}
 
 
 # On-radio AVI -> MP4 conversion with ffmpeg: one background job at a time
