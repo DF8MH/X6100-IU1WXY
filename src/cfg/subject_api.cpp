@@ -24,16 +24,8 @@ void subject_i_set(SubjectInt *subj, int32_t val) {
     subj->set(val);
 }
 
-SubjectFloat *subject_f_create(float val) {
-    return new SubjectFloat(val);
-}
-
 float subject_f_get(SubjectFloat *subj) {
     return subj->get();
-}
-
-void subject_f_set(SubjectFloat *subj, float val) {
-    subj->set(val);
 }
 
 Observer *subject_subscribe(Subject *subj, observer_cb fn, void *user_data) {

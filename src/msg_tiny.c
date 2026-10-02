@@ -79,7 +79,3 @@ void msg_tiny_set_text_fmt(const char * fmt, ...) {
 
     event_send(obj, EVENT_MSG_UPDATE, NULL);
 }
-
-void msg_tiny_set_timeout(uint16_t x) {
-    timeout = x;
-}

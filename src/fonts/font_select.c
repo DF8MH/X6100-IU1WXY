@@ -6,7 +6,7 @@
 #include "lvgl/lvgl.h"
 #include "font_select.h"
 
-#define SIZES(X) X(8) X(10) X(12) X(14) X(16) X(18) X(20) X(22) X(24) X(26) X(28) X(30) \
+#define SIZES(X) X(14) X(16) X(18) X(20) X(22) X(24) X(26) X(28) X(30) \
                  X(32) X(34) X(36) X(38) X(40) X(42) X(44) X(60)
 
 #define DECL(n) extern lv_font_t sony_##n; extern const lv_font_t roboto_##n, dejavu_##n;

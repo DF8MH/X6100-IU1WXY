@@ -171,12 +171,7 @@ int main(void) {
     pthread_create(&thread, NULL, tick_thread, NULL);
     pthread_detach(thread);
 
-#if 0
-    lv_obj_set_style_bg_opa(lv_scr_act(), LV_OPA_0, 0);
-    lv_scr_load_anim(main_obj, LV_SCR_LOAD_ANIM_FADE_IN, 250, 0, false);
-#else
     lv_scr_load(main_obj);
-#endif
 
     int64_t next_loop_time, sleep_time, loop_start_time;
     while (1) {

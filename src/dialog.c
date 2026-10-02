@@ -73,15 +73,6 @@ void dialog_send(lv_event_code_t event_code, void *param) {
     }
 }
 
-bool dialog_key(dialog_t *dialog, lv_event_t * e) {
-    if (dialog && dialog->key_cb && dialog->run) {
-        dialog->key_cb(e);
-        return true;
-    }
-
-    return false;
-}
-
 bool dialog_is_run() {
     return (current_dialog != NULL) && current_dialog->run;
 }

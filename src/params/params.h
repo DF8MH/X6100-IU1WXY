@@ -251,8 +251,6 @@ void params_int32_set(params_int32_t *var, int32_t x);
 void params_str_set(params_str_t *var, const char *x);
 void params_float_set(params_float_t *var, float x);
 
-uint8_t params_uint8_change(params_uint8_t *var, int16_t df);
-
 void params_msg_cw_load();
 void params_msg_cw_new(const char *val);
 void params_msg_cw_edit(uint32_t id, const char *val);

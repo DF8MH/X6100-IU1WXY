@@ -567,21 +567,6 @@ void params_str_set(params_str_t *var, const char *x) {
     params_unlock(&var->dirty);
 }
 
-uint8_t params_uint8_change(params_uint8_t *var, int16_t df) {
-    if (df == 0) {
-        return var->x;
-    }
-
-    int32_t x = var->x + df;
-
-    if (x > var->max) x = var->max;
-    if (x < var->min) x = var->min;
-
-    params_uint8_set(var, x);
-
-    return var->x;
-}
-
 inline char * params_key_mode_str_get(x6100_key_mode_t val) {
     switch (val) {
         case x6100_key_manual:

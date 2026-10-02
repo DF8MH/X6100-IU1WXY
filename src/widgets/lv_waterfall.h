@@ -63,9 +63,6 @@ void lv_waterfall_add_data(lv_obj_t * obj, float * data, uint16_t cnt);
 /* Add data with wall-clock timestamp for time-aligned processing (e.g. DNF). */
 void lv_waterfall_add_data_with_ts(lv_obj_t * obj, float * data, uint16_t cnt, struct timespec ts);
 
-/* Return the timestamp of the most recent PSD frame, or {0,0} if none yet. */
-struct timespec lv_waterfall_get_frame_ts(lv_obj_t * obj);
-
 void lv_waterfall_set_min(lv_obj_t *obj, int16_t val);
 void lv_waterfall_set_max(lv_obj_t *obj, int16_t val);
 

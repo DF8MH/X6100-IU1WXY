@@ -252,17 +252,6 @@ static void bool_update_subj_cb(lv_event_t *e) {
     param->set(lv_obj_has_state(obj, LV_STATE_CHECKED));
 }
 
-static void uint8_spinbox_update_cb(lv_event_t * e) {
-    lv_obj_t        *obj = lv_event_get_target(e);
-    params_uint8_t  *var = (params_uint8_t*)lv_event_get_user_data(e);
-
-    params_uint8_set(var, lv_spinbox_get_value(obj));
-    void(*update_cb)(void) = (void(*)(void))lv_obj_get_user_data(obj);
-    if (update_cb) {
-        update_cb();
-    }
-}
-
 static void uint8_dropdown_update_cb(lv_event_t * e) {
     lv_obj_t        *obj = lv_event_get_target(e);
     params_uint8_t  *var = (params_uint8_t*)lv_event_get_user_data(e);
@@ -309,23 +298,6 @@ static lv_obj_t * switch_bool(lv_obj_t *parent, ParamInt &param) {
     if (param.get()) {
         lv_obj_add_state(obj, LV_STATE_CHECKED);
     }
-    return obj;
-}
-
-static lv_obj_t * spinbox_uint8(lv_obj_t *parent, params_uint8_t *var, void(*update_cb)(void)=nullptr) {
-    lv_obj_t *obj = lv_spinbox_create(parent);
-
-    dialog_item(&dialog, obj);
-
-    lv_spinbox_set_value(obj, var->x);
-    lv_spinbox_set_range(obj, var->min, var->max);
-
-    if (update_cb) {
-        lv_obj_set_user_data(obj, (void*)update_cb);
-    }
-
-    lv_obj_add_event_cb(obj, uint8_spinbox_update_cb, LV_EVENT_VALUE_CHANGED, var);
-
     return obj;
 }
 
@@ -1341,92 +1313,6 @@ uint8_t make_spectrum_min_max(uint8_t row) {
 
     lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_FOCUSED, NULL);
     lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_DEFOCUSED, NULL);
-
-    return row + 1;
-}
-
-/* Spectrum fill, peaks */
-
-uint8_t make_spectrum_fill_peak(uint8_t row) {
-    lv_obj_t    *obj;
-    uint8_t     col = 0;
-
-    obj = lv_label_create(grid);
-
-    lv_label_set_text(obj, "Fill, peaks");
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col++, 1, LV_GRID_ALIGN_CENTER, row, 1);
-
-    obj = lv_obj_create(grid);
-
-    lv_obj_set_size(obj, SMALL_3, ROW_H);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
-    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_center(obj);
-
-    obj = switch_bool(obj, &params.spectrum_filled);
-    lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_FOCUSED, NULL);
-    lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_DEFOCUSED, NULL);
-    lv_obj_set_width(obj, SMALL_3 - 30);
-
-    obj = lv_obj_create(grid);
-
-    lv_obj_set_size(obj, SMALL_3, ROW_H);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 4, 3, LV_GRID_ALIGN_CENTER, row, 1);
-    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_center(obj);
-
-    obj = switch_bool(obj, &params.spectrum_peak);
-    lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_FOCUSED, NULL);
-    lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_DEFOCUSED, NULL);
-    lv_obj_set_width(obj, SMALL_3 - 30);
-
-    return row + 1;
-}
-
-/* Spectrum beta, peak hold, peak speed */
-
-uint8_t make_spectrum_beta_peak_hold_speed(uint8_t row) {
-    lv_obj_t *obj;
-    uint8_t   col = 1;
-
-    obj = lv_label_create(grid);
-
-    lv_label_set_text(obj, "Beta, hold, speed");
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
-
-    obj = spinbox_uint8(grid, &params.spectrum_beta, []() { dsp_set_spectrum_beta(params.spectrum_beta.x * 0.01f); });
-    lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_FOCUSED, NULL);
-    lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_DEFOCUSED, NULL);
-
-    lv_spinbox_set_digit_format(obj, 2, 0);
-    lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, ROW_H);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);
-    col += 2;
-
-    obj = spinbox_uint8(grid, &params.spectrum_peak_hold);
-    lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_FOCUSED, NULL);
-    lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_DEFOCUSED, NULL);
-
-
-    lv_spinbox_set_digit_format(obj, 2, 0);
-    lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, ROW_H);
-
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);
-    col += 2;
-
-    obj = spinbox_uint8(grid, &params.spectrum_peak_speed);
-    lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_FOCUSED, NULL);
-    lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_DEFOCUSED, NULL);
-
-    lv_spinbox_set_digit_format(obj, 2, 0);
-    lv_spinbox_set_digit_step_direction(obj, LV_DIR_LEFT);
-    lv_obj_set_size(obj, SMALL_2, ROW_H);
-    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, col, 2, LV_GRID_ALIGN_CENTER, row, 1);
-    col += 2;
 
     return row + 1;
 }

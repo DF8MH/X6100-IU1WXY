@@ -41,9 +41,7 @@ void param_unsubscribe(Observer *o);
 SubjectInt      *subject_i_create(int32_t val);
 int32_t          subject_i_get(SubjectInt *subj);
 void             subject_i_set(SubjectInt *subj, int32_t val);
-SubjectFloat    *subject_f_create(float val);
 float            subject_f_get(SubjectFloat *subj);
-void             subject_f_set(SubjectFloat *subj, float val);
 
 Observer *subject_subscribe(Subject *subj, observer_cb fn, void *user_data);
 Observer *subject_subscribe_and_notify(Subject *subj, observer_cb fn, void *user_data);

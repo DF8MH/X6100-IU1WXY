@@ -2,11 +2,17 @@
 
 #include <cstdint>
 
+// Offsets into one char blob, not pointers: pointer tables in a PIE binary
+// are relocated at start, ~6 MB of private RAM
 struct JscTuple {
-  char const* str;
+  std::uint32_t off;
   int size;
   int index;
 };
+
+extern char const JSC_CHARS[];
+
+inline char const* jsc_str(JscTuple const& t) { return JSC_CHARS + t.off; }
 
 extern JscTuple const JSC_MAP[262144];
 extern JscTuple const JSC_LIST[262144];

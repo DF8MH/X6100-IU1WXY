@@ -107,7 +107,3 @@ void backlight_switch() {
         on = true;
     }
 }
-
-bool backlight_is_on() {
-    return on;
-}

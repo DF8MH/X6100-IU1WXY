@@ -76,7 +76,7 @@ std::vector<CodewordPair> compress(std::string const& text) {
         break;
       }
       auto t = JSC_MAP[index];
-      JSC_LOGD("compress: JSC_MAP[%u] size=%d str='%.*s'", index, t.size, t.size, t.str);
+      JSC_LOGD("compress: JSC_MAP[%u] size=%d str='%.*s'", index, t.size, t.size, jsc_str(t));
       w = w.substr(t.size);
       bool isLast = w.empty();
       bool shouldAppendSpace = isLast && !isSpaceCharacter && !isLastWord;
@@ -144,7 +144,7 @@ std::string decompress(Codeword const& bitvec) {
     j = j * s + static_cast<std::uint32_t>(bytes[start + k]) + base[k];
     if (j >= JSC_SIZE) break;
 
-    auto word = std::string(JSC_MAP[j].str, JSC_MAP[j].size);
+    auto word = std::string(jsc_str(JSC_MAP[j]), JSC_MAP[j].size);
     #ifdef __ANDROID__
     __android_log_print(ANDROID_LOG_ERROR, "JSC_DEBUG",
                         "decompress: j=%u, word='%s'", j, word.c_str());
@@ -181,7 +181,7 @@ std::uint32_t lookup(const char* b, bool* ok) {
 
   // prefix scan
   for (std::uint32_t i = 0; i < JSC_PREFIX_SIZE; ++i) {
-    if (b[0] != JSC_PREFIX[i].str[0]) continue;
+    if (b[0] != jsc_str(JSC_PREFIX[i])[0]) continue;
     if (JSC_PREFIX[i].size == 1) {
       if (ok) *ok = true;
       return JSC_LIST[JSC_PREFIX[i].index].index;
@@ -195,7 +195,7 @@ std::uint32_t lookup(const char* b, bool* ok) {
 
   for (std::uint32_t i = index; i < index + count; ++i) {
     auto len = static_cast<std::uint32_t>(JSC_LIST[i].size);
-    if (std::strncmp(b, JSC_LIST[i].str, len) == 0) {
+    if (std::strncmp(b, jsc_str(JSC_LIST[i]), len) == 0) {
       if (ok) *ok = true;
       return static_cast<std::uint32_t>(JSC_LIST[i].index);
     }

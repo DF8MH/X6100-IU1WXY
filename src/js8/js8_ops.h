@@ -62,7 +62,6 @@ typedef struct {
 typedef struct js8_stations js8_stations_t;
 
 js8_stations_t *js8_stations_create(void);
-void            js8_stations_destroy(js8_stations_t *s);
 void            js8_stations_add(js8_stations_t *s, const js8_rx_msg_t *msg, const char *my_call, int64_t now_ms);
 /* Fill up to max stations, ★ first then most recent; returns the count. */
 int             js8_stations_list(js8_stations_t *s, int64_t now_ms, js8_station_t *out, int max);
@@ -214,7 +213,6 @@ bool js8_qsos_sent(js8_qsos_t *q, const char *text, const char *my_call, int64_t
                    unsigned ended_len);
 bool js8_qsos_get(js8_qsos_t *q, const char *call, int64_t now_ms, js8_qso_t *out);
 void js8_qsos_logged(js8_qsos_t *q, const char *call);
-void js8_qsos_clear(js8_qsos_t *q);
 
 /* One log entry; empty strings and tx_pwr_w 0 are left out. */
 typedef struct {

@@ -7,8 +7,6 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 project(x6100_gui)
 
 include_directories(.)
-include_directories(third-party/rapidxml)
-include_directories(third-party/utf8)
 
 if(ENABLE_TESTING)
         Include(FetchContent)
@@ -34,6 +32,9 @@ if(ENABLE_TESTING)
 
 else()
         add_compile_options(-mtune=cortex-a7 -mcpu=cortex-a7 -mfloat-abi=hard -mfpu=neon-vfpv4)
+        # Unused functions and data are not linked
+        add_compile_options(-ffunction-sections -fdata-sections)
+        add_link_options(-Wl,--gc-sections)
 endif()
 
 add_subdirectory(lvgl)

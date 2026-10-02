@@ -1426,20 +1426,6 @@ float wefax_decoder_gray_average(
         );
 }
 
-bool wefax_decoder_auto_start_detected(
-    const wefax_decoder_t *decoder)
-{
-    return decoder ? decoder->apt_start_detected : false;
-}
-
-
-float wefax_decoder_auto_apt_frequency(
-    const wefax_decoder_t *decoder)
-{
-    return decoder ? decoder->apt_frequency : 0.0f;
-}
-
-
 bool wefax_decoder_auto_stop_detected(
     const wefax_decoder_t *decoder)
 {

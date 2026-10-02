@@ -87,15 +87,6 @@ float wefax_decoder_gray_average(
     const wefax_decoder_t *decoder
 );
 
-bool wefax_decoder_auto_start_detected(
-    const wefax_decoder_t *decoder
-);
-
-float wefax_decoder_auto_apt_frequency(
-    const wefax_decoder_t *decoder
-);
-
-
 bool wefax_decoder_auto_stop_detected(
     const wefax_decoder_t *decoder
 );

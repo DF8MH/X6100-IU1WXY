@@ -223,8 +223,6 @@ static TSQueue<std::vector<char>> send_queue;
 static std::atomic<bool> scope_out{false};  /* 0x27 0x11: scope wave data output (network only) */
 static thread_local bool net_req;            /* request came from a network (wfview) client */
 
-static void send_waterfall_data();
-
 static void on_fg_freq_change(Subject *s, void *user_data);
 
 struct Frame {
@@ -579,10 +577,6 @@ static Frame *process_req(const Frame *req) {
     uint8_t        vfo_id;
 
     size_t data_size = req->data.size();
-
-#if 0
-    req->log("req");
-#endif
 
     switch (req->command) {
         case C_SND_FREQ:
@@ -1123,52 +1117,8 @@ static Frame *process_req(const Frame *req) {
             set_unsupported(req, resp);
             break;
     }
-    // send_waterfall_data();
     return resp;
 }
-
-static uint8_t counter = 0;
-
-// static void send_waterfall_data() {
-//     frame_t frame;
-//     counter++;
-//     if (counter < 10) {
-//         return;
-//     }
-//     counter          = 0;
-//     uint8_t *data    = (uint8_t *)malloc(1024);
-//     frame.dst_addr   = 0x00;
-//     frame.src_addr   = LOCAL_ADDRESS;
-//     frame.command    = C_CTL_SCP;
-//     frame.subcommand = 0;
-//     uint8_t i        = 0;
-//     // main
-//     frame.args[i++] = 0;
-//     // SequenceNumber[01-11]
-//     frame.args[i++] = 1;
-//     // TotalSeqneuceSize[01=LAN, 11=USB]
-//     frame.args[i++] = 1;
-//     // Center/Fixed (for lan radio)  [00=cent, 01=fixed]
-//     frame.args[i++] = 0;
-//     // Center freq
-    // to_bcd(frame.args + i, cfg_sm.cp_fg_freq.get(), 10);
-//     i += 5;
-//     // Span
-//     to_bcd(frame.args + i, 50000, 10);
-//     i += 5;
-//     // Range information 00 = In range, 01 = Out of range
-//     frame.args[i++] = 0;
-//     // FFT data
-//     // printf("%u\n", i);
-//     size_t c;
-//     for (c = 0; c < 300; c++) {
-//         frame.args[i + c] = c % 160;
-//     }
-//     // printf("%u, %u\n", i, c);
-//     send_frame(&frame, i + c + 3);
-//     // printf("len: %u\n", i+c);
-//     free(data);
-// }
 
 static std::mutex req_mutex;
 static void (*net_sink)(const uint8_t *data, size_t len);

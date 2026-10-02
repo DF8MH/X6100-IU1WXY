@@ -20,6 +20,5 @@ bool database_init();
 bool sql_query_exec(const char *sql);
 
 void params_write_int(const char *name, int data, bool *dirty);
-void params_write_int64(const char *name, uint64_t data, bool *dirty);
 void params_write_float(const char *name, float data, bool *dirty);
 void params_write_text(const char *name, const char *data, bool *dirty);

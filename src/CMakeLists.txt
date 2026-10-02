@@ -57,7 +57,6 @@ add_subdirectory(wspr)
 add_subdirectory(cfg)
 add_subdirectory(cw_decoder)
 
-include_directories(utf8)
 include_directories(${CMAKE_SYSROOT}/usr/include/ft8lib/)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)

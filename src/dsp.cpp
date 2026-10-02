@@ -605,14 +605,6 @@ static void on_cur_freq_change(Subject *subj, void *user_data) {
     }
 }
 
-float dsp_get_spectrum_beta() {
-    return spectrum_beta;
-}
-
-void dsp_set_spectrum_beta(float x) {
-    spectrum_beta = x;
-}
-
 void dsp_put_audio_samples(size_t nsamples, int16_t *samples) {
     if (!ready) {
         return;

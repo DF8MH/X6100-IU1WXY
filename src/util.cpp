@@ -149,33 +149,3 @@ int32_t util_compare_version(x6100_base_ver_t a, x6100_base_ver_t b) {
     }
     return ret;
 }
-
-cfg_ctrl_t loop_modes(int16_t dir, cfg_ctrl_t mode, const uint64_t mask, const std::vector<cfg_ctrl_t> all_modes) {
-    std::vector<cfg_ctrl_t> enabled;
-    std::vector<cfg_ctrl_t> filtered;
-    auto cond = [mask, mode](cfg_ctrl_t m) { return ((1LL << m) & mask); };
-    std::copy_if(all_modes.begin(), all_modes.end(), std::back_inserter(enabled), cond);
-
-    if (enabled.size() == 0) {
-        return all_modes[0];
-    }
-
-    if (dir >= 0) {
-        int mode_int = mode;
-        if (dir > 0) {
-            mode_int++;
-        }
-        auto cond = [mask, mode_int](cfg_ctrl_t m) { return m >= mode_int; };
-        std::copy_if(enabled.begin(), enabled.end(), std::back_inserter(filtered), cond);
-        std::sort(filtered.begin(), filtered.end());
-        filtered.push_back(enabled[0]);
-        mode = filtered[0];
-    } else {
-        auto cond = [mask, mode](cfg_ctrl_t m) { return m < mode; };
-        std::copy_if(enabled.begin(), enabled.end(), std::back_inserter(filtered), cond);
-        std::sort(filtered.rbegin(), filtered.rend());
-        filtered.push_back(enabled.back());
-        mode = filtered[0];
-    }
-    return mode;
-}

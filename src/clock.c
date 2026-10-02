@@ -143,30 +143,6 @@ void clock_update_power(float ext, float bat, uint8_t cap, bool charge_flag) {
     pthread_mutex_unlock(&power_mux);
 }
 
-void clock_set_view(clock_view_t x) {
-    params_lock();
-    params.clock_view = x;
-    params_unlock(&params.dirty.clock_view);
-}
-
-void clock_set_time_timeout(uint8_t sec) {
-    params_lock();
-    params.clock_time_timeout = sec;
-    params_unlock(&params.dirty.clock_time_timeout);
-}
-
-void clock_set_power_timeout(uint8_t sec) {
-    params_lock();
-    params.clock_power_timeout = sec;
-    params_unlock(&params.dirty.clock_power_timeout);
-}
-
-void clock_set_tx_timeout(uint8_t sec) {
-    params_lock();
-    params.clock_tx_timeout = sec;
-    params_unlock(&params.dirty.clock_tx_timeout);
-}
-
 static void check_time_sync_cb(lv_timer_t * t) {
     time_t new_time = get_last_sync_time();
     if (last_time_sync != new_time) {

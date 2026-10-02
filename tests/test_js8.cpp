@@ -23,6 +23,7 @@
 
 #include "js8core/decoder.hpp"
 #include "js8core/protocol/costas.hpp"
+#include "js8core/protocol/jsc.hpp"
 #include "js8core/protocol/varicode.hpp"
 
 #include <chrono>
@@ -89,6 +90,20 @@ RxFrame frame(const std::string &text, int type, float freq = 1000.0f, std::int6
 }
 
 } // namespace
+
+/* ---- JSC word tables -------------------------------------------------- */
+
+TEST_CASE("JSC compresses and decompresses text", "[js8][jsc]") {
+    namespace jsc = js8core::protocol::jsc;
+    for (std::string text : {"HELLO WORLD", "CQ CQ DE IU1WXY JN44", "I'M QRV ON 40M, 73!"}) {
+        jsc::Codeword bits;
+        for (auto const& p : jsc::compress(text)) bits.insert(bits.end(), p.first.begin(), p.first.end());
+        CHECK(jsc::decompress(bits) == text);
+    }
+    std::uint32_t i;
+    CHECK(jsc::exists("JS8CALL", &i));
+    CHECK(i == 71);
+}
 
 /* ---- Resampler -------------------------------------------------------- */
 

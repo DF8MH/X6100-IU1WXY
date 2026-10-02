@@ -37,13 +37,6 @@ bool qso_log_init() {
     return create_tables();
 }
 
-void qso_log_destruct() {
-    if (db) {
-        sqlite3_close(db);
-        db = NULL;
-    }
-}
-
 void qso_log_import_adif(const char * path) {
     pthread_t thr;
 

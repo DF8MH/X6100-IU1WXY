@@ -31,9 +31,6 @@ extern "C" {
 int32_t     param_i_get(const ParamInt *p);
 void        param_i_set(ParamInt *p, int32_t v);
 float       param_f_get(const ParamFloat *p);
-void        param_f_set(ParamFloat *p, float v);
-const char *param_t_get(const ParamText *p);          // borrowed: valid until next param_t_get on this thread
-void        param_t_set(ParamText *p, const char *v); // NULL -> ""
 
 #ifdef __cplusplus
 } // extern "C"

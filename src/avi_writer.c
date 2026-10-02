@@ -180,10 +180,6 @@ bool avi_write_audio(avi_t *a, const int16_t *samples, size_t nsamples) {
     return !a->err;
 }
 
-uint32_t avi_frames(const avi_t *a) {
-    return a->frames;
-}
-
 bool avi_close(avi_t *a) {
     uint32_t    movi_end = a->pos;
     uint8_t     h[8] = { 'i', 'd', 'x', '1' };

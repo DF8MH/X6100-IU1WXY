@@ -74,10 +74,8 @@ void dsp_init();
 void dsp_samples(cfloat *buf_samples, uint16_t size, bool tx, uint32_t base_freq, bool vary_freq, uint8_t fft_dec);
 void dsp_reset();
 
-float dsp_get_spectrum_beta();
 void dsp_set_waterfall_enabled(bool enabled);
 void dsp_set_spectrum_enabled(bool enabled);
-void dsp_set_spectrum_beta(float x);
 
 void dsp_put_audio_samples(size_t nsamples, int16_t *samples);
 #ifdef __cplusplus

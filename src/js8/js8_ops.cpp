@@ -82,10 +82,6 @@ extern "C" js8_stations_t *js8_stations_create(void) {
     return new (std::nothrow) js8_stations;
 }
 
-extern "C" void js8_stations_destroy(js8_stations_t *s) {
-    delete s;
-}
-
 extern "C" void js8_stations_add(js8_stations_t *s, const js8_rx_msg_t *m, const char *my_call, int64_t now_ms) {
     if (!s || !m || m->tx) return;
     StationEvent ev;
@@ -402,10 +398,6 @@ extern "C" bool js8_qsos_get(js8_qsos_t *q, const char *call, int64_t now_ms, js
 
 extern "C" void js8_qsos_logged(js8_qsos_t *q, const char *call) {
     if (q && call) q->tracker.logged(call);
-}
-
-extern "C" void js8_qsos_clear(js8_qsos_t *q) {
-    if (q) q->tracker.clear();
 }
 
 extern "C" bool js8_log_append(const char *path, const js8_log_entry_t *e, char *err, unsigned err_len) {

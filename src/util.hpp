@@ -13,4 +13,3 @@
 
 #include "cfg/encoder_bind_types.h"
 
-cfg_ctrl_t loop_modes(int16_t dir, cfg_ctrl_t mode, const uint64_t mask, const std::vector<cfg_ctrl_t> all_modes);

@@ -161,12 +161,6 @@ void lv_waterfall_add_data_with_ts(lv_obj_t * obj, float * data, uint16_t cnt, s
     invalidate_exact(obj);
 }
 
-struct timespec lv_waterfall_get_frame_ts(lv_obj_t * obj) {
-    LV_ASSERT_OBJ(obj, MY_CLASS);
-    lv_waterfall_t *waterfall = (lv_waterfall_t *)obj;
-    return waterfall->frame_ts;
-}
-
 void lv_waterfall_set_min(lv_obj_t * obj, int16_t val) {
     LV_ASSERT_OBJ(obj, MY_CLASS);
     lv_waterfall_t * waterfall = (lv_waterfall_t *)obj;
