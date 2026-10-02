@@ -8,10 +8,14 @@
 #include "buttons.h"
 #include "main_screen.h"
 #include "keyboard.h"
+#include "textarea_window.h"
 #include "sstv/decoder.h"
 #include "sstv/encoder.h"
 #include "radio.h"
+#include "tx_player.h"
 #include "events.h"
+#include "msg.h"
+#include "params/params.h"
 #include "app_frame.h"
 #include "freq_list.h"
 #include "cfg/cfg_api.h"
@@ -22,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <math.h>
 #include <time.h>
 #include <sys/stat.h>
@@ -41,15 +46,32 @@
 #define SSTV_IMAGE_W SSTV_CANVAS_W
 #define SSTV_IMAGE_X (APP_FRAME_X + 1)
 #define SSTV_IMAGE_Y (APP_FRAME_BODY_Y + 1)
-#define SSTV_BROWSER_MAX_FILES 128
 #define SSTV_BROWSER_W 710
 #define SSTV_BROWSER_H (APP_FRAME_BODY_H - 4)
+#define MAX_PWR TX_PLAYER_MAX_PWR_W
+
+/* Interactive TX picture selector (paths overridable for the PC harness) */
+#ifndef SSTV_TX_PICS_DIR
+#define SSTV_TX_PICS_DIR "/mnt/sstv/tx_pics"
+#define SSTV_TX_TEXT_DIR "/mnt/sstv/tx_text"
+#define SSTV_TX_PNG      "/mnt/sstv-tx.png"
+#endif
+#define SSTV_TX_PICTURE_DEBOUNCE_MS 300
+/* TX menu: a popup box in the body, right of the picture */
+#define SSTV_TX_LIST_X (SSTV_IMAGE_X + SSTV_IMAGE_W + 10)
+#define SSTV_TX_LIST_Y (APP_FRAME_BODY_Y + 6)
+#define SSTV_TX_LIST_W (APP_FRAME_X + APP_FRAME_W - 8 - SSTV_TX_LIST_X)
+#define SSTV_TX_LIST_H (APP_FRAME_BODY_H - 12)
+#define SSTV_TX_HEAD_H 32
+#define SSTV_TX_HINT   "MFK: choose - press: confirm - Cancel TX: back"
+#define SSTV_STATUS_TEXT "Freq.: calling frequencies   Pictures in /mnt/sstv"
 /* Image position is calculated from the mode detected by VIS. */
 
 static void construct_cb(lv_obj_t *parent);
 static void destruct_cb(void);
 static void test_cb(button_data_t *data);
-static void test_tx_cb(button_data_t *data);
+static void close_cb(button_data_t *data);
+static void restart_cb(button_data_t *data);
 static void key_cb(lv_event_t *e);
 static void start_cb(button_data_t *data);
 static void cont_start_cb(button_data_t *data);
@@ -58,8 +80,46 @@ static void browser_cb(button_data_t *data);
 static void delete_picture_cb(button_data_t *data);
 static void page_1_cb(button_data_t *data);
 static void page_2_cb(button_data_t *data);
+static void page_3_cb(button_data_t *data);
 static void audio_cb(unsigned int n, float *samples);
-static void close_cb(button_data_t *data);
+static void tx_ui_cb(button_data_t *data);
+static void tx_picture_selector_build(void);
+static void tx_picture_selector_destroy(void);
+static void tx_picture_selector_refresh(void);
+static void tx_picture_selection_changed_cb(lv_event_t *e);
+static void tx_picture_pressed_cb(lv_event_t *e);
+static void tx_picture_schedule_preview(void);
+static void tx_picture_load_pending_preview(void);
+static bool tx_picture_load_and_prepare(const char *filename);
+static void tx_picture_render_preview(void);
+static void tx_save_rx_canvas(void);
+static void tx_restore_rx_canvas(void);
+static void tx_rebuild_current_overlay(void);
+static void tx_type_selector_build(void);
+static void tx_type_selector_destroy(void);
+static void tx_type_pressed_cb(lv_event_t *e);
+static void tx_type_selection_changed_cb(lv_event_t *e);
+static void tx_type_update_help(void);
+static void tx_type_draw_cb(lv_event_t *e);
+static void tx_instruction_show(const char *title, const char *hint);
+static void tx_instruction_hide(void);
+static void tx_build_final_frame(bool cq_overlay);
+static void tx_template_selector_build(void);
+static void tx_template_selector_destroy(void);
+static void tx_template_selection_changed_cb(lv_event_t *e);
+static void tx_template_pressed_cb(lv_event_t *e);
+static void tx_template_render(void);
+static void tx_template_render_selected(void);
+static bool tx_target_keyboard_ok_cb(void);
+static bool tx_target_keyboard_cancel_cb(void);
+static lv_obj_t *tx_find_keyboard_recursive(lv_obj_t *parent);
+static void tx_target_keyboard_force_lower(void);
+static void tx_target_keyboard_open_now(void);
+static void tx_color_selector_build(void);
+static void tx_color_selector_destroy(void);
+static void tx_color_selection_changed_cb(lv_event_t *e);
+static void tx_color_pressed_cb(lv_event_t *e);
+static void tx_color_render_selected(void);
 static void ui_timer_cb(lv_timer_t *timer);
 static void *test_thread_cb(void *arg);
 static void *live_decode_thread_cb(void *arg);
@@ -67,6 +127,10 @@ static void *cont_decode_thread_cb(void *arg);
 static void *tx_thread_cb(void *arg);
 static bool save_debug_wav(const char *path, const float *samples, long count);
 static bool save_sstv_png(const uint8_t *rgb, int width, int height, char *saved_name, size_t saved_name_size);
+static bool save_tx_png(const char *path, const uint8_t *rgb, unsigned int width, unsigned int height);
+static bool tx_start_final_rf(void);
+static bool tx_start_final_rf_mode(sstv_mode_t mode);
+static void tx_return_to_auto_rx(void);
 static void set_status(const char *text);
 static void reset_ui_to_standby(void);
 static void render_scaled_image(void);
@@ -75,6 +139,7 @@ static button_data_t btn_cont_start;
 static button_data_t btn_cont_mode;
 static button_data_t btn_browser;
 static button_data_t btn_delete_picture;
+static button_data_t btn_tx;
 static buttons_page_t btn_page_1;
 
 static void set_receiver_ui_stopped(void);
@@ -124,6 +189,7 @@ static volatile bool tx_running = false;
 static volatile bool tx_abort = false;
 static volatile bool tx_started = false;
 static volatile int tx_progress = 0;
+static sstv_mode_t tx_mode = SSTV_MODE_ROBOT8_BW;
 static struct timespec tx_key_time;
 static volatile bool tx_key_time_valid = false;
 
@@ -133,8 +199,13 @@ static volatile bool tx_key_time_valid = false;
 static unsigned int sstv_tx_duration_ms(sstv_mode_t mode)
 {
     switch (mode) {
+        case SSTV_MODE_ROBOT8_BW:   return 8910u;   /* VIS ~910 ms + 120 x 66.667 ms */
+        case SSTV_MODE_MARTIN_M1:  return 115200u; /* VIS ~910 ms + 256 x 446.446 ms */
+        case SSTV_MODE_MARTIN_M2:  return 58970u;  /* VIS ~910 ms + 256 x 226.798 ms */
         case SSTV_MODE_ROBOT36:    return 36910u;  /* VIS 910 ms + 240 x 150.000 ms */
-        case SSTV_MODE_SCOTTIE_S1: return 110031u; /* VIS 910 + 9 ms + 256 x 426.220 ms */
+        case SSTV_MODE_ROBOT72:    return 72910u;  /* VIS 910 ms + 240 x 300.000 ms */
+        case SSTV_MODE_SCOTTIE_S1: return 110543u; /* VIS 910 + 9 ms + 256 x 428.220 ms */
+        case SSTV_MODE_SCOTTIE_S2: return 72008u;  /* VIS 910 + 9 ms + 256 x 277.692 ms */
         default:                   return 0u;
     }
 }
@@ -149,12 +220,86 @@ static uint64_t monotonic_ms_since(const struct timespec *start)
 }
 static volatile int tx_result = 0; /* 0 idle/running, 1 done, <0 error/abort */
 
+/* New interactive TX UI state.  Step 1 only implements entry/cancel; the
+ * picture/template phases are added on top of this state machine. */
+typedef enum { SSTV_TX_UI_RX = 0, SSTV_TX_UI_SETUP, SSTV_TX_UI_RF } sstv_tx_ui_state_t;
+static sstv_tx_ui_state_t tx_ui_state = SSTV_TX_UI_RX;
+static bool tx_restore_auto_rx = false;
+static char tx_mode_label[48];
+
+typedef enum {
+    SSTV_TX_PHASE_NONE = 0,
+    SSTV_TX_PHASE_SELECT_PICTURE,
+    SSTV_TX_PHASE_SELECT_TYPE,
+    SSTV_TX_PHASE_SELECT_TEMPLATE,
+    SSTV_TX_PHASE_SELECT_COLORS
+} sstv_tx_phase_t;
+
+static sstv_tx_phase_t tx_phase = SSTV_TX_PHASE_NONE;
+static lv_obj_t *tx_picture_table = NULL;
+static lv_obj_t *tx_type_table = NULL;
+static lv_obj_t *tx_template_table = NULL;
+static lv_obj_t *tx_color_table = NULL;
+static lv_obj_t *tx_instruction_label = NULL;
+/* Runtime-only persistence of the selected initial TX action row. */
+static int tx_last_type_selected = 0;
+static bool tx_template_preview_pending = false;
+static bool tx_color_preview_pending = false;
+static uint32_t tx_color_preview_since_ms = 0;
+static bool tx_target_keyboard_open_pending = false;
+static lv_obj_t *tx_target_keyboard_obj = NULL;
+static uint32_t tx_target_keyboard_force_until = 0;
+typedef enum {
+    SSTV_TX_MESSAGE_CQ = 0,
+    SSTV_TX_MESSAGE_REPLY,
+    SSTV_TX_MESSAGE_REPLAY,
+    SSTV_TX_MESSAGE_IMAGE_ONLY,
+    SSTV_TX_MESSAGE_REPEAT_LAST
+} sstv_tx_message_type_t;
+static sstv_tx_message_type_t tx_message_type = SSTV_TX_MESSAGE_CQ;
+static int tx_color_selected = 0;
+/* Runtime-only persistence of the selected color-combination row. */
+static int tx_last_color_selected = 0;
+static char **tx_template_files = NULL;
+static size_t tx_template_file_count = 0;
+static size_t tx_template_file_capacity = 0;
+static char tx_template_middle[256];
+static char tx_template_bottom[128];
+/* Runtime persistence by design: keep the last target while the app/process
+ * remains alive, but do not write it to permanent firmware configuration. */
+static char tx_target_callsign[32] = "";
+static char **tx_picture_files = NULL;
+static size_t tx_picture_file_count = 0;
+static size_t tx_picture_file_capacity = 0;
+static int tx_picture_selected = -1;
+static int tx_picture_pending = -1;
+static uint64_t tx_picture_pending_since_ms = 0;
+static uint8_t tx_picture_rgb[320 * 256 * 3];
+static uint8_t tx_final_rgb[320 * 256 * 3];
+static unsigned int tx_picture_width = 0;
+static unsigned int tx_picture_height = 0;
+
+/* Runtime-only backup of the last SSTV transmission that completed
+ * successfully.  Store the exact transmitted pixels plus the mode so
+ * REPEAT LAST TX is independent of the currently selected TX Mode. */
+static uint8_t tx_last_rgb[320 * 256 * 3];
+static unsigned int tx_last_width = 0;
+static unsigned int tx_last_height = 0;
+static sstv_mode_t tx_last_mode = SSTV_MODE_SCOTTIE_S1;
+static bool tx_last_valid = false;
+static char tx_picture_name[256];
+static char tx_last_picture_file[256] = "";
+static lv_color_t tx_saved_rx_canvas[sizeof(sstv_buffer) / sizeof(sstv_buffer[0])];
+static bool tx_saved_rx_canvas_valid = false;
+
 /* Saved-SSTV browser.  It is deliberately independent from the live SSTV
  * canvas/state machine so reception and decoding continue while it is open. */
+static lv_obj_t *sstv_browser_frame = NULL;
 static lv_obj_t *sstv_browser_table = NULL;
 static lv_obj_t *sstv_browser_canvas = NULL;
 static lv_color_t *sstv_browser_buffer = NULL;
-static char *sstv_browser_files[SSTV_BROWSER_MAX_FILES];
+static char **sstv_browser_files = NULL;
+static size_t sstv_browser_file_capacity = 0;
 static unsigned int sstv_browser_file_count = 0;
 static bool sstv_browser_open = false;
 static bool sstv_browser_preview = false;
@@ -195,6 +340,9 @@ static volatile bool live_capturing = false;
 static volatile bool live_decode_pending = false;
 static volatile bool live_decoding = false;
 static volatile bool live_canvas_clear_pending = false;
+static volatile bool live_abort_requested = false;
+static volatile bool live_mode_ui_pending = false;
+static volatile bool live_restart_enabled = true;
 static float *live_samples = NULL;
 static long live_written = 0;
 static long live_target = 0;
@@ -209,8 +357,8 @@ static volatile bool cont_decoding = false;
 static float *cont_samples = NULL;
 static long cont_written = 0;
 static long cont_capacity = 0;
-static sstv_mode_t cont_mode = SSTV_MODE_SCOTTIE_S1;
-static sstv_mode_t cont_decode_mode = SSTV_MODE_SCOTTIE_S1;
+static sstv_mode_t cont_mode = SSTV_MODE_ROBOT8_BW;
+static sstv_mode_t cont_decode_mode = SSTV_MODE_ROBOT8_BW;
 
 static const sstv_mode_t cont_modes[] = {
     SSTV_MODE_ROBOT8_BW, SSTV_MODE_ROBOT36, SSTV_MODE_ROBOT72,
@@ -232,10 +380,36 @@ static const char *cont_mode_name(sstv_mode_t mode)
     }
 }
 
+/* Nominal image duration for Manual RX.  The capture limit adds five seconds
+ * so starting Manual RX slightly before the SSTV transmission does not cut
+ * off the last rows.  SSTV_CONT_MAX_SECONDS remains the absolute safety cap. */
+static float cont_mode_seconds(sstv_mode_t mode)
+{
+    switch (mode) {
+        case SSTV_MODE_ROBOT8_BW:  return 8.0f;
+        case SSTV_MODE_ROBOT36:    return 36.5f;
+        case SSTV_MODE_ROBOT72:    return 72.5f;
+        case SSTV_MODE_MARTIN_M1:  return 115.0f;
+        case SSTV_MODE_MARTIN_M2:  return 59.0f;
+        case SSTV_MODE_SCOTTIE_S1: return 111.0f;
+        case SSTV_MODE_SCOTTIE_S2: return 72.0f;
+        default:                    return (float)SSTV_CONT_MAX_SECONDS - 5.0f;
+    }
+}
+
 static void update_rx_controls(void)
 {
     bool auto_active = live_enabled || live_capturing || live_decode_pending || live_decoding;
     bool cont_active = cont_capturing || cont_decode_pending || cont_decoding;
+
+    if (tx_ui_state != SSTV_TX_UI_RX) {
+        buttons_disabled(&btn_start, true);
+        buttons_disabled(&btn_cont_start, true);
+        buttons_disabled(&btn_cont_mode, tx_ui_state == SSTV_TX_UI_RF);
+        btn_page_1.items[3] = &btn_cont_mode;
+        if (buttons_get_cur_page() == &btn_page_1) buttons_load_page(&btn_page_1);
+        return;
+    }
 
     buttons_disabled(&btn_start, cont_active);
     buttons_disabled(&btn_cont_start, auto_active || cont_decode_pending || cont_decoding);
@@ -315,7 +489,7 @@ static void set_receiver_ui_decoding(const char *mode_name)
     snprintf(status, sizeof(status), "Decoding %s", mode_name ? mode_name : "SSTV");
     set_status(status);
     if (progress_bar) lv_obj_clear_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
-    btn_start.label = "Stop\nAuto RX";
+    btn_start.label = "Halt\nDecoding";
     buttons_disabled(&btn_start, false);
     if (btn_start.disp_btn) buttons_refresh(&btn_start);
     update_rx_controls();
@@ -356,6 +530,47 @@ static bool save_sstv_png(const uint8_t *rgb, int width, int height, char *saved
     return true;
 }
 
+
+static bool save_tx_png(const char *path, const uint8_t *rgb,
+                        unsigned int width, unsigned int height)
+{
+    if (!path || !rgb || width == 0 || height == 0) return false;
+
+    FILE *fp=fopen(path,"wb");
+    if (!fp) {
+        fprintf(stderr,"SSTV TX: fopen %s failed: %s\n",path,strerror(errno));
+        return false;
+    }
+
+    png_structp png=png_create_write_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
+    png_infop info=png ? png_create_info_struct(png) : NULL;
+    if (!png || !info) {
+        if (png) png_destroy_write_struct(&png,NULL);
+        fclose(fp);
+        return false;
+    }
+    if (setjmp(png_jmpbuf(png))) {
+        png_destroy_write_struct(&png,&info);
+        fclose(fp);
+        return false;
+    }
+
+    png_init_io(png,fp);
+    png_set_IHDR(png,info,width,height,8,PNG_COLOR_TYPE_RGB,
+                 PNG_INTERLACE_NONE,PNG_COMPRESSION_TYPE_DEFAULT,
+                 PNG_FILTER_TYPE_DEFAULT);
+    png_write_info(png,info);
+    for (unsigned int y=0;y<height;y++)
+        png_write_row(png,(png_bytep)(rgb+(size_t)y*width*3));
+    png_write_end(png,NULL);
+    png_destroy_write_struct(&png,&info);
+    fclose(fp);
+
+    fprintf(stderr,"SSTV TX: final WYSIWYG framebuffer written to %s (%ux%u)\n",
+            path,width,height);
+    return true;
+}
+
 static void render_scaled_image(void)
 {
     if (!sstv_canvas || test_rows <= 0 || test_info.width <= 0 || test_info.height <= 0) return;
@@ -386,51 +601,211 @@ static float live_goertzel(const float *x, int n, float hz)
     return s1*s1 + s2*s2 - coeff*s1*s2;
 }
 
-static int live_tone(const float *x, int n, float sec, float dur)
+/* VIS tones are nominally 1100/1200/1300/1900 Hz.  Real transmitters and
+ * SSB tuning can move them a little, so score a small frequency neighbourhood
+ * instead of one exact Goertzel bin.  Keep the range well below the 100-Hz
+ * spacing of the VIS data tones. */
+static float live_tone_power(const float *x, int n, float sec, float dur, int center_hz)
 {
     int a=(int)(sec*SSTV_SAMPLE_RATE), cnt=(int)(dur*SSTV_SAMPLE_RATE);
-    if (a < 0 || a+cnt > n || cnt < 32) return 0;
+    if (a < 0 || a+cnt > n || cnt < 32) return -1.0f;
+    return live_goertzel(x+a,cnt,(float)center_hz);
+}
+
+static int live_tone(const float *x, int n, float sec, float dur)
+{
+    static const int hz[] = {1100,1200,1300,1900};
+    float best=-1.0f, second=-1.0f; int tone=0;
+    for (unsigned i=0;i<sizeof(hz)/sizeof(hz[0]);++i) {
+        float q=live_tone_power(x,n,sec,dur,hz[i]);
+        if (q>best) { second=best; best=q; tone=hz[i]; }
+        else if (q>second) second=q;
+    }
+    /* Do not reject a VIS symbol merely because the runner-up is close.
+     * With 15-18 ms symbol windows, 1100 and 1300 Hz are intrinsically
+     * difficult to separate by a large power ratio on noisy RF.  Frame-level
+     * validation (leader + start + parity + stop + supported VIS) provides
+     * the rejection against false triggers instead. */
+    return tone;
+}
+
+static bool live_break_near(const float *x, int n, float center)
+{
+    for (float d=-0.020f; d<=0.0201f; d+=0.004f)
+        if (live_tone(x,n,center+d,0.010f)==1200) return true;
+    return false;
+}
+
+
+static int live_tone_offset(const float *x, int n, float sec, float dur, int offset_hz)
+{
     static const int hz[] = {1100,1200,1300,1900};
     float best=-1.0f; int tone=0;
     for (unsigned i=0;i<sizeof(hz)/sizeof(hz[0]);++i) {
-        float q=live_goertzel(x+a,cnt,(float)hz[i]);
+        float q=live_tone_power(x,n,sec,dur,hz[i]+offset_hz);
         if (q>best) { best=q; tone=hz[i]; }
     }
     return tone;
 }
 
+static bool live_break_near_offset(const float *x, int n, float center, int offset_hz)
+{
+    for (float d=-0.020f; d<=0.0201f; d+=0.004f)
+        if (live_tone_offset(x,n,center+d,0.010f,offset_hz)==1200) return true;
+    return false;
+}
+
+
+/* V5: estimate the frequency offset from the two long VIS leader tones.
+ * The offset is no longer a free search variable.  A real SSTV header must
+ * first provide two strong, mutually consistent leader-frequency estimates;
+ * only then is that measured offset frozen for break/start/data/parity/stop. */
+static bool live_measure_leader(const float *x, int n, float sec, float dur,
+                                int *freq_hz, float *quality)
+{
+    float best=-1.0f, runner=-1.0f;
+    int best_hz=0;
+    for (int hz=1740; hz<=2060; hz+=10) {
+        float q=live_tone_power(x,n,sec,dur,hz);
+        if (q>best) { runner=best; best=q; best_hz=hz; }
+        else if (q>runner) runner=q;
+    }
+    if (best <= 0.0f) return false;
+
+    /* Recompute the runner while ignoring the immediate main-lobe bins.
+     * This measures whether there is an actual narrow leader tone rather
+     * than merely choosing the largest bin in broadband noise. */
+    runner=-1.0f;
+    for (int hz=1740; hz<=2060; hz+=10) {
+        if (abs(hz-best_hz) < 40) continue;
+        float q=live_tone_power(x,n,sec,dur,hz);
+        if (q>runner) runner=q;
+    }
+    float qratio = best / (runner > 1.0e-20f ? runner : 1.0e-20f);
+    if (freq_hz) *freq_hz=best_hz;
+    if (quality) *quality=qratio;
+    return qratio >= 1.8f;
+}
+
+static bool live_supported_vis(int vis, sstv_info_t *out)
+{
+    memset(out,0,sizeof(*out)); out->vis=vis;
+    switch(vis) {
+        case 8:  out->mode=SSTV_MODE_ROBOT36; out->name="Robot 36"; out->width=320; out->height=240; break;
+        case 12: out->mode=SSTV_MODE_ROBOT72; out->name="Robot 72"; out->width=320; out->height=240; break;
+        case 40: out->mode=SSTV_MODE_MARTIN_M2; out->name="Martin M2"; out->width=320; out->height=256; break;
+        case 44: out->mode=SSTV_MODE_MARTIN_M1; out->name="Martin M1"; out->width=320; out->height=256; break;
+        case 56: out->mode=SSTV_MODE_SCOTTIE_S2; out->name="Scottie S2"; out->width=320; out->height=256; break;
+        case 60: out->mode=SSTV_MODE_SCOTTIE_S1; out->name="Scottie S1"; out->width=320; out->height=256; break;
+        case 76: out->mode=SSTV_MODE_SCOTTIE_DX; out->name="Scottie DX"; out->width=320; out->height=256; break;
+        default: return false;
+    }
+    return true;
+}
+
 static bool live_find_vis(const float *x, int n, sstv_info_t *out)
 {
     const float limit=(float)n/SSTV_SAMPLE_RATE-0.90f;
+
+    /* V3 first pass: preserve the historical 30-ms VIS detector exactly.
+     * Signals accepted by the old detector therefore keep priority. */
     for (float t=0.0f; t<limit; t+=0.005f) {
         if (live_tone(x,n,t+0.10f,0.020f)!=1900 ||
             live_tone(x,n,t+0.295f,0.010f)!=1200 ||
             live_tone(x,n,t+0.42f,0.020f)!=1900) continue;
-        int vis=0;
+        int vis=0, valid=1;
         for (int i=0;i<7;++i) {
             int f=live_tone(x,n,t+0.640f+i*0.030f+0.005f,0.020f);
             if (f==1100) vis|=1<<i;
-            else if (f!=1300) { vis=-1; break; }
+            else if (f!=1300) { valid=0; break; }
         }
-        if (vis < 0) continue;
-        memset(out,0,sizeof(*out)); out->vis=vis;
-        switch(vis) {
-            case 8:  out->mode=SSTV_MODE_ROBOT36; out->name="Robot 36"; out->width=320; out->height=240; break;
-            case 12: out->mode=SSTV_MODE_ROBOT72; out->name="Robot 72"; out->width=320; out->height=240; break;
-            case 40: out->mode=SSTV_MODE_MARTIN_M2; out->name="Martin M2"; out->width=320; out->height=256; break;
-            case 44: out->mode=SSTV_MODE_MARTIN_M1; out->name="Martin M1"; out->width=320; out->height=256; break;
-            case 56: out->mode=SSTV_MODE_SCOTTIE_S2; out->name="Scottie S2"; out->width=320; out->height=256; break;
-            case 60: out->mode=SSTV_MODE_SCOTTIE_S1; out->name="Scottie S1"; out->width=320; out->height=256; break;
-            case 76: out->mode=SSTV_MODE_SCOTTIE_DX; out->name="Scottie DX"; out->width=320; out->height=256; break;
-            default:
-                fprintf(stderr,"SSTV LIVE: VIS=%d detected but unsupported\n",vis);
-                continue;
-        }
-        fprintf(stderr,"SSTV LIVE: VIS header found in RF audio\n");
+        if (!valid) continue;
+        sstv_info_t candidate;
+        if (!live_supported_vis(vis,&candidate)) continue;
+        *out=candidate;
+        fprintf(stderr,"SSTV LIVE: legacy VIS header found in RF audio\n");
         for (int i=0;i<7;++i)
             fprintf(stderr,"SSTV LIVE: VIS bit %d = %d\n",i,(vis>>i)&1);
         fprintf(stderr,"SSTV LIVE: VIS=%d -> %s (%dx%d)\n",vis,out->name,out->width,out->height);
         return true;
+    }
+
+    /* V3 fallback: only after the historical detector has failed, search
+     * modest phase and bit-period errors and validate the complete VIS frame. */
+    for (float t=0.0f; t<limit; t+=0.005f) {
+        if (live_tone(x,n,t+0.10f,0.025f)!=1900 ||
+            !live_break_near(x,n,t+0.295f) ||
+            live_tone(x,n,t+0.42f,0.025f)!=1900) continue;
+
+        for (float bit=0.028f; bit<=0.0321f; bit+=0.001f) {
+            for (float phase=-0.006f; phase<=0.0061f; phase+=0.003f) {
+                float start=t+0.610f+phase;
+                float win=bit*0.55f;
+                float inset=(bit-win)*0.5f;
+                if (live_tone(x,n,start+inset,win)!=1200) continue;
+
+                int vis=0, ones=0, valid=1;
+                for (int i=0;i<7;++i) {
+                    int f=live_tone(x,n,start+(i+1)*bit+inset,win);
+                    if (f==1100) { vis|=1<<i; ++ones; }
+                    else if (f!=1300) { valid=0; break; }
+                }
+                if (!valid) continue;
+                int parity=live_tone(x,n,start+8*bit+inset,win);
+                int expected_parity=(ones&1)?1100:1300;
+                if (parity!=expected_parity) continue;
+                if (live_tone(x,n,start+9*bit+inset,win)!=1200) continue;
+
+                sstv_info_t candidate;
+                if (!live_supported_vis(vis,&candidate)) continue;
+                *out=candidate;
+                fprintf(stderr,"SSTV LIVE: robust VIS fallback found (bit %.1f ms, phase %+.1f ms)\n",bit*1000.0f,phase*1000.0f);
+                for (int i=0;i<7;++i)
+                    fprintf(stderr,"SSTV LIVE: VIS bit %d = %d\n",i,(vis>>i)&1);
+                fprintf(stderr,"SSTV LIVE: VIS=%d -> %s (%dx%d)\n",vis,out->name,out->width,out->height);
+                return true;
+            }
+        }
+    }
+    /* V5 final fallback: frequency-offset-aware, but leader-locked.
+     * Unlike V4, do NOT sweep offset until some supported VIS happens to fit.
+     * Measure it independently from both long 1900-Hz leaders and freeze it. */
+    for (float t=0.0f; t<limit; t+=0.005f) {
+        int lf1=0, lf2=0; float lq1=0.0f, lq2=0.0f;
+        if (!live_measure_leader(x,n,t+0.055f,0.140f,&lf1,&lq1) ||
+            !live_measure_leader(x,n,t+0.375f,0.140f,&lf2,&lq2)) continue;
+        if (abs(lf1-lf2)>20) continue;
+        int off=((lf1+lf2+1)/2)-1900;
+        off=(int)lroundf((float)off/10.0f)*10;
+        if (off < -150 || off > 150) continue;
+        if (off>=-20 && off<=20) continue; /* V3 already owns nominal tuning. */
+        if (!live_break_near_offset(x,n,t+0.295f,off)) continue;
+
+        for (float bit=0.028f; bit<=0.0321f; bit+=0.001f) {
+            for (float phase=-0.006f; phase<=0.0061f; phase+=0.003f) {
+                float start=t+0.610f+phase;
+                float win=bit*0.55f, inset=(bit-win)*0.5f;
+                if (live_tone_offset(x,n,start+inset,win,off)!=1200) continue;
+                int vis=0, ones=0, valid=1;
+                for (int i=0;i<7;++i) {
+                    int f=live_tone_offset(x,n,start+(i+1)*bit+inset,win,off);
+                    if (f==1100) { vis|=1<<i; ++ones; }
+                    else if (f!=1300) { valid=0; break; }
+                }
+                if (!valid) continue;
+                int parity=live_tone_offset(x,n,start+8*bit+inset,win,off);
+                if (parity != ((ones&1)?1100:1300)) continue;
+                if (live_tone_offset(x,n,start+9*bit+inset,win,off)!=1200) continue;
+                sstv_info_t candidate;
+                if (!live_supported_vis(vis,&candidate)) continue;
+                *out=candidate;
+                fprintf(stderr,"SSTV LIVE: V5 leader-locked VIS fallback found (leaders %d/%d Hz, offset %+d Hz, quality %.2f/%.2f, bit %.1f ms, phase %+.1f ms)\n",lf1,lf2,off,lq1,lq2,bit*1000.0f,phase*1000.0f);
+                for (int i=0;i<7;++i)
+                    fprintf(stderr,"SSTV LIVE: VIS bit %d = %d\n",i,(vis>>i)&1);
+                fprintf(stderr,"SSTV LIVE: VIS=%d -> %s (%dx%d)\n",vis,out->name,out->width,out->height);
+                return true;
+            }
+        }
     }
     return false;
 }
@@ -450,26 +825,33 @@ static float live_mode_seconds(sstv_mode_t m)
 }
 
 static button_data_t btn_sstv_page_1 = {
-    .type = BTN_TEXT, .label = "(SSTV 1:2)", .press = page_2_cb
+    .type = BTN_TEXT, .label = "(SSTV 1:3)", .press = page_2_cb
 };
 static button_data_t btn_sstv_page_2 = {
-    .type = BTN_TEXT, .label = "(SSTV 2:2)", .press = page_1_cb
+    .type = BTN_TEXT, .label = "(SSTV 2:3)", .press = page_3_cb
+};
+static button_data_t btn_sstv_page_3 = {
+    .type = BTN_TEXT, .label = "(SSTV 3:3)", .press = page_1_cb
 };
 static button_data_t btn_start = { .type = BTN_TEXT, .label = "Start\nAuto RX", .press = start_cb };
 static button_data_t btn_cont_start = { .type = BTN_TEXT, .label = "Start\nManual RX", .press = cont_start_cb };
-static button_data_t btn_cont_mode = { .type = BTN_TEXT, .label = "RX Mode\nScottie S1", .press = cont_mode_cb };
-static button_data_t btn_browser = { .type = BTN_TEXT, .label = "SSTV\nBrowser", .press = browser_cb };
+static button_data_t btn_cont_mode = { .type = BTN_TEXT, .label = "RX Mode\nRobot 8", .press = cont_mode_cb };
+static button_data_t btn_browser = { .type = BTN_TEXT, .label = "RX Pics\nBrowser", .press = browser_cb };
 static button_data_t btn_delete_picture = { .type = BTN_TEXT, .label = "Delete\npicture", .press = delete_picture_cb };
-static button_data_t btn_close = { .type = BTN_TEXT, .label = "Close", .press = close_cb };
-static button_data_t btn_test_tx = { .type = BTN_TEXT, .label = "Test TX", .press = test_tx_cb };
-static button_data_t btn_freq = { .type = BTN_TEXT, .label = "Freq.", .press = freq_cb };
+static button_data_t btn_tx = { .type = BTN_TEXT, .label = "TX", .press = tx_ui_cb };
+static button_data_t btn_restart = { .type = BTN_TEXT, .label = "Auto RX\nRestart ON", .press = restart_cb };
 static button_data_t btn_test = { .type = BTN_TEXT, .label = "Test RX", .press = test_cb };
+static button_data_t btn_close = { .type = BTN_TEXT, .label = "Close", .press = close_cb };
+static button_data_t btn_freq = { .type = BTN_TEXT, .label = "Freq.", .press = freq_cb };
 
 static buttons_page_t btn_page_1 = {
-    .items = { &btn_sstv_page_1, &btn_start, &btn_cont_start, &btn_cont_mode, &btn_freq }
+    .items = { &btn_sstv_page_1, &btn_start, &btn_cont_start, &btn_cont_mode, &btn_tx }
 };
 static buttons_page_t btn_page_2 = {
-    .items = { &btn_sstv_page_2, &btn_browser, &btn_delete_picture, &btn_close, &btn_test }
+    .items = { &btn_sstv_page_2, &btn_freq, &btn_browser, &btn_delete_picture, &btn_restart }
+};
+static buttons_page_t btn_page_3 = {
+    .items = { &btn_sstv_page_3, &btn_test, NULL, NULL, &btn_close }
 };
 
 static dialog_t dialog = {
@@ -491,13 +873,18 @@ static void construct_cb(lv_obj_t *parent)
 
     /* Common app look: header, picture and state in the black body, status line */
     app_frame_create(&frame, dialog.obj);
-    lv_label_set_text(frame.status, "Freq.: calling frequencies   Pictures in /mnt/sstv");
+    lv_label_set_text(frame.status, SSTV_STATUS_TEXT);
     header_update();
 
     lv_obj_t *body = lv_obj_create(dialog.obj);
     lv_obj_remove_style_all(body);
     app_frame_body(body);
     lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    if (param_f_get(cfg_pwr) > MAX_PWR) {
+        radio_set_pwr(MAX_PWR);
+        msg_schedule_text_fmt("Power was limited to %0.0fW", MAX_PWR);
+    }
 
     sstv_canvas = lv_canvas_create(dialog.obj);
     lv_canvas_set_buffer(
@@ -517,6 +904,14 @@ static void construct_cb(lv_obj_t *parent)
     lv_obj_set_size(sstv_canvas, SSTV_IMAGE_W, SSTV_IMAGE_H);
     lv_canvas_fill_bg(sstv_canvas, lv_color_white(), LV_OPA_COVER);
 
+    /* Route front-panel key/encoder events to SSTV just like WEFAX/NAVTEX.
+     * Without a focused object in keyboard_group, key_cb() never receives
+     * the volume knob events while the SSTV dialog is open. */
+    lv_group_add_obj(keyboard_group, sstv_canvas);
+    lv_obj_add_event_cb(sstv_canvas, key_cb, LV_EVENT_KEY, NULL);
+    lv_group_focus_obj(sstv_canvas);
+    lv_group_set_editing(keyboard_group, true);
+
     status_label = lv_label_create(dialog.obj);
     lv_label_set_text(status_label, "Stand by.\nPress Start Auto RX to start Autodecoder.\nPress Start Manual RX to start Manual decoder, press Mode button to cycle all available modes for the Manual decoder.");
     lv_obj_set_style_text_color(status_label, lv_color_white(), 0);
@@ -531,14 +926,17 @@ static void construct_cb(lv_obj_t *parent)
     lv_obj_add_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
     set_receiver_ui_stopped();
 
-    /* RX-only beta: keep the two internal test functions visible but disabled. */
-    buttons_disabled(&btn_test_tx, true);
-    buttons_disabled(&btn_test, true);
+    /* RESTART defaults ON: a new valid VIS restarts the current Auto RX capture. */
+    btn_restart.label = live_restart_enabled ? "Auto RX\nRestart ON" : "Auto RX\nRestart OFF";
+    buttons_disabled(&btn_restart, false);
+    buttons_disabled(&btn_test, false);
 
     shown_rows = 0;
     test_ready = false;
     test_rows = 0;
     live_canvas_clear_pending = false;
+    live_abort_requested = false;
+    live_mode_ui_pending = false;
     ui_timer = lv_timer_create(ui_timer_cb, 30, NULL);
 }
 
@@ -585,6 +983,8 @@ static void destruct_cb(void)
     live_decode_pending = false;
     live_decoding = false;
     live_canvas_clear_pending = false;
+    live_abort_requested = false;
+    live_mode_ui_pending = false;
     live_ring_pos = 0;
     live_ring_count = 0;
     live_since_check = 0;
@@ -615,14 +1015,24 @@ static void destruct_cb(void)
 
     /* Button_data objects are static and survive dialog destruction.  Restore
      * their default labels/mode now so the next open always starts clean. */
-    cont_mode = SSTV_MODE_SCOTTIE_S1;
-    cont_decode_mode = SSTV_MODE_SCOTTIE_S1;
+    cont_mode = SSTV_MODE_ROBOT8_BW;
+    cont_decode_mode = SSTV_MODE_ROBOT8_BW;
     btn_start.label = "Start\nAuto RX";
     btn_cont_start.label = "Start\nManual RX";
-    btn_cont_mode.label = "RX Mode\nScottie S1";
+    btn_cont_mode.label = "RX Mode\nRobot 8";
+    btn_tx.label = "TX";
+    tx_ui_state = SSTV_TX_UI_RX;
+    tx_restore_auto_rx = false;
     btn_page_1.items[3] = &btn_cont_mode;
 
+    tx_color_selector_destroy();
+    tx_template_selector_destroy();
+    tx_type_selector_destroy();
+    tx_picture_selector_destroy();
+    tx_instruction_hide();
+    tx_phase = SSTV_TX_PHASE_NONE;
     sstv_browser_close();
+    radio_set_pwr(param_f_get(cfg_pwr));   /* the 5 W cap ends with the app, as in WSPR */
 
     fprintf(stderr, "SSTV: dialog closed; Auto RX and Manual RX reset to defaults\n");
 
@@ -630,7 +1040,7 @@ static void destruct_cb(void)
     sstv_frame = NULL;
     status_label = NULL;
     progress_bar = NULL;
-    frame.head_left = frame.head_right = NULL;  /* deleted with the dialog */
+    frame.head_left = frame.head_right = frame.status = NULL;  /* deleted with the dialog */
     freq_list_close();
 }
 
@@ -707,8 +1117,9 @@ static void *live_decode_thread_cb(void *arg)
             live_info.name, live_written, SSTV_SAMPLE_RATE);
     save_debug_wav(SSTV_DEBUG_WAV, live_samples, live_written);
     int rows = sstv_decode_samples(live_samples, live_written, live_info.mode, test_rgb, &test_info);
-    test_rows = rows > 0 ? rows : 0;
-    if (rows > 0) {
+    bool aborted = live_abort_requested;
+    test_rows = (!aborted && rows > 0) ? rows : 0;
+    if (!aborted && rows > 0) {
         char saved_name[96] = {0};
         if (save_sstv_png(test_rgb, test_info.width, test_info.height,
                           saved_name, sizeof(saved_name))) {
@@ -716,7 +1127,8 @@ static void *live_decode_thread_cb(void *arg)
             saved_overlay_pending = true;
         }
     }
-    test_ready = true;
+    test_ready = !aborted;
+    live_abort_requested = false;
     free(live_samples); live_samples = NULL; live_written = live_target = 0;
     test_running = false;
     live_decoding = false;
@@ -760,6 +1172,21 @@ static void ui_timer_cb(lv_timer_t *timer)
         header_update();
     (void)timer;
 
+    if (tx_target_keyboard_open_pending) {
+        tx_target_keyboard_open_pending=false;
+        tx_target_keyboard_open_now();
+    }
+
+    if (tx_target_keyboard_force_until != 0) {
+        uint32_t now=lv_tick_get();
+        if ((int32_t)(tx_target_keyboard_force_until-now) > 0) {
+            tx_target_keyboard_force_lower();
+        } else {
+            tx_target_keyboard_force_lower();
+            tx_target_keyboard_force_until=0;
+        }
+    }
+
     /* audio_cb() runs outside the LVGL/UI context.  It only requests the
      * clear; the actual canvas operation is performed here by the UI timer. */
     if (live_canvas_clear_pending) {
@@ -770,22 +1197,49 @@ static void ui_timer_cb(lv_timer_t *timer)
         }
     }
 
+    /* VIS detection runs in the audio callback.  Update LVGL/button text only
+     * here, in the UI context. */
+    if (live_mode_ui_pending) {
+        live_mode_ui_pending = false;
+        snprintf(tx_mode_label,sizeof(tx_mode_label),"RX Mode\n%s",cont_mode_name(cont_mode));
+        btn_cont_mode.label=tx_mode_label;
+        if (btn_cont_mode.disp_btn) buttons_refresh(&btn_cont_mode);
+    }
+
+    if (tx_ui_state == SSTV_TX_UI_SETUP &&
+        tx_phase == SSTV_TX_PHASE_SELECT_PICTURE)
+        tx_picture_load_pending_preview();
+
+    if (tx_ui_state == SSTV_TX_UI_SETUP &&
+        tx_phase == SSTV_TX_PHASE_SELECT_TEMPLATE &&
+        tx_template_preview_pending) {
+        tx_template_preview_pending = false;
+        tx_template_render_selected();
+    }
+
+    if (tx_ui_state == SSTV_TX_UI_SETUP &&
+        tx_phase == SSTV_TX_PHASE_SELECT_COLORS &&
+        tx_color_preview_pending &&
+        (uint32_t)(lv_tick_get()-tx_color_preview_since_ms) >= 300) {
+        tx_color_preview_pending = false;
+        tx_color_render_selected();
+    }
+
     if (saved_overlay_pending) {
         char message[160];
         saved_overlay_pending = false;
         snprintf(message, sizeof(message), "SSTV picture %s saved", saved_overlay_name);
-        channel_overlay_show(message);
+        msg_schedule_text_fmt("%s", message);
     }
 
     if (tx_running) {
         if (progress_bar) {
-            lv_obj_clear_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
             int v = 0;
             if (tx_key_time_valid) {
                 uint64_t keyed_ms = monotonic_ms_since(&tx_key_time);
                 if (keyed_ms > SSTV_TX_PREROLL_MS) {
                     uint64_t payload_ms = keyed_ms - SSTV_TX_PREROLL_MS;
-                    unsigned int duration_ms = sstv_tx_duration_ms(SSTV_MODE_SCOTTIE_S1);
+                    unsigned int duration_ms = sstv_tx_duration_ms(tx_mode);
                     if (duration_ms > 0) {
                         if (payload_ms >= duration_ms) v = 1000;
                         else v = (int)((payload_ms * 1000u) / duration_ms);
@@ -793,27 +1247,66 @@ static void ui_timer_cb(lv_timer_t *timer)
                 }
             }
             tx_progress = v;
-            lv_bar_set_value(progress_bar,v,LV_ANIM_OFF);
+            app_frame_bar(&frame, v, 0xff4040);   /* red while transmitting, as in WSPR */
         }
-        if (tx_started) set_status("Transmitting Scottie S1...");
+        if (tx_started) { char msg[96]; snprintf(msg,sizeof(msg),"Transmitting %s...",cont_mode_name(tx_mode)); set_status(msg); }
     } else if (tx_thread_valid) {
         pthread_join(tx_thread, NULL);
         tx_thread_valid = false;
         if (progress_bar) {
             lv_bar_set_value(progress_bar, tx_result == 1 ? 1000 : 0, LV_ANIM_OFF);
             lv_obj_add_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_style_bg_color(progress_bar, lv_color_hex(0x40c060), LV_PART_INDICATOR);
         }
-        if (tx_result == 1) {
-            set_status("Scottie S1 test TX complete.");
-            channel_overlay_show("SSTV Scottie S1 test TX complete");
-        } else if (tx_result == -1) {
-            set_status("Scottie S1 test TX aborted.");
+        if (tx_ui_state == SSTV_TX_UI_RF) {
+            if (tx_result == 1) {
+                /* Commit LAST TX only after the RF worker has completed the
+                 * entire transmission successfully.  Aborts/errors leave the
+                 * previous backup untouched. */
+                size_t last_bytes=(size_t)tx_picture_width*tx_picture_height*3;
+                if (tx_picture_width && tx_picture_height &&
+                    last_bytes <= sizeof(tx_last_rgb)) {
+                    memcpy(tx_last_rgb,tx_final_rgb,last_bytes);
+                    tx_last_width=tx_picture_width;
+                    tx_last_height=tx_picture_height;
+                    tx_last_mode=tx_mode;
+                    tx_last_valid=true;
+                    fprintf(stderr,"SSTV TX: saved LAST TX (%ux%u, %s)\n",
+                            tx_last_width,tx_last_height,cont_mode_name(tx_last_mode));
+                }
+                char msg[96];
+                snprintf(msg,sizeof(msg),"SSTV %s TX complete",cont_mode_name(tx_mode));
+                msg_schedule_text_fmt("%s", msg);
+            } else if (tx_result == -1) {
+                msg_schedule_text_fmt("SSTV TX halted");
+            } else {
+                char msg[96];
+                snprintf(msg,sizeof(msg),"SSTV TX failed (%d)",tx_result);
+                msg_schedule_text_fmt("%s", msg);
+            }
+
+            /* QSO workflow: completion, Halt and even an encoder/audio error
+             * all leave the radio immediately listening in Auto RX. */
+            tx_started=false;
+            tx_progress=0;
+            tx_return_to_auto_rx();
         } else {
-            char msg[96];
-            snprintf(msg,sizeof(msg),"Scottie S1 test TX failed (%d).",tx_result);
-            set_status(msg);
+            if (tx_result == 1) {
+                char msg[96];
+                snprintf(msg,sizeof(msg),"%s test TX complete.",cont_mode_name(tx_mode));
+                set_status(msg);
+                snprintf(msg,sizeof(msg),"SSTV %s test TX complete",cont_mode_name(tx_mode));
+                msg_schedule_text_fmt("%s", msg);
+            } else if (tx_result == -1) {
+                set_status("SSTV test TX aborted.");
+            } else {
+                char msg[96];
+                snprintf(msg,sizeof(msg),"SSTV test TX failed (%d).",tx_result);
+                set_status(msg);
+            }
+            tx_started=false;
+            tx_progress=0;
         }
-        tx_started=false; tx_progress=0;
     }
 
     if (test_thread_valid && !test_running) {
@@ -857,6 +1350,19 @@ static void ui_timer_cb(lv_timer_t *timer)
         }
     }
 
+    /* A structurally failed Auto decode must not leave the receiver stuck at
+     * the end of the progress bar.  Discard the failed attempt, report it to
+     * the operator, then resume VIS listening. */
+    if (test_ready && test_rows <= 0 && live_enabled) {
+        test_ready = false;
+        shown_rows = 0;
+        if (progress_bar)
+            lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
+        msg_schedule_text_fmt("Decoding failed");
+        set_receiver_ui_listening();
+        return;
+    }
+
     if (!sstv_canvas || !test_ready || shown_rows >= test_rows) return;
     render_scaled_image();
     shown_rows=test_rows;
@@ -875,14 +1381,20 @@ static void key_cb(lv_event_t *e)
         case KEY_VOL_LEFT_EDIT:
         case KEY_VOL_LEFT_SELECT:
             radio_change_vol(-1);
-            break;
+            return;
         case KEY_VOL_RIGHT_EDIT:
         case KEY_VOL_RIGHT_SELECT:
             radio_change_vol(1);
-            break;
+            return;
         default:
             break;
     }
+}
+
+static bool tx_abort_cb(void *ctx)
+{
+    (void)ctx;
+    return tx_abort;
 }
 
 static void *tx_thread_cb(void *arg)
@@ -891,8 +1403,34 @@ static void *tx_thread_cb(void *arg)
     int16_t *samples = NULL;
     size_t count = 0;
 
-    int rc = sstv_encode_scottie_s1_png_pcm("/mnt/sstv-tx.png", AUDIO_PLAY_RATE,
-                                         &samples, &count);
+    int rc;
+    switch (tx_mode) {
+        case SSTV_MODE_ROBOT8_BW:
+            rc = sstv_encode_robot8_png_pcm(SSTV_TX_PNG, AUDIO_PLAY_RATE, &samples, &count);
+            break;
+        case SSTV_MODE_MARTIN_M1:
+            rc = sstv_encode_martin_m1_png_pcm(SSTV_TX_PNG, AUDIO_PLAY_RATE, &samples, &count);
+            break;
+        case SSTV_MODE_MARTIN_M2:
+            rc = sstv_encode_martin_m2_png_pcm(SSTV_TX_PNG, AUDIO_PLAY_RATE, &samples, &count);
+            break;
+        case SSTV_MODE_SCOTTIE_S1:
+            rc = sstv_encode_scottie_s1_png_pcm(SSTV_TX_PNG, AUDIO_PLAY_RATE, &samples, &count);
+            break;
+        case SSTV_MODE_ROBOT36:
+            rc = sstv_encode_robot36_png_pcm(SSTV_TX_PNG, AUDIO_PLAY_RATE, &samples, &count);
+            break;
+        case SSTV_MODE_ROBOT72:
+            rc = sstv_encode_robot72_png_pcm(SSTV_TX_PNG, AUDIO_PLAY_RATE, &samples, &count);
+            break;
+        case SSTV_MODE_SCOTTIE_S2:
+            rc = sstv_encode_scottie_s2_png_pcm(SSTV_TX_PNG, AUDIO_PLAY_RATE, &samples, &count);
+            break;
+        default:
+            fprintf(stderr,"SSTV TX: encoder not implemented for %s\n", cont_mode_name(tx_mode));
+            rc = -40;
+            break;
+    }
     if (rc < 0) {
         fprintf(stderr,"SSTV TX: PCM generation failed rc=%d\n",rc);
         tx_result = rc;
@@ -906,58 +1444,41 @@ static void *tx_thread_cb(void *arg)
         return NULL;
     }
 
-    fprintf(stderr,"SSTV TX: keying modem for Scottie S1 test (%zu samples)\n",count);
-    radio_set_modem(true);
+    /* Give the TX/codec path time to settle before the SSTV VIS leader starts:
+     * silence in front of the picture.  Kept out of the encoder so generated
+     * WAV files remain standard. */
+    const size_t preroll_count = ((size_t)AUDIO_PLAY_RATE * SSTV_TX_PREROLL_MS) / 1000u;
+    int16_t *p = realloc(samples, (preroll_count + count) * sizeof(*samples));
+    if (!p) {
+        free(samples);
+        tx_result = -32;
+        tx_running = false;
+        return NULL;
+    }
+    samples = p;
+    memmove(samples + preroll_count, samples, count * sizeof(*samples));
+    memset(samples, 0, preroll_count * sizeof(*samples));
+    count += preroll_count;
+
+    /* Same TX path as FT8/JS8/WSPR: tx_player keys the radio, keeps the
+     * power at 5 W at most and corrects the level from ALC and power.  The
+     * tones are absolute audio frequencies, so no VFO shift (offset = its
+     * centre tone). */
+    fprintf(stderr,"SSTV TX: keying modem for %s (%zu samples)\n", cont_mode_name(tx_mode), count);
     clock_gettime(CLOCK_MONOTONIC, &tx_key_time);
     tx_key_time_valid = true;
     tx_started = true;
-
-    /* Give the TX/codec path time to settle before the SSTV VIS leader starts.
-     * Keep this out of the encoder so generated WAV files remain standard. */
-    enum { TX_PREROLL_CHUNK = 2048 };
-    const size_t preroll_count = ((size_t)AUDIO_PLAY_RATE * SSTV_TX_PREROLL_MS) / 1000u;
-    static const int16_t silence[TX_PREROLL_CHUNK] = {0};
-    size_t preroll_sent = 0;
-    while (preroll_sent < preroll_count && !tx_abort) {
-        size_t part = preroll_count - preroll_sent;
-        if (part > TX_PREROLL_CHUNK) part = TX_PREROLL_CHUNK;
-        if (audio_play(silence, part) < 0) {
-            rc = -30;
-            break;
-        }
-        preroll_sent += part;
-    }
-
-    fprintf(stderr,"SSTV TX: preroll %zu/%zu silent samples\n",
-            preroll_sent, preroll_count);
-
-    size_t sent = 0;
-    while (rc >= 0 && sent < count && !tx_abort) {
-        size_t part = count - sent;
-        if (part > 2048u) part = 2048u;
-        if (audio_play(samples + sent, part) < 0) {
-            rc = -30;
-            break;
-        }
-        sent += part;
-    }
-
-    /* Drain everything already accepted by PulseAudio before unkeying.  On an
-     * abort this is at most the small amount already queued, not the image. */
-    audio_play_wait();
-    radio_set_modem(false);
+    bool done = tx_player_play(samples, (uint32_t)count, TX_PLAYER_AUDIO_HZ,
+                               tx_player_base_gain_offset(), tx_abort_cb, NULL);
     tx_started = false;
     tx_key_time_valid = false;
     free(samples);
 
-    if (tx_abort) {
-        fprintf(stderr,"SSTV TX: aborted at %zu/%zu samples\n",sent,count);
+    if (!done || tx_abort) {
+        fprintf(stderr,"SSTV TX: aborted\n");
         tx_result = -1;
-    } else if (rc < 0) {
-        fprintf(stderr,"SSTV TX: audio_play failed rc=%d\n",rc);
-        tx_result = rc;
     } else {
-        fprintf(stderr,"SSTV TX: Scottie S1 test complete\n");
+        fprintf(stderr,"SSTV TX: %s complete\n", cont_mode_name(tx_mode));
         tx_progress = 1000;
         tx_result = 1;
     }
@@ -965,57 +1486,32 @@ static void *tx_thread_cb(void *arg)
     return NULL;
 }
 
-static void test_tx_cb(button_data_t *data)
+static void restart_cb(button_data_t *data)
 {
     (void)data;
 
-    /* Pressing Test TX again is an emergency/normal abort. */
-    if (tx_running) {
-        tx_abort = true;
-        set_status("Stopping Scottie S1 test TX...");
-        return;
-    }
-
-    if (test_running || cont_capturing || cont_decode_pending || cont_decoding ||
-        live_capturing || live_decode_pending || live_decoding)
-        return;
-
-    if (tx_thread_valid) {
-        pthread_join(tx_thread,NULL);
-        tx_thread_valid=false;
-    }
-
-    /* Auto RX may be listening without capturing.  Stop it before keying so
-     * our own transmission cannot trigger the receiver state machine. */
     pthread_mutex_lock(&live_mutex);
-    live_enabled=false;
-    live_capturing=false;
-    free(live_samples); live_samples=NULL; live_written=live_target=0;
+    live_restart_enabled = !live_restart_enabled;
+
+    /* When enabling during an active capture, start the parallel VIS detector
+     * from fresh audio.  This prevents the VIS which started the current
+     * picture from immediately being detected again as a restart. */
+    if (live_restart_enabled && live_capturing) {
+        live_ring_pos = 0;
+        live_ring_count = 0;
+        live_since_check = 0;
+    }
     pthread_mutex_unlock(&live_mutex);
-    set_receiver_ui_stopped();
 
-    tx_abort=false;
-    tx_started=false;
-    tx_key_time_valid=false;
-    tx_progress=0;
-    tx_result=0;
-    tx_running=true;
-    set_status("Preparing Scottie S1 test TX...");
-    if (progress_bar) {
-        lv_bar_set_value(progress_bar,0,LV_ANIM_OFF);
-        lv_obj_clear_flag(progress_bar,LV_OBJ_FLAG_HIDDEN);
-    }
+    btn_restart.label = live_restart_enabled ? "Auto RX\nRestart ON" : "Auto RX\nRestart OFF";
+    if (btn_restart.disp_btn) buttons_refresh(&btn_restart);
+    fprintf(stderr,"SSTV LIVE: VIS restart %s\n",live_restart_enabled ? "ON" : "OFF");
+}
 
-    int rc=pthread_create(&tx_thread,NULL,tx_thread_cb,NULL);
-    if (rc==0) {
-        tx_thread_valid=true;
-    } else {
-        fprintf(stderr,"SSTV TX: pthread_create failed: %d\n",rc);
-        tx_running=false;
-        tx_result=-31;
-        set_status("Scottie S1 test TX: thread creation failed.");
-        if (progress_bar) lv_obj_add_flag(progress_bar,LV_OBJ_FLAG_HIDDEN);
-    }
+static void close_cb(button_data_t *data)
+{
+    (void)data;
+    dialog_destruct();
 }
 
 static void test_cb(button_data_t *data)
@@ -1070,6 +1566,1635 @@ static void page_2_cb(button_data_t *data)
     sstv_browser_update_buttons();
 }
 
+static void page_3_cb(button_data_t *data)
+{
+    (void)data; buttons_load_page(&btn_page_3);
+}
+
+
+static uint64_t tx_now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000u + (uint64_t)ts.tv_nsec / 1000000u;
+}
+
+static int tx_picture_name_compare(const void *a, const void *b)
+{
+    const char *const *sa = a;
+    const char *const *sb = b;
+    return strcmp(*sa, *sb);
+}
+
+static void tx_picture_free_files(void)
+{
+    for (size_t i = 0; i < tx_picture_file_count; ++i)
+        free(tx_picture_files[i]);
+    free(tx_picture_files);
+    tx_picture_files = NULL;
+    tx_picture_file_count = 0;
+    tx_picture_file_capacity = 0;
+}
+
+static void tx_picture_selector_refresh(void)
+{
+    tx_picture_free_files();
+
+    DIR *dir = opendir(SSTV_TX_PICS_DIR);
+    if (dir) {
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL) {
+            const char *name = entry->d_name;
+            size_t len = strlen(name);
+
+            /* Ignore hidden files, including macOS AppleDouble metadata (._*). */
+            if (name[0] == '.')
+                continue;
+
+            if (len < 5 || strcmp(name + len - 4, ".png") != 0)
+                continue;
+
+            if (tx_picture_file_count == tx_picture_file_capacity) {
+                size_t new_capacity = tx_picture_file_capacity ?
+                                      tx_picture_file_capacity * 2 : 32;
+                char **p = realloc(tx_picture_files,
+                                   new_capacity * sizeof(*tx_picture_files));
+                if (!p)
+                    break;
+                tx_picture_files = p;
+                tx_picture_file_capacity = new_capacity;
+            }
+
+            char *copy = strdup(name);
+            if (copy)
+                tx_picture_files[tx_picture_file_count++] = copy;
+        }
+        closedir(dir);
+    }
+
+    qsort(tx_picture_files, tx_picture_file_count,
+          sizeof(tx_picture_files[0]), tx_picture_name_compare);
+}
+
+static void tx_picture_native_size(sstv_mode_t mode,
+                                   unsigned int *width,
+                                   unsigned int *height)
+{
+    switch (mode) {
+        case SSTV_MODE_ROBOT8_BW:
+            *width = 160; *height = 120; break;
+        case SSTV_MODE_ROBOT36:
+        case SSTV_MODE_ROBOT72:
+            *width = 320; *height = 240; break;
+        case SSTV_MODE_MARTIN_M1:
+        case SSTV_MODE_MARTIN_M2:
+        case SSTV_MODE_SCOTTIE_S1:
+        case SSTV_MODE_SCOTTIE_S2:
+        default:
+            *width = 320; *height = 256; break;
+    }
+}
+
+static bool tx_picture_decode_png(const char *path,
+                                  uint8_t **out_rgb,
+                                  unsigned int *out_w,
+                                  unsigned int *out_h)
+{
+    *out_rgb = NULL;
+    *out_w = *out_h = 0;
+
+    FILE *fp = fopen(path, "rb");
+    if (!fp)
+        return false;
+
+    png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,
+                                                  NULL, NULL, NULL);
+    if (!png_ptr) {
+        fclose(fp);
+        return false;
+    }
+
+    png_infop info_ptr = png_create_info_struct(png_ptr);
+    if (!info_ptr) {
+        png_destroy_read_struct(&png_ptr, NULL, NULL);
+        fclose(fp);
+        return false;
+    }
+
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        fclose(fp);
+        return false;
+    }
+
+    png_init_io(png_ptr, fp);
+    png_read_info(png_ptr, info_ptr);
+
+    png_uint_32 w = png_get_image_width(png_ptr, info_ptr);
+    png_uint_32 h = png_get_image_height(png_ptr, info_ptr);
+    int bit_depth = png_get_bit_depth(png_ptr, info_ptr);
+    int color_type = png_get_color_type(png_ptr, info_ptr);
+
+    if (w == 0 || h == 0 || w > 8192 || h > 8192) {
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        fclose(fp);
+        return false;
+    }
+
+    if (bit_depth == 16) png_set_strip_16(png_ptr);
+    if (color_type == PNG_COLOR_TYPE_PALETTE) png_set_palette_to_rgb(png_ptr);
+    if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
+        png_set_expand_gray_1_2_4_to_8(png_ptr);
+    if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS))
+        png_set_tRNS_to_alpha(png_ptr);
+    if (color_type == PNG_COLOR_TYPE_GRAY ||
+        color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
+        png_set_gray_to_rgb(png_ptr);
+
+    png_read_update_info(png_ptr, info_ptr);
+    int channels = png_get_channels(png_ptr, info_ptr);
+    png_size_t rowbytes = png_get_rowbytes(png_ptr, info_ptr);
+    if (channels != 3 && channels != 4) {
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        fclose(fp);
+        return false;
+    }
+
+    uint8_t *rgb = malloc((size_t)w * h * 3);
+    uint8_t *row = malloc(rowbytes);
+    if (!rgb || !row) {
+        free(rgb); free(row);
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        fclose(fp);
+        return false;
+    }
+
+    for (png_uint_32 y = 0; y < h; ++y) {
+        png_read_row(png_ptr, row, NULL);
+        for (png_uint_32 x = 0; x < w; ++x) {
+            const uint8_t *p = row + (size_t)x * channels;
+            uint8_t *d = rgb + ((size_t)y * w + x) * 3;
+            if (channels == 4 && p[3] != 255) {
+                unsigned int a = p[3];
+                d[0] = (uint8_t)((p[0] * a + 255u * (255u - a)) / 255u);
+                d[1] = (uint8_t)((p[1] * a + 255u * (255u - a)) / 255u);
+                d[2] = (uint8_t)((p[2] * a + 255u * (255u - a)) / 255u);
+            } else {
+                d[0] = p[0]; d[1] = p[1]; d[2] = p[2];
+            }
+        }
+    }
+
+    png_read_end(png_ptr, NULL);
+    free(row);
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    fclose(fp);
+
+    *out_rgb = rgb;
+    *out_w = (unsigned int)w;
+    *out_h = (unsigned int)h;
+    return true;
+}
+
+static void tx_picture_aspect_fit(const uint8_t *src,
+                                  unsigned int sw, unsigned int sh,
+                                  uint8_t *dst,
+                                  unsigned int dw, unsigned int dh)
+{
+    memset(dst, 0, (size_t)dw * dh * 3);
+
+    double scale_x = (double)dw / (double)sw;
+    double scale_y = (double)dh / (double)sh;
+    double scale = scale_x < scale_y ? scale_x : scale_y;
+    unsigned int rw = (unsigned int)floor(sw * scale + 0.5);
+    unsigned int rh = (unsigned int)floor(sh * scale + 0.5);
+    if (rw < 1) rw = 1;
+    if (rh < 1) rh = 1;
+    if (rw > dw) rw = dw;
+    if (rh > dh) rh = dh;
+
+    unsigned int x0 = (dw - rw) / 2;
+    unsigned int y0 = (dh - rh) / 2;
+
+    /* Bilinear resize.  This is run only after the 300 ms selection debounce,
+     * never on every MFK detent. */
+    for (unsigned int y = 0; y < rh; ++y) {
+        double sy = ((double)y + 0.5) * sh / rh - 0.5;
+        if (sy < 0.0) sy = 0.0;
+        unsigned int y1 = (unsigned int)sy;
+        unsigned int y2 = y1 + 1 < sh ? y1 + 1 : y1;
+        double fy = sy - y1;
+
+        for (unsigned int x = 0; x < rw; ++x) {
+            double sx = ((double)x + 0.5) * sw / rw - 0.5;
+            if (sx < 0.0) sx = 0.0;
+            unsigned int x1 = (unsigned int)sx;
+            unsigned int x2 = x1 + 1 < sw ? x1 + 1 : x1;
+            double fx = sx - x1;
+
+            for (unsigned int c = 0; c < 3; ++c) {
+                double p11 = src[((size_t)y1 * sw + x1) * 3 + c];
+                double p12 = src[((size_t)y1 * sw + x2) * 3 + c];
+                double p21 = src[((size_t)y2 * sw + x1) * 3 + c];
+                double p22 = src[((size_t)y2 * sw + x2) * 3 + c];
+                double top = p11 + (p12 - p11) * fx;
+                double bot = p21 + (p22 - p21) * fx;
+                double v = top + (bot - top) * fy;
+                dst[((size_t)(y0 + y) * dw + (x0 + x)) * 3 + c] =
+                    (uint8_t)(v + 0.5);
+            }
+        }
+    }
+}
+
+static bool tx_picture_load_and_prepare(const char *filename)
+{
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", SSTV_TX_PICS_DIR, filename);
+
+    uint8_t *src = NULL;
+    unsigned int sw = 0, sh = 0;
+    if (!tx_picture_decode_png(path, &src, &sw, &sh)) {
+        fprintf(stderr, "SSTV TX UI: cannot load picture %s\n", path);
+        return false;
+    }
+
+    unsigned int dw, dh;
+    tx_picture_native_size(cont_mode, &dw, &dh);
+    tx_picture_aspect_fit(src, sw, sh, tx_picture_rgb, dw, dh);
+    free(src);
+
+    tx_picture_width = dw;
+    tx_picture_height = dh;
+    tx_build_final_frame(false);
+    snprintf(tx_picture_name, sizeof(tx_picture_name), "%s", filename);
+    fprintf(stderr, "SSTV TX UI: prepared %s (%ux%u -> %ux%u, %s)\n",
+            filename, sw, sh, dw, dh, cont_mode_name(cont_mode));
+    return true;
+}
+
+
+static void tx_instruction_hide(void)
+{
+    if (tx_instruction_label) {
+        lv_obj_del(tx_instruction_label);
+        tx_instruction_label = NULL;
+    }
+    if (frame.status) lv_label_set_text(frame.status, SSTV_STATUS_TEXT);
+}
+
+/* The TX menus look like the Modes menu: a dark box with a title, the list
+ * is a table laid over it (tx_list_create), the hint is in the status line. */
+static void tx_instruction_show(const char *title, const char *hint)
+{
+    tx_instruction_hide();
+
+    lv_obj_t *box = lv_obj_create(dialog.obj);
+    tx_instruction_label = box;
+    lv_obj_remove_style_all(box);
+    lv_obj_set_pos(box, SSTV_TX_LIST_X, SSTV_TX_LIST_Y);
+    lv_obj_set_size(box, SSTV_TX_LIST_W, SSTV_TX_LIST_H);
+    lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1622), 0);
+    lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(box, lv_color_hex(0x99aaaa), 0);
+    lv_obj_set_style_border_width(box, 2, 0);
+    lv_obj_set_style_radius(box, 10, 0);
+    lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t *head = lv_label_create(box);
+    lv_obj_set_style_text_font(head, &sony_20, 0);
+    lv_obj_set_style_text_color(head, lv_color_hex(APP_FRAME_HEAD), 0);
+    lv_label_set_text(head, title);
+    lv_obj_set_pos(head, 20, 7);
+
+    if (frame.status) lv_label_set_text(frame.status, hint);
+}
+
+static void tx_list_draw_cb(lv_event_t *e)
+{
+    lv_obj_draw_part_dsc_t *d = lv_event_get_draw_part_dsc(e);
+    if (!d || d->part != LV_PART_ITEMS || !d->rect_dsc) return;
+
+    uint16_t row = LV_TABLE_CELL_NONE, col = LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(lv_event_get_target(e), &row, &col);
+    bool on = d->id == row;
+
+    d->rect_dsc->bg_color = lv_color_hex(0x5a4818);
+    d->rect_dsc->bg_opa = on ? LV_OPA_COVER : LV_OPA_TRANSP;
+    d->rect_dsc->border_color = lv_color_white();
+    d->rect_dsc->border_opa = LV_OPA_COVER;
+    d->rect_dsc->border_width = on ? 2 : 0;
+    d->rect_dsc->border_side = LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM;
+    d->rect_dsc->outline_width = 0;
+    if (on && d->label_dsc) d->label_dsc->color = lv_color_hex(0xffd24a);
+}
+
+/* A list in the box of tx_instruction_show(): the MFK chooses, a press confirms */
+static lv_obj_t *tx_list_create(uint16_t rows)
+{
+    lv_obj_t *t = lv_table_create(dialog.obj);
+    lv_obj_remove_style(t, NULL, LV_STATE_ANY | LV_PART_MAIN);
+    lv_obj_set_pos(t, SSTV_TX_LIST_X + 2, SSTV_TX_LIST_Y + SSTV_TX_HEAD_H);
+    lv_obj_set_size(t, SSTV_TX_LIST_W - 4, SSTV_TX_LIST_H - SSTV_TX_HEAD_H - 8);
+    lv_obj_set_style_border_width(t, 0, LV_PART_ITEMS);
+    lv_obj_set_style_text_font(t, &sony_22, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(t, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_pad_ver(t, 3, LV_PART_ITEMS);
+    lv_obj_set_style_pad_left(t, 18, LV_PART_ITEMS);
+    lv_table_set_col_cnt(t, 1);
+    lv_table_set_col_width(t, 0, SSTV_TX_LIST_W - 4);
+    lv_table_set_row_cnt(t, rows);
+    lv_obj_add_event_cb(t, key_cb, LV_EVENT_KEY, NULL);
+    lv_obj_add_event_cb(t, tx_list_draw_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
+    return t;
+}
+
+/* Compact 5x7 bitmap font for the pixels that are actually transmitted.
+ * This deliberately does not depend on LVGL rendering: tx_final_rgb is the
+ * single WYSIWYG framebuffer used by both preview and, later, the encoder. */
+static const uint8_t *tx_glyph5x7(char ch)
+{
+    static const uint8_t blank[5]={0,0,0,0,0};
+    static const uint8_t glyphs[][5] = {
+        {0x7E,0x11,0x11,0x11,0x7E}, /* A */
+        {0x7F,0x49,0x49,0x49,0x36}, /* B */
+        {0x3E,0x41,0x41,0x41,0x22}, /* C */
+        {0x7F,0x41,0x41,0x22,0x1C}, /* D */
+        {0x7F,0x49,0x49,0x49,0x41}, /* E */
+        {0x7F,0x09,0x09,0x09,0x01}, /* F */
+        {0x3E,0x41,0x49,0x49,0x7A}, /* G */
+        {0x7F,0x08,0x08,0x08,0x7F}, /* H */
+        {0x00,0x41,0x7F,0x41,0x00}, /* I */
+        {0x20,0x40,0x41,0x3F,0x01}, /* J */
+        {0x7F,0x08,0x14,0x22,0x41}, /* K */
+        {0x7F,0x40,0x40,0x40,0x40}, /* L */
+        {0x7F,0x02,0x0C,0x02,0x7F}, /* M */
+        {0x7F,0x04,0x08,0x10,0x7F}, /* N */
+        {0x3E,0x41,0x41,0x41,0x3E}, /* O */
+        {0x7F,0x09,0x09,0x09,0x06}, /* P */
+        {0x3E,0x41,0x51,0x21,0x5E}, /* Q */
+        {0x7F,0x09,0x19,0x29,0x46}, /* R */
+        {0x46,0x49,0x49,0x49,0x31}, /* S */
+        {0x01,0x01,0x7F,0x01,0x01}, /* T */
+        {0x3F,0x40,0x40,0x40,0x3F}, /* U */
+        {0x1F,0x20,0x40,0x20,0x1F}, /* V */
+        {0x3F,0x40,0x38,0x40,0x3F}, /* W */
+        {0x63,0x14,0x08,0x14,0x63}, /* X */
+        {0x07,0x08,0x70,0x08,0x07}, /* Y */
+        {0x61,0x51,0x49,0x45,0x43}, /* Z */
+        {0x3E,0x51,0x49,0x45,0x3E}, /* 0 */
+        {0x00,0x42,0x7F,0x40,0x00}, /* 1 */
+        {0x42,0x61,0x51,0x49,0x46}, /* 2 */
+        {0x21,0x41,0x45,0x4B,0x31}, /* 3 */
+        {0x18,0x14,0x12,0x7F,0x10}, /* 4 */
+        {0x27,0x45,0x45,0x45,0x39}, /* 5 */
+        {0x3C,0x4A,0x49,0x49,0x30}, /* 6 */
+        {0x01,0x71,0x09,0x05,0x03}, /* 7 */
+        {0x36,0x49,0x49,0x49,0x36}, /* 8 */
+        {0x06,0x49,0x49,0x29,0x1E}, /* 9 */
+        {0x20,0x10,0x08,0x04,0x02}  /* / */
+    };
+    if (ch >= 'a' && ch <= 'z') ch -= 32;
+    if (ch >= 'A' && ch <= 'Z') return glyphs[ch-'A'];
+    if (ch >= '0' && ch <= '9') return glyphs[26 + ch-'0'];
+    if (ch == '/') return glyphs[36];
+    return blank;
+}
+
+static void tx_rgb_pixel(uint8_t *rgb, unsigned int w, unsigned int h,
+                         int x, int y, uint8_t r, uint8_t g, uint8_t b)
+{
+    if (x < 0 || y < 0 || x >= (int)w || y >= (int)h) return;
+    size_t o=((size_t)y*w+(unsigned int)x)*3;
+    rgb[o]=r; rgb[o+1]=g; rgb[o+2]=b;
+}
+
+static int tx_text_width(const char *text, int scale)
+{
+    size_t n = text ? strlen(text) : 0;
+    return n ? (int)(n * 6 - 1) * scale : 0;
+}
+
+typedef enum {
+    TX_TEXT_ALIGN_LEFT = 0,
+    TX_TEXT_ALIGN_CENTER,
+    TX_TEXT_ALIGN_RIGHT
+} tx_text_align_t;
+
+
+typedef struct { uint8_t r,g,b; } tx_rgb_t;
+typedef struct { tx_rgb_t top,middle,bottom; } tx_color_combo_t;
+
+#define TX_RGB(R,G,B) { (R),(G),(B) }
+
+/* Strong, deliberately saturated choices for readability over photographs.
+ * #0 and #1 are the only monochromatic sets. Pink occurs only as BOTTOM. */
+static const tx_color_combo_t tx_color_combos[20] = {
+    { TX_RGB(255,  0,  0), TX_RGB(255,  0,  0), TX_RGB(255,  0,  0) }, /* red */
+    { TX_RGB(255,255,255), TX_RGB(255,255,255), TX_RGB(255,255,255) }, /* white */
+    { TX_RGB(255,255,  0), TX_RGB(  0,255,  0), TX_RGB( 64,128,255) }, /* yellow green blue */
+    { TX_RGB(255,128,  0), TX_RGB(192, 64,255), TX_RGB( 64,192,255) }, /* orange violet light blue */
+    { TX_RGB(255,  0,  0), TX_RGB(255,255,  0), TX_RGB(  0,255,  0) }, /* red yellow green */
+    { TX_RGB( 64,128,255), TX_RGB(255,128,  0), TX_RGB(255,255,255) }, /* blue orange white */
+    { TX_RGB(192, 64,255), TX_RGB(  0,255,  0), TX_RGB(255,255,  0) }, /* violet green yellow */
+    { TX_RGB(  0,255,  0), TX_RGB( 64,192,255), TX_RGB(255,128,  0) }, /* green light blue orange */
+    { TX_RGB(255,255,  0), TX_RGB(255,  0,  0), TX_RGB(192, 64,255) }, /* yellow red violet */
+    { TX_RGB( 64,192,255), TX_RGB(255,255,  0), TX_RGB(255, 64,160) }, /* light blue yellow pink */
+
+    /* Darker palette: still saturated enough to remain useful for SSTV text. */
+    { TX_RGB(  0,112, 32), TX_RGB(  0, 64,160), TX_RGB(160,  0,  0) }, /* dark green, blue, red */
+    { TX_RGB(128, 64,  0), TX_RGB( 96,  0,128), TX_RGB(  0,112,112) }, /* brown, dark violet, teal */
+    { TX_RGB(  0, 80,144), TX_RGB(144, 64,  0), TX_RGB(112,  0, 80) }, /* deep blue, burnt orange, wine */
+    { TX_RGB( 72,104,  0), TX_RGB(  0, 72,112), TX_RGB(128, 32, 32) }, /* olive, petrol blue, brick */
+    { TX_RGB(112,  0,128), TX_RGB(  0,104, 64), TX_RGB(160, 80,  0) }, /* violet, emerald, amber */
+    { TX_RGB(  0, 88,128), TX_RGB(128,  0, 64), TX_RGB( 64,112,  0) }, /* ocean, burgundy, leaf */
+    { TX_RGB(144, 48,  0), TX_RGB( 48, 64,144), TX_RGB(  0,120, 96) }, /* rust, indigo, sea green */
+    { TX_RGB( 80,  0,128), TX_RGB(144, 80,  0), TX_RGB(  0, 96,128) }, /* purple, ochre, dark cyan-blue */
+    { TX_RGB(  0,128, 64), TX_RGB(128,  0, 32), TX_RGB( 64, 64,160) }, /* forest, crimson, royal blue */
+    { TX_RGB(128, 48, 96), TX_RGB( 32,112, 80), TX_RGB(144, 96,  0) }  /* plum, jade, dark gold */
+};
+
+static tx_rgb_t tx_text_top    = TX_RGB(255,0,0);
+static tx_rgb_t tx_text_middle = TX_RGB(255,0,0);
+static tx_rgb_t tx_text_bottom = TX_RGB(255,0,0);
+
+static void tx_draw_text_aligned_color(uint8_t *rgb, unsigned int w, unsigned int h,
+                                       int y, const char *text, int scale,
+                                       tx_text_align_t align, tx_rgb_t color)
+{
+    if (!text || !*text) return;
+    int tw=tx_text_width(text,scale);
+    while (scale>1 && tw>(int)w-8) {
+        scale--;
+        tw=tx_text_width(text,scale);
+    }
+
+    const int margin=15;
+    int x0;
+    if (align==TX_TEXT_ALIGN_LEFT)
+        x0=margin;
+    else if (align==TX_TEXT_ALIGN_RIGHT)
+        x0=(int)w-tw-margin;
+    else
+        x0=((int)w-tw)/2;
+
+    if (x0<0) x0=0;
+
+    for (int pass=0;pass<2;++pass) {
+        for (size_t ci=0;text[ci];++ci) {
+            const uint8_t *g=tx_glyph5x7(text[ci]);
+            int gx=x0+(int)ci*6*scale;
+            for (int x=0;x<5;x++) for (int yy=0;yy<7;yy++) {
+                if (!(g[x]&(1u<<yy))) continue;
+                for (int sy=0;sy<scale;sy++) for (int sx=0;sx<scale;sx++) {
+                    int px=gx+x*scale+sx,py=y+yy*scale+sy;
+                    if (pass==0) {
+                        for (int oy=-4;oy<=4;oy++)
+                            for (int ox=-4;ox<=4;ox++)
+                                if (ox*ox+oy*oy<=17)
+                                    tx_rgb_pixel(rgb,w,h,px+ox,py+oy,0,0,0);
+                    } else {
+                        tx_rgb_pixel(rgb,w,h,px,py,color.r,color.g,color.b);
+                        tx_rgb_pixel(rgb,w,h,px+1,py,color.r,color.g,color.b);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* Middle template text: slightly smaller than top/bottom and automatically
+ * wrapped at a word boundary to at most two centered lines. */
+static void tx_draw_middle_wrapped(uint8_t *rgb, unsigned int w, unsigned int h,
+                                   const char *text)
+{
+    if (!text || !*text) return;
+    int scale=(w<=160)?2:3;
+    int max_chars=((int)w-12)/(6*scale);
+    if (max_chars < 4) max_chars=4;
+
+    char line1[256]={0}, line2[256]={0};
+    size_t len=strlen(text);
+    if ((int)len <= max_chars) {
+        snprintf(line1,sizeof(line1),"%s",text);
+    } else {
+        int cut=max_chars;
+        while (cut>0 && text[cut]!=' ') cut--;
+        if (cut==0) cut=max_chars;
+        snprintf(line1,sizeof(line1),"%.*s",cut,text);
+        const char *p=text+cut;
+        while (*p==' ') p++;
+        snprintf(line2,sizeof(line2),"%.*s",max_chars,p);
+    }
+
+    int text_h=7*scale;
+    int gap=scale+4;
+    int total=line2[0] ? text_h*2+gap : text_h;
+    int y=((int)h-total)/2;
+    if (tx_message_type == SSTV_TX_MESSAGE_REPLAY)
+        y -= (int)h * 34 / 256;
+    if (y < 5) y = 5;
+    tx_draw_text_aligned_color(rgb,w,h,y,line1,scale,
+                               TX_TEXT_ALIGN_CENTER,tx_text_middle);
+    if (line2[0])
+        tx_draw_text_aligned_color(rgb,w,h,y+text_h+gap,line2,scale,
+                                   TX_TEXT_ALIGN_CENTER,tx_text_middle);
+}
+
+static void tx_save_rx_canvas(void)
+{
+    memcpy(tx_saved_rx_canvas, sstv_buffer, sizeof(tx_saved_rx_canvas));
+    tx_saved_rx_canvas_valid = true;
+}
+
+static void tx_restore_rx_canvas(void)
+{
+    if (!tx_saved_rx_canvas_valid || !sstv_canvas) return;
+    memcpy(sstv_buffer, tx_saved_rx_canvas, sizeof(tx_saved_rx_canvas));
+    lv_obj_invalidate(sstv_canvas);
+}
+
+static void tx_rebuild_current_overlay(void)
+{
+    if (!tx_picture_width || !tx_picture_height) return;
+
+    switch (tx_phase) {
+        case SSTV_TX_PHASE_SELECT_PICTURE:
+            memcpy(tx_final_rgb,tx_picture_rgb,
+                   (size_t)tx_picture_width*tx_picture_height*3);
+            break;
+        case SSTV_TX_PHASE_SELECT_TYPE:
+            /* Initial action phase: never replace the received image. */
+            tx_restore_rx_canvas();
+            return;
+        case SSTV_TX_PHASE_SELECT_TEMPLATE:
+            tx_template_render();
+            break;
+        case SSTV_TX_PHASE_SELECT_COLORS:
+            if (tx_message_type == SSTV_TX_MESSAGE_CQ) tx_build_final_frame(true);
+            else tx_template_render();
+            break;
+        default:
+            memcpy(tx_final_rgb,tx_picture_rgb,
+                   (size_t)tx_picture_width*tx_picture_height*3);
+            break;
+    }
+    tx_picture_render_preview();
+}
+
+static void tx_build_final_frame(bool cq_overlay)
+{
+    if (!tx_picture_width || !tx_picture_height) return;
+    size_t bytes=(size_t)tx_picture_width*tx_picture_height*3;
+    memcpy(tx_final_rgb, tx_picture_rgb, bytes);
+
+    if (cq_overlay) {
+        int scale=(tx_picture_width<=160)?2:3;
+        int text_h=7*scale;
+        tx_draw_text_aligned_color(tx_final_rgb,tx_picture_width,tx_picture_height,
+                                   5,"CQ CQ SSTV",scale,TX_TEXT_ALIGN_LEFT,
+                                   tx_text_top);
+        /* Middle line intentionally empty. */
+        tx_draw_text_aligned_color(tx_final_rgb,tx_picture_width,tx_picture_height,
+                                   (int)tx_picture_height-text_h-5,params.callsign.x,
+                                   scale,TX_TEXT_ALIGN_RIGHT,tx_text_bottom);
+    }
+}
+
+static void tx_picture_render_preview(void)
+{
+    if (!sstv_canvas || tx_picture_width == 0 || tx_picture_height == 0)
+        return;
+
+    lv_canvas_fill_bg(sstv_canvas, lv_color_black(), LV_OPA_COVER);
+
+    int out_w = SSTV_IMAGE_W;
+    int out_h = (int)((uint64_t)tx_picture_height * out_w / tx_picture_width);
+    if (out_h > SSTV_IMAGE_H) {
+        out_h = SSTV_IMAGE_H;
+        out_w = (int)((uint64_t)tx_picture_width * out_h / tx_picture_height);
+    }
+    int x0 = (SSTV_IMAGE_W - out_w) / 2;
+    int y0 = (SSTV_IMAGE_H - out_h) / 2;
+
+    for (int y = 0; y < out_h; ++y) {
+        unsigned int sy = (unsigned int)((uint64_t)y * tx_picture_height / out_h);
+        for (int x = 0; x < out_w; ++x) {
+            unsigned int sx = (unsigned int)((uint64_t)x * tx_picture_width / out_w);
+            size_t o = ((size_t)sy * tx_picture_width + sx) * 3;
+            lv_canvas_set_px(sstv_canvas, x0 + x, y0 + y,
+                             lv_color_make(tx_final_rgb[o],
+                                           tx_final_rgb[o + 1],
+                                           tx_final_rgb[o + 2]));
+        }
+    }
+    lv_obj_invalidate(sstv_canvas);
+}
+
+static void tx_picture_schedule_preview(void)
+{
+    if (!tx_picture_table || tx_picture_file_count == 0)
+        return;
+
+    int16_t row = LV_TABLE_CELL_NONE, col = LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(tx_picture_table, &row, &col);
+    if (row == LV_TABLE_CELL_NONE || row < 0 ||
+        (size_t)row >= tx_picture_file_count)
+        return;
+
+    tx_picture_pending = row;
+    tx_picture_pending_since_ms = tx_now_ms();
+}
+
+static void tx_picture_selection_changed_cb(lv_event_t *e)
+{
+    (void)e;
+    if (tx_ui_state == SSTV_TX_UI_SETUP &&
+        tx_phase == SSTV_TX_PHASE_SELECT_PICTURE)
+        tx_picture_schedule_preview();
+}
+
+static void tx_picture_pressed_cb(lv_event_t *e)
+{
+    (void)e;
+    if (tx_ui_state != SSTV_TX_UI_SETUP ||
+        tx_phase != SSTV_TX_PHASE_SELECT_PICTURE ||
+        tx_picture_file_count == 0)
+        return;
+
+    int16_t row = LV_TABLE_CELL_NONE, col = LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(tx_picture_table, &row, &col);
+    if (row == LV_TABLE_CELL_NONE || row < 0 ||
+        (size_t)row >= tx_picture_file_count)
+        return;
+
+    /* A quick rotate+press must confirm the picture currently highlighted,
+     * even if the 300 ms preview debounce has not expired yet. */
+    tx_picture_pending = row;
+    if (tx_picture_selected != row) {
+        if (!tx_picture_load_and_prepare(tx_picture_files[row]))
+            return;
+        tx_picture_selected = row;
+        tx_picture_render_preview();
+    }
+
+    snprintf(tx_last_picture_file,sizeof(tx_last_picture_file),"%s",
+             tx_picture_files[row]);
+
+    lv_group_remove_obj(tx_picture_table);
+    lv_obj_add_flag(tx_picture_table, LV_OBJ_FLAG_HIDDEN);
+
+    fprintf(stderr, "SSTV TX UI: picture confirmed: %s\n", tx_picture_name);
+    if (tx_message_type == SSTV_TX_MESSAGE_IMAGE_ONLY) {
+        size_t bytes=(size_t)tx_picture_width*tx_picture_height*3;
+        memcpy(tx_final_rgb,tx_picture_rgb,bytes);
+        tx_picture_render_preview();
+        tx_picture_selector_destroy();
+        tx_instruction_hide();
+        lv_group_add_obj(keyboard_group,sstv_canvas);
+        lv_group_focus_obj(sstv_canvas);
+        lv_group_set_editing(keyboard_group,true);
+        if (status_label) lv_obj_clear_flag(status_label,LV_OBJ_FLAG_HIDDEN);
+        fprintf(stderr,"SSTV TX UI: IMAGE ONLY picture confirmed -> RF\n");
+        tx_start_final_rf();
+        return;
+    }
+    if (tx_message_type == SSTV_TX_MESSAGE_CQ) {
+        tx_build_final_frame(true);
+        tx_picture_render_preview();
+        tx_phase = SSTV_TX_PHASE_SELECT_COLORS;
+        tx_color_selector_build();
+        fprintf(stderr, "SSTV TX UI: CQ picture confirmed -> colors\n");
+    } else {
+        tx_phase = SSTV_TX_PHASE_SELECT_TEMPLATE;
+        tx_template_selector_build();
+        fprintf(stderr, "SSTV TX UI: REPLY picture confirmed -> templates\n");
+    }
+}
+
+static void tx_picture_load_pending_preview(void)
+{
+    if (tx_picture_pending < 0 ||
+        tx_picture_pending == tx_picture_selected ||
+        (size_t)tx_picture_pending >= tx_picture_file_count)
+        return;
+
+    if (tx_now_ms() - tx_picture_pending_since_ms <
+        SSTV_TX_PICTURE_DEBOUNCE_MS)
+        return;
+
+    int row = tx_picture_pending;
+    if (tx_picture_load_and_prepare(tx_picture_files[row])) {
+        tx_picture_selected = row;
+        tx_picture_render_preview();
+    }
+}
+
+
+static void tx_type_selector_destroy(void)
+{
+    if (tx_type_table) {
+        lv_group_remove_obj(tx_type_table);
+        lv_obj_del(tx_type_table);
+        tx_type_table = NULL;
+    }
+}
+
+
+static void tx_template_free_files(void)
+{
+    for (size_t i=0;i<tx_template_file_count;i++) free(tx_template_files[i]);
+    free(tx_template_files);
+    tx_template_files=NULL;
+    tx_template_file_count=0;
+    tx_template_file_capacity=0;
+}
+
+static int tx_template_name_compare(const void *a,const void *b)
+{
+    return strcasecmp(*(const char * const *)a,*(const char * const *)b);
+}
+
+static void tx_template_refresh(void)
+{
+    tx_template_free_files();
+    DIR *dir=opendir(SSTV_TX_TEXT_DIR);
+    if (!dir) return;
+    struct dirent *entry;
+    while ((entry=readdir(dir))!=NULL) {
+        const char *name=entry->d_name;
+        size_t len=strlen(name);
+        if (name[0]=='.' || len<9 || strcmp(name+len-8,".sstvtxt")!=0) continue;
+        if (tx_template_file_count==tx_template_file_capacity) {
+            size_t nc=tx_template_file_capacity?tx_template_file_capacity*2:16;
+            char **p=realloc(tx_template_files,nc*sizeof(*p));
+            if (!p) break;
+            tx_template_files=p; tx_template_file_capacity=nc;
+        }
+        char *copy=strdup(name);
+        if (copy) tx_template_files[tx_template_file_count++]=copy;
+    }
+    closedir(dir);
+    qsort(tx_template_files,tx_template_file_count,sizeof(tx_template_files[0]),
+          tx_template_name_compare);
+}
+
+static bool tx_json_string(const char *json,const char *key,char *out,size_t outsz)
+{
+    out[0]='\0';
+    char pat[64];
+    snprintf(pat,sizeof(pat),"\"%s\"",key);
+    const char *p=strstr(json,pat);
+    if (!p) return true; /* missing is allowed */
+    p=strchr(p+strlen(pat),':');
+    if (!p) return false;
+    p++;
+    while (*p==' '||*p=='\t'||*p=='\r'||*p=='\n') p++;
+    if (!strncmp(p,"null",4)) return true;
+    if (*p!='"') return false;
+    p++;
+    size_t n=0;
+    while (*p && *p!='"') {
+        char c=*p++;
+        if (c=='\\' && *p) {
+            char e=*p++;
+            if (e=='n') c=' ';
+            else if (e=='t') c=' ';
+            else if (e=='"'||e=='\\'||e=='/') c=e;
+            else c=e;
+        }
+        if (n+1<outsz) out[n++]=c;
+    }
+    if (*p!='"') return false;
+    out[n]='\0';
+    return true;
+}
+
+static bool tx_template_load(const char *filename)
+{
+    char path[512];
+    snprintf(path,sizeof(path),"%s/%s",SSTV_TX_TEXT_DIR,filename);
+    FILE *fp=fopen(path,"rb");
+    if (!fp) return false;
+    if (fseek(fp,0,SEEK_END)!=0) { fclose(fp); return false; }
+    long sz=ftell(fp);
+    if (sz<0 || sz>16384) { fclose(fp); return false; }
+    rewind(fp);
+    char *json=malloc((size_t)sz+1);
+    if (!json) { fclose(fp); return false; }
+    size_t got=fread(json,1,(size_t)sz,fp);
+    fclose(fp);
+    json[got]='\0';
+    bool ok=tx_json_string(json,"middle",tx_template_middle,sizeof(tx_template_middle)) &&
+            tx_json_string(json,"bottom",tx_template_bottom,sizeof(tx_template_bottom));
+    free(json);
+    return ok;
+}
+
+static void tx_replay_draw_rx_thumbnail(uint8_t *rgb,
+                                        unsigned int w, unsigned int h)
+{
+    if (!rgb || !w || !h || !tx_saved_rx_canvas_valid) return;
+
+    /* About 96x72 on a 320x256 TX frame.  Scale with the selected picture
+     * and keep the saved RX canvas aspect ratio. */
+    int thumb_w=(int)w*96/320;
+    if (thumb_w < 48) thumb_w=48;
+    int thumb_h=(int)((int64_t)thumb_w*SSTV_CANVAS_H/SSTV_CANVAS_W);
+
+    /* Leave room for the bottom line. */
+    int bottom_reserved=(w<=160)?24:38;
+    /* Place the replay thumbnail 15 px from the left edge on a 320 px frame.
+     * Move it 3 px upward to make room for the 3 px black border below. */
+    int x0=(int)w*15/320;
+    int y0=(int)h*135/256 - 3;
+    if (y0+thumb_h+3 > (int)h-bottom_reserved)
+        y0=(int)h-bottom_reserved-thumb_h-3;
+    if (y0<3) y0=3;
+
+    for (int y=0;y<thumb_h;y++) {
+        int sy=(int)((int64_t)y*SSTV_CANVAS_H/thumb_h);
+        for (int x=0;x<thumb_w;x++) {
+            int sx=(int)((int64_t)x*SSTV_CANVAS_W/thumb_w);
+            uint32_t c=lv_color_to32(
+                tx_saved_rx_canvas[(size_t)sy*SSTV_CANVAS_W+sx]);
+            tx_rgb_pixel(rgb,w,h,x0+x,y0+y,
+                         (uint8_t)((c>>16)&0xff),
+                         (uint8_t)((c>>8)&0xff),
+                         (uint8_t)(c&0xff));
+        }
+    }
+
+    /* Solid 3 px black border around the replay thumbnail. */
+    for (int b=1;b<=3;b++) {
+        for (int x=-b;x<thumb_w+b;x++) {
+            tx_rgb_pixel(rgb,w,h,x0+x,y0-b,0,0,0);
+            tx_rgb_pixel(rgb,w,h,x0+x,y0+thumb_h-1+b,0,0,0);
+        }
+        for (int y=-b;y<thumb_h+b;y++) {
+            tx_rgb_pixel(rgb,w,h,x0-b,y0+y,0,0,0);
+            tx_rgb_pixel(rgb,w,h,x0+thumb_w-1+b,y0+y,0,0,0);
+        }
+    }
+}
+
+static void tx_template_render(void)
+{
+    if (!tx_picture_width || !tx_picture_height) return;
+    memcpy(tx_final_rgb,tx_picture_rgb,
+           (size_t)tx_picture_width*tx_picture_height*3);
+
+    int outer_scale=(tx_picture_width<=160)?2:3;
+    tx_draw_text_aligned_color(tx_final_rgb,tx_picture_width,tx_picture_height,5,
+                               tx_target_callsign[0] ? tx_target_callsign : "<TARGET CALLSIGN>",
+                               outer_scale,TX_TEXT_ALIGN_LEFT,tx_text_top);
+
+    tx_draw_middle_wrapped(tx_final_rgb,tx_picture_width,tx_picture_height,
+                           tx_template_middle);
+
+    if (tx_message_type == SSTV_TX_MESSAGE_REPLAY)
+        tx_replay_draw_rx_thumbnail(tx_final_rgb,tx_picture_width,tx_picture_height);
+
+    char bottom[256];
+    if (tx_template_bottom[0])
+        snprintf(bottom,sizeof(bottom),"%s%s",tx_template_bottom,params.callsign.x);
+    else
+        snprintf(bottom,sizeof(bottom),"%s",params.callsign.x);
+    int scale=(tx_picture_width<=160)?2:3;
+    tx_draw_text_aligned_color(tx_final_rgb,tx_picture_width,tx_picture_height,
+                               (int)tx_picture_height-7*scale-5,bottom,
+                               scale,TX_TEXT_ALIGN_RIGHT,tx_text_bottom);
+}
+
+static void tx_template_render_selected(void)
+{
+    if (!tx_template_table || !tx_template_file_count) return;
+    int16_t row=LV_TABLE_CELL_NONE,col=LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(tx_template_table,&row,&col);
+    if (row==LV_TABLE_CELL_NONE || row<0 || (size_t)row>=tx_template_file_count) return;
+    if (!tx_template_load(tx_template_files[row])) {
+        fprintf(stderr,"SSTV TX UI: invalid template %s\n",tx_template_files[row]);
+        return;
+    }
+    tx_template_render();
+    tx_picture_render_preview();
+}
+
+static void tx_template_selection_changed_cb(lv_event_t *e)
+{
+    (void)e;
+    if (tx_ui_state==SSTV_TX_UI_SETUP &&
+        tx_phase==SSTV_TX_PHASE_SELECT_TEMPLATE)
+        tx_template_preview_pending=true;
+}
+
+static void tx_template_pressed_cb(lv_event_t *e)
+{
+    (void)e;
+    if (tx_ui_state!=SSTV_TX_UI_SETUP ||
+        tx_phase!=SSTV_TX_PHASE_SELECT_TEMPLATE || !tx_template_file_count) return;
+    tx_template_preview_pending=false;
+    tx_template_render_selected();
+
+    int16_t row=LV_TABLE_CELL_NONE,col=LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(tx_template_table,&row,&col);
+    if (row==LV_TABLE_CELL_NONE || row<0 || (size_t)row>=tx_template_file_count) return;
+    char shown[256];
+    snprintf(shown,sizeof(shown),"%s",tx_template_files[row]);
+    size_t n=strlen(shown); if(n>=8) shown[n-8]='\0';
+
+    fprintf(stderr,"SSTV TX UI: template confirmed: %s\n",shown);
+    tx_template_selector_destroy();
+    /* Preserve REPLAY; normal non-CQ traffic remains REPLY. */
+    if (tx_message_type != SSTV_TX_MESSAGE_REPLAY)
+        tx_message_type=SSTV_TX_MESSAGE_REPLY;
+    tx_phase=SSTV_TX_PHASE_SELECT_COLORS;
+    tx_color_selector_build();
+}
+
+static void tx_template_selector_destroy(void)
+{
+    tx_template_preview_pending=false;
+    if (tx_template_table) {
+        lv_group_remove_obj(tx_template_table);
+        lv_obj_del(tx_template_table);
+        tx_template_table=NULL;
+    }
+    tx_template_free_files();
+}
+
+static void tx_template_selector_build(void)
+{
+    tx_template_selector_destroy();
+    tx_template_refresh();
+    if(status_label) lv_obj_add_flag(status_label,LV_OBJ_FLAG_HIDDEN);
+    tx_instruction_show("TX TEXT", SSTV_TX_HINT);
+
+    tx_template_table=tx_list_create(1);
+
+    if (!tx_template_file_count) {
+        lv_table_set_cell_value(tx_template_table,0,0,"No TX templates found");
+        lv_group_add_obj(keyboard_group,sstv_canvas);
+        lv_group_focus_obj(sstv_canvas);
+        lv_group_set_editing(keyboard_group,true);
+        return;
+    }
+
+    lv_table_set_row_cnt(tx_template_table,(uint16_t)tx_template_file_count);
+    for(size_t i=0;i<tx_template_file_count;i++) {
+        char shown[256];
+        snprintf(shown,sizeof(shown),"%s",tx_template_files[i]);
+        size_t n=strlen(shown); if(n>=8) shown[n-8]='\0';
+        lv_table_set_cell_value(tx_template_table,(uint16_t)i,0,shown);
+    }
+    lv_obj_add_event_cb(tx_template_table,tx_template_selection_changed_cb,
+                        LV_EVENT_VALUE_CHANGED,NULL);
+    lv_obj_add_event_cb(tx_template_table,tx_template_pressed_cb,
+                        LV_EVENT_PRESSED,NULL);
+    lv_group_remove_obj(sstv_canvas);
+    lv_group_add_obj(keyboard_group,tx_template_table);
+    lv_group_focus_obj(tx_template_table);
+    lv_group_set_editing(keyboard_group,true);
+    tx_template_preview_pending=true;
+}
+
+
+static bool tx_target_keyboard_cancel_cb(void)
+{
+    textarea_window_close();
+    tx_type_selector_build();
+    return true;
+}
+
+static bool tx_target_keyboard_ok_cb(void)
+{
+    const char *value=textarea_window_get();
+    if (value) {
+        while (*value==' ' || *value=='\t') value++;
+        snprintf(tx_target_callsign,sizeof(tx_target_callsign),"%s",value);
+        size_t n=strlen(tx_target_callsign);
+        while (n && (tx_target_callsign[n-1]==' ' ||
+                     tx_target_callsign[n-1]=='\t')) tx_target_callsign[--n]='\0';
+        for (size_t i=0;tx_target_callsign[i];i++) {
+            if (tx_target_callsign[i]>='a' && tx_target_callsign[i]<='z')
+                tx_target_callsign[i]-=('a'-'A');
+        }
+    }
+    textarea_window_close();
+    tx_type_selector_build();
+    return true;
+}
+
+static lv_obj_t *tx_find_keyboard_recursive(lv_obj_t *parent)
+{
+    if (!parent) return NULL;
+    if (lv_obj_check_type(parent,&lv_keyboard_class)) return parent;
+
+    uint32_t count=lv_obj_get_child_cnt(parent);
+    for (uint32_t i=0;i<count;i++) {
+        lv_obj_t *found=tx_find_keyboard_recursive(lv_obj_get_child(parent,i));
+        if (found) return found;
+    }
+    return NULL;
+}
+
+static void tx_target_keyboard_force_lower(void)
+{
+    if (!tx_target_keyboard_obj)
+        tx_target_keyboard_obj=tx_find_keyboard_recursive(lv_scr_act());
+
+    if (tx_target_keyboard_obj &&
+        lv_obj_is_valid(tx_target_keyboard_obj)) {
+        lv_keyboard_set_mode(tx_target_keyboard_obj,
+                             LV_KEYBOARD_MODE_TEXT_LOWER);
+    } else {
+        tx_target_keyboard_obj=NULL;
+    }
+}
+
+static void tx_target_keyboard_open_now(void)
+{
+    /* Same opening path used by the stock CALLSIGN dialog.
+     * textarea_window_open() itself selects LV_KEYBOARD_MODE_TEXT_UPPER. */
+    textarea_window_open(tx_target_keyboard_ok_cb,tx_target_keyboard_cancel_cb);
+
+    /* Keep the actual LVGL keyboard object.  Some front-panel events arrive
+     * after the window is created and can change its page, so Phase 4 keeps
+     * forcing TEXT_LOWER for the first 500 ms after opening. */
+    tx_target_keyboard_obj=tx_find_keyboard_recursive(lv_scr_act());
+    tx_target_keyboard_force_until=lv_tick_get()+500;
+    tx_target_keyboard_force_lower();
+
+    lv_obj_t *text=textarea_window_text();
+    lv_textarea_set_accepted_chars(text,
+        "0123456789/"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz");
+    lv_textarea_set_max_length(text,sizeof(tx_target_callsign)-1);
+    lv_textarea_set_placeholder_text(text,"Target callsign");
+    textarea_window_set(tx_target_callsign);
+}
+
+
+
+static void tx_color_apply(int row)
+{
+    if (row<0 || row>=20) row=0;
+    tx_color_selected=row;
+    tx_last_color_selected=row;
+    tx_text_top=tx_color_combos[row].top;
+    tx_text_middle=tx_color_combos[row].middle;
+    tx_text_bottom=tx_color_combos[row].bottom;
+}
+
+static void tx_color_render_selected(void)
+{
+    if (!tx_color_table) return;
+    int16_t row=LV_TABLE_CELL_NONE,col=LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(tx_color_table,&row,&col);
+    if (row==LV_TABLE_CELL_NONE || row<0 || row>=20) return;
+    tx_color_apply(row);
+    if (tx_message_type == SSTV_TX_MESSAGE_CQ) tx_build_final_frame(true);
+    else tx_template_render();
+    tx_picture_render_preview();
+}
+
+static void tx_color_selection_changed_cb(lv_event_t *e)
+{
+    (void)e;
+    if (tx_ui_state==SSTV_TX_UI_SETUP &&
+        tx_phase==SSTV_TX_PHASE_SELECT_COLORS) {
+        tx_color_preview_pending=true;
+        tx_color_preview_since_ms=lv_tick_get();
+    }
+}
+
+
+static void tx_return_to_auto_rx(void)
+{
+    tx_ui_state=SSTV_TX_UI_RX;
+    tx_phase=SSTV_TX_PHASE_NONE;
+    btn_tx.label="TX";
+    snprintf(tx_mode_label,sizeof(tx_mode_label),"RX Mode\n%s",cont_mode_name(cont_mode));
+    btn_cont_mode.label=tx_mode_label;
+
+    pthread_mutex_lock(&live_mutex);
+    live_enabled=true;
+    live_capturing=false;
+    live_decode_pending=false;
+    live_ring_pos=live_ring_count=0;
+    live_since_check=0;
+    live_wait_samples=live_wait_log_mark=0;
+    free(live_samples);
+    live_samples=NULL;
+    live_written=live_target=0;
+    pthread_mutex_unlock(&live_mutex);
+
+    set_receiver_ui_listening();
+    tx_restore_rx_canvas();
+    if (btn_tx.disp_btn) buttons_refresh(&btn_tx);
+    if (btn_cont_mode.disp_btn) buttons_refresh(&btn_cont_mode);
+    update_rx_controls();
+}
+
+static bool tx_start_final_rf_mode(sstv_mode_t mode)
+{
+    if (!tx_picture_width || !tx_picture_height) {
+        set_status("SSTV TX: no final image.");
+        return false;
+    }
+
+    /* The encoder consumes this exact composed framebuffer.  It is already at
+     * the selected mode's native geometry, so the encoder's PNG import does
+     * not change the WYSIWYG composition. */
+    if (!save_tx_png(SSTV_TX_PNG,tx_final_rgb,
+                     tx_picture_width,tx_picture_height)) {
+        set_status("SSTV TX: cannot prepare image.");
+        return false;
+    }
+
+    if (tx_thread_valid) {
+        pthread_join(tx_thread,NULL);
+        tx_thread_valid=false;
+    }
+
+    /* Snapshot the requested mode now.  Normal TX passes cont_mode;
+     * REPEAT LAST TX passes the mode stored with the successful backup. */
+    tx_mode=mode;
+    tx_abort=false;
+    tx_started=false;
+    tx_key_time_valid=false;
+    tx_progress=0;
+    tx_result=0;
+    tx_running=true;
+
+    tx_ui_state=SSTV_TX_UI_RF;
+    tx_phase=SSTV_TX_PHASE_NONE;
+    btn_tx.label="Halt TX";
+    snprintf(tx_mode_label,sizeof(tx_mode_label),"TX Mode\n%s",cont_mode_name(tx_mode));
+    btn_cont_mode.label=tx_mode_label;
+
+    if (status_label) lv_obj_clear_flag(status_label,LV_OBJ_FLAG_HIDDEN);
+    {
+        char msg[96];
+        snprintf(msg,sizeof(msg),"Preparing %s TX...",cont_mode_name(tx_mode));
+        set_status(msg);
+    }
+    if (progress_bar) {
+        lv_bar_set_value(progress_bar,0,LV_ANIM_OFF);
+        lv_obj_clear_flag(progress_bar,LV_OBJ_FLAG_HIDDEN);
+    }
+    if (btn_tx.disp_btn) buttons_refresh(&btn_tx);
+    if (btn_cont_mode.disp_btn) buttons_refresh(&btn_cont_mode);
+    update_rx_controls();
+
+    int rc=pthread_create(&tx_thread,NULL,tx_thread_cb,NULL);
+    if (rc != 0) {
+        fprintf(stderr,"SSTV TX: pthread_create failed: %d\n",rc);
+        tx_running=false;
+        tx_result=-31;
+        set_status("SSTV TX: thread creation failed.");
+        if (progress_bar) lv_obj_add_flag(progress_bar,LV_OBJ_FLAG_HIDDEN);
+        tx_return_to_auto_rx();
+        return false;
+    }
+
+    tx_thread_valid=true;
+    fprintf(stderr,"SSTV TX: interactive RF start %s, colors=%d, type=%s\n",
+            cont_mode_name(tx_mode),tx_color_selected+1,
+            tx_message_type == SSTV_TX_MESSAGE_CQ ? "CQ" :
+            (tx_message_type == SSTV_TX_MESSAGE_REPLAY ? "REPLAY" :
+             (tx_message_type == SSTV_TX_MESSAGE_IMAGE_ONLY ? "IMAGE ONLY" :
+              (tx_message_type == SSTV_TX_MESSAGE_REPEAT_LAST ? "REPEAT LAST" : "REPLY"))));
+    return true;
+}
+
+static bool tx_start_final_rf(void)
+{
+    return tx_start_final_rf_mode(cont_mode);
+}
+
+static void tx_color_pressed_cb(lv_event_t *e)
+{
+    (void)e;
+    if (tx_ui_state!=SSTV_TX_UI_SETUP ||
+        tx_phase!=SSTV_TX_PHASE_SELECT_COLORS || !tx_color_table) return;
+
+    /* Confirm exactly the highlighted row even if deferred preview has not run. */
+    tx_color_preview_pending=false;
+    tx_color_preview_since_ms=0;
+    tx_color_render_selected();
+
+    tx_color_selector_destroy();
+    tx_instruction_hide();
+    lv_group_add_obj(keyboard_group,sstv_canvas);
+    lv_group_focus_obj(sstv_canvas);
+    lv_group_set_editing(keyboard_group,true);
+    if (status_label) lv_obj_clear_flag(status_label,LV_OBJ_FLAG_HIDDEN);
+
+    /* Phase 5 is the single RF launch point for both CQ and REPLY. */
+    tx_start_final_rf();
+}
+
+static void tx_color_draw_cb(lv_event_t *e)
+{
+    lv_obj_draw_part_dsc_t *d=lv_event_get_draw_part_dsc(e);
+    if (!d || d->part!=LV_PART_ITEMS || d->id<0 || d->id>=20 || !d->draw_area)
+        return;
+
+    /* Table cell text is deliberately blank; draw three color swatches. */
+    const tx_color_combo_t *c=&tx_color_combos[d->id];
+    tx_rgb_t colors[3]={c->top,c->middle,c->bottom};
+    lv_area_t a=*d->draw_area;
+    int box=22, gap=10;
+    int total=3*box+2*gap;
+    int x=a.x1+(lv_area_get_width(&a)-total)/2;
+    int y=a.y1+(lv_area_get_height(&a)-box)/2;
+
+    for (int i=0;i<3;i++) {
+        lv_draw_rect_dsc_t rd;
+        lv_draw_rect_dsc_init(&rd);
+        rd.bg_opa=LV_OPA_COVER;
+        rd.bg_color=lv_color_make(colors[i].r,colors[i].g,colors[i].b);
+        rd.border_width=2;
+        rd.border_opa=LV_OPA_COVER;
+        rd.border_color=lv_color_black();
+        lv_area_t r={x+i*(box+gap),y,x+i*(box+gap)+box-1,y+box-1};
+        lv_draw_rect(d->draw_ctx,&rd,&r);
+    }
+}
+
+static void tx_color_selector_destroy(void)
+{
+    tx_color_preview_pending=false;
+    tx_color_preview_since_ms=0;
+    if (tx_color_table) {
+        lv_group_remove_obj(tx_color_table);
+        lv_obj_del(tx_color_table);
+        tx_color_table=NULL;
+    }
+}
+
+static void tx_color_selector_build(void)
+{
+    tx_color_selector_destroy();
+    if (status_label) lv_obj_add_flag(status_label,LV_OBJ_FLAG_HIDDEN);
+
+    tx_instruction_show("TEXT COLORS", "MFK: choose - press: start the transmission - Cancel TX: back");
+
+    /* The style is set before the rows are filled: LVGL sizes the rows then */
+    tx_color_table=tx_list_create(20);
+
+    /* Blank rows; the DRAW_PART callback paints three swatches per row. */
+    for (int i=0;i<20;i++)
+        lv_table_set_cell_value(tx_color_table,i,0," ");
+
+    lv_obj_add_event_cb(tx_color_table,tx_color_draw_cb,LV_EVENT_DRAW_PART_END,NULL);
+    lv_obj_add_event_cb(tx_color_table,tx_color_selection_changed_cb,
+                        LV_EVENT_VALUE_CHANGED,NULL);
+    lv_obj_add_event_cb(tx_color_table,tx_color_pressed_cb,
+                        LV_EVENT_PRESSED,NULL);
+
+    lv_group_remove_obj(sstv_canvas);
+    lv_group_add_obj(keyboard_group,tx_color_table);
+    lv_group_focus_obj(tx_color_table);
+    lv_group_set_editing(keyboard_group,true);
+
+    /* Restore the last color-combination row used in this runtime.  This
+     * LVGL version has no lv_table_set_selected_cell(), so drive the table
+     * through the same key events used by MFK; LVGL also scrolls it into view. */
+    int initial_row=tx_last_color_selected;
+    if (initial_row<0 || initial_row>=20) initial_row=0;
+    int16_t selected_row=LV_TABLE_CELL_NONE, selected_col=LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(tx_color_table,&selected_row,&selected_col);
+    if (selected_row==LV_TABLE_CELL_NONE) {
+        uint32_t key=LV_KEY_DOWN;
+        lv_event_send(tx_color_table,LV_EVENT_KEY,&key);
+        lv_table_get_selected_cell(tx_color_table,&selected_row,&selected_col);
+    }
+    while (selected_row!=LV_TABLE_CELL_NONE && selected_row<initial_row) {
+        uint32_t key=LV_KEY_DOWN;
+        lv_event_send(tx_color_table,LV_EVENT_KEY,&key);
+        lv_table_get_selected_cell(tx_color_table,&selected_row,&selected_col);
+    }
+    tx_color_apply(initial_row);
+    tx_color_preview_pending=true;
+    tx_color_preview_since_ms=lv_tick_get()-300;
+}
+
+static void tx_type_draw_cb(lv_event_t *e)
+{
+    lv_obj_draw_part_dsc_t *d=lv_event_get_draw_part_dsc(e);
+    if (!d || d->part!=LV_PART_ITEMS || !d->label_dsc) return;
+    if (((d->id==1 || d->id==2) && !tx_target_callsign[0]) ||
+        (d->id==4 && !tx_last_valid))
+        d->label_dsc->color=lv_palette_main(LV_PALETTE_GREY);
+}
+
+static void tx_type_update_help(void)
+{
+    if (!tx_type_table || !frame.status) return;
+
+    int16_t row=LV_TABLE_CELL_NONE,col=LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(tx_type_table,&row,&col);
+
+    /* One line in the status line of the app look */
+    const char *text=SSTV_TX_HINT;
+    switch (row) {
+        case 0:
+            text="A picture, then CQ CQ SSTV and your callsign on it";
+            break;
+        case 1:
+            text=tx_target_callsign[0]
+                ? "A picture and a text template, with the target callsign"
+                : "Set the target callsign first";
+            break;
+        case 2:
+            text=tx_target_callsign[0]
+                ? "As Reply, with a miniature of the last received picture"
+                : "Set the target callsign first";
+            break;
+        case 3:
+            text="A picture, sent without any text";
+            break;
+        case 4:
+            text=tx_last_valid
+                ? "The last transmission again, same picture and mode"
+                : "No transmission to repeat yet";
+            break;
+        case 5:
+            text="It goes in the text of Reply and Replay";
+            break;
+        default:
+            break;
+    }
+
+    lv_label_set_text(frame.status,text);
+}
+
+static void tx_type_selection_changed_cb(lv_event_t *e)
+{
+    (void)e;
+    /* Remember the selected initial TX action for the next TX entry. */
+    if (tx_type_table) {
+        int16_t row=LV_TABLE_CELL_NONE,col=LV_TABLE_CELL_NONE;
+        lv_table_get_selected_cell(tx_type_table,&row,&col);
+        if (row>=0 && row<=5) tx_last_type_selected=row;
+    }
+    tx_type_update_help();
+    /* Phase 1 intentionally leaves the received SSTV canvas untouched. */
+}
+
+static void tx_type_pressed_cb(lv_event_t *e)
+{
+    (void)e;
+    if (tx_ui_state != SSTV_TX_UI_SETUP ||
+        tx_phase != SSTV_TX_PHASE_SELECT_TYPE || !tx_type_table)
+        return;
+
+    int16_t row=LV_TABLE_CELL_NONE,col=LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(tx_type_table,&row,&col);
+    if (row==LV_TABLE_CELL_NONE || row<0 || row>5) return;
+
+    if (row==0) {
+        tx_message_type=SSTV_TX_MESSAGE_CQ;
+        tx_type_selector_destroy();
+        tx_phase=SSTV_TX_PHASE_SELECT_PICTURE;
+        tx_picture_selector_build();
+        fprintf(stderr,"SSTV TX UI: CALL CQ -> pictures\n");
+        return;
+    }
+
+    /* REPLY and REPLAY both require a target callsign. */
+    if (row==1 || row==2) {
+        if (!tx_target_callsign[0]) return;
+        tx_message_type=(row==2) ? SSTV_TX_MESSAGE_REPLAY : SSTV_TX_MESSAGE_REPLY;
+        tx_type_selector_destroy();
+        tx_phase=SSTV_TX_PHASE_SELECT_PICTURE;
+        tx_picture_selector_build();
+        fprintf(stderr,"SSTV TX UI: %s TO %s -> pictures\n",
+                row==2 ? "REPLAY" : "REPLY",tx_target_callsign);
+        return;
+    }
+
+    if (row==3) {
+        tx_message_type=SSTV_TX_MESSAGE_IMAGE_ONLY;
+        tx_type_selector_destroy();
+        tx_phase=SSTV_TX_PHASE_SELECT_PICTURE;
+        tx_picture_selector_build();
+        fprintf(stderr,"SSTV TX UI: TX IMAGE ONLY -> pictures\n");
+        return;
+    }
+
+    if (row==4) {
+        if (!tx_last_valid) return;
+        tx_message_type=SSTV_TX_MESSAGE_REPEAT_LAST;
+        tx_type_selector_destroy();
+        tx_instruction_hide();
+        tx_picture_width=tx_last_width;
+        tx_picture_height=tx_last_height;
+        memcpy(tx_final_rgb,tx_last_rgb,(size_t)tx_last_width*tx_last_height*3);
+        tx_picture_render_preview();
+        lv_group_add_obj(keyboard_group,sstv_canvas);
+        lv_group_focus_obj(sstv_canvas);
+        lv_group_set_editing(keyboard_group,true);
+        if (status_label) lv_obj_clear_flag(status_label,LV_OBJ_FLAG_HIDDEN);
+        fprintf(stderr,"SSTV TX UI: REPEAT LAST TX -> RF (%s)\n",
+                cont_mode_name(tx_last_mode));
+        tx_start_final_rf_mode(tx_last_mode);
+        return;
+    }
+
+    /* SET TARGET CALLSIGN */
+    lv_group_remove_obj(tx_type_table);
+    tx_target_keyboard_open_pending=true;
+    return;
+}
+
+static void tx_type_selector_build(void)
+{
+    tx_type_selector_destroy();
+    tx_phase=SSTV_TX_PHASE_SELECT_TYPE;
+
+    if (status_label) lv_obj_add_flag(status_label,LV_OBJ_FLAG_HIDDEN);
+
+    /* This is now the FIRST TX phase.  Keep the received image visible so
+     * the operator can read the remote callsign while choosing the action. */
+    tx_restore_rx_canvas();
+    tx_instruction_show("SSTV TX", SSTV_TX_HINT);
+
+    tx_type_table=tx_list_create(6);
+
+    char reply[64], replay[64];
+    snprintf(reply,sizeof(reply),tx_target_callsign[0] ? "REPLY TO %s" : "REPLY TO...",
+             tx_target_callsign);
+    snprintf(replay,sizeof(replay),tx_target_callsign[0] ? "REPLAY TO %s" : "REPLAY TO...",
+             tx_target_callsign);
+    lv_table_set_cell_value(tx_type_table,0,0,"CALL CQ");
+    lv_table_set_cell_value(tx_type_table,1,0,reply);
+    lv_table_set_cell_value(tx_type_table,2,0,replay);
+    lv_table_set_cell_value(tx_type_table,3,0,"TX IMAGE ONLY");
+    lv_table_set_cell_value(tx_type_table,4,0,"REPEAT LAST TX");
+    lv_table_set_cell_value(tx_type_table,5,0,"SET TARGET CALLSIGN");
+
+    lv_obj_add_event_cb(tx_type_table,tx_type_draw_cb,LV_EVENT_DRAW_PART_BEGIN,NULL);
+    lv_obj_add_event_cb(tx_type_table,tx_type_selection_changed_cb,LV_EVENT_VALUE_CHANGED,NULL);
+    lv_obj_add_event_cb(tx_type_table,tx_type_pressed_cb,LV_EVENT_PRESSED,NULL);
+
+    /* With no target, REPLY/REPLAY remain selectable for navigation but pressing them
+     * is deliberately a no-op; the label itself makes the unavailable state clear. */
+    lv_group_remove_obj(sstv_canvas);
+    lv_group_add_obj(keyboard_group,tx_type_table);
+    lv_group_focus_obj(tx_type_table);
+    lv_group_set_editing(keyboard_group,true);
+
+    /* Restore the last action row selected during this runtime.  If REPLY/REPLAY was
+     * remembered but there is currently no target callsign, fall back to
+     * SET TARGET CALLSIGN because both are disabled in that state. */
+    int initial_row=tx_last_type_selected;
+    if (initial_row<0 || initial_row>5) initial_row=0;
+    if ((initial_row==1 || initial_row==2) && !tx_target_callsign[0])
+        initial_row=5;
+    if (initial_row==4 && !tx_last_valid)
+        initial_row=0;
+
+    int16_t selected_row=LV_TABLE_CELL_NONE, selected_col=LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(tx_type_table,&selected_row,&selected_col);
+    if (selected_row==LV_TABLE_CELL_NONE) {
+        uint32_t key=LV_KEY_DOWN;
+        lv_event_send(tx_type_table,LV_EVENT_KEY,&key);
+        lv_table_get_selected_cell(tx_type_table,&selected_row,&selected_col);
+    }
+    while (selected_row!=LV_TABLE_CELL_NONE && selected_row<initial_row) {
+        uint32_t key=LV_KEY_DOWN;
+        lv_event_send(tx_type_table,LV_EVENT_KEY,&key);
+        lv_table_get_selected_cell(tx_type_table,&selected_row,&selected_col);
+    }
+    tx_last_type_selected=initial_row;
+    tx_type_update_help();
+
+    fprintf(stderr,"SSTV TX UI: initial action selector; target=%s\n",
+            tx_target_callsign[0] ? tx_target_callsign : "<not set>");
+}
+
+static void tx_picture_selector_destroy(void)
+{
+    if (tx_picture_table) {
+        lv_group_remove_obj(tx_picture_table);
+        lv_obj_del(tx_picture_table);
+        tx_picture_table = NULL;
+    }
+    tx_picture_free_files();
+    tx_picture_selected = -1;
+    tx_picture_pending = -1;
+    tx_picture_pending_since_ms = 0;
+//    tx_picture_width = tx_picture_height = 0;
+    tx_picture_name[0] = '\0';
+}
+
+static void tx_picture_display_name(const char *filename,
+                                    char *out, size_t out_size)
+{
+    if (!out || out_size == 0)
+        return;
+
+    out[0] = '\0';
+    if (!filename)
+        return;
+
+    size_t len = strlen(filename);
+    if (len >= 4 && strcmp(filename + len - 4, ".png") == 0)
+        len -= 4;
+
+    /* The TX browser is deliberately narrow.  Keep every item on one line
+     * and use an explicit ellipsis rather than letting LVGL wrap it. */
+    const size_t max_chars = 22;
+    if (len <= max_chars) {
+        snprintf(out, out_size, "%.*s", (int)len, filename);
+    } else {
+        size_t keep = max_chars - 3;
+        snprintf(out, out_size, "%.*s...", (int)keep, filename);
+    }
+}
+
+static void tx_picture_selector_build(void)
+{
+    tx_picture_selector_destroy();
+    tx_picture_selector_refresh();
+
+    if (status_label)
+        lv_obj_add_flag(status_label, LV_OBJ_FLAG_HIDDEN);
+
+    tx_instruction_show("TX PICTURE", "MFK: choose - press: confirm - TX Mode: mode - Cancel TX: back");
+
+    tx_picture_table = tx_list_create(1);
+
+    if (tx_picture_file_count == 0) {
+        lv_table_set_cell_value(tx_picture_table, 0, 0, "No TX pictures found");
+        buttons_disabled(&btn_cont_mode, false);
+        lv_group_add_obj(keyboard_group, sstv_canvas);
+        lv_group_focus_obj(sstv_canvas);
+        lv_group_set_editing(keyboard_group, true);
+        set_status("No TX pictures found");
+        if (frame.status) lv_label_set_text(frame.status, "Put PNG pictures in " SSTV_TX_PICS_DIR);
+        return;
+    }
+
+    lv_table_set_row_cnt(tx_picture_table, tx_picture_file_count);
+    for (size_t i = 0; i < tx_picture_file_count; ++i) {
+        char display_name[64];
+        tx_picture_display_name(tx_picture_files[i],
+                                display_name, sizeof(display_name));
+        lv_table_set_cell_value(tx_picture_table, i, 0, display_name);
+    }
+
+    lv_obj_add_event_cb(tx_picture_table, tx_picture_selection_changed_cb,
+                        LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(tx_picture_table, tx_picture_pressed_cb,
+                        LV_EVENT_PRESSED, NULL);
+
+    lv_group_remove_obj(sstv_canvas);
+    lv_group_add_obj(keyboard_group, tx_picture_table);
+    lv_group_focus_obj(tx_picture_table);
+    lv_group_set_editing(keyboard_group, true);
+
+    int initial_row=0;
+    if (tx_last_picture_file[0]) {
+        for (size_t i=0;i<tx_picture_file_count;i++) {
+            if (strcmp(tx_picture_files[i],tx_last_picture_file)==0) {
+                initial_row=(int)i;
+                break;
+            }
+        }
+    }
+
+    /* This firmware's LVGL has get_selected_cell(), but not the newer
+     * lv_table_set_selected_cell().  Drive the table through the same LV_KEY
+     * interface used by MFK instead; the table updates selection and scrolling
+     * itself, so this stays compatible with the installed LVGL version. */
+    int16_t selected_row=LV_TABLE_CELL_NONE, selected_col=LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell(tx_picture_table,&selected_row,&selected_col);
+
+    if (selected_row==LV_TABLE_CELL_NONE) {
+        uint32_t key=LV_KEY_DOWN;
+        lv_event_send(tx_picture_table,LV_EVENT_KEY,&key);
+        lv_table_get_selected_cell(tx_picture_table,&selected_row,&selected_col);
+    }
+
+    while (selected_row!=LV_TABLE_CELL_NONE && selected_row<initial_row) {
+        uint32_t key=LV_KEY_DOWN;
+        lv_event_send(tx_picture_table,LV_EVENT_KEY,&key);
+        lv_table_get_selected_cell(tx_picture_table,&selected_row,&selected_col);
+    }
+
+    tx_picture_pending=initial_row;
+    tx_picture_pending_since_ms=tx_now_ms()-SSTV_TX_PICTURE_DEBOUNCE_MS;
+    tx_picture_load_pending_preview();
+
+    fprintf(stderr,"SSTV TX UI: %zu TX pictures found in %s; initial=%s\n",
+            tx_picture_file_count,SSTV_TX_PICS_DIR,tx_picture_files[initial_row]);
+}
+
 static int sstv_browser_name_compare(const void *a, const void *b)
 {
     const char *const *sa = a;
@@ -1079,11 +3204,13 @@ static int sstv_browser_name_compare(const void *a, const void *b)
 
 static void sstv_browser_free_files(void)
 {
-    for (unsigned int i = 0; i < sstv_browser_file_count; ++i) {
+    for (unsigned int i = 0; i < sstv_browser_file_count; ++i)
         free(sstv_browser_files[i]);
-        sstv_browser_files[i] = NULL;
-    }
+
+    free(sstv_browser_files);
+    sstv_browser_files = NULL;
     sstv_browser_file_count = 0;
+    sstv_browser_file_capacity = 0;
 }
 
 static void sstv_browser_refresh(void)
@@ -1095,8 +3222,7 @@ static void sstv_browser_refresh(void)
         return;
 
     struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL &&
-           sstv_browser_file_count < SSTV_BROWSER_MAX_FILES) {
+    while ((entry = readdir(dir)) != NULL) {
         const char *name = entry->d_name;
         size_t len = strlen(name);
 
@@ -1104,6 +3230,18 @@ static void sstv_browser_refresh(void)
             continue;
         if (strncmp(name, "sstv-", 5) != 0)
             continue;
+
+        if (sstv_browser_file_count == sstv_browser_file_capacity) {
+            size_t new_capacity = sstv_browser_file_capacity ?
+                                  sstv_browser_file_capacity * 2 : 128;
+            char **new_files = realloc(sstv_browser_files,
+                                       new_capacity * sizeof(*new_files));
+            if (!new_files)
+                break;
+
+            sstv_browser_files = new_files;
+            sstv_browser_file_capacity = new_capacity;
+        }
 
         char *copy = strdup(name);
         if (copy)
@@ -1145,7 +3283,7 @@ static void sstv_browser_update_buttons(void)
     if (sstv_browser_open)
         btn_browser.label = "Close\nBrowser";
     else
-        btn_browser.label = "SSTV\nBrowser";
+        btn_browser.label = "RX Pics\nBrowser";
 
     if (btn_browser.disp_btn)
         buttons_refresh(&btn_browser);
@@ -1441,6 +3579,15 @@ static void sstv_browser_build(void)
 
     sstv_browser_refresh();
 
+    /* Opaque browser background: deliberately identical to the main SSTV
+     * frame, but kept above the live SSTV view so it hides the canvas/text
+     * underneath while the saved-picture browser is open. */
+    sstv_browser_frame = lv_obj_create(dialog.obj);
+    lv_obj_remove_style_all(sstv_browser_frame);
+    app_frame_body(sstv_browser_frame);   /* the body of the common app look */
+    lv_obj_clear_flag(sstv_browser_frame, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(sstv_browser_frame, LV_OBJ_FLAG_CLICKABLE);
+
     sstv_browser_table = lv_table_create(dialog.obj);
     lv_obj_set_style_border_width(sstv_browser_table, 0, LV_PART_MAIN);
 
@@ -1492,6 +3639,11 @@ static void sstv_browser_close(void)
         sstv_browser_canvas = NULL;
     }
 
+    if (sstv_browser_frame) {
+        lv_obj_del(sstv_browser_frame);
+        sstv_browser_frame = NULL;
+    }
+
     free(sstv_browser_buffer);
     sstv_browser_buffer = NULL;
     sstv_browser_free_image();
@@ -1529,16 +3681,25 @@ static void delete_picture_cb(button_data_t *data)
 static void cont_mode_cb(button_data_t *data)
 {
     (void)data;
-    if (live_enabled || live_capturing || cont_capturing || cont_decode_pending || test_running)
+    if (tx_ui_state == SSTV_TX_UI_RF) return;
+    if (tx_ui_state == SSTV_TX_UI_RX &&
+        (live_enabled || live_capturing || cont_capturing || cont_decode_pending || test_running))
         return;
     unsigned count = sizeof(cont_modes)/sizeof(cont_modes[0]);
     unsigned idx = 0;
     while (idx < count && cont_modes[idx] != cont_mode) ++idx;
     cont_mode = cont_modes[(idx + 1) % count];
-    static char label[48];
-    snprintf(label, sizeof(label), "RX Mode\n%s", cont_mode_name(cont_mode));
-    btn_cont_mode.label = label;
+    snprintf(tx_mode_label, sizeof(tx_mode_label), "%s Mode\n%s",
+             tx_ui_state == SSTV_TX_UI_RX ? "RX" : "TX", cont_mode_name(cont_mode));
+    btn_cont_mode.label = tx_mode_label;
     if (btn_cont_mode.disp_btn) buttons_refresh(&btn_cont_mode);
+
+    if (tx_ui_state == SSTV_TX_UI_SETUP &&
+        tx_picture_selected >= 0 &&
+        (size_t)tx_picture_selected < tx_picture_file_count) {
+        if (tx_picture_load_and_prepare(tx_picture_files[tx_picture_selected]))
+            tx_rebuild_current_overlay();
+    }
 }
 
 static void cont_start_cb(button_data_t *data)
@@ -1568,7 +3729,10 @@ static void cont_start_cb(button_data_t *data)
         return;
     }
 
-    cont_capacity = (long)SSTV_CONT_MAX_SECONDS * SSTV_SAMPLE_RATE;
+    float cont_limit_seconds = cont_mode_seconds(cont_mode) + 5.0f;
+    if (cont_limit_seconds > (float)SSTV_CONT_MAX_SECONDS)
+        cont_limit_seconds = (float)SSTV_CONT_MAX_SECONDS;
+    cont_capacity = (long)(cont_limit_seconds * (float)SSTV_SAMPLE_RATE);
     cont_samples = malloc((size_t)cont_capacity * sizeof(float));
     if (!cont_samples) {
         cont_capacity=0;
@@ -1590,8 +3754,8 @@ static void cont_start_cb(button_data_t *data)
     btn_cont_start.label = "Stop\nManual RX";
     if (btn_cont_start.disp_btn) buttons_refresh(&btn_cont_start);
     update_rx_controls();
-    fprintf(stderr,"SSTV CONT: START - manual %s capture at %d Hz, max %d s\n",
-            cont_mode_name(cont_mode),SSTV_SAMPLE_RATE,SSTV_CONT_MAX_SECONDS);
+    fprintf(stderr,"SSTV CONT: START - manual %s capture at %d Hz, auto-stop after %.1f s\n",
+            cont_mode_name(cont_mode),SSTV_SAMPLE_RATE,cont_limit_seconds);
 }
 
 static void start_cb(button_data_t *data)
@@ -1601,6 +3765,28 @@ static void start_cb(button_data_t *data)
 
     if (cont_capturing || cont_decode_pending || cont_decoding) {
         pthread_mutex_unlock(&live_mutex);
+        return;
+    }
+
+    /* While Auto RX is receiving/decoding a detected picture, this button is
+     * "Halt Decoding": discard only the current picture and keep Auto RX on. */
+    if (live_capturing || live_decode_pending || live_decoding) {
+        live_abort_requested=true;
+        live_capturing=false;
+        live_decode_pending=false;
+        live_ring_pos=live_ring_count=0;
+        live_since_check=0;
+        live_wait_samples=live_wait_log_mark=0;
+        if (!live_decoding) {
+            free(live_samples);
+            live_samples=NULL;
+            live_written=live_target=0;
+            live_abort_requested=false;
+        }
+        live_enabled=true;
+        pthread_mutex_unlock(&live_mutex);
+        set_receiver_ui_listening();
+        fprintf(stderr,"SSTV LIVE: HALT - current picture discarded; awaiting next VIS\n");
         return;
     }
 
@@ -1617,6 +3803,7 @@ static void start_cb(button_data_t *data)
 
     if (!test_running) {
         live_enabled=true; live_capturing=false; live_decode_pending=false;
+        live_abort_requested=false;
         live_ring_pos=live_ring_count=0; live_since_check=0;
         live_wait_samples=live_wait_log_mark=0;
         free(live_samples); live_samples=NULL; live_written=live_target=0;
@@ -1643,8 +3830,8 @@ static void audio_cb(unsigned int n, float *samples)
             cont_capturing=false;
             cont_decode_mode=cont_mode;
             cont_decode_pending=true;
-            fprintf(stderr,"SSTV CONT: maximum %d s capture reached; stopping and decoding %s\n",
-                    SSTV_CONT_MAX_SECONDS,cont_mode_name(cont_decode_mode));
+            fprintf(stderr,"SSTV CONT: mode timeout reached after %.1f s; stopping and decoding %s\n",
+                    (double)cont_written/SSTV_SAMPLE_RATE,cont_mode_name(cont_decode_mode));
         }
         pthread_mutex_unlock(&live_mutex);
         return;
@@ -1666,6 +3853,80 @@ static void audio_cb(unsigned int n, float *samples)
             live_capturing=false; live_decode_pending=true; live_enabled=false;
             fprintf(stderr,"SSTV LIVE: expected %s duration reached; RAM capture complete (%ld samples)\n",
                     live_info.name,live_written);
+            pthread_mutex_unlock(&live_mutex); return;
+        }
+
+        /* Historical behaviour ends here.  With RESTART OFF we return exactly
+         * as before; the parallel VIS detector below is completely bypassed. */
+        if (!live_restart_enabled) {
+            pthread_mutex_unlock(&live_mutex); return;
+        }
+
+        /* RESTART ON: feed the same rolling VIS detector in parallel with the
+         * current capture.  The ring is reset whenever a picture starts, so
+         * the VIS that started this picture cannot trigger itself again. */
+        for (unsigned int i=0;i<n;++i) {
+            live_ring[live_ring_pos]=samples[i];
+            live_ring_pos=(live_ring_pos+1)%SSTV_PREBUF_SAMPLES;
+            if (live_ring_count<SSTV_PREBUF_SAMPLES) ++live_ring_count;
+        }
+        live_since_check += n;
+        if (live_ring_count >= SSTV_VIS_WINDOW_SAMPLES && live_since_check >= SSTV_VIS_CHECK_STEP) {
+            live_since_check=0;
+            size_t start=(live_ring_pos + SSTV_PREBUF_SAMPLES - SSTV_VIS_WINDOW_SAMPLES)%SSTV_PREBUF_SAMPLES;
+            for (size_t i=0;i<SSTV_VIS_WINDOW_SAMPLES;++i)
+                live_vis_window[i]=live_ring[(start+i)%SSTV_PREBUF_SAMPLES];
+
+            sstv_info_t restart_info;
+            if (live_find_vis(live_vis_window,SSTV_VIS_WINDOW_SAMPLES,&restart_info)) {
+                long restart_target=(long)((live_mode_seconds(restart_info.mode)+2.0f)*SSTV_SAMPLE_RATE);
+                float *restart_samples=malloc((size_t)restart_target*sizeof(float));
+                if (!restart_samples) {
+                    fprintf(stderr,"SSTV LIVE: RESTART ignored - ERROR allocating %.1f MB capture buffer\n",
+                            (double)restart_target*sizeof(float)/(1024.0*1024.0));
+                } else {
+                    size_t keep=live_ring_count;
+                    if ((long)keep>restart_target) keep=(size_t)restart_target;
+                    size_t oldest=(live_ring_pos + SSTV_PREBUF_SAMPLES - live_ring_count)%SSTV_PREBUF_SAMPLES;
+                    for (size_t i=0;i<keep;++i)
+                        restart_samples[i]=live_ring[(oldest+i)%SSTV_PREBUF_SAMPLES];
+
+                    fprintf(stderr,"SSTV LIVE: RESTART - new VIS=%d -> %s; discarding current %s capture at %.1f s\n",
+                            restart_info.vis,restart_info.name,live_info.name,
+                            (double)live_written/SSTV_SAMPLE_RATE);
+
+                    free(live_samples);
+                    live_samples=restart_samples;
+                    live_written=(long)keep;
+                    live_target=restart_target;
+                    live_info=restart_info;
+                    live_canvas_clear_pending=true;
+
+                    /* Same reply-mode update used by the normal first VIS. */
+                    switch (live_info.mode) {
+                        case SSTV_MODE_ROBOT8_BW:
+                        case SSTV_MODE_ROBOT36:
+                        case SSTV_MODE_ROBOT72:
+                        case SSTV_MODE_MARTIN_M1:
+                        case SSTV_MODE_MARTIN_M2:
+                        case SSTV_MODE_SCOTTIE_S1:
+                        case SSTV_MODE_SCOTTIE_S2:
+                            cont_mode=live_info.mode;
+                            live_mode_ui_pending=true;
+                            break;
+                        default:
+                            break;
+                    }
+
+                    /* Arm for a later, genuinely new VIS rather than finding
+                     * this same header again in the rolling window. */
+                    live_ring_pos=0;
+                    live_ring_count=0;
+                    live_since_check=0;
+                    fprintf(stderr,"SSTV LIVE: RESTART capturing %s from new VIS; target %.1f s, prebuffer=%ld samples\n",
+                            live_info.name,(double)live_target/SSTV_SAMPLE_RATE,live_written);
+                }
+            }
         }
         pthread_mutex_unlock(&live_mutex); return;
     }
@@ -1687,6 +3948,22 @@ static void audio_cb(unsigned int n, float *samples)
         size_t start=(live_ring_pos + SSTV_PREBUF_SAMPLES - SSTV_VIS_WINDOW_SAMPLES)%SSTV_PREBUF_SAMPLES;
         for (size_t i=0;i<SSTV_VIS_WINDOW_SAMPLES;++i) live_vis_window[i]=live_ring[(start+i)%SSTV_PREBUF_SAMPLES];
         if (live_find_vis(live_vis_window,SSTV_VIS_WINDOW_SAMPLES,&live_info)) {
+            /* Prepare RX/TX Mode for a reply using the detected VIS mode.
+             * Scottie DX is RX-only here, so keep the previous TX mode for it. */
+            switch (live_info.mode) {
+                case SSTV_MODE_ROBOT8_BW:
+                case SSTV_MODE_ROBOT36:
+                case SSTV_MODE_ROBOT72:
+                case SSTV_MODE_MARTIN_M1:
+                case SSTV_MODE_MARTIN_M2:
+                case SSTV_MODE_SCOTTIE_S1:
+                case SSTV_MODE_SCOTTIE_S2:
+                    cont_mode=live_info.mode;
+                    live_mode_ui_pending=true;
+                    break;
+                default:
+                    break;
+            }
             live_target=(long)((live_mode_seconds(live_info.mode)+2.0f)*SSTV_SAMPLE_RATE);
             live_samples=malloc((size_t)live_target*sizeof(float));
             if (!live_samples) {
@@ -1700,6 +3977,12 @@ static void audio_cb(unsigned int n, float *samples)
                 for (size_t i=0;i<keep;++i) live_samples[i]=live_ring[(oldest+i)%SSTV_PREBUF_SAMPLES];
                 live_written=(long)keep;
                 live_capturing=true;
+                if (live_restart_enabled) {
+                    /* Start the parallel detector from audio AFTER this VIS. */
+                    live_ring_pos=0;
+                    live_ring_count=0;
+                    live_since_check=0;
+                }
                 /* A valid VIS starts a new picture.  Do not touch LVGL from
                  * the audio callback; ask the UI timer to clear the canvas. */
                 live_canvas_clear_pending = true;
@@ -1712,8 +3995,86 @@ static void audio_cb(unsigned int n, float *samples)
     pthread_mutex_unlock(&live_mutex);
 }
 
-static void close_cb(button_data_t *data)
+static void tx_ui_cb(button_data_t *data)
 {
     (void)data;
-    dialog_destruct();
+
+    if (tx_ui_state == SSTV_TX_UI_RF) {
+        tx_abort = true;
+        set_status("Stopping SSTV TX...");
+        return;
+    }
+
+    if (tx_ui_state == SSTV_TX_UI_SETUP) {
+        tx_color_selector_destroy();
+        tx_template_selector_destroy();
+        tx_type_selector_destroy();
+        tx_picture_selector_destroy();
+        tx_instruction_hide();
+        tx_phase = SSTV_TX_PHASE_NONE;
+        if (status_label)
+            lv_obj_clear_flag(status_label, LV_OBJ_FLAG_HIDDEN);
+        tx_ui_state = SSTV_TX_UI_RX;
+
+        /* TX selectors own keyboard focus while the TX setup is open.
+         * On Cancel TX restore the normal RX focus, otherwise VOL events
+         * no longer reach key_cb() even though the RX screen is visible. */
+        lv_group_add_obj(keyboard_group, sstv_canvas);
+        lv_group_focus_obj(sstv_canvas);
+        lv_group_set_editing(keyboard_group, true);
+
+        btn_tx.label = "TX";
+        snprintf(tx_mode_label, sizeof(tx_mode_label), "RX Mode\n%s", cont_mode_name(cont_mode));
+        btn_cont_mode.label = tx_mode_label;
+
+        if (tx_restore_auto_rx) {
+            pthread_mutex_lock(&live_mutex);
+            live_enabled = true; live_capturing = false; live_decode_pending = false;
+            live_ring_pos = live_ring_count = 0; live_since_check = 0;
+            live_wait_samples = live_wait_log_mark = 0;
+            free(live_samples); live_samples = NULL; live_written = live_target = 0;
+            pthread_mutex_unlock(&live_mutex);
+            set_receiver_ui_listening();
+        } else {
+            set_receiver_ui_stopped();
+        }
+        tx_restore_rx_canvas();
+        if (btn_tx.disp_btn) buttons_refresh(&btn_tx);
+        if (btn_cont_mode.disp_btn) buttons_refresh(&btn_cont_mode);
+        update_rx_controls();
+        fprintf(stderr, "SSTV TX UI: setup cancelled; RX restored%s\n",
+                tx_restore_auto_rx ? " with Auto RX" : " to stand-by");
+        return;
+    }
+
+    /* Preserve the exact RX pixels before TX preview changes the canvas. */
+    tx_save_rx_canvas();
+
+    /* Remember only whether Auto RX was active.  Manual RX is abandoned
+     * without scheduling a decode: TX has priority. */
+    tx_restore_auto_rx = live_enabled || live_capturing || live_decode_pending || live_decoding;
+    pthread_mutex_lock(&live_mutex);
+    live_enabled = false; live_capturing = false; live_decode_pending = false;
+    live_ring_pos = live_ring_count = 0; live_since_check = 0;
+    live_wait_samples = live_wait_log_mark = 0;
+    free(live_samples); live_samples = NULL; live_written = live_target = 0;
+    cont_capturing = false; cont_decode_pending = false;
+    free(cont_samples); cont_samples = NULL; cont_written = cont_capacity = 0;
+    pthread_mutex_unlock(&live_mutex);
+
+    tx_ui_state = SSTV_TX_UI_SETUP;
+    tx_phase = SSTV_TX_PHASE_SELECT_TYPE;
+    btn_tx.label = "Cancel TX";
+    snprintf(tx_mode_label, sizeof(tx_mode_label), "TX Mode\n%s", cont_mode_name(cont_mode));
+    btn_cont_mode.label = tx_mode_label;
+    set_status("TX setup\n\nChoose TX action");
+    if (progress_bar) {
+        lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
+        lv_obj_add_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (btn_tx.disp_btn) buttons_refresh(&btn_tx);
+    if (btn_cont_mode.disp_btn) buttons_refresh(&btn_cont_mode);
+    update_rx_controls();
+    tx_type_selector_build();
+    fprintf(stderr, "SSTV TX UI: entered setup at action selector; previous Auto RX=%d\n", tx_restore_auto_rx ? 1 : 0);
 }

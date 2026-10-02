@@ -123,6 +123,57 @@ static void wav_values(wav_writer_t *w, const uint8_t *values, int count, double
     }
 }
 
+
+/* Martin M2: VIS 40, 320x256.  Each line is 4.862 ms sync, 0.572 ms
+ * porch, then G/B/R channels of 73.216 ms separated by 0.572 ms. */
+static void wav_rgb_channel(wav_writer_t *w, const uint8_t *rgb, int row,
+                            int channel, double total_ms)
+{
+    const double total = total_ms * (double)SSTV_SAMPLE_RATE / 1000.0;
+    long prev = 0;
+    for (int x = 0; x < OUT_W; ++x) {
+        long next = (long)llround(total * (double)(x + 1) / (double)OUT_W);
+        uint8_t v = rgb[((size_t)row * OUT_W + x) * 3u + (size_t)channel];
+        double hz = 1500.0 + 800.0 * (double)v / 255.0;
+        wav_tone_samples(w, hz, next - prev);
+        prev = next;
+    }
+}
+
+int sstv_encode_martin_m2_png_wav(const char *png_path, const char *wav_path)
+{
+    const int height = 256;
+    const double channel_ms = 73.216;
+    uint8_t *rgb = malloc((size_t)OUT_W * height * 3u);
+    if (!rgb) return -10;
+    int rc = load_png_scaled(png_path, rgb, height);
+    if (rc < 0) { free(rgb); return rc; }
+
+    wav_writer_t w;
+    if (wav_begin(&w, wav_path) < 0) { free(rgb); return -11; }
+    wav_vis(&w, 40);
+
+    for (int y = 0; y < height; ++y) {
+        wav_tone_ms(&w, 1200, 4.862);
+        wav_tone_ms(&w, 1500, 0.572);
+        wav_rgb_channel(&w, rgb, y, 1, channel_ms); /* G */
+        wav_tone_ms(&w, 1500, 0.572);
+        wav_rgb_channel(&w, rgb, y, 2, channel_ms); /* B */
+        wav_tone_ms(&w, 1500, 0.572);
+        wav_rgb_channel(&w, rgb, y, 0, channel_ms); /* R */
+        wav_tone_ms(&w, 1500, 0.572);
+    }
+
+    free(rgb);
+    uint32_t data = w.samples * 2u;
+    fseek(w.fp, 4, SEEK_SET); put_u32(w.fp, 36u + data);
+    fseek(w.fp, 40, SEEK_SET); put_u32(w.fp, data);
+    fclose(w.fp);
+    fprintf(stderr, "SSTV TX TEST: Martin M2 WAV written to %s (%u samples, %.3f s)\n",
+            wav_path, w.samples, (double)w.samples / SSTV_SAMPLE_RATE);
+    return 0;
+}
+
 int sstv_encode_robot36_png_wav(const char *png_path, const char *wav_path)
 {
     uint8_t *rgb = malloc((size_t)OUT_W * ROBOT36_H * 3u);
@@ -224,6 +275,7 @@ typedef struct {
     size_t capacity;
     unsigned rate;
     double phase;
+    double timeline_samples; /* ideal absolute sample position */
 } pcm_writer_t;
 
 static int pcm_reserve(pcm_writer_t *w, size_t extra)
@@ -257,20 +309,28 @@ static int pcm_tone_samples(pcm_writer_t *w, double hz, size_t count)
 
 static int pcm_tone_ms(pcm_writer_t *w, double hz, double ms)
 {
-    size_t n = (size_t)llround(ms * (double)w->rate / 1000.0);
-    return pcm_tone_samples(w, hz, n);
+    /* Keep one continuous ideal timeline for the whole transmission.
+     * Rounding each SSTV segment independently creates a repeatable error on
+     * every scan line and therefore visible slant.  Round only the absolute
+     * boundary, so fractional samples are carried into the following segment. */
+    w->timeline_samples += ms * (double)w->rate / 1000.0;
+    long target = (long)llround(w->timeline_samples);
+    if (target < (long)w->count) return -1;
+    return pcm_tone_samples(w, hz, (size_t)(target - (long)w->count));
 }
 
 static int pcm_values(pcm_writer_t *w, const uint8_t *values, int count, double total_ms)
 {
+    const double start = w->timeline_samples;
     const double total = total_ms * (double)w->rate / 1000.0;
-    long prev = 0;
     for (int x = 0; x < count; ++x) {
-        long next = (long)llround(total * (double)(x + 1) / (double)count);
+        double boundary = start + total * (double)(x + 1) / (double)count;
+        long target = (long)llround(boundary);
+        if (target < (long)w->count) return -1;
         double hz = 1500.0 + 800.0 * (double)values[x] / 255.0;
-        if (pcm_tone_samples(w, hz, (size_t)(next - prev)) < 0) return -1;
-        prev = next;
+        if (pcm_tone_samples(w, hz, (size_t)(target - (long)w->count)) < 0) return -1;
     }
+    w->timeline_samples = start + total;
     return 0;
 }
 
@@ -287,6 +347,57 @@ static int pcm_vis(pcm_writer_t *w, int vis)
     PT((ones & 1) ? 1100 : 1300, 30);
     PT(1200,30);
 #undef PT
+    return 0;
+}
+
+
+static int pcm_rgb_channel(pcm_writer_t *w, const uint8_t *rgb, int row,
+                           int channel, double total_ms)
+{
+    uint8_t values[OUT_W];
+    for (int x = 0; x < OUT_W; ++x)
+        values[x] = rgb[((size_t)row * OUT_W + x) * 3u + (size_t)channel];
+    return pcm_values(w, values, OUT_W, total_ms);
+}
+
+int sstv_encode_martin_m2_png_pcm(const char *png_path, unsigned sample_rate,
+                                  int16_t **samples, size_t *sample_count)
+{
+    const int height = 256;
+    const double channel_ms = 73.216;
+    if (!png_path || !samples || !sample_count || sample_rate < 8000u) return -20;
+    *samples = NULL;
+    *sample_count = 0;
+
+    uint8_t *rgb = malloc((size_t)OUT_W * height * 3u);
+    if (!rgb) return -10;
+    int rc = load_png_scaled(png_path, rgb, height);
+    if (rc < 0) { free(rgb); return rc; }
+
+    pcm_writer_t w = { .rate = sample_rate };
+    if (pcm_vis(&w, 40) < 0) { free(rgb); free(w.data); return -21; }
+
+#define MARTIN_T(hz,ms) do { if (pcm_tone_ms(&w,(hz),(ms)) < 0) { rc=-21; goto out_martin_m2; } } while (0)
+    for (int y = 0; y < height; ++y) {
+        MARTIN_T(1200, 4.862);
+        MARTIN_T(1500, 0.572);
+        if (pcm_rgb_channel(&w, rgb, y, 1, channel_ms) < 0) { rc=-21; goto out_martin_m2; }
+        MARTIN_T(1500, 0.572);
+        if (pcm_rgb_channel(&w, rgb, y, 2, channel_ms) < 0) { rc=-21; goto out_martin_m2; }
+        MARTIN_T(1500, 0.572);
+        if (pcm_rgb_channel(&w, rgb, y, 0, channel_ms) < 0) { rc=-21; goto out_martin_m2; }
+        MARTIN_T(1500, 0.572);
+    }
+    rc = 0;
+#undef MARTIN_T
+
+out_martin_m2:
+    free(rgb);
+    if (rc < 0) { free(w.data); return rc; }
+    *samples = w.data;
+    *sample_count = w.count;
+    fprintf(stderr, "SSTV TX: Martin M2 PCM generated (%zu samples @ %u Hz, %.3f s)\n",
+            w.count, sample_rate, (double)w.count / (double)sample_rate);
     return 0;
 }
 
@@ -400,4 +511,96 @@ out_scottie:
     fprintf(stderr,"SSTV TX: Scottie S1 PCM generated (%zu samples @ %u Hz, %.3f s)\n",
             w.count, sample_rate, (double)w.count/(double)sample_rate);
     return 0;
+}
+
+/* Additional direct-PCM encoders used by SSTV Test TX. */
+static int encode_martin_pcm_common(const char *png_path, unsigned sample_rate,
+                                    int vis, double channel_ms,
+                                    int16_t **samples, size_t *sample_count)
+{
+    const int height=256;
+    if(!png_path||!samples||!sample_count||sample_rate<8000u)return -20;
+    *samples=NULL; *sample_count=0;
+    uint8_t *rgb=malloc((size_t)OUT_W*height*3u); if(!rgb)return -10;
+    int rc=load_png_scaled(png_path,rgb,height); if(rc<0){free(rgb);return rc;}
+    pcm_writer_t w={.rate=sample_rate}; if(pcm_vis(&w,vis)<0){free(rgb);free(w.data);return -21;}
+#define MT(hz,ms) do{if(pcm_tone_ms(&w,(hz),(ms))<0){rc=-21;goto mout;}}while(0)
+    for(int y=0;y<height;++y){
+        MT(1200,4.862); MT(1500,0.572);
+        if(pcm_rgb_channel(&w,rgb,y,1,channel_ms)<0){rc=-21;goto mout;}
+        MT(1500,0.572);
+        if(pcm_rgb_channel(&w,rgb,y,2,channel_ms)<0){rc=-21;goto mout;}
+        MT(1500,0.572);
+        if(pcm_rgb_channel(&w,rgb,y,0,channel_ms)<0){rc=-21;goto mout;}
+        MT(1500,0.572);
+    }
+    rc=0;
+#undef MT
+mout:
+    free(rgb); if(rc<0){free(w.data);return rc;}
+    *samples=w.data; *sample_count=w.count; return 0;
+}
+
+int sstv_encode_martin_m1_png_pcm(const char *p,unsigned r,int16_t **s,size_t *n)
+{ return encode_martin_pcm_common(p,r,44,146.432,s,n); }
+
+static int encode_scottie_pcm_common(const char *png_path,unsigned sample_rate,
+                                     int vis,double channel_ms,
+                                     int16_t **samples,size_t *sample_count)
+{
+    if(!png_path||!samples||!sample_count||sample_rate<8000u)return -20;
+    *samples=NULL; *sample_count=0;
+    uint8_t *rgb=malloc((size_t)OUT_W*SCOTTIE_H*3u); if(!rgb)return -10;
+    int rc=load_png_scaled(png_path,rgb,SCOTTIE_H); if(rc<0){free(rgb);return rc;}
+    pcm_writer_t w={.rate=sample_rate}; if(pcm_vis(&w,vis)<0){free(rgb);free(w.data);return -21;}
+    if(pcm_tone_ms(&w,1200,9.0)<0){rc=-21;goto sout;}
+    for(int y=0;y<SCOTTIE_H;++y){uint8_t c[OUT_W];
+#define ST(hz,ms) do{if(pcm_tone_ms(&w,(hz),(ms))<0){rc=-21;goto sout;}}while(0)
+        ST(1500,1.5); for(int x=0;x<OUT_W;++x)c[x]=rgb[((size_t)y*OUT_W+x)*3u+1]; if(pcm_values(&w,c,OUT_W,channel_ms)<0){rc=-21;goto sout;}
+        ST(1500,1.5); for(int x=0;x<OUT_W;++x)c[x]=rgb[((size_t)y*OUT_W+x)*3u+2]; if(pcm_values(&w,c,OUT_W,channel_ms)<0){rc=-21;goto sout;}
+        ST(1200,9.0); ST(1500,1.5); for(int x=0;x<OUT_W;++x)c[x]=rgb[((size_t)y*OUT_W+x)*3u]; if(pcm_values(&w,c,OUT_W,channel_ms)<0){rc=-21;goto sout;}
+#undef ST
+    } rc=0;
+sout:
+    free(rgb); if(rc<0){free(w.data);return rc;} *samples=w.data;*sample_count=w.count;return 0;
+}
+
+int sstv_encode_scottie_s2_png_pcm(const char *p,unsigned r,int16_t **s,size_t *n)
+{ return encode_scottie_pcm_common(p,r,56,88.064,s,n); }
+
+int sstv_encode_robot8_png_pcm(const char *png_path,unsigned sample_rate,int16_t **samples,size_t *sample_count)
+{
+    const int H=120,W=160;
+    if(!png_path||!samples||!sample_count||sample_rate<8000u)return -20;
+    *samples=NULL;*sample_count=0;
+    uint8_t *rgb=malloc((size_t)OUT_W*H*3u);if(!rgb)return -10;
+    int rc=load_png_scaled(png_path,rgb,H);if(rc<0){free(rgb);return rc;}
+    pcm_writer_t w={.rate=sample_rate};if(pcm_vis(&w,2)<0){free(rgb);free(w.data);return -21;}
+    uint8_t Y[W];
+    for(int y=0;y<H;++y){
+        if(pcm_tone_ms(&w,1200,5.0)<0){rc=-21;goto r8out;}
+        for(int x=0;x<W;++x){int sx=x*2;const uint8_t*q=rgb+((size_t)y*OUT_W+sx)*3u;Y[x]=clamp_byte(.299*q[0]+.587*q[1]+.114*q[2]);}
+        if(pcm_values(&w,Y,W,1000.0/15.0-5.0)<0){rc=-21;goto r8out;}
+    }rc=0;
+r8out: free(rgb);if(rc<0){free(w.data);return rc;}*samples=w.data;*sample_count=w.count;return 0;
+}
+
+int sstv_encode_robot72_png_pcm(const char *png_path,unsigned sample_rate,int16_t **samples,size_t *sample_count)
+{
+    const int H=240;
+    if(!png_path||!samples||!sample_count||sample_rate<8000u)return -20;
+    *samples=NULL;*sample_count=0;
+    uint8_t *rgb=malloc((size_t)OUT_W*H*3u);if(!rgb)return -10;
+    int rc=load_png_scaled(png_path,rgb,H);if(rc<0){free(rgb);return rc;}
+    pcm_writer_t w={.rate=sample_rate};if(pcm_vis(&w,12)<0){free(rgb);free(w.data);return -21;}
+    uint8_t Y[OUT_W],Cr[OUT_W],Cb[OUT_W];
+    for(int y=0;y<H;++y){const uint8_t*row=rgb+(size_t)y*OUT_W*3u;
+        for(int x=0;x<OUT_W;++x){double R=row[x*3],G=row[x*3+1],B=row[x*3+2],yy=.299*R+.587*G+.114*B;Y[x]=clamp_byte(yy);Cr[x]=clamp_byte((R-yy)/1.402+128.0);Cb[x]=clamp_byte((B-yy)/1.772+128.0);}
+#define RT(hz,ms) do{if(pcm_tone_ms(&w,(hz),(ms))<0){rc=-21;goto r72out;}}while(0)
+        RT(1200,9.0);RT(1500,3.0);if(pcm_values(&w,Y,OUT_W,138.0)<0){rc=-21;goto r72out;}
+        RT(1500,4.5);RT(1900,1.5);if(pcm_values(&w,Cr,OUT_W,69.0)<0){rc=-21;goto r72out;}
+        RT(2300,4.5);RT(1500,1.5);if(pcm_values(&w,Cb,OUT_W,69.0)<0){rc=-21;goto r72out;}
+#undef RT
+    }rc=0;
+r72out: free(rgb);if(rc<0){free(w.data);return rc;}*samples=w.data;*sample_count=w.count;return 0;
 }

@@ -73,6 +73,9 @@ static void band_all_cb(button_data_t *data);
 static void tune_cb(button_data_t *data);
 static void mode_cb(button_data_t *data);
 static const char *mode_label(void);
+static const char *band_label(void);
+static void order_cb(button_data_t *data);
+static const char *order_label(void);
 static void server_cb(button_data_t *data);
 static bool popup_key(uint32_t key);
 static void use_server(int i);
@@ -85,8 +88,9 @@ static button_data_t btn_page = {
 static button_data_t btn_page2 = {
     .type = BTN_TEXT, .label = "(CLUSTER\n2:2)", .press = button_next_page_cb, .next = &btn_page_1};
 static button_data_t btn_server = {.type = BTN_TEXT, .label = "Server", .press = server_cb};
-static button_data_t btn_band = {.type = BTN_TEXT, .label = "Band /\nAll", .press = band_all_cb};
+static button_data_t btn_band = {.type = BTN_TEXT_FN, .label_fn = band_label, .press = band_all_cb};
 static button_data_t btn_mode = {.type = BTN_TEXT_FN, .label_fn = mode_label, .press = mode_cb};
+static button_data_t btn_order = {.type = BTN_TEXT_FN, .label_fn = order_label, .press = order_cb};
 static button_data_t btn_tune = {.type = BTN_TEXT, .label = "Tune", .press = tune_cb};
 static button_data_t btn_close = {.type = BTN_TEXT, .label = "Close", .press = close_cb};
 
@@ -94,7 +98,7 @@ static buttons_page_t btn_page_1 = {
     .items = {&btn_page, &btn_band, &btn_tune, &btn_mode, &btn_close},
 };
 static buttons_page_t btn_page_2 = {
-    .items = {&btn_page2, &btn_server, NULL, NULL, &btn_close},
+    .items = {&btn_page2, &btn_server, &btn_order, NULL, &btn_close},
 };
 
 static dialog_t dialog = {
@@ -127,7 +131,6 @@ static int            row_count;
 
 static int      sel = -1; /* index into view[] */
 static bool     follow_vfo = true;
-static bool     show_all;
 static uint8_t  view_mode;  /* quick view filter (CLUSTER_FM_*, 0 = all), not saved */
 static int      scope_count; /* spots of the band (or all) before the filters */
 static const cluster_filter_t *flt;
@@ -329,14 +332,25 @@ static int vfo_band(void) {
     return cluster_band_of(cparam_i_get(cfg_fg_freq));
 }
 
-/* All bands when asked, or when the VFO is outside the amateur bands. */
+/* All bands when asked, or when the VFO is outside the amateur bands.
+ * Band and order are shared with the column on the main screen. */
 static bool showing_all(void) {
-    return show_all || vfo_band() < 0;
+    return param_i_get(cfg_cluster_all_bands) || vfo_band() < 0;
+}
+
+static bool by_time(void) {
+    return param_i_get(cfg_cluster_order);
 }
 
 static int cmp_freq(const void *a, const void *b) {
     const cluster_spot_t *x = a, *y = b;
     return (x->freq_hz > y->freq_hz) - (x->freq_hz < y->freq_hz);
+}
+
+/* Newest first */
+static int cmp_age(const void *a, const void *b) {
+    const cluster_spot_t *x = a, *y = b;
+    return cluster_age_min(x->utc_min, now_min) - cluster_age_min(y->utc_min, now_min);
 }
 
 static int nearest_to_vfo(void) {
@@ -392,11 +406,11 @@ static void rebuild(void) {
         if (view_mode && cluster_spot_mode_class(&all_spots[i]) != view_mode) continue;
         view[view_count++] = all_spots[i];
     }
-    qsort(view, (size_t)view_count, sizeof(view[0]), cmp_freq);
+    qsort(view, (size_t)view_count, sizeof(view[0]), by_time() ? cmp_age : cmp_freq);
 
     int32_t vfo = cparam_i_get(cfg_fg_freq);
     row_count   = 0;
-    bool marker = false;
+    bool marker = by_time(); /* newest first: no VFO row */
     for (int i = 0; i < view_count; i++) {
         if (!marker && view[i].freq_hz >= vfo) {
             rows[row_count++] = ROW_VFO;
@@ -408,17 +422,23 @@ static void rebuild(void) {
 
     sel = -1;
     if (follow_vfo) {
-        sel = nearest_to_vfo();
+        sel = by_time() ? (view_count ? 0 : -1) : nearest_to_vfo();
     } else if (had_sel) {
         for (int i = 0; i < view_count; i++)
             if (strcasecmp(view[i].dx, keep.dx) == 0 && view[i].freq_hz == keep.freq_hz) sel = i;
         if (sel < 0) sel = nearest_to_vfo();
     }
 
-    lv_table_set_row_cnt(table, (uint16_t)row_count);
+    lv_table_set_row_cnt(table, (uint16_t)(row_count ? row_count : 1));
     for (int r = 0; r < row_count; r++) lv_table_set_cell_value(table, (uint16_t)r, 0, " ");
-    /* Following the VFO, its row stays in the middle and the spots move. */
-    scroll_to_row(follow_vfo || sel < 0 ? row_of_spot(ROW_VFO) : row_of_spot(sel));
+    if (by_time()) {
+        /* The newest at the top of the list (past the padding) */
+        if (follow_vfo || sel < 0) lv_obj_scroll_to_y(table, lv_obj_get_style_pad_top(table, LV_PART_MAIN), LV_ANIM_OFF);
+        else scroll_to_show_row(row_of_spot(sel));
+    } else {
+        /* Following the VFO, its row stays in the middle and the spots move. */
+        scroll_to_row(follow_vfo || sel < 0 ? row_of_spot(ROW_VFO) : row_of_spot(sel));
+    }
     lv_obj_invalidate(table);
 }
 
@@ -488,6 +508,7 @@ static void timer_cb(lv_timer_t *t) {
     if (band != last_band) {
         last_band = band;
         changed   = true;
+        if (buttons_get_cur_page() == &btn_page_1) buttons_refresh(&btn_band);
     }
 
     uint16_t m = utc_now_min();
@@ -786,12 +807,34 @@ static void close_cb(button_data_t *data) {
 }
 
 static void band_all_cb(button_data_t *data) {
-    (void)data;
-    show_all   = !show_all;
+    bool all = !param_i_get(cfg_cluster_all_bands);
+    param_i_set(cfg_cluster_all_bands, all);
+    buttons_refresh(data);
     follow_vfo = true;
     rebuild();
     update_header();
-    msg_update_text_fmt("Cluster: %s", show_all ? "all bands" : "current band");
+    msg_update_text_fmt("Cluster: %s", all ? "all bands" : "current band");
+}
+
+/* The view shown: all bands, or the VFO's band by name */
+static const char *band_label(void) {
+    static char label[24];
+    int         band = vfo_band();
+    snprintf(label, sizeof(label), "Band /\n%s", showing_all() ? "All" : cluster_band_name(band));
+    return label;
+}
+
+static const char *order_label(void) {
+    return by_time() ? "Order /\nTime" : "Order /\nFreq";
+}
+
+/* By frequency around the VFO <-> newest first */
+static void order_cb(button_data_t *data) {
+    param_i_set(cfg_cluster_order, !by_time());
+    buttons_refresh(data);
+    follow_vfo = true;
+    rebuild();
+    msg_update_text_fmt("Cluster: %s", by_time() ? "newest first" : "by frequency");
 }
 
 static const char *mode_label(void) {

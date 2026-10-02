@@ -70,8 +70,8 @@ void btaudio_run(const char *args, btaudio_done_cb_t cb, void *user) {
     scheduler_put(fake_done, &r, sizeof r);
 }
 extern void *cfg_band_split;
-extern void *cfg_cluster_column;
-int32_t harness_cluster_column;
+extern void *cfg_cluster_column, *cfg_cluster_order, *cfg_cluster_all_bands;
+int32_t harness_cluster_column, harness_cluster_order, harness_cluster_all_bands;
 /* CW trainer: level, group and keyer speed are kept here, train is on */
 extern void *cfg_cwt_level, *cfg_cwt_group, *cfg_key_speed, *cfg_key_train;
 int32_t harness_cwt_level = 2, harness_cwt_group = 1, harness_key_speed = 15;
@@ -85,6 +85,8 @@ void param_i_set(void *p, int32_t v) {
     if (p == cfg_cwt_level) harness_cwt_level = v;
     if (p == cfg_cwt_group) harness_cwt_group = v;
     if (p == cfg_key_speed) harness_key_speed = v;
+    if (p == cfg_cluster_order) harness_cluster_order = v;
+    if (p == cfg_cluster_all_bands) harness_cluster_all_bands = v;
 }
 /* The decoder sink of the trainer: the harness feeds "decoded" text */
 static void (*sink_text)(const char *);
@@ -101,6 +103,8 @@ int32_t param_i_get(const void *p) {
     if (p == cfg_key_speed) return harness_key_speed;
     if (p == cfg_key_train) return 1;
     if (p == cfg_cluster_column) return harness_cluster_column;
+    if (p == cfg_cluster_order) return harness_cluster_order;
+    if (p == cfg_cluster_all_bands) return harness_cluster_all_bands;
     if (p == cfg_band_split) return 0;
     if (p == cfg_tx_filter_low) return 160;
     if (p == cfg_tx_filter_high) return 3000;
@@ -143,6 +147,15 @@ int __wrap_connect(int fd, const struct sockaddr *addr, socklen_t len) {
     (void)fd; (void)addr; (void)len;
     errno = ECONNREFUSED;
     return -1;
+}
+/* TX player: "transmits" for 3 s or until aborted (SSTV TX screen) */
+#include <unistd.h>
+bool tx_player_play(int16_t *s, uint32_t n, int32_t off, float gain, bool (*abort_check)(void *), void *ctx) {
+    for (int i = 0; i < 300; i++) {
+        if (abort_check && abort_check(ctx)) return false;
+        usleep(10000);
+    }
+    return true;
 }
 /* BASE rev 12: Settings shows every option (struct of 4 bytes, rev last) */
 uint32_t x6100_control_get_base_ver(void) { return 12u << 24; }

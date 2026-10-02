@@ -18,10 +18,12 @@ target_sources(${PROJECT_NAME} PUBLIC
     dialog_js8.c
     tx_player.c
     dialog_sstv.c
+    sstv_resources.c
     dialog_cluster.c
     freq_list.c
     dialog_modes.c
     dialog_cw_trainer.c
+    dialog_cw_kbd.c
     freq_strip.c
     freq_scale.c
     spot_marks.c

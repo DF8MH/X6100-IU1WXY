@@ -826,6 +826,7 @@ static action_items_t long_action_items[] = {
     /* Tools */
     { .label = " APP Cluster ", .action = ACTION_APP_CLUSTER },
     { .label = " APP CW Trainer ", .action = ACTION_APP_CWTRAINER },
+    { .label = " APP CW Keyboard ", .action = ACTION_APP_CW_KBD },
     { .label = " APP RX recorder ", .action = ACTION_APP_RECORDER },
     { .label = " APP SWR Scan ", .action = ACTION_APP_SWRSCAN },
     { .label = " APP GPS ", .action = ACTION_APP_GPS },
@@ -2130,6 +2131,7 @@ typedef struct {
     bool        hp;
     bool        autoconn;
     bool        is_new;
+    bool        kbd;
 } bt_dev_t;
 
 static int                    wl_gen;       /* results for a deleted page are dropped */
@@ -2207,6 +2209,7 @@ static void wl_pill(lv_obj_t *obj, const char *text, uint32_t bg, uint32_t fg) {
 #define PILL_OK     "connected", 0x1f4a24, 0x88ff88
 #define PILL_HP     "headphones", 0x4b3c14, 0xffd24a
 #define PILL_CAT    "CAT", 0x3a2f5a, 0xccbbff
+#define PILL_KBD    "keyboard", 0x14404b, 0x88e0ff
 #define PILL_NEW    "new", 0x2f3d4a, 0xccddee
 
 /* Cards: a rounded panel with a header (icon, title, divider) and its own
@@ -2840,6 +2843,8 @@ static void bt_update_view() {
             wl_pill(r->pill_1, PILL_NEW);
         } else if (d->hp) {
             wl_pill(r->pill_1, PILL_HP);
+        } else if (d->kbd) {
+            wl_pill(r->pill_1, PILL_KBD);
         } else {
             wl_pill(r->pill_1, PILL_CAT);
         }
@@ -2868,7 +2873,7 @@ static void bt_list_done(const char *out, int status, void *user) {
         auto f = split(line, '\t');
 
         if (f[0] == "DEV" && f.size() >= 6) {
-            bt.devs.push_back({f[1], f[5], f[2] == "1", f[3] == "hp", f[4] == "1", false});
+            bt.devs.push_back({f[1], f[5], f[2] == "1", f[3] == "hp", f[4] == "1", false, f[3] == "kbd"});
         } else if (f[0] == "HP" && f.size() >= 3) {
             int vol = atoi(f[2].c_str());
 
@@ -2940,11 +2945,13 @@ static void bt_scan_done(const char *out, int status, void *user) {
         auto f = split(line, '\t');
 
         if (f[0] == "NEW" && f.size() >= 3) {
-            bt.found.push_back({f[1], f[2], false, true, false, true});
+            bool kbd = f.size() >= 4 && f[3] == "kbd";
+
+            bt.found.push_back({f[1], f[2], false, !kbd, false, true, kbd});
         }
     }
     if (bt.scan_note) {
-        lv_label_set_text(bt.scan_note, bt.found.empty() ? "no headphones found" : "");
+        lv_label_set_text(bt.scan_note, bt.found.empty() ? "no headphones or keyboards found" : "");
     }
     bt_refresh();
 }
@@ -2955,7 +2962,7 @@ static void bt_scan_cb(lv_event_t *e) {
     }
     bt.scanning = true;
     if (bt.scan_note) {
-        lv_label_set_text(bt.scan_note, "scanning 15 s, put the headphones in pairing");
+        lv_label_set_text(bt.scan_note, "scanning 15 s, put the headphones or keyboard in pairing");
     }
     btaudio_run("scan", bt_scan_done, (void *)(intptr_t)wl_gen);
 }
@@ -2978,7 +2985,7 @@ static void bt_row_cb(lv_event_t *e) {
 
     if (d.connected) {
         items.push_back({"Disconnect", "", [d, name] { bt_action("disconnect " + d.mac, "disconnecting..."); }});
-    } else if (d.hp) {
+    } else if (d.hp || d.kbd) {
         items.push_back({"Connect", "", [d, name] { bt_action("connect " + d.mac, "connecting " + name + "..."); }});
     }
     if (d.hp) {

@@ -124,6 +124,12 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_cluster_column{"cluster_column", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Cluster lists (column and app): 0 = by frequency around the VFO, 1 = newest first
+    Parameter<int32_t> p_cluster_order{"cluster_order", 0, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Cluster lists: 0 = the VFO's band, 1 = all bands
+    Parameter<int32_t> p_cluster_all_bands{"cluster_all_bands", 0, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_waterfall_ref{"waterfall_ref", 0, -40, 20,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Spectrum and waterfall: 0 = VFO centered (the view follows it), 1 = fixed span (the VFO line moves)

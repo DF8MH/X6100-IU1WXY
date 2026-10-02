@@ -36,6 +36,8 @@ ParamInt         *cfg_spectrum_show       = nullptr;
 ParamInt         *cfg_cluster_spots_wf    = nullptr;
 ParamInt         *cfg_band_plan           = nullptr;
 ParamInt         *cfg_cluster_column      = nullptr;
+ParamInt         *cfg_cluster_order       = nullptr;
+ParamInt         *cfg_cluster_all_bands   = nullptr;
 ParamInt         *cfg_waterfall_ref       = nullptr;
 ParamInt         *cfg_wf_mode             = nullptr;
 ParamText        *cfg_encoder_bind        = nullptr;
@@ -166,6 +168,8 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_cluster_spots_wf = &cfg_sm.p_cluster_spots_wf;
     cfg_band_plan        = &cfg_sm.p_band_plan;
     cfg_cluster_column = &cfg_sm.p_cluster_column;
+    cfg_cluster_order    = &cfg_sm.p_cluster_order;
+    cfg_cluster_all_bands = &cfg_sm.p_cluster_all_bands;
     cfg_waterfall_ref    = &cfg_sm.p_waterfall_ref;
     cfg_wf_mode          = &cfg_sm.p_wf_mode;
     cfg_encoder_bind     = &cfg_sm.p_encoder_bind;

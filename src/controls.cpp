@@ -416,6 +416,24 @@ void controls_encoder_update(cfg_ctrl_t ctrl, int32_t diff, std::string &msg) {
             knobs_set_mfk_param(CTRL_CLUSTER);  /* no subject: refresh the knob label */
             break;
 
+        case CTRL_CLUSTER_ORDER:
+            i = cfg_sm.p_cluster_order.get();
+            if (diff) {
+                i = !i;
+                cfg_sm.p_cluster_order.set(i);
+            }
+            snprintf(msg.data(), msg.capacity(), "Cluster order: %s", i ? "newest first" : "frequency");
+            break;
+
+        case CTRL_CLUSTER_BANDS:
+            i = cfg_sm.p_cluster_all_bands.get();
+            if (diff) {
+                i = !i;
+                cfg_sm.p_cluster_all_bands.set(i);
+            }
+            snprintf(msg.data(), msg.capacity(), "Cluster: %s", i ? "all bands" : "current band");
+            break;
+
         case CTRL_IF_SHIFT:
             {
                 x6100_base_ver_t base_ver = x6100_control_get_base_ver();
@@ -439,7 +457,8 @@ cfg_ctrl_t controls_encoder_get_next(encoder_binds_t encoder, cfg_ctrl_t current
     // Initialization
     /* Cluster: always on the MFK, but only while its column is shown */
     auto bound = [&](size_t c) {
-        return c == CTRL_CLUSTER ? encoder == ENCODER_BIND_MFK && cfg_sm.p_cluster_column.get()
+        bool cl = c == CTRL_CLUSTER || c == CTRL_CLUSTER_ORDER || c == CTRL_CLUSTER_BANDS;
+        return cl ? encoder == ENCODER_BIND_MFK && cfg_sm.p_cluster_column.get()
                                  : binds[c] == encoder;
     };
     if (dir == 0) {

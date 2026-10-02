@@ -200,6 +200,8 @@ static std::map<int, Control*> controls = {
     {CTRL_WF_REF, new ControlSubjInt("WF ref", &cfg_sm.p_waterfall_ref)},
     {CTRL_WF_MODE, new ControlSubjChoices("WF mode", &cfg_sm.p_wf_mode, {"Centered", "Fixed"})},
     {CTRL_CLUSTER, new ControlCluster("Cluster")},
+    {CTRL_CLUSTER_ORDER, new ControlSubjChoices("Cluster order", &cfg_sm.p_cluster_order, {"Freq", "Time"})},
+    {CTRL_CLUSTER_BANDS, new ControlSubjChoices("Cluster bands", &cfg_sm.p_cluster_all_bands, {"Band", "All"})},
 
     {CTRL_DNF, new ControlSubjOnOff("Notch filter", &cfg_sm.p_dnf)},
     {CTRL_DNF_CENTER, new ControlSubjInt("DNF center", &cfg_sm.p_dnf_center)},

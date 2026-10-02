@@ -27,5 +27,8 @@ void cw_encoder_require_train(bool on);
 
 cw_encoder_state_t cw_encoder_state();
 
+/* Characters of the text already keyed (0 when idle) */
+int cw_encoder_sent();
+
 /* Seconds left in a beacon pause */
 int cw_encoder_pause_left();

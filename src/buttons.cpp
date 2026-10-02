@@ -327,6 +327,7 @@ static button_data_t btn_settings = make_app_btn("Settings", ACTION_APP_SETTINGS
 static button_data_t btn_cluster = make_app_btn("Cluster", ACTION_APP_CLUSTER);
 static button_data_t btn_modes   = make_app_btn("Modes", ACTION_APP_MODES);
 static button_data_t btn_cwt     = make_app_btn("CW\nTrainer", ACTION_APP_CWTRAINER);
+static button_data_t btn_cw_kbd  = make_app_btn("CW\nKeyboard", ACTION_APP_CW_KBD);
 
 /* RTTY */
 static button_data_t btn_rtty_p1 = {
@@ -450,7 +451,7 @@ static buttons_page_t page_app_1 = {
     {&btn_app_p1, &btn_modes, &btn_cluster, &btn_swr, &btn_gps}
 };
 static buttons_page_t page_app_2 = {
-    {&btn_app_p2, &btn_rec, &btn_settings, &btn_cwt}
+    {&btn_app_p2, &btn_rec, &btn_settings, &btn_cwt, &btn_cw_kbd}
 };
 
 /* RTTY */

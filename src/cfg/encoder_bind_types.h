@@ -68,6 +68,8 @@ typedef enum {
     CTRL_WF_REF,
     CTRL_CLUSTER,     /* MFK only, offered while the cluster column is shown; not stored */
     CTRL_WF_MODE,
+    CTRL_CLUSTER_ORDER,   /* as CTRL_CLUSTER: MFK only, while the column is shown */
+    CTRL_CLUSTER_BANDS,
 
     CTRL_FAST_ACCESS_LAST,
 

@@ -18,12 +18,13 @@
 #define TITLE_H 30
 #define ROW_H   28
 #define POOL    16
+#define FREQ_W  58
 
 typedef struct {
     lv_obj_t *freq, *call, *mode, *age;
 } row_t;
 
-static lv_obj_t      *box, *hl;
+static lv_obj_t      *box, *hl, *title;
 static row_t          rows[POOL];
 static cluster_spot_t spots[CLUSTER_MAX_SPOTS];
 static int            spots_n;
@@ -31,8 +32,10 @@ static uint32_t       spots_gen;
 static uint16_t       last_min = 0xFFFF;
 static uint32_t       last_fgen;
 static int32_t        last_vfo = -1;
+static int32_t        last_order = -1, last_all = -1;
 static int32_t        vfo;
-static cluster_spot_t band[CLUSTER_MAX_SPOTS];  /* the band's spots by frequency */
+static uint16_t       sort_now;
+static cluster_spot_t band[CLUSTER_MAX_SPOTS];  /* the listed spots, by frequency or newest first */
 static int            band_n;
 static bool           active;                   /* MFK item "Cluster" */
 static bool           has_sel;
@@ -59,6 +62,11 @@ static int by_freq(const void *a, const void *b) {
     return ((const cluster_spot_t *)a)->freq_hz - ((const cluster_spot_t *)b)->freq_hz;
 }
 
+static int by_age(const void *a, const void *b) {
+    return cluster_age_min(((const cluster_spot_t *)a)->utc_min, sort_now) -
+           cluster_age_min(((const cluster_spot_t *)b)->utc_min, sort_now);
+}
+
 static void show_row(row_t *r, bool show) {
     void (*f)(lv_obj_t *, lv_obj_flag_t) = show ? lv_obj_clear_flag : lv_obj_add_flag;
 
@@ -78,11 +86,35 @@ static void set_alert_bg(row_t *r, bool on) {
     }
 }
 
-/* The band's spots by frequency with the VFO marker row among them, kept
- * in the middle of the box: tuning scrolls the names past it. */
+static void show_spot(row_t *r, const cluster_spot_t *s, bool highlighted, const cluster_filter_t *flt, uint16_t now) {
+    uint16_t age   = cluster_age_min(s->utc_min, now);
+    uint32_t c     = age_color(age);
+    bool     alert = cluster_alert_match(flt, s) >= 0;
+    char     buf[16];
+
+    snprintf(buf, sizeof buf, "%d", (int)(s->freq_hz / 1000));
+    lv_label_set_text(r->freq, buf);
+    lv_obj_set_width(r->freq, FREQ_W);
+    lv_obj_set_style_text_align(r->freq, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_color(r->freq, lv_color_hex(0xDDE6F0), 0);
+    set_alert_bg(r, alert && !highlighted);
+    lv_label_set_text(r->call, s->dx);
+    set_mode(r->mode, s);
+    snprintf(buf, sizeof buf, "%um", age);
+    lv_label_set_text(r->age, buf);
+    lv_obj_set_style_text_color(r->call, lv_color_hex(alert ? 0xFF9BE0 : c), 0);
+    lv_obj_set_style_text_color(r->age, lv_color_hex(c), 0);
+    show_row(r, true);
+}
+
+/* By frequency: the spots with the VFO marker row among them, kept in the
+ * middle of the box: tuning scrolls the names past it. Newest first: the
+ * list from the top, no marker. */
 static void redraw(void) {
     int       n = 0, m = 0, si = -1;
     int       cb = cluster_band_of(vfo);
+    bool      all = param_i_get(cfg_cluster_all_bands);
+    bool      by_time = param_i_get(cfg_cluster_order);
     const cluster_filter_t *flt = cluster_filter();
     time_t    t  = time(NULL);
     struct tm tm;
@@ -99,17 +131,22 @@ static void redraw(void) {
     gmtime_r(&t, &tm);
     now = tm.tm_hour * 60 + tm.tm_min;
 
-    last_fgen = flt->gen;
-    if (cb >= 0) {
+    last_fgen  = flt->gen;
+    last_order = by_time;
+    last_all   = all;
+    lv_label_set_text_fmt(title, "Cluster %s - %s", all ? "All" : (cb >= 0 ? cluster_band_name(cb) : "--"),
+                          by_time ? "Time" : "Freq");
+    if (all || cb >= 0) {
         for (int i = 0; i < spots_n; i++) {
-            if (cluster_band_of(spots[i].freq_hz) == cb && cluster_filter_pass(flt, &spots[i], now)) {
+            if ((all || cluster_band_of(spots[i].freq_hz) == cb) && cluster_filter_pass(flt, &spots[i], now)) {
                 band[n++] = spots[i];
             }
         }
-        qsort(band, n, sizeof(band[0]), by_freq);
+        sort_now = now;
+        qsort(band, n, sizeof(band[0]), by_time ? by_age : by_freq);
     }
     band_n = n;
-    while (m < n && band[m].freq_hz < vfo) {
+    while (!by_time && m < n && band[m].freq_hz < vfo) {
         m++;    /* the marker goes before band[m] */
     }
     if (active && n > 0) {
@@ -118,13 +155,12 @@ static void redraw(void) {
                 si = i;
             }
         }
-        if (si < 0) {   /* none yet, or gone: the spot nearest above the VFO */
-            si  = m < n ? m : n - 1;
+        if (si < 0) {   /* none yet, or gone: the newest, or the spot nearest above the VFO */
+            si  = by_time ? 0 : (m < n ? m : n - 1);
             sel = band[si];
             has_sel = true;
         }
     }
-    int base = si < 0 ? m : (si < m ? si : si + 1);  /* active: the highlight stays in the middle */
     int fit = (lv_obj_get_height(box) - TITLE_H - 8) / ROW_H;
 
     if (fit > POOL) {
@@ -137,6 +173,34 @@ static void redraw(void) {
     } else {
         lv_obj_add_flag(hl, LV_OBJ_FLAG_HIDDEN);
     }
+    if (by_time) {
+        int first = si - fit / 2;   /* the highlight in the middle once the list is long enough */
+
+        if (first > n - fit) {
+            first = n - fit;
+        }
+        if (first < 0) {
+            first = 0;
+        }
+        for (int k = 0; k < fit; k++) {
+            int idx = first + k;
+
+            if (idx >= n) {
+                show_row(&rows[k], false);
+                continue;
+            }
+            if (idx == si) {
+                lv_obj_set_y(hl, TITLE_H + k * ROW_H);
+            }
+            show_spot(&rows[k], &band[idx], idx == si, flt, now);
+        }
+        for (int k = fit; k < POOL; k++) {
+            show_row(&rows[k], false);
+        }
+        return;
+    }
+    int base = si < 0 ? m : (si < m ? si : si + 1);  /* active: the highlight stays in the middle */
+
     for (int k = 0; k < fit; k++) {
         int   idx = base - fit / 2 + k;     /* < m: spots below the marker, m: the marker, > m: spots (idx - 1) */
         row_t *r  = &rows[k];
@@ -161,25 +225,7 @@ static void redraw(void) {
             lv_obj_add_flag(r->mode, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(r->age, LV_OBJ_FLAG_HIDDEN);
         } else {
-            const cluster_spot_t *s = &band[idx < m ? idx : idx - 1];
-            uint16_t age = cluster_age_min(s->utc_min, now);
-            uint32_t c   = age_color(age);
-            bool     alert = cluster_alert_match(flt, s) >= 0;
-            char     buf[16];
-
-            snprintf(buf, sizeof buf, "%d", (int)(s->freq_hz / 1000));
-            lv_label_set_text(r->freq, buf);
-            lv_obj_set_width(r->freq, 58);
-            lv_obj_set_style_text_align(r->freq, LV_TEXT_ALIGN_LEFT, 0);
-            lv_obj_set_style_text_color(r->freq, lv_color_hex(0xDDE6F0), 0);
-            set_alert_bg(r, alert && !(idx == base && si >= 0));
-            lv_label_set_text(r->call, s->dx);
-            set_mode(r->mode, s);
-            snprintf(buf, sizeof buf, "%um", age);
-            lv_label_set_text(r->age, buf);
-            lv_obj_set_style_text_color(r->call, lv_color_hex(alert ? 0xFF9BE0 : c), 0);
-            lv_obj_set_style_text_color(r->age, lv_color_hex(c), 0);
-            show_row(r, true);
+            show_spot(r, &band[idx < m ? idx : idx - 1], idx == base && si >= 0, flt, now);
         }
     }
     for (int k = fit; k < POOL; k++) {
@@ -187,7 +233,7 @@ static void redraw(void) {
     }
 }
 
-/* 1 Hz, redraws only when the spots, the minute or the VFO changed */
+/* 1 Hz, redraws only when the spots, the minute, the VFO or the view changed */
 static void timer_cb(lv_timer_t *t) {
     int      n   = cluster_client_snapshot(spots, CLUSTER_MAX_SPOTS, &spots_gen);
     uint16_t min = (time(NULL) / 60) % 1440;
@@ -196,7 +242,8 @@ static void timer_cb(lv_timer_t *t) {
     if (n >= 0) {
         spots_n = n;
     }
-    if (n >= 0 || min != last_min || vfo != last_vfo || cluster_filter()->gen != last_fgen) {
+    if (n >= 0 || min != last_min || vfo != last_vfo || cluster_filter()->gen != last_fgen ||
+        param_i_get(cfg_cluster_order) != last_order || param_i_get(cfg_cluster_all_bands) != last_all) {
         last_min = min;
         last_vfo = vfo;
         redraw();
@@ -245,10 +292,11 @@ void cluster_column_refresh(void) {
     redraw();
 }
 
-static lv_obj_t *cell(lv_obj_t *p, lv_coord_t x, lv_coord_t w, lv_coord_t y, lv_text_align_t al, uint32_t c) {
+static lv_obj_t *cell(lv_obj_t *p, lv_coord_t x, lv_coord_t w, lv_coord_t y, lv_text_align_t al, uint32_t c,
+                      const lv_font_t *font) {
     lv_obj_t *l = lv_label_create(p);
 
-    lv_obj_set_style_text_font(l, &sony_22, 0);
+    lv_obj_set_style_text_font(l, font, 0);
     lv_obj_set_style_text_color(l, lv_color_hex(c), 0);
     lv_obj_set_style_text_align(l, al, 0);
     lv_label_set_long_mode(l, LV_LABEL_LONG_CLIP);
@@ -266,7 +314,7 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
     lv_obj_set_size(box, COL_W, 480 - BUTTONS_H - y);
     lv_obj_set_style_radius(box, 10, 0);
     lv_obj_set_style_bg_color(box, lv_color_hex(0x080E1E), 0);
-    lv_obj_set_style_bg_opa(box, 240, 0);
+    lv_obj_set_style_bg_opa(box, LV_OPA_80, 0);
     lv_obj_set_style_border_color(box, lv_color_hex(0x3A4A6A), 0);
     lv_obj_set_style_border_width(box, 1, 0);
     lv_obj_clear_flag(box, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
@@ -283,17 +331,19 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
     lv_obj_add_flag(hl, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(hl, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *title = cell(box, 0, COL_W - 2, 2, LV_TEXT_ALIGN_CENTER, 0x60E0D0);
+    title = cell(box, 0, COL_W - 2, 2, LV_TEXT_ALIGN_CENTER, 0x60E0D0, &sony_22);
     lv_label_set_text(title, "DX Cluster");
     lv_obj_clear_flag(title, LV_OBJ_FLAG_HIDDEN);
 
+    /* Call, mode and age in smaller fonts with a gap between the fields: long
+     * calls no longer run into the frequency and the mode */
     for (int i = 0; i < POOL; i++) {
         lv_coord_t ry = TITLE_H + i * ROW_H;
 
-        rows[i].freq = cell(box, 5, 58, ry, LV_TEXT_ALIGN_LEFT, 0xDDE6F0);
-        rows[i].call = cell(box, 66, 96, ry, LV_TEXT_ALIGN_LEFT, 0xFFFFFF);
-        rows[i].mode = cell(box, 162, 40, ry, LV_TEXT_ALIGN_LEFT, 0xFFFFFF);
-        rows[i].age  = cell(box, 202, 36, ry, LV_TEXT_ALIGN_RIGHT, 0xFFFFFF);
+        rows[i].freq = cell(box, 5, FREQ_W, ry, LV_TEXT_ALIGN_LEFT, 0xDDE6F0, &sony_22);
+        rows[i].call = cell(box, 67, 102, ry + 2, LV_TEXT_ALIGN_LEFT, 0xFFFFFF, &sony_20);
+        rows[i].mode = cell(box, 173, 32, ry + 3, LV_TEXT_ALIGN_LEFT, 0xFFFFFF, &sony_18);
+        rows[i].age  = cell(box, 207, 32, ry + 3, LV_TEXT_ALIGN_RIGHT, 0xFFFFFF, &sony_18);
     }
     lv_timer_create(timer_cb, 1000, NULL);
     timer_cb(NULL);

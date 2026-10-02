@@ -60,6 +60,7 @@ typedef enum {
     ACTION_APP_MODES,   /* appended after CLUSTER */
     ACTION_APP_CWTRAINER, /* appended after MODES */
     ACTION_APP_WSPR,    /* appended after CWTRAINER */
+    ACTION_APP_CW_KBD,  /* appended after WSPR */
 } press_action_t;
 
 typedef enum {

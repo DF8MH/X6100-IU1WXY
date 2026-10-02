@@ -2,7 +2,7 @@
 # Bluetooth headphones (A2DP) for the RX audio. Used by Settings -> Wireless.
 #
 #   btaudio-ctl list                     paired devices + audio state (tab separated)
-#   btaudio-ctl scan                     15 s scan, prints the new headphones found
+#   btaudio-ctl scan                     15 s scan, prints the new headphones and keyboards found
 #   btaudio-ctl pair MAC                 pair + trust + connect
 #   btaudio-ctl connect|disconnect|remove MAC
 #   btaudio-ctl autoconnect MAC on|off   connect at startup
@@ -44,9 +44,12 @@ has() { echo "$2" | grep -q "$1: yes"; }
 
 name() { echo "$1" | sed -n 's/^[[:space:]]*Alias: //p' | head -n 1; }
 
-# Role from `bluetoothctl info`: hp = A2DP headphones, cat = phone/tablet (SPP)
+# Role from `bluetoothctl info`: hp = A2DP headphones, kbd = keyboard (CW
+# keyboard app), cat = phone/tablet (SPP)
 role() {
-	if echo "$1" | grep -q "Icon: audio-"; then
+	if echo "$1" | grep -q "Icon: input-keyboard"; then
+		echo kbd
+	elif echo "$1" | grep -q "Icon: audio-"; then
 		echo hp
 	elif echo "$1" | grep -q "0000110b-" && ! echo "$1" | grep -q "0000111f-"; then
 		echo hp
@@ -127,13 +130,20 @@ scan() {
 	for mac in $(devices); do
 		info=$(bluetoothctl info "$mac" 2>/dev/null)
 		has Paired "$info" && continue
-		[ "$(role "$info")" = hp ] || continue
-		printf 'NEW\t%s\t%s\n' "$mac" "$(name "$info")"
+		r=$(role "$info")
+		[ "$r" = hp ] || [ "$r" = kbd ] || continue
+		printf 'NEW\t%s\t%s\t%s\n' "$mac" "$(name "$info")" "$r"
 	done
 }
 
 connect() {
 	bluetoothctl connect "$1" >/dev/null 2>&1
+	# a keyboard has no audio: connected is enough
+	if [ "$(role "$(bluetoothctl info "$1" 2>/dev/null)")" = kbd ]; then
+		sleep 2
+		bluetoothctl info "$1" 2>/dev/null | grep -q "Connected: yes" || { echo "Connection failed"; return 1; }
+		return 0
+	fi
 	# the A2DP sink shows up a moment after the link
 	for _ in 1 2 3 4 5 6 7 8 9 10; do
 		sync_audio

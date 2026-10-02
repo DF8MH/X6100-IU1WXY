@@ -21,6 +21,7 @@
 #include "cluster_column.h"
 #include "dialog_msg_voice.h"
 #include "dialog_msg_cw.h"
+#include "dialog_cw_kbd.h"
 #include "dialog_cw_trainer.h"
 #include "dialog_wspr.h"
 #include "wspr/wspr.h"
@@ -212,13 +213,17 @@ static void app(const char *name, dialog_t *d, int pages) {
 
 extern int32_t harness_fg_freq;
 
-/* The frequency bookmarks of an app: the Freq. button is the 2nd on page 1. */
-static void bookmarks(const char *name, dialog_t *d, int32_t freq, int btn) {
+/* The frequency bookmarks of an app: the Freq. button is button btn of page page + 1. */
+static void bookmarks(const char *name, dialog_t *d, int32_t freq, int page, int btn) {
     char p[64];
     harness_fg_freq = freq;
     dialog_construct(d, lv_scr_act());
     pump(300);
     buttons_page_t *pg = buttons_get_cur_page();
+    for (int i = 0; i < page; i++) {
+        pg->items[0]->press(pg->items[0]);
+        pg = buttons_get_cur_page();
+    }
     pg->items[btn]->press(pg->items[btn]);   /* Freq. */
     pump(100);
     snprintf(p, sizeof p, "%s_freq.ppm", name);
@@ -230,6 +235,68 @@ static void bookmarks(const char *name, dialog_t *d, int32_t freq, int btn) {
     pump(100);
     snprintf(p, sizeof p, "%s_freq_2.ppm", name);
     shot(p);
+    dialog_destruct();
+    pump(200);
+}
+
+/* SSTV TX: the menu, a target callsign, Replay with picture, text and
+ * colours, then the transmission (stubbed tx_player) and Halt TX. */
+static void sstv_key(uint32_t key, int n) {
+    for (int i = 0; i < n; i++) lv_event_send(lv_group_get_focused(keyboard_group), LV_EVENT_KEY, &key);
+    pump(100);
+}
+static void sstv_press(int ms) {
+    lv_event_send(lv_group_get_focused(keyboard_group), LV_EVENT_PRESSED, NULL);
+    pump(ms);
+}
+static void sstv_tx_demo(void) {
+    system("rm -rf sstv_demo && mkdir -p sstv_demo && cp -r '" SSTV_DEFAULTS "/tx_pics' '" SSTV_DEFAULTS "/tx_text' sstv_demo/");
+    params_str_set(&params.callsign, "IU1WXY");
+    harness_fg_freq = 14230000;
+    dialog_construct(dialog_sstv, lv_scr_act());
+    pump(300);
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[4]->press(pg->items[4]);   /* TX */
+    pump(200);
+    shot("sstv_tx_1.ppm");               /* the TX menu */
+    sstv_key(LV_KEY_DOWN, 5);            /* SET TARGET CALLSIGN */
+    sstv_press(200);
+    textarea_window_set("IK1ABC");
+    pump(100);
+    shot("sstv_tx_2.ppm");               /* keyboard */
+    uint32_t enter = LV_KEY_ENTER;
+    lv_event_send(textarea_window_text(), LV_EVENT_KEY, &enter);
+    pump(200);
+    sstv_key(LV_KEY_UP, 3);              /* REPLAY TO IK1ABC */
+    shot("sstv_tx_3.ppm");
+    sstv_press(600);                     /* pictures, the first one loaded */
+    sstv_key(LV_KEY_DOWN, 1);
+    pg = buttons_get_cur_page();
+    for (int i = 0; i < 3; i++) pg->items[3]->press(pg->items[3]);   /* TX Mode: Martin M1 */
+    pump(500);
+    shot("sstv_tx_4.ppm");
+    sstv_press(300);                     /* text templates */
+    sstv_key(LV_KEY_DOWN, 4);
+    pump(200);
+    shot("sstv_tx_5.ppm");
+    sstv_press(300);                     /* colours */
+    sstv_key(LV_KEY_DOWN, 2);
+    pump(500);
+    shot("sstv_tx_6.ppm");
+    sstv_press(1500);                    /* transmitting */
+    shot("sstv_tx_7.ppm");
+    pg = buttons_get_cur_page();
+    pg->items[4]->press(pg->items[4]);   /* Halt TX */
+    pump(500);
+    shot("sstv_tx_8.ppm");               /* back to Auto RX */
+    pg->items[0]->press(pg->items[0]);
+    pump(100);
+    shot("sstv_tx_9.ppm");               /* page 2: Freq., browser, restart */
+    pg = buttons_get_cur_page();
+    pg->items[2]->press(pg->items[2]);   /* RX pictures browser */
+    pump(200);
+    shot("sstv_tx_10.ppm");
+    pg->items[2]->press(pg->items[2]);
     dialog_destruct();
     pump(200);
 }
@@ -323,6 +390,11 @@ static void cluster_demo(void) {
     pump(100);
     shot("cluster_4b.ppm");
     pg->items[1]->press(pg->items[1]); /* Server again closes the list */
+    pump(100);
+    pg->items[2]->press(pg->items[2]); /* Order: newest first */
+    pump(300);
+    shot("cluster_time.ppm");
+    pg->items[2]->press(pg->items[2]); /* back to by frequency */
     pump(100);
     /* Tuning: the VFO row stays in the middle, also at the band edge */
     harness_fg_freq = 14250000;
@@ -567,6 +639,15 @@ static void topbar(void) {
     cluster_column_refresh();
     pump(1100);
     shot("cluster_column_1.ppm");
+    extern int32_t harness_cluster_order, harness_cluster_all_bands;
+    harness_cluster_order = 1;      /* newest first, then all bands */
+    pump(1100);
+    shot("cluster_column_time.ppm");
+    harness_cluster_all_bands = 1;
+    pump(1100);
+    shot("cluster_column_time_all.ppm");
+    harness_cluster_order = harness_cluster_all_bands = 0;
+    pump(1100);
     cluster_column_set_active(true);
     cluster_column_move(1);
     pump(100);
@@ -972,6 +1053,39 @@ static void settings_nav(void) {
     pump(200);
 }
 
+/* CW keyboard: a line typed and sent, a second one queued, then stopped */
+static void cwkbd_demo(void) {
+    extern int32_t harness_mode;
+    int32_t        mode = harness_mode;
+    const char    *line = "CQ CQ DE IU1WXY K";
+
+    harness_mode = x6100_mode_cw;
+    dialog_construct(dialog_cw_kbd, lv_scr_act());
+    pump(300);
+    shot("cwkbd_1.ppm");
+    for (const char *c = line; *c; c++) {
+        uint32_t k = (unsigned char)*c;
+        lv_event_send(dialog_cw_kbd->obj, LV_EVENT_KEY, &k);
+    }
+    pump(200);
+    shot("cwkbd_2.ppm");
+    uint32_t enter = LV_KEY_ENTER, esc = LV_KEY_ESC;
+    lv_event_send(dialog_cw_kbd->obj, LV_EVENT_KEY, &enter);
+    for (const char *c = "tu 5nn"; *c; c++) {
+        uint32_t k = (unsigned char)*c;
+        lv_event_send(dialog_cw_kbd->obj, LV_EVENT_KEY, &k);
+    }
+    lv_event_send(dialog_cw_kbd->obj, LV_EVENT_KEY, &enter);
+    pump(1500);
+    shot("cwkbd_3.ppm");
+    lv_event_send(dialog_cw_kbd->obj, LV_EVENT_KEY, &esc);   /* stop, or close when idle (here: the Morse table is a stub, sending is instant) */
+    pump(300);
+    shot("cwkbd_4.ppm");
+    dialog_destruct();
+    pump(200);
+    harness_mode = mode;
+}
+
 static void crash(int sig) {
     void *bt[32];
     int n = backtrace(bt, 32);
@@ -1062,6 +1176,7 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < sizeof apps / sizeof apps[0]; i++)
         if (!only || !strcmp(only, apps[i].n)) app(apps[i].n, *apps[i].d, apps[i].pages);
     if (!only || !strcmp(only, "cluster")) cluster_demo();
+    if (!only || !strcmp(only, "sstv")) sstv_tx_demo();
     if (only && !strcmp(only, "voicekeyer")) voicekeyer();
     if (!only || !strcmp(only, "msg")) {
         dialog_construct(dialog_msg_voice, lv_scr_act());
@@ -1084,11 +1199,12 @@ int main(int argc, char **argv) {
     if (!only || !strcmp(only, "settings")) settings_demo();
     if (!only || !strcmp(only, "wireless")) wireless_demo();
     if (only && !strcmp(only, "settings_nav")) settings_nav();
+    if (!only || !strcmp(only, "cwkbd")) cwkbd_demo();
     if (only && !strcmp(only, "cluster_filters")) cluster_filters_demo();
     if (!only || !strcmp(only, "bookmarks")) {
-        bookmarks("navtex", dialog_navtex, 517000, 1);
-        bookmarks("wefax", dialog_wefax, 7878500, 1);
-        bookmarks("sstv", dialog_sstv, 14230000, 4);
+        bookmarks("navtex", dialog_navtex, 517000, 0, 1);
+        bookmarks("wefax", dialog_wefax, 7878500, 0, 1);
+        bookmarks("sstv", dialog_sstv, 14230000, 1, 1);
     }
     return 0;
 }

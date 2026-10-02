@@ -179,6 +179,10 @@ void cw_encoder_send(const char *text, bool beacon) {
     }
 }
 
+int cw_encoder_sent() {
+    return state == CW_ENCODER_IDLE || !current_msg ? 0 : (int)(current_char - current_msg);
+}
+
 int cw_encoder_pause_left() {
     return pause_left;
 }

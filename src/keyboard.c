@@ -17,6 +17,9 @@
 
 #include <linux/input.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <sys/ioctl.h>
 
 #include <glob.h>
 
@@ -48,16 +51,45 @@ static void kbd_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
     kbd_rollover_read(&rollover, kbd_next, NULL, data);
 }
 
-static char* search_kbd_device() {
-    glob_t globbuf;
-    globbuf.gl_offs = 1;
-    char *path = NULL;
+/* A device with the keys of a keyboard (letters, space, enter): the radio's
+ * own buttons and knobs have none of these */
+static bool has_letters(const char *path) {
+    unsigned long bits[KEY_MAX / (8 * sizeof(long)) + 1] = {0};
+    int           fd = open(path, O_RDONLY | O_NONBLOCK);
+    bool          ok;
 
-    int res = glob("/dev/input/by-path/*-kbd", 0, NULL, &globbuf);
-    if (res == 0) {
-        path = globbuf.gl_pathv[0];
+    if (fd < 0) {
+        return false;
     }
-    return path;
+    ok = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(bits)), bits) >= 0;
+    close(fd);
+    for (int k = KEY_Q; ok && k <= KEY_P; k++) {    /* the top letter row */
+        ok = bits[k / (8 * sizeof(long))] & (1UL << (k % (8 * sizeof(long))));
+    }
+    return ok && (bits[KEY_SPACE / (8 * sizeof(long))] & (1UL << (KEY_SPACE % (8 * sizeof(long)))));
+}
+
+/* USB keyboards by path; Bluetooth ones have no path link: by their keys */
+static char* search_kbd_device() {
+    static char path[64];
+    glob_t      globbuf;
+    bool        found = false;
+
+    if (glob("/dev/input/by-path/*-kbd", 0, NULL, &globbuf) == 0) {
+        snprintf(path, sizeof(path), "%s", globbuf.gl_pathv[0]);
+        found = true;
+    }
+    globfree(&globbuf);
+    if (!found && glob("/dev/input/event*", 0, NULL, &globbuf) == 0) {
+        for (size_t i = 0; i < globbuf.gl_pathc && !found; i++) {
+            if (has_letters(globbuf.gl_pathv[i])) {
+                snprintf(path, sizeof(path), "%s", globbuf.gl_pathv[i]);
+                found = true;
+            }
+        }
+        globfree(&globbuf);
+    }
+    return found ? path : NULL;
 }
 
 static void setup_kbd(char *path) {

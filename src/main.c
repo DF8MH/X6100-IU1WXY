@@ -47,6 +47,7 @@
 #include "btaudio.h"
 #include "usb_devices.h"
 #include "dialog_cluster.h"
+#include "sstv_resources.h"
 
 #define DISP_BUF_SIZE (800 * 480 * 4)
 
@@ -137,6 +138,7 @@ int main(void) {
     vol->state = VOL_STATE_EDIT;
 
     params_init();
+    sstv_resources_init();
     display_settings_check();
     audio_set_play_vol(params.play_gain_db_f.x);
     audio_set_rec_vol(params.rec_gain_db_f.x);
