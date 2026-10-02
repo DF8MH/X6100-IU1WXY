@@ -415,6 +415,62 @@ static x6100_mode_t ci_mode_2_x_mode(uint8_t mode, bool data_mode=false) {
     return r_mode;
 }
 
+/* 1A 06 set: data mode on/off keeps LSB/USB, only adds or drops the D */
+static x6100_mode_t ci_data_mode_2_x_mode(x6100_mode_t x_mode, uint8_t data_mode) {
+    if (data_mode) {
+        if (x_mode == x6100_mode_lsb) return x6100_mode_lsb_dig;
+        if (x_mode == x6100_mode_usb) return x6100_mode_usb_dig;
+    } else {
+        if (x_mode == x6100_mode_lsb_dig) return x6100_mode_lsb;
+        if (x_mode == x6100_mode_usb_dig) return x6100_mode_usb;
+    }
+    return x_mode;
+}
+
+/* CW pitch: 0 = 300 Hz, 128 = 600 Hz, 255 = 900 Hz */
+static uint8_t x_cw_pitch_2_ci(int32_t key_tone) {
+    return static_cast<float>(key_tone - 300) * 0.425f;
+}
+
+static int32_t ci_cw_pitch_2_x(uint8_t val) {
+    float tone = 2.3529411764705883f * static_cast<float>(val) + 300;
+    return std::round(tone / 5.0f) * 5;     /* to 5 Hz */
+}
+
+/* 1A 01: ICOM band codes (BCD: 6 m is 0x10), 0x15 = outside the bands */
+static uint8_t get_ci_band_id(int32_t freq) {
+    switch (freq / 1000) {
+        case 1800 ... 2000:   return 0x01;
+        case 3400 ... 4100:   return 0x02;
+        case 6900 ... 7500:   return 0x03;
+        case 9900 ... 10500:  return 0x04;
+        case 13900 ... 14500: return 0x05;
+        case 17900 ... 18500: return 0x06;
+        case 20900 ... 21500: return 0x07;
+        case 24400 ... 25100: return 0x08;
+        case 28000 ... 30000: return 0x09;
+        case 50000 ... 54000: return 0x10;
+    }
+    return 0x15;
+}
+
+/* The band's centre frequency, 0 for an unknown code */
+static int32_t ci_band_freq(uint8_t band) {
+    switch (band) {
+        case 0x01: return 1900000;
+        case 0x02: return 3500000;
+        case 0x03: return 7100000;
+        case 0x04: return 10100000;
+        case 0x05: return 14200000;
+        case 0x06: return 18100000;
+        case 0x07: return 21200000;
+        case 0x08: return 24900000;
+        case 0x09: return 28400000;
+        case 0x10: return 50000000;
+    }
+    return 0;
+}
+
 static uint8_t x_mode_2_ci_mode(x6100_mode_t mode, bool *data_mode=nullptr) {
     switch (mode) {
         case x6100_mode_lsb_dig:
@@ -688,6 +744,15 @@ static Frame *process_req(const Frame *req) {
                             cfg_sm.p_squelch.set(from_bcd_be(&req->data[1], 3) * 100 / 255);
                         }
                         break;
+                    case 0x09:
+                        // CW pitch
+                        if (data_size == 1) {
+                            resp->set_payload_len(4);
+                            to_bcd_be(&resp->data[1], x_cw_pitch_2_ci(cfg_sm.p_key_tone.get()), 3);
+                        } else if (data_size == 3) {
+                            cfg_sm.p_key_tone.set(ci_cw_pitch_2_x(from_bcd_be(&req->data[1], 3)));
+                        }
+                        break;
                     case 0x0a:
                         // PWR
                         if (data_size == 1) {
@@ -848,18 +913,22 @@ static Frame *process_req(const Frame *req) {
             // TODO: Implement another options
             if (data_size == 1) {
                 switch (req->data[0]) {
+                    case MEM_BS_REG:
+                        resp->set_payload_len(4);
+                        resp->data[1] = get_ci_band_id(cfg_sm.cp_fg_freq.get());
+                        resp->data[2] = 0x02;
+                        break;
+
                     case MEM_IF_FW:
                         resp->set_payload_len(3);
                         resp->data[1] = get_if_bandwidth();
                         break;
 
                     case MEM_DM_FG:
-                        resp->set_payload_len(5);
-                        resp->data[1] = x_mode_2_ci_mode(cur_mode);
-                        // data mode
-                        resp->data[2] = (cur_mode == x6100_mode_lsb_dig) || (cur_mode == x6100_mode_usb_dig);
-                        // filter group
-                        resp->data[3] = 0;
+                        // data mode, filter
+                        resp->set_payload_len(4);
+                        resp->data[1] = (cur_mode == x6100_mode_lsb_dig) || (cur_mode == x6100_mode_usb_dig);
+                        resp->data[2] = 0x01;
                         break;
 
                     default:
@@ -868,15 +937,22 @@ static Frame *process_req(const Frame *req) {
                 }
             } else {
                 switch (req->data[0]) {
+                    case MEM_BS_REG:
+                        {
+                            int32_t freq = ci_band_freq(req->data[1]);
+                            if (freq) {
+                                cfg_sm.cp_fg_freq.set(freq);
+                            }
+                            resp->set_code(freq ? CODE_OK : CODE_NG);
+                        }
+                        break;
                     case MEM_LOCK:  // Various controls for icom, unsupported
                         resp->set_code(CODE_NG);
                         break;
                     case MEM_DM_FG:
-                        {
-                            x6100_mode_t new_mode  = ci_mode_2_x_mode(req->data[1], req->data[2]);
-                            cfg_sm.cp_cur_mode.set(new_mode);
-                            resp->set_code(CODE_OK);
-                        }
+                        // data mode, filter
+                        cfg_sm.cp_cur_mode.set(ci_data_mode_2_x_mode(cur_mode, req->data[1]));
+                        resp->set_code(CODE_OK);
                         break;
                     default:
                         set_unsupported(req, resp);

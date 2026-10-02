@@ -687,21 +687,17 @@ static void dsp_update_min_max(float *psd_lin, uint16_t size) {
     size_t start = size * 0.04f;
     size_t stop = size * (1 - 0.04f);
 
-    float power_sum[stop - start - window_size];
-
-    // Sum with window
-    for (size_t i = 0; i < stop - start - window_size; i++) {
-        power_sum[i] = 0.0f;
-        for (size_t j = 0; j < window_size; j++) {
-            power_sum[i] += psd_lin[i + j + start];
-        }
+    // Minimum of the window sums, with a running sum (one add and one
+    // subtract per bin instead of window_size adds)
+    float running = 0.0f;
+    for (size_t j = 0; j < window_size; j++) {
+        running += psd_lin[start + j];
     }
-
-    // Search minimum
-    float min = MAXFLOAT;
-    for (size_t i = 0; i < stop - start - window_size; i++) {
-        if (min > power_sum[i]) {
-            min = power_sum[i];
+    float min = running;
+    for (size_t i = 1; i < stop - start - window_size; i++) {
+        running += psd_lin[start + i + window_size - 1] - psd_lin[start + i - 1];
+        if (running < min) {
+            min = running;
         }
     }
 
@@ -734,7 +730,8 @@ static void dsp_update_min_max(float *psd_lin, uint16_t size) {
     float noise_bw_offset = 10.0f * log10f(((float)filter_to - filter_from) / win_size_hz);
     meter_set_noise(min + noise_bw_offset);
 
-    min -= 19.0f;
+    // From the window sum back to the level of one bin, plus a margin
+    min -= 10.0f * log10f(window_size) + 5.0f;
 
     if (min < S_MIN) {
         min = S_MIN;
