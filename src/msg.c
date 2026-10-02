@@ -11,6 +11,7 @@
 #include "styles.h"
 #include "util.h"
 #include "events.h"
+#include "remote_server.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,6 +91,12 @@ static void msg_update_cb(lv_event_t * e) {
 static void create_msg(const char * fmt, enum msg_type_t type, uint16_t dur, va_list args) {
     delayed_message_t * msg = (delayed_message_t *) malloc(sizeof(delayed_message_t));
     vsnprintf(msg->text, sizeof(msg->text), fmt, args);
+
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "t", "msg");
+    cJSON_AddStringToObject(o, "text", msg->text);
+    remote_event(o);
+
     msg->type = type;
     msg->dur = dur;
     event_send(obj, EVENT_MSG_UPDATE, (void*)msg);

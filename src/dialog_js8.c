@@ -31,6 +31,7 @@
 #include "msg.h"
 #include "params/params.h"
 #include "radio.h"
+#include "remote_server.h"
 #include "keypad.h"
 #include "scheduler.h"
 #include "styles.h"
@@ -1000,7 +1001,25 @@ static void table_select_cb(lv_event_t *e) {
 
 static void ui_add_message(void *arg) {
     if (!dialog.run || !table) return;
-    add_message((const js8_rx_msg_t *)arg);
+    const js8_rx_msg_t *m = arg;
+    add_message(m);
+
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "t", "js8_rx");
+    cJSON_AddNumberToObject(o, "id", m->msg_id);
+    cJSON_AddBoolToObject(o, "partial", m->partial);
+    cJSON_AddNumberToObject(o, "utc", m->utc);
+    cJSON_AddNumberToObject(o, "snr", m->snr);
+    cJSON_AddNumberToObject(o, "dt", roundf(m->dt * 10.0f) / 10.0f);
+    cJSON_AddNumberToObject(o, "freq", roundf(m->freq_hz));
+    cJSON_AddStringToObject(o, "speed", js8_speed_name(js8_speed_from_submode(m->submode)));
+    cJSON_AddStringToObject(o, "from", m->from);
+    cJSON_AddStringToObject(o, "to", m->to);
+    cJSON_AddStringToObject(o, "text", m->text);
+    cJSON_AddBoolToObject(o, "cq", m->cq);
+    cJSON_AddBoolToObject(o, "to_me", m->to_me);
+    cJSON_AddBoolToObject(o, "hb", m->heartbeat);
+    remote_event(o);
 }
 
 static void on_message(const js8_rx_msg_t *m, void *ctx) {
@@ -1322,6 +1341,16 @@ static void ui_tx_status(void *arg) {
     }
     tx_status = *st;
     update_tx_bar();
+
+    static const char *states[] = {"IDLE", "WAITING", "KEYING"};
+    cJSON             *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "t", "js8_tx");
+    cJSON_AddStringToObject(o, "state", st->state <= JS8_TX_KEYING ? states[st->state] : "?");
+    cJSON_AddNumberToObject(o, "frame", st->frame);
+    cJSON_AddNumberToObject(o, "frames", st->frames);
+    cJSON_AddNumberToObject(o, "freq", roundf(st->offset_hz));
+    cJSON_AddStringToObject(o, "text", st->text);
+    remote_event(o);
 }
 
 static void on_tx_status(const js8_tx_status_t *st, void *ctx) {
@@ -1334,6 +1363,10 @@ static void ui_tx_done(void *arg) {
     const tx_done_t *done      = arg;
     bool             completed = done->completed;
     if (!completed) add_info_row("TX stopped");
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "t", "js8_txdone");
+    cJSON_AddBoolToObject(o, "ok", completed);
+    remote_event(o);
     deliver_end(done->text, completed);
     memset(&tx_status, 0, sizeof(tx_status));
     update_tx_bar();
@@ -4962,4 +4995,27 @@ static void freq_cb(button_data_t *btn) {
     if (popup_guard()) return;
     if (composing) return;
     freq_show();
+}
+
+/* ---- Web remote ---------------------------------------------------------- */
+
+void dialog_js8_remote(const char *cmd, int32_t val, const char *text) {
+    (void)val;
+    user_touch();
+    if (!strcmp(cmd, "js8_send")) {
+        char out[TX_TEXT_MAX + 8];
+        if (aprs_prepare(text, out, sizeof(out))) tx_queue(out);
+    } else if (!strcmp(cmd, "js8_cq")) {
+        send_cq(false);
+    } else if (!strcmp(cmd, "js8_hb")) {
+        send_heartbeat(false);
+    } else if (!strcmp(cmd, "js8_stop")) {
+        if (js8_tx_busy(tx)) js8_tx_stop(tx);
+        auto_cq_stop("TX stopped");
+    }
+}
+
+int dialog_js8_remote_state(char *buf, size_t size) {
+    return snprintf(buf, size, "{\"busy\":%i,\"txfreq\":%i,\"speed\":\"%s\"}", tx_status.state != JS8_TX_IDLE,
+                    params.js8_tx_freq.x, js8_speed_name(cur_speed()));
 }

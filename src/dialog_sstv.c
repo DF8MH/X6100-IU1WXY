@@ -13,6 +13,7 @@
 #include "sstv/decoder.h"
 #include "sstv/encoder.h"
 #include "radio.h"
+#include "remote_server.h"
 #include "tx_player.h"
 #include "events.h"
 #include "msg.h"
@@ -1231,6 +1232,12 @@ static void ui_timer_cb(lv_timer_t *timer)
         saved_overlay_pending = false;
         snprintf(message, sizeof(message), "SSTV picture %s saved", saved_overlay_name);
         msg_schedule_text_fmt("%s", message);
+
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddStringToObject(o, "t", "sstv_rx");
+        cJSON_AddStringToObject(o, "file", saved_overlay_name);
+        cJSON_AddStringToObject(o, "mode", test_info.name ? test_info.name : "");
+        remote_event(o);
     }
 
     if (tx_running) {
@@ -1260,6 +1267,11 @@ static void ui_timer_cb(lv_timer_t *timer)
             lv_obj_set_style_bg_color(progress_bar, TC(ok_bar), LV_PART_INDICATOR);
         }
         if (tx_ui_state == SSTV_TX_UI_RF) {
+            cJSON *o = cJSON_CreateObject();
+            cJSON_AddStringToObject(o, "t", "sstv_txdone");
+            cJSON_AddNumberToObject(o, "result", tx_result);
+            remote_event(o);
+
             if (tx_result == 1) {
                 /* Commit LAST TX only after the RF worker has completed the
                  * entire transmission successfully.  Aborts/errors leave the
@@ -2215,6 +2227,22 @@ static void tx_picture_selection_changed_cb(lv_event_t *e)
         tx_picture_schedule_preview();
 }
 
+/* IMAGE ONLY: the prepared picture goes out as it is (TX setup, or the web remote) */
+static void tx_image_only_start(void)
+{
+    size_t bytes=(size_t)tx_picture_width*tx_picture_height*3;
+    memcpy(tx_final_rgb,tx_picture_rgb,bytes);
+    tx_picture_render_preview();
+    tx_picture_selector_destroy();
+    tx_instruction_hide();
+    lv_group_add_obj(keyboard_group,sstv_canvas);
+    lv_group_focus_obj(sstv_canvas);
+    lv_group_set_editing(keyboard_group,true);
+    if (status_label) lv_obj_clear_flag(status_label,LV_OBJ_FLAG_HIDDEN);
+    fprintf(stderr,"SSTV TX UI: IMAGE ONLY picture confirmed -> RF\n");
+    tx_start_final_rf();
+}
+
 static void tx_picture_pressed_cb(lv_event_t *e)
 {
     (void)e;
@@ -2247,17 +2275,7 @@ static void tx_picture_pressed_cb(lv_event_t *e)
 
     fprintf(stderr, "SSTV TX UI: picture confirmed: %s\n", tx_picture_name);
     if (tx_message_type == SSTV_TX_MESSAGE_IMAGE_ONLY) {
-        size_t bytes=(size_t)tx_picture_width*tx_picture_height*3;
-        memcpy(tx_final_rgb,tx_picture_rgb,bytes);
-        tx_picture_render_preview();
-        tx_picture_selector_destroy();
-        tx_instruction_hide();
-        lv_group_add_obj(keyboard_group,sstv_canvas);
-        lv_group_focus_obj(sstv_canvas);
-        lv_group_set_editing(keyboard_group,true);
-        if (status_label) lv_obj_clear_flag(status_label,LV_OBJ_FLAG_HIDDEN);
-        fprintf(stderr,"SSTV TX UI: IMAGE ONLY picture confirmed -> RF\n");
-        tx_start_final_rf();
+        tx_image_only_start();
         return;
     }
     if (tx_message_type == SSTV_TX_MESSAGE_CQ) {
@@ -4078,4 +4096,53 @@ static void tx_ui_cb(button_data_t *data)
     update_rx_controls();
     tx_type_selector_build();
     fprintf(stderr, "SSTV TX UI: entered setup at action selector; previous Auto RX=%d\n", tx_restore_auto_rx ? 1 : 0);
+}
+
+/* Web remote: sstv_tx sends a picture of SSTV_TX_PICS_DIR as IMAGE ONLY, val is the
+ * index in cont_modes[] */
+void dialog_sstv_remote(const char *cmd, int32_t val, const char *text)
+{
+    if (!strcmp(cmd, "sstv_stop")) {
+        if (tx_ui_state == SSTV_TX_UI_RF) tx_abort = true;
+        return;
+    }
+    if (strcmp(cmd, "sstv_tx") || val < 0 || val >= (int32_t)(sizeof(cont_modes)/sizeof(cont_modes[0])))
+        return;
+    if (tx_ui_state != SSTV_TX_UI_RX || tx_running) {
+        msg_update_text_fmt("SSTV TX busy");
+        return;
+    }
+    if (sstv_browser_open) sstv_browser_close();
+    cont_mode = cont_modes[val];
+    tx_ui_cb(NULL);                 /* into the TX setup, as the TX button */
+    tx_type_selector_destroy();
+    tx_message_type = SSTV_TX_MESSAGE_IMAGE_ONLY;
+    if (!tx_picture_load_and_prepare(text)) {
+        msg_update_text_fmt("SSTV TX: can't load %s", text);
+        tx_ui_cb(NULL);             /* cancel */
+        return;
+    }
+    snprintf(tx_last_picture_file, sizeof(tx_last_picture_file), "%s", text);
+    tx_image_only_start();
+}
+
+int dialog_sstv_remote_state(char *buf, size_t size)
+{
+    sstv_tx_ui_state_t ui = tx_ui_state;
+    const char *rx = "OFF";
+    long w = 0, n = 0;
+
+    if (live_decoding || live_decode_pending || cont_decoding || cont_decode_pending) {
+        rx = "DECODE";
+    } else if (live_capturing) {
+        rx = "CAPTURE"; w = live_written; n = live_target;
+    } else if (cont_capturing) {
+        rx = "CAPTURE"; w = cont_written; n = cont_capacity;
+    } else if (live_enabled) {
+        rx = "LISTEN";
+    }
+    int prog = ui == SSTV_TX_UI_RF ? tx_progress : n > 0 ? (int)(w * 1000 / n) : 0;
+    return snprintf(buf, size, "{\"ui\":\"%s\",\"rx\":\"%s\",\"vis\":\"%s\",\"prog\":%i}",
+                    ui == SSTV_TX_UI_RF ? "TX" : ui == SSTV_TX_UI_SETUP ? "SETUP" : "RX", rx,
+                    cont_mode_name(ui == SSTV_TX_UI_RF ? tx_mode : cont_mode), prog < 0 ? 0 : prog > 1000 ? 1000 : prog);
 }

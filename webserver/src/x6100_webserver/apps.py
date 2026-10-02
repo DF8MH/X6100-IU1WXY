@@ -356,9 +356,12 @@ def set_wfview():
 
 
 # Web remote: control and spectrum through the GUI's local socket (src/remote_server.cpp,
-# one JSON object per line), RX audio from PulseAudio. Receive only: there is no PTT.
+# one JSON object per line), RX audio from PulseAudio. No PTT: only the apps transmit
+# (docs/REMOTE_API.md), when the radio's Remote TX setting allows it.
 
-REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", "rfgain", "filter"}
+REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", "rfgain", "filter",
+               "app", "ft8_cq", "ft8_reply", "ft8_stop", "ft8_auto", "ft8_hold", "ft8_txfreq",
+               "js8_send", "js8_cq", "js8_hb", "js8_stop", "wspr_txpct", "wspr_txnext", "sstv_tx", "sstv_stop"}
 # The radio RX audio as the GUI's decoders get it (src/audio.c), 16 bit mono
 REMOTE_AUDIO_CMD = ["parec", "--device=alsa_input.platform-sound.stereo-fallback", "--format=s16le",
                     "--rate=12000", "--channels=1", "--latency-msec=100",
@@ -395,15 +398,27 @@ def remote_command():
     # The GUI checks the values; keep the line short and plain
     if not (val is None or (isinstance(val, int) and not isinstance(val, bool)) or (isinstance(val, str) and len(val) <= 8)):
         return api_error(400, "Invalid value")
+    text = data.get("text")
+    if not (text is None or (isinstance(text, str) and len(text) <= 200 and text.isascii() and text.isprintable())):
+        return api_error(400, "Invalid text")
+    cmd = {"cmd": data["cmd"], "val": val}
+    if text is not None:
+        cmd["text"] = text
     try:
         with remote_connect(3) as sock, sock.makefile("rb") as f:
-            sock.sendall(json.dumps({"cmd": data["cmd"], "val": val}).encode() + b"\n")
+            sock.sendall(json.dumps(cmd).encode() + b"\n")
             reply = json.loads(f.readline() or b"{}")
     except (OSError, ValueError):
         return api_error(503, "Radio GUI not reachable")
     if reply.get("t") != "ok":
         return api_error(409, reply.get("err", "Rejected by the radio"))
     return {"status": "OK"}
+
+
+@app.get('/api/info')
+def remote_info():
+    """Discovery for the phone app"""
+    return {"radio": "x6100", "api": 1, "callsign": read_callsign(), "remote": os.path.exists(settings.REMOTE_SOCK)}
 
 
 @app.get('/api/remote/stream')
@@ -847,7 +862,8 @@ def files(filepath=""):
 
 # Gallery: screen recordings, audio recordings and screenshots
 
-GALLERY_DIRS = {"screenrec": ("screenrec", (".avi", ".mp4")), "rec": ("rec", (".mp3", ".wav")), "shots": ("", (".png",))}
+GALLERY_DIRS = {"screenrec": ("screenrec", (".avi", ".mp4")), "rec": ("rec", (".mp3", ".wav")), "shots": ("", (".png",)),
+                "sstv": ("sstv", (".png",)), "sstv_tx": ("sstv/tx_pics", (".png",))}
 GALLERY_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._ -]*$')
 
 
@@ -892,6 +908,8 @@ def gallery():
 def get_gallery():
     items = []
     for kind, (sub, exts) in GALLERY_DIRS.items():
+        if bottle.request.query.get("kind", kind) != kind:
+            continue
         folder = os.path.join(settings.FILEBROWSER_PATH, sub)
         try:
             names = os.listdir(folder)
@@ -922,7 +940,7 @@ def gallery_file(kind, name):
 @app.get('/gallery/thumb/<kind>/<name>')
 def gallery_thumb(kind, name):
     root, path = gallery_path(kind, name)
-    if kind == "shots":
+    if kind in ("shots", "sstv", "sstv_tx"):
         return bottle.static_file(name, root=root)
     jpeg = avi_first_frame(path) if kind == "screenrec" else None
     if not jpeg:
@@ -936,6 +954,32 @@ def gallery_thumb(kind, name):
 def delete_gallery_file(kind, name):
     root, path = gallery_path(kind, name)
     os.remove(path)
+    return {"status": "OK"}
+
+
+SSTV_TX_MAX = 4 * 1024 * 1024
+
+
+@app.post('/api/sstv/tx_pics')
+def upload_sstv_tx_pic():
+    """A PNG for the radio's SSTV TX pictures (multipart field "file")"""
+    upload = bottle.request.files.get("file")
+    if upload is None:
+        return api_error(400, "No file")
+    name = upload.raw_filename
+    if not GALLERY_NAME.match(name) or not name.endswith(".png"):
+        return api_error(400, "Invalid file name")
+    data = upload.file.read(SSTV_TX_MAX + 1)
+    if len(data) > SSTV_TX_MAX:
+        return api_error(413, "Larger than 4 MB")
+    if not data.startswith(b"\x89PNG"):
+        return api_error(400, "Not a PNG")
+    folder = os.path.join(settings.FILEBROWSER_PATH, GALLERY_DIRS["sstv_tx"][0])
+    os.makedirs(folder, exist_ok=True)
+    tmp = os.path.join(folder, "." + name + ".tmp")   # hidden: the radio and the gallery skip it
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, os.path.join(folder, name))
     return {"status": "OK"}
 
 

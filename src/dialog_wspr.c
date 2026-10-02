@@ -32,6 +32,7 @@
 #include "params/params.h"
 #include "qth/qth.h"
 #include "radio.h"
+#include "remote_server.h"
 #include "scheduler.h"
 #include "station.h"
 #include "styles.h"
@@ -363,6 +364,28 @@ static void decoded_cb(void *arg) {
     if (!dialog.run || res->gen != atomic_load(&gen)) {
         return;
     }
+
+    cJSON *o = cJSON_CreateObject();
+
+    cJSON_AddStringToObject(o, "t", "wspr_rx");
+    cJSON_AddNumberToObject(o, "cycle", res->cycle);
+    cJSON_AddNumberToObject(o, "dial", res->dial_hz);
+    cJSON *spots = cJSON_AddArrayToObject(o, "spots");
+    for (int k = 0; k < res->n && k < MAX_SPOTS; k++) {
+        const wspr_spot_t *s = &res->spots[k];
+        cJSON             *j = cJSON_CreateObject();
+
+        cJSON_AddNumberToObject(j, "snr", s->snr);
+        cJSON_AddNumberToObject(j, "dt", roundf(s->dt * 10.0f) / 10.0f);
+        cJSON_AddNumberToObject(j, "drift", s->drift);
+        cJSON_AddNumberToObject(j, "freq", round(s->freq_hz));
+        cJSON_AddStringToObject(j, "call", s->call);
+        cJSON_AddStringToObject(j, "loc", s->loc);
+        cJSON_AddNumberToObject(j, "dbm", s->dbm);
+        cJSON_AddItemToArray(spots, j);
+    }
+    remote_event(o);
+
     last_n    = res->n;
     last_secs = res->secs;
     if (res->n == 0) {
@@ -665,4 +688,26 @@ static void destruct_cb(void) {
     freq_strip_set_offset(-1);
     radio_set_pwr(param_f_get(cfg_pwr));
     table = NULL;
+}
+
+/* Web remote */
+
+void dialog_wspr_remote(const char *cmd, int32_t val, const char *text) {
+    (void)text;
+    if (!strcmp(cmd, "wspr_txpct")) {
+        param_i_set(cfg_wspr_tx_pct, val);
+    } else if (!strcmp(cmd, "wspr_txnext")) {
+        if (val != atomic_load(&tx_next)) {
+            tx_next_cb(NULL);
+        }
+    }
+}
+
+int dialog_wspr_remote_state(char *buf, size_t size) {
+    static const char *names[] = {"WAIT", "RX", "TX", "STOP"};
+    int                st      = atomic_load(&state);
+
+    return snprintf(buf, size, "{\"st\":\"%s\",\"sec\":%i,\"pct\":%i,\"next\":%i,\"up\":%i}",
+                    st >= ST_WAIT && st <= ST_STOP ? names[st] : "?", (int)fmod(now_s(), CYCLE_S),
+                    param_i_get(cfg_wspr_tx_pct), atomic_load(&tx_next) ? 1 : 0, atomic_load(&uploaded));
 }

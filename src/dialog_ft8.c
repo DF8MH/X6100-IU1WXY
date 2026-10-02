@@ -44,6 +44,7 @@
 #include "ft8/worker.h"
 #include "adif.h"
 #include "qso_log.h"
+#include "remote_server.h"
 #include "scheduler.h"
 #include "theme.h"
 
@@ -112,6 +113,17 @@ static double cur_lat, cur_lon;
 static int32_t filter_low, filter_high;
 
 static float base_gain_offset;
+
+/* Decodes the web remote can answer (ft8_reply), by the id of their ft8_rx event */
+#define REMOTE_RX_N 64
+
+static struct {
+    int32_t        id;
+    bool           odd;
+    ftx_msg_meta_t meta;
+} remote_rx[REMOTE_RX_N];
+static int32_t         remote_rx_id;
+static pthread_mutex_t remote_rx_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void construct_cb(lv_obj_t *parent);
 static void key_cb(lv_event_t * e);
@@ -235,6 +247,14 @@ static void save_qso(const char *remote_callsign, const char *remote_grid, const
     }
 
     lv_finder_clear_cursor(finder);
+
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "t", "ft8_qso");
+    cJSON_AddStringToObject(o, "call", remote_callsign);
+    cJSON_AddStringToObject(o, "grid", remote_grid);
+    cJSON_AddNumberToObject(o, "sent", s_snr);
+    cJSON_AddNumberToObject(o, "rcvd", r_snr);
+    remote_event(o);
 }
 
 static void worker_init() {
@@ -274,6 +294,10 @@ static void worker_done() {
     }
     lv_finder_clear_cursor(finder);
     tx_msg.msg[0] = '\0';
+
+    pthread_mutex_lock(&remote_rx_mutex);   /* other band or protocol */
+    memset(remote_rx, 0, sizeof(remote_rx));
+    pthread_mutex_unlock(&remote_rx_mutex);
 }
 
 /* Table widget lifecycle, draw, scroll and message insertion all live
@@ -864,6 +888,38 @@ static void add_tx_text(const char * text) {
         cell_data.text[2] = ' ';
     }
     scheduler_put(table_view_add_msg_cb, &cell_data, sizeof(cell_data_t));
+
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "t", "ft8_tx");
+    cJSON_AddStringToObject(o, "text", cell_data.text);
+    remote_event(o);
+}
+
+/* Every decode, for the web remote */
+static void remote_rx_event(int16_t snr, const char *text, bool odd, const ftx_msg_meta_t *meta) {
+    static const char *types[] = {"CQ", "GRID", "REPORT", "R_REPORT", "RR73", "73", "OTHER"};
+    int32_t            id;
+
+    pthread_mutex_lock(&remote_rx_mutex);
+    id = ++remote_rx_id;
+    remote_rx[id % REMOTE_RX_N].id   = id;
+    remote_rx[id % REMOTE_RX_N].odd  = odd;
+    remote_rx[id % REMOTE_RX_N].meta = *meta;
+    pthread_mutex_unlock(&remote_rx_mutex);
+
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "t", "ft8_rx");
+    cJSON_AddNumberToObject(o, "id", id);
+    cJSON_AddBoolToObject(o, "odd", odd);
+    cJSON_AddNumberToObject(o, "snr", snr);
+    cJSON_AddNumberToObject(o, "dt", roundf(meta->time_sec * 10.0f) / 10.0f);
+    cJSON_AddNumberToObject(o, "freq", roundf(meta->freq_hz));
+    cJSON_AddStringToObject(o, "text", text);
+    cJSON_AddStringToObject(o, "call", meta->call_de);
+    cJSON_AddStringToObject(o, "grid", meta->grid);
+    cJSON_AddStringToObject(o, "type", meta->type <= FXT_MSG_TYPE_OTHER ? types[meta->type] : "OTHER");
+    cJSON_AddBoolToObject(o, "to_me", meta->to_me);
+    remote_event(o);
 }
 
 /**
@@ -889,6 +945,7 @@ static void add_rx_text(int16_t snr, const char * text, slot_info_t *s_info, flo
         }
     }
     free(old_msg);
+    remote_rx_event(snr, text, s_info->odd, &meta);
 
     ft8_cell_type_t cell_type;
     if (meta.to_me) {
@@ -1015,4 +1072,48 @@ static void on_tick_cb(const slot_info_t *info, bool new_slot,
                      ts->tm_hour, ts->tm_min, ts->tm_sec);
         }
     }
+}
+
+/* ---- Web remote --------------------------------------------------------- */
+
+void dialog_ft8_remote(const char *cmd, int32_t val, const char *text) {
+    (void)text;
+    if (!strcmp(cmd, "ft8_cq")) {
+        if (val != subject_i_get(cq_enabled))
+            tx_cq_en_dis_cb(NULL);
+    } else if (!strcmp(cmd, "ft8_stop")) {
+        tx_call_off();
+        subject_i_set(cq_enabled, false);
+        tx_msg.msg[0] = '\0';
+    } else if (!strcmp(cmd, "ft8_auto")) {
+        if (val != param_i_get(cfg_ft8_auto))
+            mode_auto_cb(NULL);
+    } else if (!strcmp(cmd, "ft8_hold")) {
+        if (val != param_i_get(cfg_ft8_hold_freq))
+            hold_tx_freq_cb(NULL);
+    } else if (!strcmp(cmd, "ft8_txfreq")) {
+        set_freq(limit(val, filter_low, filter_high - (param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? FT8_WIDTH_HZ : FT4_WIDTH_HZ)));
+    } else if (!strcmp(cmd, "ft8_reply")) {
+        cell_data_t cd = {.cell_type = CELL_RX_MSG};
+        bool        found;
+
+        pthread_mutex_lock(&remote_rx_mutex);
+        found = remote_rx[val % REMOTE_RX_N].id == val;
+        if (found) {
+            cd.odd  = remote_rx[val % REMOTE_RX_N].odd;
+            cd.meta = remote_rx[val % REMOTE_RX_N].meta;
+        }
+        pthread_mutex_unlock(&remote_rx_mutex);
+        if (found)
+            on_table_press(&cd);
+        else
+            msg_update_text_fmt("FT8: that message is too old");
+    }
+}
+
+int dialog_ft8_remote_state(char *buf, size_t size) {
+    return snprintf(buf, size, "{\"cq\":%i,\"txen\":%i,\"txing\":%i,\"auto\":%i,\"hold\":%i,\"txfreq\":%i}",
+                    cq_enabled ? subject_i_get(cq_enabled) != 0 : 0, tx_enabled ? subject_i_get(tx_enabled) != 0 : 0,
+                    state == TX_PROCESS, param_i_get(cfg_ft8_auto) != 0, param_i_get(cfg_ft8_hold_freq) != 0,
+                    params.ft8_tx_freq.x);
 }

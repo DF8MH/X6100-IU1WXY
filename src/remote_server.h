@@ -12,11 +12,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "cJSON.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void remote_server_init();
+
+/* An event ({"t":...}) for the subscribed web clients. Any thread; takes o and frees it. */
+void remote_event(cJSON *o);
 
 /* Waterfall PSD (dB) from the DSP, sent to the subscribed web clients (~10 fps) */
 void remote_scope_data(const float *psd_db, size_t n, uint32_t center_hz, uint32_t width_hz, bool tx);
