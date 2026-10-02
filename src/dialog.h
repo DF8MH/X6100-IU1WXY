@@ -41,6 +41,9 @@ typedef struct {
 void dialog_construct(dialog_t *dialog, lv_obj_t *parent);
 void dialog_destruct();
 
+/* The open app changed the mode from mode to forced: back to mode when it closes */
+void dialog_restore_mode_on_close(int32_t mode, int32_t forced);
+
 void dialog_send(lv_event_code_t event_code, void *param);
 bool dialog_is_run();
 bool dialog_type_is_run(dialog_t *dialog);

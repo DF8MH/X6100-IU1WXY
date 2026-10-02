@@ -377,7 +377,7 @@ static bool update_spectrum(ChunkedSpgram *sp_sg, uint64_t now, bool tx, uint32_
             float *src = spectrum_psd_filtered;
             float *dst = spectrum_psd_filtered;
             float *to_clear_p;
-            int32_t size;
+            int32_t size = 0;   /* shift 0 (less than a bin): nothing to move */
             if (shift > 0) {
                 src = spectrum_psd_filtered + shift;
                 size = SPECTRUM_NFFT - shift;

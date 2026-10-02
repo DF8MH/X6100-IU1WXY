@@ -12,6 +12,7 @@
 #include "theme.h"
 #include "main_screen.h"
 #include "freq_strip.h"
+#include "cfg/cfg_api.h"
 #include "keyboard.h"
 #include "events.h"
 #include "waterfall.h"
@@ -19,6 +20,13 @@
 
 static lv_obj_t     *obj;
 static dialog_t     *current_dialog = NULL;
+static int32_t      restore_mode = -1;     /* the mode before an app changed it, back at its close */
+static int32_t      forced_mode;
+
+void dialog_restore_mode_on_close(int32_t mode, int32_t forced) {
+    restore_mode = mode;
+    forced_mode  = forced;
+}
 
 void dialog_construct(dialog_t *dialog, lv_obj_t *parent) {
     if (dialog && !dialog->run) {
@@ -64,6 +72,12 @@ void dialog_destruct() {
         }
         main_screen_keys_enable(true);
         current_dialog = NULL;
+    }
+    if (restore_mode >= 0) {
+        /* Unless the mode was changed again meanwhile */
+        if (cparam_i_get(cfg_cur_mode) == forced_mode)
+            cparam_i_set(cfg_cur_mode, restore_mode);
+        restore_mode = -1;
     }
 }
 

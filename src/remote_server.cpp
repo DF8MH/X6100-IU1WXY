@@ -293,10 +293,15 @@ static void open_app(int32_t app) {
     bool    cw   = mode == x6100_mode_cw || mode == x6100_mode_cwr;
     if (main_screen_mode_locked())
         return;
+    int32_t to = -1;
     if (actions[app] == ACTION_APP_CW_KBD && !cw)
-        cfg_sm.cp_cur_mode.set(x6100_mode_cw);
+        to = x6100_mode_cw;
     else if (cw && (actions[app] == ACTION_APP_SSTV || actions[app] == ACTION_APP_WEFAX || actions[app] == ACTION_APP_NAVTEX))
-        cfg_sm.cp_cur_mode.set(x6100_mode_usb);
+        to = x6100_mode_usb;
+    if (to >= 0) {
+        cfg_sm.cp_cur_mode.set(to);
+        dialog_restore_mode_on_close(mode, to);
+    }
 }
 
 /* Taken also while the radio transmits */
