@@ -9,6 +9,7 @@
 #include "lvgl/lvgl.h"
 #include "lv_drivers/display/fbdev.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
@@ -140,6 +141,10 @@ int main(void) {
     audio_set_rec_vol(params.rec_gain_db_f.x);
     mfk_init();
     vol_init();
+    /* Bundled themes to the SD card once; one already there is never overwritten */
+    if (system("mkdir -p /mnt/themes; for t in /usr/share/x6100/themes/*; do "
+               "[ -e \"/mnt/themes/${t##*/}\" ] || cp -r \"$t\" /mnt/themes/; done") != 0)
+        LV_LOG_WARN("Bundled themes not copied to /mnt/themes");
     theme_init(params.theme_name.x);    /* an unknown one falls back to IU1WXY */
     fonts_apply(theme_shape.font >= 0 ? theme_shape.font : params.font.x);
     styles_init();
