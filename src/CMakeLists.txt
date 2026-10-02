@@ -33,6 +33,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     sstv/decoder.c
     sstv/encoder.c
     wefax/decoder.c
+    wefax/encoder.c
     navtex/decoder.cpp
     navtex/navtex_rx.cpp
     navtex/fftfilt.cxx

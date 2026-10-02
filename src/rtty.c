@@ -13,12 +13,20 @@
 #include "params/params.h"
 #include "cfg/cfg_api.h"
 #include "util.h"
+#include "msg.h"
+#include "remote_server.h"
+#include "tx_player.h"
 
 #include "lvgl/lvgl.h"
 
+#include <ctype.h>
 #include <math.h>
+#include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
+#include <time.h>
 
 #define SYMBOL_OVER 8
 #define SYMBOL_FACTOR 2
@@ -253,6 +261,7 @@ static void add_symbol(float pwr) {
                         char str[2] = {c, 0};
 
                         panel_add_text(str);
+                        remote_text("rtty_text", str, 1);
                     }
                 }
                 rx_state = RX_STATE_IDLE;
@@ -429,4 +438,195 @@ bool rtty_change_reverse(int16_t df) {
 
 static void on_cur_mode_change(Subject *subj, void *user_data) {
     cur_mode = cparam_i_get(cfg_cur_mode);
+}
+
+/* TX (web remote): the text in AFSK, ITA2 with 1 start, 5 data (LSB first) and 1.5 stop bits */
+
+#define TX_TEXT_MAX 200
+#define TX_AMP      (32767.0f * 0.8f)
+#define TX_IDLE_S   1.0f    /* mark before the first character */
+#define TX_TAIL     3.0f    /* bits of mark after the last one */
+
+typedef struct {
+    char  text[TX_TEXT_MAX + 1];
+    float baud, mark_hz, space_hz;
+    int   n;                          /* codes */
+    uint8_t  codes[2 * TX_TEXT_MAX + 1];
+    uint8_t  done[2 * TX_TEXT_MAX + 1];   /* characters of text on air once this code is */
+    uint32_t end[2 * TX_TEXT_MAX + 1];    /* sample where this code ends */
+    struct timespec start;
+} tx_job_t;
+
+typedef struct {
+    int16_t *buf;
+    uint32_t n;
+    double   pos;   /* samples, fractional */
+    float    phase;
+} synth_t;
+
+static atomic_bool tx_abort;
+static atomic_int  tx_sent;
+
+/* ITA2 code of c, -1 if none. *shift: the case it needs, 0 for both */
+static int baudot_code(char c, uint8_t *shift) {
+    for (int i = 0; c && i < 32; i++) {
+        if (i == RTTY_SYMBOL_CODE || i == RTTY_LETTER_CODE)
+            continue;
+        bool l = rtty_letters[i] == c, f = rtty_symbols[i] == c;
+        if (l || f) {
+            *shift = (l && f) ? 0 : l ? RTTY_LETTER_CODE : RTTY_SYMBOL_CODE;
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* LTRS first, then the characters with the case shifts; the ones Baudot lacks are dropped */
+static void tx_encode(tx_job_t *job) {
+    uint8_t shift = RTTY_LETTER_CODE;
+
+    job->n        = 0;
+    job->codes[0] = RTTY_LETTER_CODE;
+    job->done[0]  = 0;
+    job->n++;
+    for (int i = 0; job->text[i]; i++) {
+        uint8_t sh;
+        int     code = baudot_code(toupper((unsigned char)job->text[i]), &sh);
+
+        if (code < 0)
+            continue;
+        if (sh && sh != shift) {
+            shift               = sh;
+            job->codes[job->n]  = sh;
+            job->done[job->n++] = i;
+        }
+        job->codes[job->n]  = code;
+        job->done[job->n++] = i + 1;
+    }
+}
+
+/* Continuous phase; bit edges on the fractional sample position */
+static void tx_bits(synth_t *s, float hz, float bits, float spb) {
+    float    dphi = 2.0f * (float)M_PI * hz / AUDIO_PLAY_RATE;
+    uint32_t to;
+
+    s->pos += bits * spb;
+    to = (uint32_t)lround(s->pos);
+    for (; s->n < to; s->n++) {
+        s->phase += dphi;
+        if (s->phase > 2.0f * (float)M_PI)
+            s->phase -= 2.0f * (float)M_PI;
+        s->buf[s->n] = (int16_t)(sinf(s->phase) * TX_AMP);
+    }
+}
+
+static bool tx_abort_cb(void *ctx) {
+    tx_job_t       *job = ctx;
+    struct timespec now;
+
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (!job->start.tv_sec)
+        job->start = now;
+    double played = ((now.tv_sec - job->start.tv_sec) + (now.tv_nsec - job->start.tv_nsec) * 1e-9) * AUDIO_PLAY_RATE;
+    for (int i = 0; i < job->n && job->end[i] <= played; i++)
+        atomic_store(&tx_sent, job->done[i]);
+    return atomic_load(&tx_abort) || state != RTTY_TX;    /* stopped, or the app closed */
+}
+
+static void *tx_thread(void *arg) {
+    tx_job_t *job    = arg;
+    float     spb    = AUDIO_PLAY_RATE / job->baud;
+    int       result = -2;
+
+    tx_encode(job);
+
+    /* ponytail: the whole waveform in memory (~6 MB for 200 characters at 45 baud); stream it when that hurts */
+    synth_t  s   = {0};
+    uint32_t cap = (uint32_t)((TX_IDLE_S * AUDIO_PLAY_RATE) + (job->n * 7.5f + TX_TAIL) * spb) + 16;
+
+    s.buf = malloc(cap * sizeof(int16_t));
+    if (s.buf) {
+        tx_bits(&s, job->mark_hz, TX_IDLE_S * job->baud, spb);
+        for (int i = 0; i < job->n; i++) {
+            tx_bits(&s, job->space_hz, 1.0f, spb);
+            for (int b = 0; b < 5; b++)
+                tx_bits(&s, (job->codes[i] >> b) & 1 ? job->mark_hz : job->space_hz, 1.0f, spb);
+            tx_bits(&s, job->mark_hz, 1.5f, spb);
+            job->end[i] = s.n;
+        }
+        tx_bits(&s, job->mark_hz, TX_TAIL, spb);
+
+        bool ok = tx_player_play(s.buf, s.n, TX_PLAYER_AUDIO_HZ, tx_player_base_gain_offset(), tx_abort_cb, job);
+        result  = ok ? 1 : -1;
+        if (ok)
+            atomic_store(&tx_sent, (int)strlen(job->text));
+        free(s.buf);
+    }
+    if (state == RTTY_TX)
+        state = RTTY_RX;
+
+    cJSON *ev = cJSON_CreateObject();
+    cJSON_AddStringToObject(ev, "t", "rtty_txdone");
+    cJSON_AddNumberToObject(ev, "result", result);
+    remote_event(ev);
+    free(job);
+    return NULL;
+}
+
+/* LVGL thread */
+static void tx_start(const char *text) {
+    pthread_t th;
+    tx_job_t *job;
+
+    if (state != RTTY_RX) {
+        msg_update_text_fmt("RTTY TX busy");
+        return;
+    }
+    job = calloc(1, sizeof(*job));
+    if (!job)
+        return;
+    snprintf(job->text, sizeof(job->text), "%s", text);
+    job->baud = params.rtty_rate / 100.0f;
+
+    /* The tones the receiver takes for mark and space (rtty_put_audio_samples) */
+    bool mark_hi = ((cur_mode == x6100_mode_usb || cur_mode == x6100_mode_usb_dig) && !params.rtty_reverse) ||
+                   ((cur_mode == x6100_mode_lsb || cur_mode == x6100_mode_lsb_dig) && params.rtty_reverse);
+    float half = params.rtty_shift / 2.0f;
+    job->mark_hz  = params.rtty_center + (mark_hi ? half : -half);
+    job->space_hz = params.rtty_center + (mark_hi ? -half : half);
+
+    atomic_store(&tx_abort, false);
+    atomic_store(&tx_sent, 0);
+    state = RTTY_TX;    /* no RX feed while sending */
+    if (pthread_create(&th, NULL, tx_thread, job)) {
+        state = RTTY_RX;
+        free(job);
+        return;
+    }
+    pthread_detach(th);
+}
+
+void rtty_remote(const char *cmd, int32_t val, const char *text) {
+    if (!strcmp(cmd, "rtty_send")) {
+        tx_start(text);
+    } else if (!strcmp(cmd, "rtty_stop")) {
+        atomic_store(&tx_abort, true);
+    } else if (!strcmp(cmd, "rtty_rate")) {
+        for (int i = 0; i < 8 && params.rtty_rate != (uint32_t)val; i++)
+            rtty_change_rate(1);
+    } else if (!strcmp(cmd, "rtty_shift")) {
+        for (int i = 0; i < 4 && params.rtty_shift != val; i++)
+            rtty_change_shift(1);
+    } else if (!strcmp(cmd, "rtty_center")) {
+        rtty_change_center((val - params.rtty_center) / 10);
+    } else if (!strcmp(cmd, "rtty_rev")) {
+        if (val != params.rtty_reverse)
+            rtty_change_reverse(1);
+    }
+}
+
+int rtty_remote_state(char *buf, size_t size) {
+    return snprintf(buf, size, "{\"rate\":%i,\"shift\":%i,\"center\":%i,\"rev\":%i,\"tx\":%i,\"sent\":%i}",
+                    (int)params.rtty_rate, params.rtty_shift, params.rtty_center, params.rtty_reverse,
+                    state == RTTY_TX, atomic_load(&tx_sent));
 }

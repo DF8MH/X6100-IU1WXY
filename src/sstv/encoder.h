@@ -31,4 +31,8 @@ int sstv_encode_scottie_s2_png_pcm(const char *, unsigned, int16_t **, size_t *)
 int sstv_encode_robot8_png_pcm(const char *, unsigned, int16_t **, size_t *);
 int sstv_encode_robot72_png_pcm(const char *, unsigned, int16_t **, size_t *);
 
+/* Read a PNG scaled (nearest neighbour) to out_w x out_h RGB888 into out.
+ * Returns 0 on success, <0 on error. Also used by the WeFax encoder. */
+int sstv_load_png_scaled(const char *path, uint8_t *out, int out_w, int out_h);
+
 #endif

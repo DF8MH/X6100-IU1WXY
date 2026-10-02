@@ -700,6 +700,14 @@ void dialog_wspr_remote(const char *cmd, int32_t val, const char *text) {
         if (val != atomic_load(&tx_next)) {
             tx_next_cb(NULL);
         }
+    } else if (!strcmp(cmd, "app_base")) {
+        int32_t f = cparam_i_get(cfg_fg_freq);
+        if (cfg_digital_load(0, CFG_DIG_TYPE_WSPR)) {
+            msg_update_text_fmt("%s", cfg_digital_label_get());
+            if (cparam_i_get(cfg_fg_freq) != f) {
+                restart_cycle();     /* this cycle was on another frequency */
+            }
+        }
     }
 }
 
@@ -707,7 +715,8 @@ int dialog_wspr_remote_state(char *buf, size_t size) {
     static const char *names[] = {"WAIT", "RX", "TX", "STOP"};
     int                st      = atomic_load(&state);
 
-    return snprintf(buf, size, "{\"st\":\"%s\",\"sec\":%i,\"pct\":%i,\"next\":%i,\"up\":%i}",
+    return snprintf(buf, size, "{\"st\":\"%s\",\"sec\":%i,\"pct\":%i,\"next\":%i,\"up\":%i,\"base\":%i}",
                     st >= ST_WAIT && st <= ST_STOP ? names[st] : "?", (int)fmod(now_s(), CYCLE_S),
-                    param_i_get(cfg_wspr_tx_pct), atomic_load(&tx_next) ? 1 : 0, atomic_load(&uploaded));
+                    param_i_get(cfg_wspr_tx_pct), atomic_load(&tx_next) ? 1 : 0, atomic_load(&uploaded),
+                    (int)cfg_digital_freq_get());
 }

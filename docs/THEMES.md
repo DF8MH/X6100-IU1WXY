@@ -45,7 +45,7 @@ Every key is optional: what a file does not set comes from its `base`.
 | `border` | border width of boxes and buttons (3 or more: high contrast boxes) |
 | `btn_gradient`, `box_gradient` | vertical gradient `btn` -> `btn_grad` on the buttons, `bar` -> `bar_grad` etc. on the boxes |
 | `focus_solid` | the focused control in Settings is filled with `focus` (else half see-through) |
-| `font` | `sony`, `roboto` or `dejavu`; without it the font chosen in Settings |
+| `font` | `sony`, `roboto`, `dejavu` or `arial`; without it the font chosen in Settings |
 | `waterfall` | 2 to 16 colours from weak to strong signal |
 | `waterfall_steps` | 0 smooth, else that many flat bands |
 | `mark` | encoder LED on the buttons: `[x, width, height]`, centred in height; without it the bar on the left edge |

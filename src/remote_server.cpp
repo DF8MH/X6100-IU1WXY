@@ -6,7 +6,7 @@
  *  Web remote: control socket for the webserver's /remote page and the phone app
  *  (docs/REMOTE_API.md). UNIX socket, one JSON object per line. Requests:
  *    {"cmd":"get"}                 -> one state line
- *    {"cmd":"sub"}                 -> state lines (5/s), spectrum lines (10/s) and events (remote_event)
+ *    {"cmd":"sub"}                 -> state lines (5/s), spectrum lines (10/s), events (remote_event) and decoded text (remote_text)
  *                                     until the client closes
  *    {"cmd":"freq","val":14074000} {"cmd":"tune","val":-100} {"cmd":"mode","val":"USB"} {"cmd":"band","val":40}
  *    {"cmd":"pre|att|nb|nr","val":0|1} {"cmd":"agc"} (next) {"cmd":"rfgain","val":0..100} {"cmd":"filter","val":Hz}
@@ -23,6 +23,7 @@
 #include "cfg/settings_manager.h"
 #include "util.h"
 
+#include <algorithm>
 #include <atomic>
 #include <deque>
 #include <map>
@@ -32,13 +33,17 @@
 extern "C" {
     #include "cJSON.h"
     #include "dialog.h"
+    #include "dialog_cw_kbd.h"
     #include "dialog_ft8.h"
     #include "dialog_js8.h"
+    #include "dialog_navtex.h"
     #include "dialog_sstv.h"
+    #include "dialog_wefax.h"
     #include "dialog_wspr.h"
     #include "main_screen.h"
     #include "meter.h"
     #include "radio.h"
+    #include "rtty.h"
     #include "scheduler.h"
     #include "waterfall.h"
 
@@ -73,6 +78,8 @@ extern "C" {
 #define STALL_MS        10000   /* a subscriber that takes nothing for this long is dropped */
 #define MAX_PENDING     16      /* commands queued on the LVGL thread */
 #define MAX_EVENTS      64      /* events waiting for the socket thread */
+#define TEXT_MS         300     /* decoded text (remote_text) waits at most this */
+#define TEXT_MAX        200     /* or this many characters */
 
 typedef struct {
     int      fd;
@@ -101,31 +108,63 @@ static const char *mode_names[] = {"LSB", "LSB-D", "USB", "USB-D", "CW", "CW-R",
 static const char *agc_names[]  = {"OFF", "SLOW", "FAST", "AUTO"};
 
 /* "app" values; cont_modes[] order in dialog_sstv.c */
-static const char *app_names[]  = {"off", "FT8", "FT4", "JS8", "WSPR", "SSTV"};
+static const char *app_names[]  = {"off", "FT8", "FT4", "JS8", "WSPR", "SSTV", "WeFax", "NavTex", "RTTY", "CW"};
 static const char *sstv_modes[] = {"R8BW", "R36", "R72", "M1", "M2", "S1", "S2"};
 
-/* Commands of the app that is open. val in min..max (none when min > max). With val >= tx
- * they transmit (Remote TX); with val < stop they are taken also while the radio transmits. */
+/* Commands of the app that is open: app is current_app() or its start ("FT": FT8 and FT4); a name
+ * can have a row for each app. val in min..max (none when min > max). With val >= tx they transmit
+ * (Remote TX); with val < stop they are taken also while the radio transmits. */
 static const struct {
     const char *name;
-    dialog_t  **app;
+    const char *app;
     void      (*fn)(const char *cmd, int32_t val, const char *text);
     int32_t     min, max, tx, stop;
 } app_cmds[] = {
-    {"ft8_cq",      &dialog_ft8,  dialog_ft8_remote,  0, 1,         1,         1},
-    {"ft8_reply",   &dialog_ft8,  dialog_ft8_remote,  1, INT32_MAX, INT32_MIN, INT32_MIN},
-    {"ft8_stop",    &dialog_ft8,  dialog_ft8_remote,  1, 0,         INT32_MAX, INT32_MAX},
-    {"ft8_auto",    &dialog_ft8,  dialog_ft8_remote,  0, 1,         1,         INT32_MIN},
-    {"ft8_hold",    &dialog_ft8,  dialog_ft8_remote,  0, 1,         INT32_MAX, INT32_MIN},
-    {"ft8_txfreq",  &dialog_ft8,  dialog_ft8_remote,  0, 5000,      INT32_MAX, INT32_MIN},
-    {"js8_send",    &dialog_js8,  dialog_js8_remote,  1, 0,         INT32_MIN, INT32_MIN},
-    {"js8_cq",      &dialog_js8,  dialog_js8_remote,  1, 0,         INT32_MIN, INT32_MIN},
-    {"js8_hb",      &dialog_js8,  dialog_js8_remote,  1, 0,         INT32_MIN, INT32_MIN},
-    {"js8_stop",    &dialog_js8,  dialog_js8_remote,  1, 0,         INT32_MAX, INT32_MAX},
-    {"wspr_txpct",  &dialog_wspr, dialog_wspr_remote, 0, 50,        1,         INT32_MIN},
-    {"wspr_txnext", &dialog_wspr, dialog_wspr_remote, 0, 1,         1,         1},
-    {"sstv_tx",     &dialog_sstv, dialog_sstv_remote, 1, 0,         INT32_MIN, INT32_MIN},   /* val: sstv_modes[] */
-    {"sstv_stop",   &dialog_sstv, dialog_sstv_remote, 1, 0,         INT32_MAX, INT32_MAX},
+    {"ft8_cq",      "FT",     dialog_ft8_remote,    0, 1,         1,         1},
+    {"ft8_reply",   "FT",     dialog_ft8_remote,    1, INT32_MAX, INT32_MIN, INT32_MIN},
+    {"ft8_stop",    "FT",     dialog_ft8_remote,    1, 0,         INT32_MAX, INT32_MAX},
+    {"ft8_auto",    "FT",     dialog_ft8_remote,    0, 1,         1,         INT32_MIN},
+    {"ft8_hold",    "FT",     dialog_ft8_remote,    0, 1,         INT32_MAX, INT32_MIN},
+    {"ft8_txfreq",  "FT",     dialog_ft8_remote,    0, 5000,      INT32_MAX, INT32_MIN},
+    {"js8_send",    "JS8",    dialog_js8_remote,    1, 0,         INT32_MIN, INT32_MIN},
+    {"js8_cq",      "JS8",    dialog_js8_remote,    1, 0,         INT32_MIN, INT32_MIN},
+    {"js8_hb",      "JS8",    dialog_js8_remote,    1, 0,         INT32_MIN, INT32_MIN},
+    {"js8_stop",    "JS8",    dialog_js8_remote,    1, 0,         INT32_MAX, INT32_MAX},
+    {"wspr_txpct",  "WSPR",   dialog_wspr_remote,   0, 50,        1,         INT32_MIN},
+    {"wspr_txnext", "WSPR",   dialog_wspr_remote,   0, 1,         1,         1},
+    {"sstv_tx",     "SSTV",   dialog_sstv_remote,   1, 0,         INT32_MIN, INT32_MIN},   /* val: sstv_modes[] */
+    {"sstv_stop",   "SSTV",   dialog_sstv_remote,   1, 0,         INT32_MAX, INT32_MAX},
+    {"wefax_mode",  "WeFax",  dialog_wefax_remote,  0, 1,         INT32_MAX, INT32_MIN},
+    {"wefax_save",  "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MAX, INT32_MIN},
+    {"wefax_clear", "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MAX, INT32_MIN},
+    {"wefax_tx",    "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MIN, INT32_MIN},
+    {"wefax_stop",  "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MAX, INT32_MAX},
+    {"rtty_send",   "RTTY",   rtty_remote,          1, 0,         INT32_MIN, INT32_MIN},
+    {"rtty_stop",   "RTTY",   rtty_remote,          1, 0,         INT32_MAX, INT32_MAX},
+    {"rtty_rate",   "RTTY",   rtty_remote,          4500, 15000,  INT32_MAX, INT32_MIN},
+    {"rtty_shift",  "RTTY",   rtty_remote,          170, 850,     INT32_MAX, INT32_MIN},
+    {"rtty_center", "RTTY",   rtty_remote,          800, 1600,    INT32_MAX, INT32_MIN},
+    {"rtty_rev",    "RTTY",   rtty_remote,          0, 1,         INT32_MAX, INT32_MIN},
+    {"cw_send",     "CW",     dialog_cw_kbd_remote, 1, 0,         INT32_MIN, INT32_MAX},   /* also while keying */
+    {"cw_stop",     "CW",     dialog_cw_kbd_remote, 1, 0,         INT32_MAX, INT32_MAX},
+    {"cw_wpm",      "CW",     dialog_cw_kbd_remote, 5, 60,        INT32_MAX, INT32_MIN},
+    {"cw_dec",      "CW",     dialog_cw_kbd_remote, 0, 1,         INT32_MAX, INT32_MIN},
+    {"app_base",    "FT",     dialog_ft8_remote,    1, 0,         INT32_MAX, INT32_MIN},
+    {"app_base",    "JS8",    dialog_js8_remote,    1, 0,         INT32_MAX, INT32_MIN},
+    {"app_base",    "WSPR",   dialog_wspr_remote,   1, 0,         INT32_MAX, INT32_MIN},
+    {"app_base",    "SSTV",   dialog_sstv_remote,   1, 0,         INT32_MAX, INT32_MIN},
+    {"app_base",    "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MAX, INT32_MIN},
+    {"app_base",    "NavTex", dialog_navtex_remote, 1, 0,         INT32_MAX, INT32_MIN},
+};
+
+/* The "ax" object of each app (any thread) */
+static const struct {
+    const char *app;
+    int       (*fn)(char *buf, size_t size);
+} app_states[] = {
+    {"FT", dialog_ft8_remote_state},    {"JS8", dialog_js8_remote_state},     {"WSPR", dialog_wspr_remote_state},
+    {"SSTV", dialog_sstv_remote_state}, {"WeFax", dialog_wefax_remote_state}, {"NavTex", dialog_navtex_remote_state},
+    {"RTTY", rtty_remote_state},        {"CW", dialog_cw_kbd_remote_state},
 };
 
 static client_t          clients[MAX_CLIENTS];
@@ -147,6 +186,14 @@ static bool              spec_new;
 /* Event lines from any thread, oldest dropped */
 static std::mutex              events_mutex;
 static std::deque<std::string> events;
+
+/* Decoded text from any thread by type (remote_text), until the socket thread sends it */
+struct text_t {
+    std::string text;
+    uint64_t    first_ms;
+};
+static std::mutex                    texts_mutex;
+static std::map<std::string, text_t> texts;
 
 static uint64_t now_ms() {
     struct timespec ts;
@@ -205,17 +252,33 @@ static const char *current_app() {
         return "WSPR";
     if (dialog_type_is_run(dialog_sstv))
         return "SSTV";
+    if (dialog_type_is_run(dialog_wefax))
+        return "WeFax";
+    if (dialog_type_is_run(dialog_navtex))
+        return "NavTex";
+    if (dialog_type_is_run(dialog_cw_kbd))
+        return "CW";
+    if (rtty_get_state() != RTTY_OFF)
+        return "RTTY";
     return "";
 }
 
+/* The row's app is open */
+static bool app_open(size_t i) {
+    const char *app = app_cmds[i].app;
+
+    return !strncmp(current_app(), app, strlen(app));
+}
+
 static void open_app(int32_t app) {
-    static const press_action_t actions[] = {ACTION_NONE, ACTION_APP_FT8, ACTION_APP_FT8, ACTION_APP_JS8,
-                                             ACTION_APP_WSPR, ACTION_APP_SSTV};
+    static const press_action_t actions[] = {ACTION_NONE,     ACTION_APP_FT8,   ACTION_APP_FT8,    ACTION_APP_JS8,
+                                             ACTION_APP_WSPR, ACTION_APP_SSTV,  ACTION_APP_WEFAX,  ACTION_APP_NAVTEX,
+                                             ACTION_APP_RTTY, ACTION_APP_CW_KBD};
     const char *cur = current_app();
 
     if (!app) {
         if (cur[0])
-            dialog_destruct();
+            main_screen_close_app();
         return;
     }
     if (!strcmp(cur, app_names[app]))
@@ -223,6 +286,17 @@ static void open_app(int32_t app) {
     if (actions[app] == ACTION_APP_FT8)
         cfg_sm.p_ft8_protocol.set(app == 2 ? FTX_PROTOCOL_FT4 : FTX_PROTOCOL_FT8);
     main_screen_start_app(actions[app]);
+
+    /* After the start: the app before may have locked the mode. In CW the DSP feeds the CW decoder,
+     * not the picture and NavTex decoders. */
+    int32_t mode = cfg_sm.cp_cur_mode.get();
+    bool    cw   = mode == x6100_mode_cw || mode == x6100_mode_cwr;
+    if (main_screen_mode_locked())
+        return;
+    if (actions[app] == ACTION_APP_CW_KBD && !cw)
+        cfg_sm.cp_cur_mode.set(x6100_mode_cw);
+    else if (cw && (actions[app] == ACTION_APP_SSTV || actions[app] == ACTION_APP_WEFAX || actions[app] == ACTION_APP_NAVTEX))
+        cfg_sm.cp_cur_mode.set(x6100_mode_usb);
 }
 
 /* Taken also while the radio transmits */
@@ -243,7 +317,7 @@ static void apply_cmd(void *arg) {
             open_app(c->val);
             break;
         case CMD_APP_CMD:
-            if (dialog_type_is_run(*app_cmds[c->app_cmd].app))
+            if (app_open(c->app_cmd))
                 app_cmds[c->app_cmd].fn(app_cmds[c->app_cmd].name, c->val, c->text);
             break;
         case CMD_FREQ:
@@ -363,14 +437,11 @@ static int state_line(char *buf, size_t size) {
     int         l    = -1;
 
     /* The app's state from its scalars: safe from this thread */
-    if (app[0] == 'F')
-        l = dialog_ft8_remote_state(ax, sizeof(ax));
-    else if (app[0] == 'J')
-        l = dialog_js8_remote_state(ax, sizeof(ax));
-    else if (app[0] == 'W')
-        l = dialog_wspr_remote_state(ax, sizeof(ax));
-    else if (app[0] == 'S')
-        l = dialog_sstv_remote_state(ax, sizeof(ax));
+    for (size_t i = 0; app[0] && i < sizeof(app_states) / sizeof(app_states[0]); i++)
+        if (!strncmp(app, app_states[i].app, strlen(app_states[i].app))) {
+            l = app_states[i].fn(ax, sizeof(ax));
+            break;
+        }
     if (l <= 0 || (size_t)l >= sizeof(ax))
         strcpy(ax, "{}");
 
@@ -440,6 +511,39 @@ static void send_events() {
                 client_send(&clients[i], line.data(), line.size());
 }
 
+/* Decoded text that is due: at a newline, TEXT_MS old or TEXT_MAX long; dropped without subscribers */
+static void send_texts(uint64_t now) {
+    std::deque<std::string> out;
+    bool                    subs = subscribers > 0;
+
+    {
+        std::lock_guard<std::mutex> lock(texts_mutex);
+        for (auto &it : texts) {
+            text_t &t = it.second;
+            if (t.text.empty() || (subs && t.text.find('\n') == std::string::npos && t.text.size() < TEXT_MAX &&
+                                   now - t.first_ms < TEXT_MS))
+                continue;
+            if (subs) {
+                cJSON *o = cJSON_CreateObject();
+                cJSON_AddStringToObject(o, "t", it.first.c_str());
+                cJSON_AddStringToObject(o, "text", t.text.c_str());
+                char *line = cJSON_PrintUnformatted(o);
+                cJSON_Delete(o);
+                if (line) {
+                    out.emplace_back(line);
+                    out.back() += '\n';
+                    cJSON_free(line);
+                }
+            }
+            t.text.clear();
+        }
+    }
+    for (const std::string &line : out)
+        for (int i = 0; i < MAX_CLIENTS; i++)
+            if (clients[i].sub)
+                client_send(&clients[i], line.data(), line.size());
+}
+
 /* A picture in tx_pics: [A-Za-z0-9][A-Za-z0-9._ -]*.png */
 static bool png_name_ok(const char *s) {
     size_t n = strlen(s);
@@ -499,8 +603,12 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
             }
         return "Unknown app";
     }
+    bool app_cmd = false;
     for (size_t i = 0; i < sizeof(app_cmds) / sizeof(app_cmds[0]); i++) {
         if (strcmp(name, app_cmds[i].name))
+            continue;
+        app_cmd = true;
+        if (!app_open(i))
             continue;
         cmd->id      = CMD_APP_CMD;
         cmd->app_cmd = i;
@@ -514,6 +622,9 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
                 return "Invalid mode";
             if (!png_name_ok(cmd->text))
                 return "Invalid file name";
+        } else if (!strcmp(name, "wefax_tx")) {
+            if (!png_name_ok(cmd->text))
+                return "Invalid file name";
         } else if (app_cmds[i].min <= app_cmds[i].max && !get_int(req, app_cmds[i].min, app_cmds[i].max, &cmd->val)) {
             return "Invalid value";
         }
@@ -522,12 +633,21 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
             return "Invalid value";
         if (!strcmp(name, "js8_send") && (!cmd->text[0] || strlen(cmd->text) > 160))   /* TX_TEXT_MAX, dialog_js8.c */
             return "Invalid text";
-        if (!dialog_type_is_run(*app_cmds[i].app))
-            return "app not open";
+        if ((!strcmp(name, "rtty_send") || !strcmp(name, "cw_send")) && !cmd->text[0])
+            return "Invalid text";
+        static const int32_t rtty_rates[] = {4500, 4545, 5000, 5600, 7500, 10000, 11000, 15000};   /* rtty_change_rate() */
+        if (!strcmp(name, "rtty_rate") && std::find(std::begin(rtty_rates), std::end(rtty_rates), cmd->val) == std::end(rtty_rates))
+            return "Invalid value";
+        if (!strcmp(name, "rtty_shift") && cmd->val != 170 && cmd->val != 425 && cmd->val != 450 && cmd->val != 850)
+            return "Invalid value";
+        if (!strcmp(name, "rtty_center") && cmd->val % 10)
+            return "Invalid value";
         if (cmd->val >= app_cmds[i].tx && !cfg_sm.p_remote_tx.get())
             return "remote TX off";
         return NULL;
     }
+    if (app_cmd)
+        return !strcmp(name, "app_base") && current_app()[0] ? "No base" : "app not open";
     if (!strcmp(name, "agc")) {
         cmd->id = CMD_AGC;
         return NULL;
@@ -676,6 +796,7 @@ static void *server_thread(void *arg) {
         }
 
         uint64_t now = now_ms();
+        send_texts(now);
         bool     state = subscribers > 0 && now >= next_state;
         if (state)
             next_state = now + STATE_MS;
@@ -753,6 +874,27 @@ void remote_event(cJSON *o) {
     cJSON_free(line);
     char b = 0;
     if (write(wake_fd[1], &b, 1) < 0) {
+        /* pipe full: the socket thread is already woken */
+    }
+}
+
+void remote_text(const char *type, const char *s, size_t n) {
+    bool wake;
+
+    if (!subscribers.load(std::memory_order_relaxed) || !n)
+        return;
+    {
+        std::lock_guard<std::mutex> lock(texts_mutex);
+        text_t                     &t = texts[type];
+        if (t.text.empty())
+            t.first_ms = now_ms();
+        for (size_t i = 0; i < n; i++)
+            if (s[i] != '\r')   /* plain for the JSON string */
+                t.text += (s[i] == '\n' || (s[i] >= ' ' && s[i] <= '~')) ? s[i] : '?';
+        wake = t.text.size() >= TEXT_MAX || memchr(s, '\n', n);
+    }
+    char b = 0;
+    if (wake && write(wake_fd[1], &b, 1) < 0) {
         /* pipe full: the socket thread is already woken */
     }
 }

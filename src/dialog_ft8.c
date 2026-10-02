@@ -1108,12 +1108,14 @@ void dialog_ft8_remote(const char *cmd, int32_t val, const char *text) {
             on_table_press(&cd);
         else
             msg_update_text_fmt("FT8: that message is too old");
+    } else if (!strcmp(cmd, "app_base")) {
+        load_band(0);
     }
 }
 
 int dialog_ft8_remote_state(char *buf, size_t size) {
-    return snprintf(buf, size, "{\"cq\":%i,\"txen\":%i,\"txing\":%i,\"auto\":%i,\"hold\":%i,\"txfreq\":%i}",
+    return snprintf(buf, size, "{\"cq\":%i,\"txen\":%i,\"txing\":%i,\"auto\":%i,\"hold\":%i,\"txfreq\":%i,\"base\":%i}",
                     cq_enabled ? subject_i_get(cq_enabled) != 0 : 0, tx_enabled ? subject_i_get(tx_enabled) != 0 : 0,
                     state == TX_PROCESS, param_i_get(cfg_ft8_auto) != 0, param_i_get(cfg_ft8_hold_freq) != 0,
-                    params.ft8_tx_freq.x);
+                    params.ft8_tx_freq.x, (int)cfg_digital_freq_get());
 }

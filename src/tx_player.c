@@ -10,6 +10,7 @@
 
 #include <math.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "lvgl/lvgl.h"
 
@@ -55,12 +56,38 @@ float tx_player_base_gain_offset(void) {
     return -16.4f + log10f(target_pwr) * 10.0f;
 }
 
+typedef struct {
+    const int16_t *ptr;
+    uint32_t       left;
+} buf_src_t;
+
+static size_t buf_fill(int16_t *buf, size_t n, void *ctx) {
+    buf_src_t *src = ctx;
+
+    n = LV_MIN(n, src->left);
+    memcpy(buf, src->ptr, n * sizeof(*buf));
+    src->ptr  += n;
+    src->left -= n;
+    return n;
+}
+
 bool tx_player_play(int16_t      *samples,
                     uint32_t      n_samples,
                     int32_t       tx_offset_hz,
                     float         base_gain_offset,
                     tx_abort_fn_t abort_check,
                     void         *abort_check_ctx) {
+    buf_src_t src = {samples, n_samples};
+
+    return tx_player_stream(buf_fill, &src, tx_offset_hz, base_gain_offset, abort_check, abort_check_ctx);
+}
+
+bool tx_player_stream(tx_fill_fn_t  fill,
+                      void         *fill_ctx,
+                      int32_t       tx_offset_hz,
+                      float         base_gain_offset,
+                      tx_abort_fn_t abort_check,
+                      void         *abort_check_ctx) {
     if (param_f_get(cfg_pwr) > TX_PLAYER_MAX_PWR_W) {
         radio_set_pwr(TX_PLAYER_MAX_PWR_W);
     }
@@ -75,7 +102,7 @@ bool tx_player_play(int16_t      *samples,
 
     float    prev_gain_offset = gain_offset;
     size_t   counter          = 0;
-    int16_t *ptr              = samples;
+    int16_t  ptr[1024 * 2];
     size_t   part;
 
     bool aborted = false;
@@ -88,14 +115,14 @@ bool tx_player_play(int16_t      *samples,
                 gain_offset = GAIN_MIN_DB;
             }
         }
-        if (n_samples <= 0) {
+        part = fill(ptr, sizeof(ptr) / sizeof(ptr[0]), fill_ctx);
+        if (part == 0) {
             break;
         }
         if (abort_check && abort_check(abort_check_ctx)) {
             aborted = true;
             break;
         }
-        part = LV_MIN(1024 * 2, n_samples);
         if (gain_offset == prev_gain_offset) {
             if (gain_offset != 0.0f) {
                 audio_gain_db(ptr, part, gain_offset, ptr);
@@ -105,8 +132,6 @@ bool tx_player_play(int16_t      *samples,
             prev_gain_offset = gain_offset;
         }
         audio_play(ptr, part);
-        n_samples -= part;
-        ptr       += part;
         counter++;
     }
 

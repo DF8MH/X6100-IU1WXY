@@ -27,6 +27,9 @@ void cw_put_audio_samples(unsigned int n, float *samples);
 
 float cw_get_tone_freq(void);
 
+/* Decoded speed (WPM), the last one measured */
+int cw_get_wpm(void);
+
 /* CW trainer: decode always (the decoder listens to the sidetone) */
 void cw_trainer_set(bool on);
 

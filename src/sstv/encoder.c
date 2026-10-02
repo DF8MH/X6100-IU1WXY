@@ -74,7 +74,7 @@ static void wav_vis(wav_writer_t *w, int vis)
     wav_tone_ms(w,1200,30); /* VIS stop bit */
 }
 
-static int load_png_scaled(const char *path, uint8_t *out, int out_h)
+int sstv_load_png_scaled(const char *path, uint8_t *out, int out_w, int out_h)
 {
     FILE *fp=fopen(path,"rb"); if(!fp) return -1;
     png_structp p=png_create_read_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
@@ -98,10 +98,15 @@ static int load_png_scaled(const char *path, uint8_t *out, int out_h)
     png_read_image(p,rows); png_read_end(p,NULL); png_destroy_read_struct(&p,&info,NULL); fclose(fp); free(rows);
     if(ch<3){free(raw);return -6;}
     for(int y=0;y<out_h;++y){png_uint_32 sy=(png_uint_32)((uint64_t)y*h/(uint64_t)out_h);if(sy>=h)sy=h-1;
-        for(int x=0;x<OUT_W;++x){png_uint_32 sx=(png_uint_32)((uint64_t)x*w/OUT_W);if(sx>=w)sx=w-1;
-            const uint8_t *s=raw+(size_t)sy*rb+(size_t)sx*ch; uint8_t *d=out+((size_t)y*OUT_W+x)*3u;
+        for(int x=0;x<out_w;++x){png_uint_32 sx=(png_uint_32)((uint64_t)x*w/out_w);if(sx>=w)sx=w-1;
+            const uint8_t *s=raw+(size_t)sy*rb+(size_t)sx*ch; uint8_t *d=out+((size_t)y*out_w+x)*3u;
             d[0]=s[0];d[1]=s[1];d[2]=s[2];}}
     free(raw); return 0;
+}
+
+static int load_png_scaled(const char *path, uint8_t *out, int out_h)
+{
+    return sstv_load_png_scaled(path,out,OUT_W,out_h);
 }
 
 static uint8_t clamp_byte(double v)

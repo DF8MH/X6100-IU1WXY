@@ -26,3 +26,10 @@ void freq_list_open(lv_obj_t *parent, const char *title, const freq_list_item_t 
                     int32_t audio_hz, void (*on_close)(void));
 void freq_list_close(void);
 bool freq_list_is_open(void);
+
+/* Tunes to an entry as choosing it in the list does (LVGL thread) */
+void freq_list_tune(const freq_list_item_t *it, int32_t audio_hz);
+
+/* The entry whose dial is the closest to vfo, its dial in *dial; NULL for an empty list */
+const freq_list_item_t *freq_list_base(const freq_list_item_t *items, int count, int32_t audio_hz, int32_t vfo,
+                                       int32_t *dial);

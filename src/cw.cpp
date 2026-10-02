@@ -173,6 +173,10 @@ float cw_get_tone_freq(void) {
     return tone_freq;
 }
 
+int cw_get_wpm(void) {
+    return wpm_sent;
+}
+
 static void on_val_bool_change(Subject *subj, void *user_data) {
     *(bool*)user_data = static_cast<SubjectT<int32_t>*>(subj)->get();
 }

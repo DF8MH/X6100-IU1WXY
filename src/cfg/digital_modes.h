@@ -35,6 +35,9 @@ bool cfg_digital_load(int8_t dir, cfg_digital_type_t type);
 // successful load.
 const char *cfg_digital_label_get(void);
 
+// Frequency of the last successfully loaded preset (0 before any). Any thread.
+int32_t cfg_digital_freq_get(void);
+
 #ifdef __cplusplus
 }
 #endif

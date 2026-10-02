@@ -361,7 +361,10 @@ def set_wfview():
 
 REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", "rfgain", "filter",
                "app", "ft8_cq", "ft8_reply", "ft8_stop", "ft8_auto", "ft8_hold", "ft8_txfreq",
-               "js8_send", "js8_cq", "js8_hb", "js8_stop", "wspr_txpct", "wspr_txnext", "sstv_tx", "sstv_stop"}
+               "js8_send", "js8_cq", "js8_hb", "js8_stop", "wspr_txpct", "wspr_txnext", "sstv_tx", "sstv_stop",
+               "app_base", "wefax_mode", "wefax_save", "wefax_clear", "wefax_tx", "wefax_stop",
+               "rtty_send", "rtty_stop", "rtty_rate", "rtty_shift", "rtty_center", "rtty_rev",
+               "cw_send", "cw_stop", "cw_wpm", "cw_dec"}
 # The radio RX audio as the GUI's decoders get it (src/audio.c), 16 bit mono
 REMOTE_AUDIO_CMD = ["parec", "--device=alsa_input.platform-sound.stereo-fallback", "--format=s16le",
                     "--rate=12000", "--channels=1", "--latency-msec=100",
@@ -863,7 +866,8 @@ def files(filepath=""):
 # Gallery: screen recordings, audio recordings and screenshots
 
 GALLERY_DIRS = {"screenrec": ("screenrec", (".avi", ".mp4")), "rec": ("rec", (".mp3", ".wav")), "shots": ("", (".png",)),
-                "sstv": ("sstv", (".png",)), "sstv_tx": ("sstv/tx_pics", (".png",))}
+                "sstv": ("sstv", (".png",)), "sstv_tx": ("sstv/tx_pics", (".png",)),
+                "wefax": ("wefax", (".png",)), "wefax_tx": ("wefax/tx_pics", (".png",))}
 GALLERY_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._ -]*$')
 
 
@@ -940,7 +944,7 @@ def gallery_file(kind, name):
 @app.get('/gallery/thumb/<kind>/<name>')
 def gallery_thumb(kind, name):
     root, path = gallery_path(kind, name)
-    if kind in ("shots", "sstv", "sstv_tx"):
+    if kind in ("shots", "sstv", "sstv_tx", "wefax", "wefax_tx"):
         return bottle.static_file(name, root=root)
     jpeg = avi_first_frame(path) if kind == "screenrec" else None
     if not jpeg:
@@ -963,6 +967,16 @@ SSTV_TX_MAX = 4 * 1024 * 1024
 @app.post('/api/sstv/tx_pics')
 def upload_sstv_tx_pic():
     """A PNG for the radio's SSTV TX pictures (multipart field "file")"""
+    return upload_tx_pic("sstv_tx")
+
+
+@app.post('/api/wefax/tx_pics')
+def upload_wefax_tx_pic():
+    """A PNG for the radio's WeFax TX pictures (multipart field "file")"""
+    return upload_tx_pic("wefax_tx")
+
+
+def upload_tx_pic(kind):
     upload = bottle.request.files.get("file")
     if upload is None:
         return api_error(400, "No file")
@@ -974,7 +988,7 @@ def upload_sstv_tx_pic():
         return api_error(413, "Larger than 4 MB")
     if not data.startswith(b"\x89PNG"):
         return api_error(400, "Not a PNG")
-    folder = os.path.join(settings.FILEBROWSER_PATH, GALLERY_DIRS["sstv_tx"][0])
+    folder = os.path.join(settings.FILEBROWSER_PATH, GALLERY_DIRS[kind][0])
     os.makedirs(folder, exist_ok=True)
     tmp = os.path.join(folder, "." + name + ".tmp")   # hidden: the radio and the gallery skip it
     with open(tmp, "wb") as f:

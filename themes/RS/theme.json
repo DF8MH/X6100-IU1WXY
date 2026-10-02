@@ -1,6 +1,6 @@
 {
   "base": "Classic",
-  "font": "roboto",
+  "font": "arial",
   "radius": 6,
   "radius_btn": 5,
   "radius_popup": 6,

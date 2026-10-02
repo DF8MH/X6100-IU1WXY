@@ -10,11 +10,13 @@
 
 #include "buttons.h"
 #include "cfg/cfg_api.h"
+#include "cw.h"
 #include "cw_encoder.h"
 #include "events.h"
 #include "keyboard.h"
 #include "msg.h"
 #include "radio.h"
+#include "remote_server.h"
 #include "styles.h"
 #include "textarea_window.h"
 #include "theme.h"
@@ -133,6 +135,11 @@ static void timer_cb(lv_timer_t *t) {
             snprintf(sending, sizeof(sending), "%s", queue);
             queue[0] = 0;
             cw_encoder_send(sending, false);
+
+            cJSON *ev = cJSON_CreateObject();
+            cJSON_AddStringToObject(ev, "t", "cw_tx");
+            cJSON_AddStringToObject(ev, "text", sending);
+            remote_event(ev);
         }
     }
     update_view();
@@ -394,4 +401,25 @@ static void destruct_cb(void) {
     }
     lv_group_remove_obj(dialog.obj);
     sending[0] = queue[0] = 0;
+}
+
+/* Web remote, docs/REMOTE_API.md */
+void dialog_cw_kbd_remote(const char *cmd, int32_t val, const char *text) {
+    if (!strcmp(cmd, "cw_send")) {
+        enqueue(text);
+    } else if (!strcmp(cmd, "cw_stop")) {
+        stop();
+    } else if (!strcmp(cmd, "cw_wpm")) {
+        change_speed(val - param_i_get(cfg_key_speed));
+    } else if (!strcmp(cmd, "cw_dec")) {
+        param_i_set(cfg_cw_decoder, val);
+    }
+}
+
+int dialog_cw_kbd_remote_state(char *buf, size_t size) {
+    bool b = busy();
+
+    return snprintf(buf, size, "{\"cw\":%i,\"wpm\":%i,\"rx_wpm\":%i,\"dec\":%i,\"busy\":%i,\"sent\":%i,\"queue\":%i}",
+                    cw_mode(), (int)param_i_get(cfg_key_speed), cw_get_wpm(), param_i_get(cfg_cw_decoder) != 0, b,
+                    b ? cw_encoder_sent() : 0, (int)strlen(queue));
 }

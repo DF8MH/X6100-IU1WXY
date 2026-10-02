@@ -10,6 +10,7 @@
 
 #include "helpers.h"
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <liquid/liquid.h>
@@ -30,3 +31,7 @@ float rtty_change_rate(int16_t df);
 uint16_t rtty_change_shift(int16_t df);
 uint16_t rtty_change_center(int16_t df);
 bool rtty_change_reverse(int16_t df);
+
+/* Web remote, docs/REMOTE_API.md: a command (LVGL thread) and the "ax" state object (any thread) */
+void rtty_remote(const char *cmd, int32_t val, const char *text);
+int rtty_remote_state(char *buf, size_t size);

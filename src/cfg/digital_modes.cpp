@@ -9,6 +9,7 @@
 
 #include "digital_modes.h"
 
+#include <atomic>
 #include <string>
 
 #include "db.h"
@@ -19,6 +20,9 @@ namespace {
 // Label of the last successfully loaded preset; retained only until the next
 // successful load (matches the legacy C module's strdup'ed label).
 std::string last_label;
+
+// Its frequency, read by the web remote's thread
+std::atomic<int32_t> last_freq{0};
 
 } // namespace
 
@@ -38,6 +42,7 @@ extern "C" bool cfg_digital_load(int8_t dir, cfg_digital_type_t type) {
     }
 
     last_label = result.value.label;
+    last_freq  = result.value.freq;
     cfg_sm.cp_fg_freq.set(result.value.freq);
     cfg_sm.cp_cur_mode.set(result.value.mode);
     return true;
@@ -45,4 +50,8 @@ extern "C" bool cfg_digital_load(int8_t dir, cfg_digital_type_t type) {
 
 extern "C" const char *cfg_digital_label_get(void) {
     return last_label.c_str();
+}
+
+extern "C" int32_t cfg_digital_freq_get(void) {
+    return last_freq;
 }

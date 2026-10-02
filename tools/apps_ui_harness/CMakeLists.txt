@@ -24,7 +24,7 @@ add_library(apps OBJECT
     ${X}/src/widgets/lv_waterfall.c ${X}/src/widgets/lv_finder.c
     ${X}/src/dialog_js8.c
     ${X}/src/dialog_sstv.c ${X}/src/sstv/decoder.c ${X}/src/sstv/encoder.c
-    ${X}/src/dialog_wefax.c ${X}/src/wefax/decoder.c
+    ${X}/src/dialog_wefax.c ${X}/src/wefax/decoder.c ${X}/src/wefax/encoder.c
     ${X}/src/dialog_navtex.c ${X}/src/navtex/decoder.cpp ${X}/src/navtex/navtex_rx.cpp ${X}/src/navtex/fftfilt.cxx
     ${X}/src/dialog_ft8.c ${X}/src/ft8/table_view.c ${X}/src/ft8/utils.c ${X}/src/ft8/qso.cpp
     ${X}/src/dialog_settings.cpp

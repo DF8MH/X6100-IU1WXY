@@ -16,6 +16,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -34,8 +35,12 @@ typedef bool (*tx_abort_fn_t)(void *ctx);
 /* Starting gain offset (dB) for the radio's firmware and power setting. */
 float tx_player_base_gain_offset(void);
 
+/* Fill callback for tx_player_stream: write up to n samples into buf and
+ * return how many; 0 ends the transmission. */
+typedef size_t (*tx_fill_fn_t)(int16_t *buf, size_t n, void *ctx);
+
 /* Key the radio and play n_samples of int16 audio at AUDIO_PLAY_RATE,
- * shifted to tx_offset_hz. Samples are scaled in place. Returns false if
+ * shifted to tx_offset_hz. The samples are left unchanged. Returns false if
  * abort_check stopped it early. */
 bool tx_player_play(int16_t      *samples,
                     uint32_t      n_samples,
@@ -43,6 +48,15 @@ bool tx_player_play(int16_t      *samples,
                     float         base_gain_offset,
                     tx_abort_fn_t abort_check,
                     void         *abort_check_ctx);
+
+/* As tx_player_play, with the audio generated block by block by fill (for
+ * waveforms too long to hold in memory, e.g. WeFax). */
+bool tx_player_stream(tx_fill_fn_t  fill,
+                      void         *fill_ctx,
+                      int32_t       tx_offset_hz,
+                      float         base_gain_offset,
+                      tx_abort_fn_t abort_check,
+                      void         *abort_check_ctx);
 
 #ifdef __cplusplus
 }

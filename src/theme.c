@@ -196,6 +196,7 @@ static bool load_file(const char *name) {
     if (font) {
         theme_shape.font = !strcasecmp(font, "roboto") ? FONT_ROBOTO :
                            !strcasecmp(font, "dejavu") ? FONT_DEJAVU :
+                           !strcasecmp(font, "arial") ? FONT_ARIAL :
                            !strcasecmp(font, "sony") ? FONT_SONY : -1;
     }
     const cJSON *wf = cJSON_GetObjectItemCaseSensitive(root, "waterfall");

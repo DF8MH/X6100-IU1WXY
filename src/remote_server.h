@@ -23,6 +23,10 @@ void remote_server_init();
 /* An event ({"t":...}) for the subscribed web clients. Any thread; takes o and frees it. */
 void remote_event(cJSON *o);
 
+/* Decoded text of type ("rtty_text"...) for the subscribed web clients, batched into
+ * {"t":type,"text":...} at a newline, 300 ms or 200 characters. Any thread; nothing without subscribers. */
+void remote_text(const char *type, const char *s, size_t n);
+
 /* Waterfall PSD (dB) from the DSP, sent to the subscribed web clients (~10 fps) */
 void remote_scope_data(const float *psd_db, size_t n, uint32_t center_hz, uint32_t width_hz, bool tx);
 

@@ -39,8 +39,12 @@ static int                     sel;
 static int32_t                 audio_hz;
 static void                    (*on_close)(void);
 
+static int32_t item_dial(const freq_list_item_t *it, int32_t audio) {
+    return it->lsb ? it->freq_hz + audio : it->freq_hz - audio;
+}
+
 static int32_t dial_of(int i) {
-    return items[i].lsb ? items[i].freq_hz + audio_hz : items[i].freq_hz - audio_hz;
+    return item_dial(&items[i], audio_hz);
 }
 
 static bool is_current(int i) {
@@ -64,16 +68,7 @@ static void step(int dir) {
 
 static void tune(void) {
     if (sel < 0 || items[sel].group) return;
-    main_screen_set_freq(dial_of(sel));
-    cparam_i_set(cfg_cur_mode, items[sel].lsb ? x6100_mode_lsb : x6100_mode_usb);
-    /* The station stays named in the frequency strip while decoding */
-    char label[64];
-    if (items[sel].note)
-        snprintf(label, sizeof(label), "%s - %s", items[sel].name, items[sel].note);
-    else
-        snprintf(label, sizeof(label), "%s", items[sel].name);
-    freq_strip_set_label(label, dial_of(sel));
-    msg_update_text_fmt("%s %d.%d kHz", items[sel].name, items[sel].freq_hz / 1000, (items[sel].freq_hz % 1000) / 100);
+    freq_list_tune(&items[sel], audio_hz);
     freq_list_close();
 }
 
@@ -241,6 +236,38 @@ void freq_list_close(void) {
         lv_group_set_editing(keyboard_group, true);
     }
     if (on_close) on_close();
+}
+
+void freq_list_tune(const freq_list_item_t *it, int32_t audio) {
+    int32_t dial = item_dial(it, audio);
+
+    main_screen_set_freq(dial);
+    cparam_i_set(cfg_cur_mode, it->lsb ? x6100_mode_lsb : x6100_mode_usb);
+    /* The station stays named in the frequency strip while decoding */
+    char label[64];
+    if (it->note)
+        snprintf(label, sizeof(label), "%s - %s", it->name, it->note);
+    else
+        snprintf(label, sizeof(label), "%s", it->name);
+    freq_strip_set_label(label, dial);
+    msg_update_text_fmt("%s %d.%d kHz", it->name, it->freq_hz / 1000, (it->freq_hz % 1000) / 100);
+}
+
+const freq_list_item_t *freq_list_base(const freq_list_item_t *list, int n, int32_t audio, int32_t vfo,
+                                       int32_t *dial) {
+    const freq_list_item_t *best = NULL;
+    int32_t                 dist = 0;
+
+    for (int i = 0; i < n; i++) {
+        if (list[i].group) continue;
+        int32_t d = abs(item_dial(&list[i], audio) - vfo);
+        if (!best || d < dist) {
+            best = &list[i];
+            dist = d;
+        }
+    }
+    if (best && dial) *dial = item_dial(best, audio);
+    return best;
 }
 
 bool freq_list_is_open(void) {

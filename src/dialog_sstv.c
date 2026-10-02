@@ -4106,6 +4106,12 @@ void dialog_sstv_remote(const char *cmd, int32_t val, const char *text)
         if (tx_ui_state == SSTV_TX_UI_RF) tx_abort = true;
         return;
     }
+    if (!strcmp(cmd, "app_base")) {   /* the closest calling frequency, as its Freq. list */
+        const freq_list_item_t *it = freq_list_base(sstv_freqs, sizeof(sstv_freqs)/sizeof(sstv_freqs[0]), 0,
+                                                    cparam_i_get(cfg_fg_freq), NULL);
+        if (it) freq_list_tune(it, 0);
+        return;
+    }
     if (strcmp(cmd, "sstv_tx") || val < 0 || val >= (int32_t)(sizeof(cont_modes)/sizeof(cont_modes[0])))
         return;
     if (tx_ui_state != SSTV_TX_UI_RX || tx_running) {
@@ -4142,7 +4148,9 @@ int dialog_sstv_remote_state(char *buf, size_t size)
         rx = "LISTEN";
     }
     int prog = ui == SSTV_TX_UI_RF ? tx_progress : n > 0 ? (int)(w * 1000 / n) : 0;
-    return snprintf(buf, size, "{\"ui\":\"%s\",\"rx\":\"%s\",\"vis\":\"%s\",\"prog\":%i}",
+    int32_t base = 0;
+    freq_list_base(sstv_freqs, sizeof(sstv_freqs)/sizeof(sstv_freqs[0]), 0, cparam_i_get(cfg_fg_freq), &base);
+    return snprintf(buf, size, "{\"ui\":\"%s\",\"rx\":\"%s\",\"vis\":\"%s\",\"prog\":%i,\"base\":%i}",
                     ui == SSTV_TX_UI_RF ? "TX" : ui == SSTV_TX_UI_SETUP ? "SETUP" : "RX", rx,
-                    cont_mode_name(ui == SSTV_TX_UI_RF ? tx_mode : cont_mode), prog < 0 ? 0 : prog > 1000 ? 1000 : prog);
+                    cont_mode_name(ui == SSTV_TX_UI_RF ? tx_mode : cont_mode), prog < 0 ? 0 : prog > 1000 ? 1000 : prog, (int)base);
 }

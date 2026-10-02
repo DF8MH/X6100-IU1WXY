@@ -595,6 +595,12 @@ static void apps_disable() {
     panel_update_visibility(false);
 }
 
+/* As the GEN key: the app closes, the GEN buttons come back */
+void main_screen_close_app(void) {
+    apps_disable();
+    buttons_load_page_group(buttons_group_gen);
+}
+
 void main_screen_start_app(press_action_t app_action) {
     /* Modes again closes its menu. */
     if (app_action == ACTION_APP_MODES && dialog_type_is_run(dialog_modes)) {

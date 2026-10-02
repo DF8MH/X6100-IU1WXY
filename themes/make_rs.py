@@ -87,7 +87,7 @@ save('dialog', body, [6, 6, 6, 6])
 
 theme = {
     'base': 'Classic',
-    'font': 'roboto',
+    'font': 'arial',
     'radius': 6, 'radius_btn': 5, 'radius_popup': 6, 'border': 1,
     'btn_gradient': True, 'box_gradient': False, 'focus_solid': True,
     # LED on the buttons as on RS-BA1 (3 px in, 8 x 14 on a 23 px button), scaled to the 52 px ones

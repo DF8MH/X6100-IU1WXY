@@ -1792,6 +1792,18 @@ static bool load_band(int8_t dir) {
     return true;
 }
 
+/* The band's JS8 frequency, or the custom one */
+static void load_base(void) {
+    load_band(0); /* also sets the mode */
+    if (params.js8_custom_on.x) {
+        if (params.js8_custom_hz.x >= CUSTOM_MIN_HZ && params.js8_custom_hz.x <= CUSTOM_MAX_HZ)
+            cparam_i_set(cfg_fg_freq, params.js8_custom_hz.x);
+        else
+            params_bool_set(&params.js8_custom_on, false);
+    }
+    js8_usb_dig(); /* a custom frequency on another band loaded that band's mode */
+}
+
 static js8_stations_t *stations_for_band(void) {
     int32_t khz = cparam_i_get(cfg_fg_freq) / 1000;
     for (int i = 0; i < BAND_LISTS; i++) {
@@ -1884,14 +1896,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_add_event_cb(dialog.obj, band_cb, EVENT_BAND_UP, NULL);
     lv_obj_add_event_cb(dialog.obj, band_cb, EVENT_BAND_DOWN, NULL);
 
-    load_band(0); /* also sets the mode */
-    if (params.js8_custom_on.x) {
-        if (params.js8_custom_hz.x >= CUSTOM_MIN_HZ && params.js8_custom_hz.x <= CUSTOM_MAX_HZ)
-            cparam_i_set(cfg_fg_freq, params.js8_custom_hz.x);
-        else
-            params_bool_set(&params.js8_custom_on, false);
-    }
-    js8_usb_dig(); /* a custom frequency on another band loaded that band's mode */
+    load_base();
 
     /* 200-3000 Hz while JS8 is open. High first: each edge is validated
      * against the other. */
@@ -5012,10 +5017,13 @@ void dialog_js8_remote(const char *cmd, int32_t val, const char *text) {
     } else if (!strcmp(cmd, "js8_stop")) {
         if (js8_tx_busy(tx)) js8_tx_stop(tx);
         auto_cq_stop("TX stopped");
+    } else if (!strcmp(cmd, "app_base")) {
+        load_base();
     }
 }
 
 int dialog_js8_remote_state(char *buf, size_t size) {
-    return snprintf(buf, size, "{\"busy\":%i,\"txfreq\":%i,\"speed\":\"%s\"}", tx_status.state != JS8_TX_IDLE,
-                    params.js8_tx_freq.x, js8_speed_name(cur_speed()));
+    return snprintf(buf, size, "{\"busy\":%i,\"txfreq\":%i,\"speed\":\"%s\",\"base\":%i}", tx_status.state != JS8_TX_IDLE,
+                    params.js8_tx_freq.x, js8_speed_name(cur_speed()),
+                    (int)(params.js8_custom_on.x ? params.js8_custom_hz.x : cfg_digital_freq_get()));
 }

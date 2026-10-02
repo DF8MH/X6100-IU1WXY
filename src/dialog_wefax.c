@@ -6,6 +6,11 @@
 #include "dialog_wefax.h"
 #include "freq_list.h"
 #include "wefax/decoder.h"
+#include "wefax/encoder.h"
+#include "tx_player.h"
+#include "remote_server.h"
+#include "msg.h"
+#include "audio.h"
 #include "mfk.h"
 #include "keyboard.h"
 #include "cfg/cfg_api.h"
@@ -18,6 +23,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <ctype.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <time.h>
@@ -46,6 +52,7 @@
  */
 #define FAX_BUFFER_ROWS     2400
 #define FAX_SAVE_DIR        "/mnt/wefax"
+#define FAX_TX_DIR          FAX_SAVE_DIR "/tx_pics"
 
 
 /*
@@ -147,6 +154,10 @@ static void auto_finish_fax(void);
 
 static bool open_test_wav(void);
 
+static void tx_start(const char *name);
+static void tx_check_done(void);
+static void tx_done_event(int result);
+
 
 /*
  * Decoder.
@@ -158,6 +169,22 @@ static uint32_t auto_start_generation_seen = 0;
 
 /* GUI-side latch: provisional AUTO rows stay hidden until confirmation. */
 static bool auto_fax_confirmed_seen = false;
+
+/*
+ * TX (web remote): a worker streams the fax through tx_player, the decoder
+ * is not fed meanwhile.
+ */
+static pthread_t tx_thread;
+static bool tx_thread_valid = false;
+static volatile bool tx_running = false;
+static volatile bool tx_abort = false;
+static volatile int tx_progress = 0;
+static volatile int tx_result = 0;
+static char tx_path[192];
+
+/* Mirrors for dialog_wefax_remote_state(): the web thread must not touch the decoder */
+static volatile bool remote_cont = false;
+static volatile bool remote_receiving = false;
 
 
 /*
@@ -1138,6 +1165,14 @@ static void construct_cb(lv_obj_t *parent)
  */
 static void destruct_cb(void)
 {
+    /* Closing the app stops a TX: wait for the worker to unkey the radio */
+    if (tx_thread_valid) {
+        tx_abort = true;
+        pthread_join(tx_thread, NULL);
+        tx_thread_valid = false;
+        tx_done_event(tx_result);
+    }
+
     freq_list_close();
 
     stop_wav_test();
@@ -1782,6 +1817,12 @@ static void *save_fax_worker(void *arg)
     );
 
     success = true;
+
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "t", "wefax_rx");
+    cJSON_AddStringToObject(o, "file", strrchr(job->path, '/') + 1);
+    cJSON_AddNumberToObject(o, "rows", job->rows);
+    remote_event(o);
 
  done:
     if (out_row) {
@@ -3432,6 +3473,135 @@ static void test_cb(button_data_t *data)
 
 
 /*
+ * TX of a picture of FAX_TX_DIR (web remote).
+ */
+static bool tx_abort_cb(void *ctx)
+{
+    (void)ctx;
+    return tx_abort;
+}
+
+
+static size_t tx_fill_cb(int16_t *buf, size_t n, void *enc)
+{
+    n = wefax_encoder_fill(buf, n, enc);
+    tx_progress = wefax_encoder_progress(enc);
+    return n;
+}
+
+
+static void *tx_thread_cb(void *arg)
+{
+    (void)arg;
+
+    int rc;
+    wefax_encoder_t *enc = wefax_encoder_open(tx_path, AUDIO_PLAY_RATE, &rc);
+
+    if (!enc) {
+        printf("WEFAX TX: can't load %s (%d)\n", tx_path, rc);
+        tx_result = rc;
+        tx_running = false;
+        return NULL;
+    }
+
+    printf("WEFAX TX: %s, %u lines\n", tx_path, wefax_encoder_rows(enc));
+
+    /* Absolute audio tones as SSTV: offset = tx_player's centre, no VFO shift */
+    bool done = tx_player_stream(tx_fill_cb, enc, TX_PLAYER_AUDIO_HZ,
+                                 tx_player_base_gain_offset(), tx_abort_cb, NULL);
+
+    wefax_encoder_close(enc);
+    tx_result = done && !tx_abort ? 1 : -1;
+    tx_running = false;
+    return NULL;
+}
+
+
+static void tx_done_event(int result)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "t", "wefax_txdone");
+    cJSON_AddNumberToObject(o, "result", result);
+    remote_event(o);
+}
+
+
+/* name: a file of FAX_TX_DIR, [A-Za-z0-9][A-Za-z0-9._ -]*.png */
+static void tx_start(const char *name)
+{
+    size_t len = name ? strlen(name) : 0;
+    bool ok = len > 4 && len < 128 && isalnum((unsigned char)name[0]) &&
+              !strcmp(name + len - 4, ".png");
+
+    for (size_t i = 0; ok && i < len; i++) {
+        ok = isalnum((unsigned char)name[i]) || strchr("._ -", name[i]);
+    }
+
+    if (!ok) {
+        msg_update_text_fmt("WeFax TX: bad file name");
+        return;
+    }
+
+    if (tx_running || tx_thread_valid) {
+        msg_update_text_fmt("WeFax TX busy");
+        return;
+    }
+
+    stop_wav_test();
+    snprintf(tx_path, sizeof(tx_path), FAX_TX_DIR "/%s", name);
+
+    tx_abort = false;
+    tx_progress = 0;
+    tx_result = 0;
+    tx_running = true;
+
+    int rc = pthread_create(&tx_thread, NULL, tx_thread_cb, NULL);
+
+    if (rc != 0) {
+        printf("WEFAX TX: pthread_create failed: %s\n", strerror(rc));
+        tx_running = false;
+        tx_done_event(-31);
+        return;
+    }
+
+    tx_thread_valid = true;
+}
+
+
+/* LVGL thread: progress, and the end of a TX */
+static void tx_check_done(void)
+{
+    if (tx_running) {
+        app_frame_bar(&frame, tx_progress, theme_hex(TC_tx));
+        return;
+    }
+
+    if (!tx_thread_valid) {
+        return;
+    }
+
+    pthread_join(tx_thread, NULL);
+    tx_thread_valid = false;
+    app_frame_bar(&frame, -1, 0);
+    tx_done_event(tx_result);
+
+    if (tx_result == 1) {
+        msg_update_text_fmt("WeFax TX done");
+    } else if (tx_result == -1) {
+        msg_update_text_fmt("WeFax TX stopped");
+    } else {
+        msg_update_text_fmt("WeFax TX failed (%i)", tx_result);
+    }
+
+    /* RX resumes from a clean decoder */
+    if (decoder) {
+        wefax_decoder_reset(decoder);
+        auto_start_generation_seen = 0;
+    }
+}
+
+
+/*
  * RX audio callback.
  */
 static void audio_cb(
@@ -3448,6 +3618,12 @@ static void audio_cb(
      * not be mixed into the test stream.
      */
     if (test_running) {
+        return;
+    }
+
+
+    /* Not our own transmission */
+    if (tx_running) {
         return;
     }
 
@@ -3651,7 +3827,9 @@ static void header_update(void)
             name = wefax_freqs[i].name;
     }
     snprintf(l, sizeof(l), "%s   %.1f kHz", name, f / 1000.0);
-    if (test_running) {
+    if (tx_running) {
+        snprintf(r, sizeof(r), "#%06x TX %i%%#", theme_hex(TC_tx), tx_progress / 10);
+    } else if (test_running) {
         snprintf(r, sizeof(r), "#%06x Test WAV#", theme_hex(TC_warn));
     } else {
         snprintf(r, sizeof(r), "%s", decoder && wefax_decoder_get_mode(decoder) == WEFAX_MODE_CONT ? "RX Cont" : "RX Auto");
@@ -3667,9 +3845,15 @@ static void update_preview_cb(
 {
     (void)timer;
 
+    remote_cont = decoder && wefax_decoder_get_mode(decoder) == WEFAX_MODE_CONT;
+    remote_receiving = remote_cont ||
+        (decoder && wefax_decoder_get_mode(decoder) == WEFAX_MODE_AUTO && auto_fax_confirmed_seen);
+
     if (frame.head_left) {
         header_update();
     }
+
+    tx_check_done();
 
     /* Consume asynchronous PNG completion in LVGL context. */
     check_async_save_completion();
@@ -4034,4 +4218,46 @@ static void freq_cb(button_data_t *data)
         freq_list_open(app_parent, "WEFAX - stations", wefax_freqs,
                        sizeof(wefax_freqs) / sizeof(wefax_freqs[0]), WEFAX_CENTER_HZ, NULL);
     }
+}
+
+
+/* Web remote, docs/REMOTE_API.md */
+void dialog_wefax_remote(const char *cmd, int32_t val, const char *text)
+{
+    if (!strcmp(cmd, "wefax_mode")) {
+        if (val == 0) {
+            auto_cb(NULL);
+        } else if (val == 1) {
+            cont_cb(NULL);
+        }
+        if (btn_rx_mode.disp_btn) {
+            buttons_refresh(&btn_rx_mode);
+        }
+    } else if (!strcmp(cmd, "wefax_save")) {
+        save_cb(NULL);
+    } else if (!strcmp(cmd, "wefax_clear")) {
+        clear_cb(NULL);
+    } else if (!strcmp(cmd, "wefax_tx")) {
+        tx_start(text);
+    } else if (!strcmp(cmd, "wefax_stop")) {
+        tx_abort = true;
+    } else if (!strcmp(cmd, "app_base")) {
+        const freq_list_item_t *it = freq_list_base(wefax_freqs, sizeof(wefax_freqs) / sizeof(wefax_freqs[0]),
+                                                    WEFAX_CENTER_HZ, cparam_i_get(cfg_fg_freq), NULL);
+        if (it) {
+            freq_list_tune(it, WEFAX_CENTER_HZ);
+        }
+    }
+}
+
+
+int dialog_wefax_remote_state(char *buf, size_t size)
+{
+    int32_t dial = 0;
+
+    freq_list_base(wefax_freqs, sizeof(wefax_freqs) / sizeof(wefax_freqs[0]), WEFAX_CENTER_HZ,
+                   cparam_i_get(cfg_fg_freq), &dial);
+    return snprintf(buf, size, "{\"rx\":\"%s\",\"st\":\"%s\",\"rows\":%u,\"prog\":%i,\"base\":%i}",
+                    remote_cont ? "CONT" : "AUTO", tx_running ? "TX" : remote_receiving ? "RX" : "WAIT",
+                    fax_buffer_count, tx_running ? tx_progress : 0, (int)dial);
 }

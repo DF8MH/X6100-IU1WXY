@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include "cw_decoder.h"
 #include "panel.h"
+#include "remote_server.h"
+#include <string.h>
 
 cw_characters_t cw_characters[] = {
     { .morse = ".-",        .character = "A" },
@@ -95,6 +97,7 @@ void cw_decoder_text(const char *text) {
         sink_text(text);
     } else {
         panel_add_text(text);
+        remote_text("cw_text", text, strlen(text));
     }
 }
 

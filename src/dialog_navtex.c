@@ -16,6 +16,7 @@
 #include "app_frame.h"
 #include "cfg/cfg_api.h"
 #include "dsp.h"
+#include "remote_server.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -430,6 +431,8 @@ static void ui_timer_cb(lv_timer_t *timer)
     }
     pthread_mutex_unlock(&text_mutex);
 
+    if (n > 0)
+        remote_text("navtex_text", local, n);
     if (n == 0 || !label)
         return;
 
@@ -637,4 +640,25 @@ static void freq_cb(button_data_t *data)
     else if (scroll)
         freq_list_open(lv_obj_get_parent(scroll), "NAVTEX - frequencies", navtex_freqs,
                        sizeof(navtex_freqs) / sizeof(navtex_freqs[0]), 1000, NULL);
+}
+
+/* Web remote, docs/REMOTE_API.md */
+void dialog_navtex_remote(const char *cmd, int32_t val, const char *text)
+{
+    (void)val;
+    (void)text;
+    if (!strcmp(cmd, "app_base")) {
+        const freq_list_item_t *it = freq_list_base(navtex_freqs, sizeof(navtex_freqs) / sizeof(navtex_freqs[0]), 1000,
+                                                    cparam_i_get(cfg_fg_freq), NULL);
+        if (it)
+            freq_list_tune(it, 1000);
+    }
+}
+
+int dialog_navtex_remote_state(char *buf, size_t size)
+{
+    int32_t dial = 0;
+
+    freq_list_base(navtex_freqs, sizeof(navtex_freqs) / sizeof(navtex_freqs[0]), 1000, cparam_i_get(cfg_fg_freq), &dial);
+    return snprintf(buf, size, "{\"base\":%i}", (int)dial);
 }
