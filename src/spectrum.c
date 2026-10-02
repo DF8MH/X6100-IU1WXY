@@ -22,6 +22,7 @@
 #include "rtty.h"
 #include "scheduler.h"
 #include "styles.h"
+#include "theme.h"
 #include "util.h"
 
 #include <pthread.h>
@@ -106,12 +107,12 @@ static void spectrum_draw_cb(lv_event_t *e) {
 
     lv_draw_line_dsc_init(&main_line_dsc);
 
-    main_line_dsc.color = lv_color_hex(0xAAAAAA);
+    main_line_dsc.color = TC(line);
     main_line_dsc.width = 1;
 
     lv_draw_line_dsc_init(&peak_line_dsc);
 
-    peak_line_dsc.color = lv_color_hex(0x555555);
+    peak_line_dsc.color = TC(off);
     peak_line_dsc.width = 1;
 
     lv_coord_t x1 = obj->coords.x1;
@@ -212,7 +213,7 @@ static void spectrum_draw_cb(lv_event_t *e) {
     if (dnf_show) {
         int32_t from, to;
 
-        rect_dsc.bg_color = lv_color_white();
+        rect_dsc.bg_color = TC(text);
         rect_dsc.bg_opa   = LV_OPA_50;
 
         from = sign_from * (dnf_center - dnf_width);
@@ -309,7 +310,7 @@ static void spectrum_draw_cb(lv_event_t *e) {
     /* Center */
 
     main_line_dsc.width = 1;
-    main_line_dsc.color = lv_color_hex(0xFFA000);   /* VFO line, amber like the waterfall one */
+    main_line_dsc.color = TC(vfo_line);   /* VFO line, as the waterfall one */
 
     main_a.x = x1 + markers_offset + w / 2;
     main_a.y = y1;
@@ -317,7 +318,7 @@ static void spectrum_draw_cb(lv_event_t *e) {
     main_b.y = y1 + h;
 
     if (recorder_is_on()) {
-        main_line_dsc.color = lv_color_hex(0xFF0000);
+        main_line_dsc.color = TC(err_strong);
     }
     if (center_line_show) {
         lv_draw_line(draw_ctx, &main_line_dsc, &main_a, &main_b);

@@ -71,6 +71,7 @@ extern lv_style_t   btn_active_style;
 extern lv_style_t   btn_disabled_style;
 extern lv_style_t   btn_mark_style;
 extern lv_style_t   btn_mark_assigned_style;
+extern lv_style_t   btn_mark_active_style;     /* the control the encoder is on now */
 
 extern lv_style_t   msg_style;
 extern lv_style_t   msg_tiny_style;
@@ -116,13 +117,11 @@ extern lv_font_t    sony_42;
 extern lv_font_t    sony_44;
 extern lv_font_t    sony_60;
 
-void styles_init(themes_t theme);
+/* The shared styles from the theme loaded with theme_init() */
+void styles_init(void);
 
-void styles_set_theme(themes_t theme);
-
-/* Dim/secondary text colour: `color` as is, light grey in Outdoor */
-uint32_t styles_dim(uint32_t color);
-bool styles_outdoor(void);
+/* Again after another theme_init() (the UI harness switches themes) */
+void styles_apply(void);
 
 #ifdef __cplusplus
 }

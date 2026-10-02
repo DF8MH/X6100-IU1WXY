@@ -24,6 +24,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     dialog_modes.c
     dialog_cw_trainer.c
     dialog_cw_kbd.c
+    theme.c
     freq_strip.c
     freq_scale.c
     spot_marks.c

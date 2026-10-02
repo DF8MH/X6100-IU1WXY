@@ -42,6 +42,7 @@ add_executable(js8_ui_harness
     ${X}/src/widgets/lv_waterfall.c
     ${X}/src/widgets/lv_finder.c
     ${CMAKE_BINARY_DIR}/styles_host.c
+    ${X}/src/theme.c
     ${FONTS}
 )
 set_source_files_properties(main.cpp PROPERTIES COMPILE_OPTIONS "-std=c++20")

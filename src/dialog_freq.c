@@ -14,6 +14,7 @@
 #include "dialog.h"
 #include "dialog_freq.h"
 #include "styles.h"
+#include "theme.h"
 #include "radio.h"
 #include "events.h"
 #include "util.h"
@@ -53,8 +54,8 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_obj_remove_style(text, NULL, LV_STATE_ANY | LV_PART_MAIN);
 
-    lv_obj_set_style_text_color(text, lv_color_white(), 0);
-    lv_obj_set_style_bg_color(text, lv_color_white(), LV_PART_CURSOR);
+    lv_obj_set_style_text_color(text, TC(text), 0);
+    lv_obj_set_style_bg_color(text, TC(text), LV_PART_CURSOR);
     lv_obj_set_style_bg_opa(text, 255, LV_PART_CURSOR);
 
     lv_textarea_set_one_line(text, true);

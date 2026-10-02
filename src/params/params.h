@@ -74,6 +74,7 @@ typedef enum {
     THEME_SIMPLE,
     THEME_LEGACY,
     THEME_OUTDOOR,
+    THEME_CLASSIC,
 } themes_t;
 
 
@@ -183,7 +184,8 @@ typedef struct {
 
     /* Theme */
 
-    params_uint8_t       theme;
+    params_uint8_t       theme;         /* old setting, replaced by theme_name */
+    params_str_t         theme_name;    /* built-in theme or /mnt/themes/<name>.json */
     params_uint8_t       font;
 
     /* durty flags */

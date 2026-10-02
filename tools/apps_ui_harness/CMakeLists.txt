@@ -35,13 +35,14 @@ add_library(apps OBJECT
     ${X}/src/info.c ${X}/src/meter.c ${X}/src/clock.c ${X}/src/tx_info.c
     ${X}/src/cfg/settings_manager.cpp ${X}/src/cfg/pending_writes.cpp ${X}/src/cfg/storage_policy.cpp
     ${X}/src/cfg/subject.cpp ${CMAKE_CURRENT_SOURCE_DIR}/cfg_host.cpp
-    ${CMAKE_BINARY_DIR}/styles_host.c ${FONTS})
+    ${CMAKE_BINARY_DIR}/styles_host.c ${X}/src/theme.c ${FONTS})
 target_link_libraries(apps PRIVATE lvgl)
 set_source_files_properties(${X}/src/info.c PROPERTIES COMPILE_DEFINITIONS "BTCAT_CLIENTS_FILE=\"btcat.clients\"")
 set_source_files_properties(${X}/src/dialog_msg_voice.c PROPERTIES COMPILE_DEFINITIONS "VOICE_MSG_PATH=\"msg_demo\"")
 set_source_files_properties(${X}/src/dialog_cw_trainer.c PROPERTIES COMPILE_DEFINITIONS "CWT_STATS_FILE=\"cw_trainer_demo.json\"")
 set_source_files_properties(${X}/src/dialog_sstv.c PROPERTIES COMPILE_DEFINITIONS "SSTV_TX_PICS_DIR=\"sstv_demo/tx_pics\";SSTV_TX_TEXT_DIR=\"sstv_demo/tx_text\";SSTV_TX_PNG=\"sstv_demo/sstv-tx.png\"")
 set_source_files_properties(main.c PROPERTIES COMPILE_DEFINITIONS "SSTV_DEFAULTS=\"${X}/rootfs/usr/share/x6100/sstv\"")
+set_source_files_properties(${X}/src/theme.c PROPERTIES COMPILE_DEFINITIONS "THEMES_DIR=\"themes_demo\"")
 set_source_files_properties(${X}/src/scheduler.cpp PROPERTIES COMPILE_OPTIONS "-include;cstdlib")
 add_executable(apps_ui_harness main.c stubs.c $<TARGET_OBJECTS:apps> ${CMAKE_BINARY_DIR}/stubs_auto.S)
 # No network from the harness: the cluster client must not log in anywhere

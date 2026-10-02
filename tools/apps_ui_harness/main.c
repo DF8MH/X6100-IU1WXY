@@ -3,6 +3,7 @@
 #include "buttons.h"
 #include "dialog.h"
 #include "styles.h"
+#include "theme.h"
 #include "keyboard.h"
 #include "events.h"
 #include "params/params.h"
@@ -541,15 +542,18 @@ static void topbar(void) {
     harness_gps_fix = false;
     pump(3100);
     shot("topbar_2.ppm");          /* no fix: the saved QTH */
-    styles_set_theme(THEME_LEGACY);
+    theme_init("Legacy");
+    styles_apply();
     lv_obj_report_style_change(NULL);
     pump(100);
     shot("topbar_3.ppm");
-    styles_set_theme(THEME_OUTDOOR);
+    theme_init("Outdoor");
+    styles_apply();
     lv_obj_report_style_change(NULL);
     pump(100);
     shot("topbar_outdoor.ppm");
-    styles_set_theme(THEME_SIMPLE);
+    theme_init(getenv("THEME"));    /* back to the theme of the run */
+    styles_apply();
     lv_obj_report_style_change(NULL);
     /* Band plan: zoom x8 on the CW/DIG edge, a band edge with beacons, out of any band */
     freq_scale_update(7040000, 50000 / 8, 0xffffff);
@@ -1111,8 +1115,10 @@ int main(int argc, char **argv) {
     EVENT_RADIO_RX = lv_event_register_id();
     EVENT_RADIO_TX = lv_event_register_id();
     EVENT_RADIO_RX = lv_event_register_id();
+    theme_init(getenv("THEME"));    /* THEME=Classic, or a file in out/themes_demo; default IU1WXY */
     if (getenv("FONT")) { params.font.x = atoi(getenv("FONT")); fonts_apply(params.font.x); }
-    styles_init(THEME_SIMPLE);
+    else if (theme_shape.font >= 0) fonts_apply(theme_shape.font);
+    styles_init();
     lv_obj_t *scr = lv_scr_act();
     lv_obj_add_style(scr, &background_style, 0);
     keyboard_group = lv_group_create();
@@ -1159,7 +1165,8 @@ int main(int argc, char **argv) {
 
     const char *only = argc > 1 ? argv[1] : NULL;
     if (only && !strcmp(only, "outdoor")) {   /* Settings in Outdoor: Display is settings_1_2 */
-        styles_set_theme(THEME_OUTDOOR);
+        theme_init("Outdoor");
+        styles_apply();
         lv_obj_report_style_change(NULL);
         settings_demo();
         return 0;

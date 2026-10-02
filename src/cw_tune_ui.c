@@ -9,6 +9,7 @@
 #include "cw_tune_ui.h"
 
 #include "styles.h"
+#include "theme.h"
 #include "params/params.h"
 #include "cfg/cfg_api.h"
 #include "pubsub_ids.h"
@@ -38,12 +39,12 @@ static void update_visibility(Subject *subj, void *user_data);
 
 void cw_tune_init(lv_obj_t *parent)
 {
-    color_ok = lv_color_hex(COLOR_LIGHT_GREEN);
-    color_good = lv_color_hex(COLOR_LIGHT_YELLOW);
-    color_bad = lv_color_hex(COLOR_LIGHT_RED);
+    color_ok = TC(ok);
+    color_good = TC(tune_good);
+    color_bad = TC(err);
 
     lv_draw_rect_dsc_init(&rect_dsc);
-    rect_dsc.bg_color = lv_color_hex(0x7f7f7f);
+    rect_dsc.bg_color = TC(text_mute);
     rect_dsc.radius = 5;
     rect_dsc.bg_opa = LV_OPA_50;
 

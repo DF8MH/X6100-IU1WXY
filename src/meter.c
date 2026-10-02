@@ -8,6 +8,7 @@
 
 #include "meter.h"
 #include "styles.h"
+#include "theme.h"
 #include "events.h"
 #include "params/params.h"
 #include "cfg/cfg_api.h"
@@ -65,9 +66,9 @@ static lv_color_t bar_color(int16_t db) {
     if (db >= S9) {
         /* Green at S9 fading to red at +40 */
         uint8_t mix = (db - S9) * 255 / (S9_40 - S9);
-        return lv_color_mix(lv_color_hex(0xE02020), lv_color_hex(0x20C040), mix);
+        return lv_color_mix(TC(meter_high), TC(meter_low), mix);
     }
-    return lv_color_hex(db <= noise_level ? 0x777777 : 0xAAAAAA);
+    return db <= noise_level ? TC(text_mute) : TC(meter_bar);
 }
 
 static void meter_draw_cb(lv_event_t * e) {
@@ -121,7 +122,7 @@ static void meter_draw_cb(lv_event_t * e) {
         area.x1 = x1 + 30 - slice_w / 2 + slice_w * peak_i + slice_spacing / 2;
         area.x2 = area.x1 + slice_w - slice_spacing;
         rect_dsc.bg_opa = LV_OPA_COVER;    /* bright: gradient colour from S9, white below */
-        rect_dsc.bg_color = bar_db[peak_i] >= S9 ? bar_color(bar_db[peak_i]) : lv_color_white();
+        rect_dsc.bg_color = bar_db[peak_i] >= S9 ? bar_color(bar_db[peak_i]) : TC(text);
         lv_draw_rect(draw_ctx, &rect_dsc, &area);
     }
 
@@ -129,7 +130,7 @@ static void meter_draw_cb(lv_event_t * e) {
 
     lv_draw_label_dsc_init(&label_dsc);
 
-    label_dsc.color = lv_color_white();
+    label_dsc.color = TC(text);
     label_dsc.font = &sony_22;
 
     area.x1 = x1;
@@ -150,6 +151,7 @@ static void meter_draw_cb(lv_event_t * e) {
             bar++;
         area.x1 = x1 + 30 + slice_w * bar - label_size.x / 2;
         area.x2 = area.x1 + label_size.x;
+        label_dsc.color = db > S9 ? TC(meter_over) : TC(text);
 
         lv_draw_label(draw_ctx, &label_dsc, &area, label, NULL);
     }
@@ -180,7 +182,7 @@ lv_obj_t * meter_init(lv_obj_t * parent) {
     db_val_label = lv_label_create(obj);
     lv_obj_set_style_text_font(db_val_label, &sony_20, 0);
     lv_obj_align(db_val_label, LV_ALIGN_BOTTOM_MID, 0, -2);
-    lv_obj_set_style_text_color(db_val_label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(db_val_label, TC(text), 0);
     lv_label_set_text(db_val_label, "");
     return obj;
 }

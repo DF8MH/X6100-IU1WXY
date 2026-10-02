@@ -10,6 +10,7 @@
 #include "keyboard.h"
 #include "cfg/cfg_api.h"
 #include "styles.h"
+#include "theme.h"
 #include "radio.h"
 #include "events.h"
 #include "app_frame.h"
@@ -1077,10 +1078,10 @@ static void construct_cb(lv_obj_t *parent)
      * Since that image is intentionally disabled above (to avoid its built-in
      * duplicate outline), provide the closest flat equivalent explicitly.
      */
-    lv_obj_set_style_bg_color(fax_frame, lv_color_hex(0x182028), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(fax_frame, TC(frame), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(fax_frame, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(fax_frame, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(fax_frame, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_border_color(fax_frame, TC(dialog_border), LV_PART_MAIN);
     lv_obj_set_style_border_opa(fax_frame, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(fax_frame, 8, LV_PART_MAIN);
 
@@ -2716,7 +2717,7 @@ static void fax_browser_build(void)
 
     lv_obj_set_style_bg_color(
         fax_browser_table,
-        lv_color_hex(0x27313a),
+        TC(bg),
         LV_PART_MAIN
     );
 
@@ -2740,7 +2741,7 @@ static void fax_browser_build(void)
 
     lv_obj_set_style_text_color(
         fax_browser_table,
-        lv_color_white(),
+        TC(text),
         LV_PART_ITEMS
     );
 
@@ -2770,7 +2771,7 @@ static void fax_browser_build(void)
 
     lv_obj_set_style_text_color(
         fax_browser_table,
-        lv_color_hex(0x808080),
+        TC(text_mute),
         LV_PART_ITEMS | LV_STATE_EDITED
     );
 
@@ -3651,7 +3652,7 @@ static void header_update(void)
     }
     snprintf(l, sizeof(l), "%s   %.1f kHz", name, f / 1000.0);
     if (test_running) {
-        snprintf(r, sizeof(r), "#ffd24a Test WAV#");
+        snprintf(r, sizeof(r), "#%06x Test WAV#", theme_hex(TC_warn));
     } else {
         snprintf(r, sizeof(r), "%s", decoder && wefax_decoder_get_mode(decoder) == WEFAX_MODE_CONT ? "RX Cont" : "RX Auto");
     }

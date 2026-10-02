@@ -8,6 +8,7 @@
 #include "cfg/cfg_api.h"
 #include "dialog_cluster.h"
 #include "styles.h"
+#include "theme.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,20 +43,20 @@ static bool           has_sel;
 static cluster_spot_t sel;                      /* highlighted spot, kept by call + freq */
 
 static uint32_t age_color(uint16_t age) {
-    if (age < 2)  return 0x7CFF7C;
-    if (age < 10) return 0xE8E070;
-    if (age < 30) return 0xC08A4A;
-    return 0x777777;
+    if (age < 2)  return theme_hex(TC_new);
+    if (age < 10) return theme_hex(TC_age_mid);
+    if (age < 30) return theme_hex(TC_age_old);
+    return theme_hex(TC_text_mute);
 }
 
 /* Mode the spot tunes to (as the Cluster app does) */
 static void set_mode(lv_obj_t *l, const cluster_spot_t *s) {
     static const char     *name[]  = { "CW", "LSB", "USB", "DIG", "AM", "FM" };
-    static const uint32_t  color[] = { 0xFFB040, 0x7CC4FF, 0x7CC4FF, 0xC890FF, 0xDDE6F0, 0xDDE6F0 };
+    static const theme_color_t color[] = { TC_warn, TC_vfo, TC_vfo, TC_digi, TC_text_value, TC_text_value };
     cluster_mode_t         m = cluster_guess_mode(s);
 
     lv_label_set_text(l, name[m]);
-    lv_obj_set_style_text_color(l, lv_color_hex(color[m]), 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(theme_hex(color[m])), 0);
 }
 
 static int by_freq(const void *a, const void *b) {
@@ -81,7 +82,7 @@ static void set_alert_bg(row_t *r, bool on) {
     lv_obj_t *l[] = {r->freq, r->call, r->mode, r->age};
 
     for (int i = 0; i < 4; i++) {
-        lv_obj_set_style_bg_color(l[i], lv_color_hex(on ? 0x7A1F5C : 0x0A1F3A), 0);
+        lv_obj_set_style_bg_color(l[i], on ? TC(alert_bg) : TC(vfo_bg), 0);
         lv_obj_set_style_bg_opa(l[i], on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
     }
 }
@@ -96,13 +97,13 @@ static void show_spot(row_t *r, const cluster_spot_t *s, bool highlighted, const
     lv_label_set_text(r->freq, buf);
     lv_obj_set_width(r->freq, FREQ_W);
     lv_obj_set_style_text_align(r->freq, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(r->freq, lv_color_hex(0xDDE6F0), 0);
+    lv_obj_set_style_text_color(r->freq, TC(text_value), 0);
     set_alert_bg(r, alert && !highlighted);
     lv_label_set_text(r->call, s->dx);
     set_mode(r->mode, s);
     snprintf(buf, sizeof buf, "%um", age);
     lv_label_set_text(r->age, buf);
-    lv_obj_set_style_text_color(r->call, lv_color_hex(alert ? 0xFF9BE0 : c), 0);
+    lv_obj_set_style_text_color(r->call, lv_color_hex(alert ? theme_hex(TC_alert_text) : c), 0);
     lv_obj_set_style_text_color(r->age, lv_color_hex(c), 0);
     show_row(r, true);
 }
@@ -217,7 +218,7 @@ static void redraw(void) {
             lv_label_set_text(r->freq, buf);
             lv_obj_set_width(r->freq, COL_W - 12);
             lv_obj_set_style_text_align(r->freq, LV_TEXT_ALIGN_CENTER, 0);
-            lv_obj_set_style_text_color(r->freq, lv_color_hex(0x7CC4FF), 0);
+            lv_obj_set_style_text_color(r->freq, TC(vfo), 0);
             set_alert_bg(r, false);
             lv_obj_set_style_bg_opa(r->freq, LV_OPA_COVER, 0);
             show_row(r, true);
@@ -302,7 +303,7 @@ static lv_obj_t *cell(lv_obj_t *p, lv_coord_t x, lv_coord_t w, lv_coord_t y, lv_
     lv_label_set_long_mode(l, LV_LABEL_LONG_CLIP);
     lv_obj_set_pos(l, x, y);
     lv_obj_set_width(l, w);
-    lv_obj_set_style_bg_color(l, lv_color_hex(0x0A1F3A), 0);
+    lv_obj_set_style_bg_color(l, TC(vfo_bg), 0);
     lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
     return l;
 }
@@ -312,11 +313,11 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
     lv_obj_remove_style_all(box);
     lv_obj_set_pos(box, 800 - COL_W, y);
     lv_obj_set_size(box, COL_W, 480 - BUTTONS_H - y);
-    lv_obj_set_style_radius(box, 10, 0);
-    lv_obj_set_style_bg_color(box, lv_color_hex(0x080E1E), 0);
+    lv_obj_set_style_radius(box, theme_shape.radius_popup, 0);
+    lv_obj_set_style_bg_color(box, TC(side), 0);
     lv_obj_set_style_bg_opa(box, LV_OPA_80, 0);
-    lv_obj_set_style_border_color(box, lv_color_hex(0x3A4A6A), 0);
-    lv_obj_set_style_border_width(box, 1, 0);
+    lv_obj_set_style_border_color(box, TC(panel_border), 0);
+    lv_obj_set_style_border_width(box, theme_shape.border, 0);
     lv_obj_clear_flag(box, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
     hl = lv_obj_create(box);
@@ -324,14 +325,14 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
     lv_obj_set_pos(hl, 2, TITLE_H);
     lv_obj_set_size(hl, COL_W - 6, ROW_H);
     lv_obj_set_style_radius(hl, 4, 0);
-    lv_obj_set_style_bg_color(hl, lv_color_hex(0x5A4A00), 0);
+    lv_obj_set_style_bg_color(hl, TC(sel_bg), 0);
     lv_obj_set_style_bg_opa(hl, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(hl, lv_color_hex(0xFFD800), 0);
+    lv_obj_set_style_border_color(hl, TC(sel_text), 0);
     lv_obj_set_style_border_width(hl, 2, 0);
     lv_obj_add_flag(hl, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(hl, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
-    title = cell(box, 0, COL_W - 2, 2, LV_TEXT_ALIGN_CENTER, 0x60E0D0, &sony_22);
+    title = cell(box, 0, COL_W - 2, 2, LV_TEXT_ALIGN_CENTER, theme_hex(TC_text_head), &sony_22);
     lv_label_set_text(title, "DX Cluster");
     lv_obj_clear_flag(title, LV_OBJ_FLAG_HIDDEN);
 
@@ -340,10 +341,10 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
     for (int i = 0; i < POOL; i++) {
         lv_coord_t ry = TITLE_H + i * ROW_H;
 
-        rows[i].freq = cell(box, 5, FREQ_W, ry, LV_TEXT_ALIGN_LEFT, 0xDDE6F0, &sony_22);
-        rows[i].call = cell(box, 67, 102, ry + 2, LV_TEXT_ALIGN_LEFT, 0xFFFFFF, &sony_20);
-        rows[i].mode = cell(box, 173, 32, ry + 3, LV_TEXT_ALIGN_LEFT, 0xFFFFFF, &sony_18);
-        rows[i].age  = cell(box, 207, 32, ry + 3, LV_TEXT_ALIGN_RIGHT, 0xFFFFFF, &sony_18);
+        rows[i].freq = cell(box, 5, FREQ_W, ry, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text_value), &sony_22);
+        rows[i].call = cell(box, 67, 102, ry + 2, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), &sony_20);
+        rows[i].mode = cell(box, 173, 32, ry + 3, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), &sony_18);
+        rows[i].age  = cell(box, 207, 32, ry + 3, LV_TEXT_ALIGN_RIGHT, theme_hex(TC_text), &sony_18);
     }
     lv_timer_create(timer_cb, 1000, NULL);
     timer_cb(NULL);

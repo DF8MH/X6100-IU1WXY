@@ -20,6 +20,7 @@
 
 extern "C" {
     #include "styles.h"
+    #include "theme.h"
     #include "main_screen.h"
     #include "screen_rec.h"
     #include "mfk.h"
@@ -31,6 +32,7 @@ extern "C" {
 }
 
 #define STATE_ASSIGNED LV_STATE_USER_1
+#define STATE_ACTIVE   LV_STATE_USER_2  /* the encoder is on this control now */
 
 struct _disp_button_t {
     lv_obj_t      *parent;
@@ -49,6 +51,7 @@ static std::array<char, CTRL_LAST> binds;
 
 static void disp_btn_refresh(disp_btn_t *b);
 static void disp_btn_clear(disp_btn_t *b);
+static void marks_refresh(disp_btn_t *b);
 
 static void button_app_page_cb(button_data_t *data);
 static void button_encoder_update_cb(button_data_t *data);
@@ -561,23 +564,28 @@ void buttons_init(lv_obj_t *parent) {
         /* Encoder marks */
         lv_obj_t *enc_mark;
 
-        /* Encoder marks: a bar on the left edge, green VOL, blue MFK */
+        /* Encoder marks: a bar on the left edge, green VOL, blue MFK, or the theme's LED */
+        lv_coord_t mark_x = theme_shape.mark[1] ? theme_shape.mark[0] : 0;
+        lv_coord_t mark_y = theme_shape.mark[1] ? (BTN_HEIGHT - 2 - theme_shape.mark[2]) / 2 : 10;
+
         enc_mark = lv_obj_create(f);
-        lv_obj_set_pos(enc_mark, 0, 10);
+        lv_obj_set_pos(enc_mark, mark_x, mark_y);
         lv_obj_clear_flag(enc_mark, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_style(enc_mark, &btn_mark_style, 0);
         lv_obj_add_style(enc_mark, &btn_mark_assigned_style, STATE_ASSIGNED);
+        lv_obj_add_style(enc_mark, &btn_mark_active_style, STATE_ACTIVE);
 
         disp_btns[i].vol_mark = enc_mark;
 
 
         enc_mark = lv_obj_create(f);
-        lv_obj_set_pos(enc_mark, 0, 10);
-        lv_obj_set_style_bg_color(enc_mark, lv_color_hex(0x55ccff), 0);
+        lv_obj_set_pos(enc_mark, mark_x, mark_y);
+        lv_obj_set_style_bg_color(enc_mark, TC(info), 0);
         lv_obj_clear_flag(enc_mark, LV_OBJ_FLAG_SCROLLABLE);
 
         lv_obj_add_style(enc_mark, &btn_mark_style, 0);
         lv_obj_add_style(enc_mark, &btn_mark_assigned_style, STATE_ASSIGNED);
+        lv_obj_add_style(enc_mark, &btn_mark_active_style, STATE_ACTIVE);
         disp_btns[i].mfk_mark = enc_mark;
 
         /* Label */
@@ -589,7 +597,7 @@ void buttons_init(lv_obj_t *parent) {
 
         lv_obj_t *value = lv_label_create(f);
         lv_obj_set_style_text_font(value, &sony_32, 0);
-        lv_obj_set_style_text_color(value, lv_color_white(), 0);
+        lv_obj_set_style_text_color(value, TC(btn_text), 0);
         lv_obj_align(value, LV_ALIGN_BOTTOM_MID, 0, -5);
         lv_obj_add_flag(value, LV_OBJ_FLAG_HIDDEN);
 
@@ -1085,11 +1093,11 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
         snprintf(name, sizeof(name), "%.*s", (int)(nl - text - 1), text);
         lv_label_set_text(b->label, name);
         lv_obj_set_style_text_font(b->label, &sony_22, 0);
-        lv_obj_set_style_text_color(b->label, lv_color_hex(0x90f0d0), 0);
+        lv_obj_set_style_text_color(b->label, TC(text_head), 0);
         lv_obj_align(b->label, LV_ALIGN_TOP_MID, 0, 4);
         lv_label_set_text(b->value, nl + 1);
         lv_obj_clear_flag(b->value, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_style_bg_color(b->parent, styles_outdoor() ? lv_color_black() : lv_color_hex(0x0b1622), 0);
+        lv_obj_set_style_bg_color(b->parent, TC(btn), 0);
         return;
     }
 
@@ -1105,11 +1113,15 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
         lv_label_set_text(b->label, text);
     }
     lv_obj_set_style_text_font(b->label, page ? &sony_28 : &sony_30, 0);
-    lv_obj_set_style_text_color(b->label, lv_color_hex(page ? styles_dim(0xccddee) : 0xffffff), 0);
-    if (styles_outdoor() && !page) lv_obj_remove_local_style_prop(b->label, LV_STYLE_TEXT_COLOR, 0);   /* black on the yellow active button */
+    if (page) lv_obj_set_style_text_color(b->label, TC(btn_page_text), 0);
+    else lv_obj_remove_local_style_prop(b->label, LV_STYLE_TEXT_COLOR, 0);   /* the button's: btn_text, btn_active_text, btn_off_text */
     lv_obj_center(b->label);
     lv_obj_add_flag(b->value, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_style_bg_color(b->parent, styles_outdoor() ? lv_color_black() : lv_color_hex(page ? 0x16232f : 0x0b1622), 0);
+    lv_obj_set_style_bg_color(b->parent, page ? TC(btn_page) : TC(btn), 0);
+    /* Themes with images: the page button's own, else the button's */
+    const lv_img_dsc_t *img = page ? theme_image(TI_btn_page, BTN_WIDTH - 2, BTN_HEIGHT - 2) : NULL;
+    if (!img) img = theme_image(TI_btn, BTN_WIDTH - 2, BTN_HEIGHT - 2);
+    if (img) lv_obj_set_style_bg_img_src(b->parent, img, 0);
 }
 
 static void label_update_cb(Subject *subj, void *user_data) {
@@ -1162,9 +1174,15 @@ static void disp_btn_refresh(disp_btn_t *b) {
         lv_obj_clear_state(b->parent, LV_STATE_DISABLED);
     }
 
-    /* Encoder */
+    marks_refresh(b);
+}
 
-    if ((btn_data->ctrl >= 0) && btn_data->encoder_allowed) {
+/* Encoder marks: which encoder the button's control is on, red (active) when
+ * the encoder is on it now */
+static void marks_refresh(disp_btn_t *b) {
+    button_data_t *btn_data = b->data;
+
+    if (btn_data && (btn_data->ctrl >= 0) && btn_data->encoder_allowed) {
         cfg_ctrl_t ctrl = (cfg_ctrl_t)btn_data->ctrl;
         encoder_binds_t encoder      = ENCODER_BIND_NONE,
                         fast_encoder = ENCODER_BIND_NONE;
@@ -1184,6 +1202,12 @@ static void disp_btn_refresh(disp_btn_t *b) {
             }
         }
         lv_obj_t *active_encoder_marker = NULL;
+        bool      active = (encoder == ENCODER_BIND_VOL && ctrl == vol_get_ctrl()) ||
+                           (encoder == ENCODER_BIND_MFK && ctrl == mfk_ctrl);
+        for (lv_obj_t *m : {b->vol_mark, b->mfk_mark}) {
+            if (active) lv_obj_add_state(m, STATE_ACTIVE);
+            else lv_obj_clear_state(m, STATE_ACTIVE);
+        }
         switch (encoder) {
             case ENCODER_BIND_VOL:
                 lv_obj_clear_flag(b->vol_mark, LV_OBJ_FLAG_HIDDEN);
@@ -1208,6 +1232,13 @@ static void disp_btn_refresh(disp_btn_t *b) {
     }
 }
 
+
+/* An encoder moved to another control: its LED goes to that button */
+void buttons_refresh_marks() {
+    for (size_t i = 0; i < BUTTONS; i++) {
+        if (disp_btns[i].parent) marks_refresh(&disp_btns[i]);   /* not before buttons_init() */
+    }
+}
 
 static void disp_btn_clear(disp_btn_t *btn) {
     lv_obj_t *label = btn->label;

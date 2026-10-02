@@ -10,6 +10,7 @@
 
 #include "dialog.h"
 #include "styles.h"
+#include "theme.h"
 #include "params/params.h"
 #include "cfg/cfg_api.h"
 #include "radio.h"
@@ -174,12 +175,12 @@ static void draw_cb(lv_event_t * e) {
     lv_draw_label_dsc_t dsc_label;
     lv_draw_label_dsc_init(&dsc_label);
 
-    dsc_label.color = lv_color_white();
+    dsc_label.color = TC(text);
     dsc_label.font = &sony_28;
 
     lv_point_t label_size;
 
-    line_dsc.color = lv_color_hex(0xAAAAAA);
+    line_dsc.color = TC(line);
     line_dsc.width = 2;
 
     a.x = x1;
@@ -228,7 +229,7 @@ static void draw_cb(lv_event_t * e) {
 
     /* Chart */
 
-    line_dsc.color = lv_color_white();
+    line_dsc.color = TC(text);
     line_dsc.width = 4;
 
     for (uint16_t i = 1; i < STEPS; i++) {

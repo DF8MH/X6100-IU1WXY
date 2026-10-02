@@ -16,6 +16,7 @@
 #include "pubsub_ids.h"
 #include "radio.h"
 #include "textarea_window.h"
+#include "theme.h"
 #include "wifi.h"
 
 #include "lvgl/lvgl.h"
@@ -186,14 +187,14 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_obj_remove_style(ap_table, NULL, LV_PART_MAIN | LV_PART_ITEMS | LV_STATE_ANY);
     lv_obj_set_style_bg_opa(ap_table, LV_OPA_50, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(ap_table, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(ap_table, TC(panel), LV_PART_MAIN);
     lv_obj_set_style_border_width(ap_table, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(ap_table, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_border_color(ap_table, TC(dialog_border), LV_PART_MAIN);
     lv_obj_set_style_border_opa(ap_table, 128, LV_PART_MAIN);
 
     lv_obj_set_style_border_width(ap_table, 0, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(ap_table, lv_color_white(), LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(ap_table, lv_color_white(), LV_PART_ITEMS | LV_STATE_EDITED);
+    lv_obj_set_style_text_color(ap_table, TC(text), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(ap_table, TC(focus), LV_PART_ITEMS | LV_STATE_EDITED);
     lv_obj_set_style_bg_opa(ap_table, LV_OPA_30, LV_PART_ITEMS | LV_STATE_EDITED);
     lv_obj_set_style_pad_top(ap_table, 3, LV_PART_ITEMS);
     lv_obj_set_style_pad_bottom(ap_table, 3, LV_PART_ITEMS);
@@ -604,10 +605,10 @@ static void ap_table_draw_event_cb(lv_event_t *e) {
 
             lv_draw_rect_dsc_t draw_rect_dsc;
             lv_draw_rect_dsc_init(&draw_rect_dsc);
-            draw_rect_dsc.bg_color = lv_color_white();
+            draw_rect_dsc.bg_color = TC(text);
             draw_rect_dsc.bg_opa = LV_OPA_COVER;
             draw_rect_dsc.border_width = 1;
-            draw_rect_dsc.border_color = lv_color_white();
+            draw_rect_dsc.border_color = TC(text);
 
             const uint8_t bars = 5;
             const uint8_t bar_w = 10;

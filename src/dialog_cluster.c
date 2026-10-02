@@ -21,6 +21,7 @@
 #include "params/params.h"
 #include "radio.h"
 #include "styles.h"
+#include "theme.h"
 #include "wifi.h"
 
 #include <stdio.h>
@@ -48,16 +49,16 @@
 #define FONT_MAIN     (&sony_30) /* frequency and call */
 #define FONT_SMALL    (&sony_24) /* spotter, comment, time */
 
-#define COLOR_NEAR_BG 0x3a2f12
-#define COLOR_SEL_BG  0x5a4818
-#define COLOR_NEAR    0xffd24a
-#define COLOR_VFO     0x7cc4ff
-#define COLOR_VFO_BG  0x0a1f3a
-#define COLOR_DIM     0x90a0b0
-#define COLOR_NEW     0x60ff60
-#define COLOR_ALERT_BG     0x7a1f5c
-#define COLOR_ALERT_BORDER 0xff4fc0
-#define COLOR_ALERT_TEXT   0xff9be0
+#define COLOR_NEAR_BG theme_hex(TC_near_bg)
+#define COLOR_SEL_BG  theme_hex(TC_sel_bg)
+#define COLOR_NEAR    theme_hex(TC_sel_text)
+#define COLOR_VFO     theme_hex(TC_vfo)
+#define COLOR_VFO_BG  theme_hex(TC_vfo_bg)
+#define COLOR_DIM     theme_hex(TC_text_dim)
+#define COLOR_NEW     theme_hex(TC_new)
+#define COLOR_ALERT_BG     theme_hex(TC_alert_bg)
+#define COLOR_ALERT_BORDER theme_hex(TC_alert)
+#define COLOR_ALERT_TEXT   theme_hex(TC_alert_text)
 
 #define ALERT_SHOW_MS   10000
 #define ALERT_NEW_MIN   5    /* only fresh spots raise an alert */
@@ -225,11 +226,11 @@ static void alert_show(const cluster_spot_t *s) {
     lv_obj_remove_style_all(alert_box);
     lv_obj_set_pos(alert_box, 120, 318);
     lv_obj_set_size(alert_box, 420, 78);
-    lv_obj_set_style_bg_color(alert_box, lv_color_hex(0x2a0f22), 0);
+    lv_obj_set_style_bg_color(alert_box, TC(alert_box), 0);
     lv_obj_set_style_bg_opa(alert_box, 240, 0);
     lv_obj_set_style_border_color(alert_box, lv_color_hex(COLOR_ALERT_BORDER), 0);
     lv_obj_set_style_border_width(alert_box, 2, 0);
-    lv_obj_set_style_radius(alert_box, 10, 0);
+    lv_obj_set_style_radius(alert_box, theme_shape.radius_popup, 0);
     lv_obj_clear_flag(alert_box, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *title = lv_label_create(alert_box);
@@ -246,7 +247,7 @@ static void alert_show(const cluster_spot_t *s) {
 
     lv_obj_t *line = lv_label_create(alert_box);
     lv_obj_set_style_text_font(line, FONT_MAIN, 0);
-    lv_obj_set_style_text_color(line, lv_color_white(), 0);
+    lv_obj_set_style_text_color(line, TC(text), 0);
     lv_label_set_long_mode(line, LV_LABEL_LONG_CLIP);
     lv_obj_set_width(line, 420 - 28);
     lv_label_set_text_fmt(line, "%s  %d.%03d.%d  %s", s->dx, s->freq_hz / 1000000, (s->freq_hz / 1000) % 1000,
@@ -444,10 +445,10 @@ static void rebuild(void) {
 
 static void update_header(void) {
     int32_t vfo = cparam_i_get(cfg_fg_freq);
-    lv_label_set_text_fmt(head_left, "CLUSTER #ffffff %s# - %s", server,
+    lv_label_set_text_fmt(head_left, "CLUSTER #%06x %s# - %s", theme_hex(TC_text), server,
                           params.callsign.x[0] ? params.callsign.x : "no callsign");
-    lv_label_set_text_fmt(head_mid, "#ffffff %s# - VFO #ffffff %d.%03d.%02d#",
-                          showing_all() ? "All" : cluster_band_name(vfo_band()), vfo / 1000000,
+    lv_label_set_text_fmt(head_mid, "#%06x %s# - VFO #%06x %d.%03d.%02d#", theme_hex(TC_text),
+                          showing_all() ? "All" : cluster_band_name(vfo_band()), theme_hex(TC_text), vfo / 1000000,
                           (vfo / 1000) % 1000, (vfo % 1000) / 10);
     bool conf_filtered = flt && (flt->modes != CLUSTER_FM_ALL || flt->max_age || flt->skip[0]);
     if (view_mode || conf_filtered) {
@@ -464,22 +465,22 @@ static void update_status(void) {
     cluster_state_t st = cluster_client_state(detail, sizeof(detail));
 
     if (!params.callsign.x[0]) {
-        lv_label_set_text(status_right, "#ff6060 Set your callsign: Settings > General#");
+        lv_label_set_text_fmt(status_right, "#%06x Set your callsign: Settings > General#", theme_hex(TC_err));
         return;
     }
     if (wifi_get_status() != WIFI_CONNECTED) {
-        lv_label_set_text(status_right, "#ff6060 WiFi not connected#");
+        lv_label_set_text_fmt(status_right, "#%06x WiFi not connected#", theme_hex(TC_err));
         return;
     }
     switch (st) {
         case CLUSTER_CONNECTED:
-            lv_label_set_text(status_right, "#60ff60 WiFi - cluster connected#");
+            lv_label_set_text_fmt(status_right, "#%06x WiFi - cluster connected#", theme_hex(TC_ok));
             break;
         case CLUSTER_CONNECTING:
-            lv_label_set_text(status_right, "#ffd24a Connecting...#");
+            lv_label_set_text_fmt(status_right, "#%06x Connecting...#", theme_hex(TC_warn));
             break;
         case CLUSTER_FAILED:
-            lv_label_set_text_fmt(status_right, "#ff6060 %s, retrying#", detail[0] ? detail : "Cluster error");
+            lv_label_set_text_fmt(status_right, "#%06x %s, retrying#", theme_hex(TC_err), detail[0] ? detail : "Cluster error");
             break;
         default:
             lv_label_set_text(status_right, "Stopped");
@@ -537,7 +538,7 @@ static void table_draw_cb(lv_event_t *e) {
     if (r >= (uint32_t)row_count) return;
 
     dsc->rect_dsc->bg_opa   = LV_OPA_COVER;
-    dsc->rect_dsc->bg_color = lv_color_black();
+    dsc->rect_dsc->bg_color = TC(panel);
     if (rows[r] == ROW_VFO) {
         dsc->rect_dsc->bg_color = lv_color_hex(COLOR_VFO_BG);
         return;
@@ -546,7 +547,7 @@ static void table_draw_cb(lv_event_t *e) {
     const cluster_spot_t *s = &view[rows[r]];
     if (rows[r] == sel) {
         dsc->rect_dsc->bg_color     = lv_color_hex(COLOR_SEL_BG);
-        dsc->rect_dsc->border_color = lv_color_white();
+        dsc->rect_dsc->border_color = TC(sel_border);
         dsc->rect_dsc->border_width = 2;
         dsc->rect_dsc->border_opa   = LV_OPA_COVER;
         dsc->rect_dsc->border_side  = LV_BORDER_SIDE_FULL;
@@ -611,15 +612,15 @@ static void table_draw_end_cb(lv_event_t *e) {
 
     snprintf(text, sizeof(text), "%d.%03d.%d", s->freq_hz / 1000000, (s->freq_hz / 1000) % 1000,
              (s->freq_hz % 1000) / 100);
-    draw_text(dsc, FONT_MAIN, 0, 122, lv_color_hex(0xd0e0f0), LV_TEXT_ALIGN_RIGHT, text);
-    draw_text(dsc, FONT_MAIN, 136, 290, alert ? lv_color_hex(COLOR_ALERT_TEXT) : near ? lv_color_hex(COLOR_NEAR) : lv_color_white(),
+    draw_text(dsc, FONT_MAIN, 0, 122, TC(text_value), LV_TEXT_ALIGN_RIGHT, text);
+    draw_text(dsc, FONT_MAIN, 136, 290, alert ? lv_color_hex(COLOR_ALERT_TEXT) : near ? lv_color_hex(COLOR_NEAR) : TC(text),
               LV_TEXT_ALIGN_LEFT, s->dx);
     if (age <= NEW_MIN) {
         lv_coord_t w = lv_txt_get_width(s->dx, strlen(s->dx), FONT_MAIN, 0, 0);
         draw_text(dsc, FONT_MAIN, 136 + w + 4, 310, lv_color_hex(COLOR_NEW), LV_TEXT_ALIGN_LEFT, "*");
     }
     draw_text(dsc, FONT_SMALL, 300, 400, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_LEFT, s->spotter);
-    draw_text(dsc, FONT_SMALL, 410, alert ? 620 : 690, lv_color_hex(0xd0d0d0), LV_TEXT_ALIGN_LEFT, s->comment);
+    draw_text(dsc, FONT_SMALL, 410, alert ? 620 : 690, TC(text_value), LV_TEXT_ALIGN_LEFT, s->comment);
     if (alert) draw_text(dsc, FONT_SMALL, 624, 686, lv_color_hex(COLOR_ALERT_BORDER), LV_TEXT_ALIGN_RIGHT, "ALERT");
     snprintf(text, sizeof(text), "%02d%02dZ", s->utc_min / 60, s->utc_min % 60);
     draw_text(dsc, FONT_SMALL, 690, WIDTH - 12, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_RIGHT, text);
@@ -733,7 +734,7 @@ static void construct_cb(lv_obj_t *parent) {
     all_count  = 0;
     view_mode  = 0;
 
-    lv_color_t head_color = lv_color_hex(0x90f0d0);
+    lv_color_t head_color = TC(text_head);
     head_left             = make_label(dialog.obj, &sony_22, head_color);
     lv_obj_set_pos(head_left, 18, 12);
     lv_obj_set_width(head_left, 350);
@@ -753,14 +754,14 @@ static void construct_cb(lv_obj_t *parent) {
     lv_table_set_col_cnt(table, 1);
     lv_table_set_col_width(table, 0, WIDTH - 2);
     lv_obj_set_style_bg_opa(table, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(table, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(table, TC(panel), LV_PART_MAIN);
     lv_obj_set_style_border_width(table, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(table, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_border_color(table, TC(dialog_border), LV_PART_MAIN);
     lv_obj_set_style_border_opa(table, 96, LV_PART_MAIN);
     lv_obj_set_style_pad_ver(table, TABLE_H / 2, LV_PART_MAIN);
     lv_obj_set_style_border_width(table, 0, LV_PART_ITEMS);
     lv_obj_set_style_text_font(table, FONT_MAIN, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(table, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(table, TC(text), LV_PART_ITEMS);
     lv_obj_set_style_pad_top(table, 6, LV_PART_ITEMS);
     lv_obj_set_style_pad_bottom(table, 2, LV_PART_ITEMS);
     lv_obj_set_style_pad_left(table, 5, LV_PART_ITEMS);
@@ -865,7 +866,7 @@ static void show_servers(void) {
         lv_obj_set_style_bg_opa(srv_rows[i], on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(srv_rows[i], on ? 2 : 0, 0);
         lv_obj_t *name = lv_obj_get_child(srv_rows[i], 0);
-        lv_obj_set_style_text_color(name, on ? lv_color_hex(COLOR_NEAR) : lv_color_white(), 0);
+        lv_obj_set_style_text_color(name, on ? lv_color_hex(COLOR_NEAR) : TC(text), 0);
         lv_obj_set_style_text_color(lv_obj_get_child(srv_rows[i], 1), on ? lv_color_hex(COLOR_NEAR) : lv_color_hex(COLOR_DIM), 0);
         if (on) lv_obj_scroll_to_view(srv_rows[i], LV_ANIM_OFF);
     }
@@ -925,7 +926,7 @@ static void open_popup(void) {
     popup = lv_obj_create(dialog.obj);
     lv_obj_remove_style_all(popup);
     lv_obj_set_size(popup, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_color(popup, lv_color_hex(0x1c2a33), 0);
+    lv_obj_set_style_bg_color(popup, TC(veil), 0);
     lv_obj_set_style_bg_opa(popup, LV_OPA_COVER, 0);
     lv_obj_clear_flag(popup, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -937,21 +938,21 @@ static void open_popup(void) {
     lv_obj_remove_style_all(box);
     lv_obj_set_size(box, POP_W, box_h);
     lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1622), 0);
+    lv_obj_set_style_bg_color(box, TC(popup), 0);
     lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(box, lv_color_hex(0x99aaaa), 0);
+    lv_obj_set_style_border_color(box, TC(popup_border), 0);
     lv_obj_set_style_border_width(box, 2, 0);
-    lv_obj_set_style_radius(box, 10, 0);
+    lv_obj_set_style_radius(box, theme_shape.radius_popup, 0);
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *head = lv_label_create(box);
     lv_obj_set_style_text_font(head, &sony_22, 0);
-    lv_obj_set_style_text_color(head, lv_color_hex(0x90f0d0), 0);
+    lv_obj_set_style_text_color(head, TC(text_head), 0);
     lv_label_set_text(head, "CLUSTER SERVERS");
     lv_obj_set_pos(head, 22, 9);
     lv_obj_t *count = lv_label_create(box);
     lv_obj_set_style_text_font(count, &sony_22, 0);
-    lv_obj_set_style_text_color(count, lv_color_hex(0x90f0d0), 0);
+    lv_obj_set_style_text_color(count, TC(text_head), 0);
     lv_label_set_text_fmt(count, "%d", srv_n);
     lv_obj_align(count, LV_ALIGN_TOP_RIGHT, -22, 9);
 
@@ -971,7 +972,7 @@ static void open_popup(void) {
         lv_obj_set_size(row, POP_W - 4, POP_ROW_H);
         lv_obj_set_pos(row, 0, i * POP_ROW_H);
         lv_obj_set_style_bg_color(row, lv_color_hex(COLOR_SEL_BG), 0);
-        lv_obj_set_style_border_color(row, lv_color_white(), 0);
+        lv_obj_set_style_border_color(row, TC(sel_border), 0);
         lv_obj_set_style_border_side(row, LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM, 0);
         lv_obj_add_event_cb(row, server_row_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
 

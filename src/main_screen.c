@@ -9,6 +9,7 @@
 #include "main_screen.h"
 
 #include "styles.h"
+#include "theme.h"
 #include "spectrum.h"
 #include "waterfall.h"
 #include "util.h"
@@ -147,7 +148,7 @@ void channel_overlay_show(const char *name) {
 
         lv_obj_set_style_bg_color(
             channel_overlay,
-            lv_color_hex(0x27313A),
+            TC(bg),
             LV_PART_MAIN
         );
 
@@ -165,7 +166,7 @@ void channel_overlay_show(const char *name) {
 
         lv_obj_set_style_border_color(
             channel_overlay,
-            lv_color_hex(styles_dim(0x808080)),
+            TC(text_mute),
             LV_PART_MAIN
         );
 
@@ -207,7 +208,7 @@ void channel_overlay_show(const char *name) {
 
         lv_obj_set_style_text_color(
             channel_overlay_label,
-            lv_color_hex(0xFFFFFF),
+            TC(text),
             0
         );
 
@@ -296,7 +297,7 @@ static void broadcast_overlay_render(void) {
         /* Result counter, only shown when more than one match exists. */
         broadcast_overlay_counter = lv_label_create(broadcast_overlay);
         lv_obj_set_pos(broadcast_overlay_counter, 8, 2);
-        lv_obj_set_style_text_color(broadcast_overlay_counter, lv_color_white(), 0);
+        lv_obj_set_style_text_color(broadcast_overlay_counter, TC(text), 0);
         lv_obj_set_style_text_font(broadcast_overlay_counter, &sony_28, 0);
 
         /* Station name. */
@@ -305,7 +306,7 @@ static void broadcast_overlay_render(void) {
         lv_obj_set_pos(broadcast_overlay_name, 20, 4);
         lv_label_set_long_mode(broadcast_overlay_name, LV_LABEL_LONG_DOT);
         lv_obj_set_style_text_align(broadcast_overlay_name, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_color(broadcast_overlay_name, lv_color_white(), 0);
+        lv_obj_set_style_text_color(broadcast_overlay_name, TC(text), 0);
         lv_obj_set_style_text_font(broadcast_overlay_name, &sony_38, 0);
 
         /* Broadcast details, fitted inside the standard 795 x 182 panel. */
@@ -314,7 +315,7 @@ static void broadcast_overlay_render(void) {
         lv_obj_set_pos(broadcast_overlay_label, 10, 48);
         lv_label_set_long_mode(broadcast_overlay_label, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_align(broadcast_overlay_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_color(broadcast_overlay_label, lv_color_white(), 0);
+        lv_obj_set_style_text_color(broadcast_overlay_label, TC(text), 0);
         lv_obj_set_style_text_font(broadcast_overlay_label, &sony_28, 0);
     }
 
@@ -717,20 +718,20 @@ void main_screen_action(press_action_t action) {
             b = param_i_get(cfg_nr);
             b = !b;
             param_i_set(cfg_nr, b);
-            msg_update_text_fmt("#FFFFFF NR: %s", b ? "On" : "Off");
+            msg_update_text_fmt("#%06x NR: %s", theme_hex(TC_text), b ? "On" : "Off");
             break;
 
         case ACTION_NB_TOGGLE:
             b = param_i_get(cfg_nb);
             b = !b;
             param_i_set(cfg_nb, b);
-            msg_update_text_fmt("#FFFFFF NB: %s", b ? "On" : "Off");
+            msg_update_text_fmt("#%06x NB: %s", theme_hex(TC_text), b ? "On" : "Off");
             break;
 
         case ACTION_WF_MODE:
             b = !param_i_get(cfg_wf_mode);
             param_i_set(cfg_wf_mode, b);
-            msg_update_text_fmt("#FFFFFF Waterfall: %s", b ? "Fixed" : "Centered");
+            msg_update_text_fmt("#%06x Waterfall: %s", theme_hex(TC_text), b ? "Fixed" : "Centered");
             break;
 
         case ACTION_APP_RTTY:
@@ -1809,7 +1810,7 @@ static void update_freq_boundaries(Subject *subj, void *user_data) {
     }
 
     int32_t     half_width = 50000;
-    uint32_t    color = subject_i_get(freq_lock) ? styles_dim(0xBBBBBB) : 0xFFFFFF;
+    uint32_t    color = subject_i_get(freq_lock) ? theme_hex(TC_text_soft) : theme_hex(TC_text);
 
     int32_t zoom = param_i_get(cfg_mode_zoom);
 

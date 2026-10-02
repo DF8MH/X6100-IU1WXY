@@ -17,6 +17,7 @@
 #include "radio.h"
 #include "styles.h"
 #include "textarea_window.h"
+#include "theme.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -26,10 +27,10 @@
 #define LINE_MAX     64
 #define HISTORY_MAX  400   /* characters of sent text kept on screen */
 
-#define COLOR_HEAD   0x90f0d0
-#define COLOR_DIM    0x90a0b0
-#define COLOR_SENT   0xffffff
-#define COLOR_NEXT   0xffd24a
+#define COLOR_HEAD   theme_hex(TC_text_head)
+#define COLOR_DIM    theme_hex(TC_text_dim)
+#define COLOR_SENT   theme_hex(TC_text)
+#define COLOR_NEXT   theme_hex(TC_accent)
 
 static void construct_cb(lv_obj_t *parent);
 static void destruct_cb(void);
@@ -99,23 +100,23 @@ static void update_view(void) {
         sent = n;
     }
     snprintf(buf, sizeof(buf), "#%06x %s##%06x %.*s##%06x %s# #%06x %s#", COLOR_DIM, history, COLOR_SENT, sent,
-             sending, COLOR_NEXT, sending + sent, 0x607080, queue);
+             sending, COLOR_NEXT, sending + sent, theme_hex(TC_text_faint), queue);
     lv_label_set_text(log_lbl, buf);
 
-    lv_label_set_text_fmt(head, "CW KEYBOARD - #ffffff %i WPM#", (int)param_i_get(cfg_key_speed));
+    lv_label_set_text_fmt(head, "CW KEYBOARD - #%06x %i WPM#", theme_hex(TC_text), (int)param_i_get(cfg_key_speed));
     lv_label_set_text(head_right, keyboard_ready() ? "keyboard ready" : "no keyboard: MFK press");
 
     if (!cw_mode()) {
         lv_label_set_text(state_lbl, "NOT CW");
-        lv_obj_set_style_bg_color(state_lbl, lv_color_hex(0x4a3a10), 0);
-        lv_obj_set_style_text_color(state_lbl, lv_color_hex(0xffd24a), 0);
+        lv_obj_set_style_bg_color(state_lbl, TC(warn_bg), 0);
+        lv_obj_set_style_text_color(state_lbl, TC(warn), 0);
     } else if (busy()) {
         lv_label_set_text(state_lbl, "ON AIR");
-        lv_obj_set_style_bg_color(state_lbl, lv_color_hex(0xb01e1e), 0);
-        lv_obj_set_style_text_color(state_lbl, lv_color_white(), 0);
+        lv_obj_set_style_bg_color(state_lbl, TC(tx_bg), 0);
+        lv_obj_set_style_text_color(state_lbl, TC(text), 0);
     } else {
         lv_label_set_text(state_lbl, "READY");
-        lv_obj_set_style_bg_color(state_lbl, lv_color_hex(0x1f2a35), 0);
+        lv_obj_set_style_bg_color(state_lbl, TC(chip), 0);
         lv_obj_set_style_text_color(state_lbl, lv_color_hex(COLOR_HEAD), 0);
     }
 }
@@ -325,10 +326,10 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_remove_style_all(box);
     lv_obj_set_size(box, 776, DIALOG_H - 40 - 96);
     lv_obj_set_pos(box, 10, 40);
-    lv_obj_set_style_bg_color(box, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(box, TC(panel), 0);
     lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(box, lv_color_hex(0x445566), 0);
-    lv_obj_set_style_border_width(box, 1, 0);
+    lv_obj_set_style_border_color(box, TC(panel_border), 0);
+    lv_obj_set_style_border_width(box, theme_shape.border, 0);
     lv_obj_set_style_radius(box, 8, 0);
     lv_obj_set_style_pad_all(box, 10, 0);
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
@@ -344,14 +345,14 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_remove_style(input, NULL, LV_STATE_ANY | LV_PART_MAIN);
     lv_obj_set_size(input, 610, 44);
     lv_obj_set_pos(input, 10, DIALOG_H - 88);
-    lv_obj_set_style_bg_color(input, lv_color_hex(0x121a22), 0);
+    lv_obj_set_style_bg_color(input, TC(side), 0);
     lv_obj_set_style_bg_opa(input, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(input, 8, 0);
     lv_obj_set_style_pad_hor(input, 10, 0);
     lv_obj_set_style_pad_top(input, 6, 0);
     lv_obj_set_style_text_font(input, &sony_30, 0);
-    lv_obj_set_style_text_color(input, lv_color_white(), 0);
-    lv_obj_set_style_bg_color(input, lv_color_white(), LV_PART_CURSOR);
+    lv_obj_set_style_text_color(input, TC(text), 0);
+    lv_obj_set_style_bg_color(input, TC(text), LV_PART_CURSOR);
     lv_obj_set_style_bg_opa(input, LV_OPA_80, LV_PART_CURSOR);
     lv_textarea_set_one_line(input, true);
     lv_textarea_set_max_length(input, LINE_MAX);

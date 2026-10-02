@@ -10,6 +10,7 @@
 #pragma once
 
 #include "lvgl/lvgl.h"
+#include "theme.h"
 
 #include <stdint.h>
 
@@ -23,8 +24,8 @@ extern "C" {
 #define APP_FRAME_STATUS_H  30
 #define APP_FRAME_BODY_H    (DIALOG_H - APP_FRAME_BODY_Y - APP_FRAME_STATUS_H - 8)
 
-#define APP_FRAME_HEAD      0x90f0d0
-#define APP_FRAME_DIM       0x90a0b0
+#define APP_FRAME_HEAD      theme_hex(TC_text_head)
+#define APP_FRAME_DIM       theme_hex(TC_text_dim)
 
 typedef struct {
     lv_obj_t *head_left;    /* recolor on */

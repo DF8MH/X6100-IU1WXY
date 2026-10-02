@@ -45,6 +45,7 @@
 #include "adif.h"
 #include "qso_log.h"
 #include "scheduler.h"
+#include "theme.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -485,7 +486,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_bg_opa(finder, LV_OPA_50, LV_PART_INDICATOR);
 
     lv_obj_set_style_border_width(finder, 1, LV_PART_INDICATOR);
-    lv_obj_set_style_border_color(finder, lv_color_white(), LV_PART_INDICATOR);
+    lv_obj_set_style_border_color(finder, TC(text), LV_PART_INDICATOR);
     lv_obj_set_style_border_opa(finder, LV_OPA_50, LV_PART_INDICATOR);
 
     /* Table */

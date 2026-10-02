@@ -6,6 +6,7 @@
 
 #include "cfg/cfg_api.h"
 #include "styles.h"
+#include "theme.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -43,7 +44,7 @@ static const bp_seg_t plan[] = {
     { 50400000, 50500000, BP_BCN }, { 50500000, 52000000, BP_ALL },
 };
 
-static const uint32_t colors[] = { 0x4aa3ff, 0xffd24a, 0x60d060, 0xff6060 };
+static const theme_color_t colors[] = { TC_bp_cw, TC_bp_dig, TC_bp_ssb, TC_bp_bcn };
 /* Longest first: the first label that fits the segment is used */
 static const char *const labels[][2] = {
     { "CW", NULL }, { "DIG", NULL }, { "ALL MODES / SSB", "SSB" }, { "BCN", NULL },
@@ -84,7 +85,7 @@ static void redraw(void) {
 
             lv_obj_set_x(s->box, a);
             lv_obj_set_width(s->box, b - a);
-            lv_obj_set_style_bg_color(s->box, lv_color_hex(colors[p->type]), 0);
+            lv_obj_set_style_bg_color(s->box, lv_color_hex(theme_hex(colors[p->type])), 0);
 
             /* No label when it does not fit the visible part */
             for (int k = 0; k < 2 && labels[p->type][k] && !text; k++) {
@@ -125,7 +126,7 @@ void band_plan_init(lv_obj_t *parent, lv_coord_t y) {
         lv_obj_t *l = lv_label_create(b);
 
         lv_obj_set_style_text_font(l, &sony_18, 0);
-        lv_obj_set_style_text_color(l, lv_color_black(), 0);
+        lv_obj_set_style_text_color(l, TC(bp_text), 0);
         lv_obj_clear_flag(l, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
         segs[i].label = l;

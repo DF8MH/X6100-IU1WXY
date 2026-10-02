@@ -10,6 +10,7 @@
 
 #include "cfg/cfg_api.h"
 #include "styles.h"
+#include "theme.h"
 #include "params/params.h"
 #include "pubsub_ids.h"
 #include "wifi.h"
@@ -28,9 +29,11 @@
 
 #define STATUS_POLL_S   3
 
-#define COLOR_ICON_OFF  0x151515
-#define COLOR_ICON_IDLE 0x909090
-#define COLOR_ICON_BT   0x55CCFF
+#define COLOR_ICON_OFF  theme_hex(TC_icon_off)
+#define COLOR_ICON_IDLE theme_hex(TC_text_mute)
+#define COLOR_ICON_BT   theme_hex(TC_info)
+/* PRE, ATT, ATU on: half see-through focus colour, or solid where the theme says so */
+#define PILL_ON_OPA     (theme_shape.focus_solid ? LV_OPA_COVER : LV_OPA_50)
 
 typedef enum {
     INFO_VFO = 0,
@@ -109,7 +112,7 @@ lv_obj_t * info_init(lv_obj_t * parent) {
         lv_obj_set_style_text_align(item, LV_TEXT_ALIGN_CENTER, 0);
         if (i < INFO_WIFI) {
             lv_obj_add_style(item, &info_item_style, 0);
-            lv_obj_set_style_text_color(item, lv_color_white(), 0);
+            lv_obj_set_style_text_color(item, TC(text), 0);
         } else {
             lv_obj_set_style_text_font(item, &lv_font_montserrat_22, 0);
             lv_obj_set_style_text_color(item, lv_color_hex(COLOR_ICON_OFF), 0);
@@ -248,10 +251,10 @@ static void wifi_state_change_cb(void *s, lv_msg_t *m) {
     lv_color_t color;
     switch (wifi_get_status()) {
     case WIFI_CONNECTED:
-        color = lv_color_hex(COLOR_LIGHT_GREEN);
+        color = TC(ok);
         break;
     case WIFI_OFF:
-        color = lv_color_black();
+        color = TC(icon_off);
         break;
     default:
         color = lv_color_hex(COLOR_ICON_IDLE);
@@ -270,9 +273,9 @@ static void status_update(void *arg) {
 
     set_icon(INFO_BT, st->bt, COLOR_ICON_BT);
     set_icon(INFO_HEADPHONES, st->headphones, COLOR_ICON_BT);
-    set_icon(INFO_CAT, st->cat, 0xFFB030);   /* amber: stands out from white text */
-    set_icon(INFO_GPS, st->gps, COLOR_LIGHT_GREEN);
-    set_icon(INFO_CLUSTER, st->cluster, COLOR_LIGHT_GREEN);
+    set_icon(INFO_CAT, st->cat, theme_hex(TC_warn));   /* amber: stands out from white text */
+    set_icon(INFO_GPS, st->gps, theme_hex(TC_ok));
+    set_icon(INFO_CLUSTER, st->cluster, theme_hex(TC_ok));
 }
 
 /* Bluetooth: adapter up, any device connected, an A2DP headset among them.
@@ -347,11 +350,11 @@ static void mode_label_update(Subject *subj, void *user_data) {
     lv_label_set_text(items[INFO_MODE], info_params_mode_label_get());
     x6100_mode_t mode = cparam_i_get(cfg_cur_mode);
     if ((mode == x6100_mode_lsb_dig) || (mode == x6100_mode_usb_dig)) {
-        lv_obj_set_style_text_color(items[INFO_MODE], lv_color_hex(COLOR_LIGHT_RED), 0);
+        lv_obj_set_style_text_color(items[INFO_MODE], TC(mode_dig), 0);
     } else if (subject_i_get(mode_lock)) {
-        lv_obj_set_style_text_color(items[INFO_MODE], lv_color_hex(styles_dim(0xAAAAAA)), 0);
+        lv_obj_set_style_text_color(items[INFO_MODE], TC(text_soft), 0);
     } else {
-        lv_obj_set_style_text_color(items[INFO_MODE], lv_color_white(), 0);
+        lv_obj_set_style_text_color(items[INFO_MODE], TC(text), 0);
     }
 }
 
@@ -360,18 +363,18 @@ static void atu_label_update(Subject *subj, void * user_data) {
     int32_t freq = cparam_i_get(cfg_fg_freq);
 
     if (!param_i_get(cfg_atu_enabled)) {
-        lv_obj_set_style_text_color(items[INFO_ATU], lv_color_white(), 0);
-        lv_obj_set_style_bg_color(items[INFO_ATU], lv_color_black(), 0);
+        lv_obj_set_style_text_color(items[INFO_ATU], TC(pill_off_text), 0);
+        lv_obj_set_style_bg_color(items[INFO_ATU], TC(panel), 0);
         lv_obj_set_style_bg_opa(items[INFO_ATU], LV_OPA_0, 0);
     } else {
         if (cfg_transverter_shift_for(freq)) {
-            lv_obj_set_style_text_color(items[INFO_ATU], lv_color_hex(styles_dim(0xAAAAAA)), 0);
+            lv_obj_set_style_text_color(items[INFO_ATU], TC(text_soft), 0);
             lv_obj_set_style_bg_opa(items[INFO_ATU], LV_OPA_20, 0);
         } else {
-            lv_obj_set_style_text_color(items[INFO_ATU], cfg_atu_is_loaded() ? lv_color_black() : lv_color_hex(0xFF0000), 0);
-            lv_obj_set_style_bg_opa(items[INFO_ATU], LV_OPA_50, 0);
+            lv_obj_set_style_text_color(items[INFO_ATU], cfg_atu_is_loaded() ? TC(focus_text) : TC(err_strong), 0);
+            lv_obj_set_style_bg_opa(items[INFO_ATU], PILL_ON_OPA, 0);
         }
-        lv_obj_set_style_bg_color(items[INFO_ATU], lv_color_white(), 0);
+        lv_obj_set_style_bg_color(items[INFO_ATU], TC(focus), 0);
     }
 }
 
@@ -381,24 +384,24 @@ static void agc_label_update(Subject *subj, void * user_data) {
 
 static void att_label_update(Subject *subj, void * user_data) {
     if (cparam_i_get(cfg_cur_att)) {
-        lv_obj_set_style_text_color(items[INFO_ATT], lv_color_black(), 0);
-        lv_obj_set_style_bg_color(items[INFO_ATT], lv_color_white(), 0);
-        lv_obj_set_style_bg_opa(items[INFO_ATT], LV_OPA_50, 0);
+        lv_obj_set_style_text_color(items[INFO_ATT], TC(focus_text), 0);
+        lv_obj_set_style_bg_color(items[INFO_ATT], TC(focus), 0);
+        lv_obj_set_style_bg_opa(items[INFO_ATT], PILL_ON_OPA, 0);
     } else {
-        lv_obj_set_style_text_color(items[INFO_ATT], lv_color_white(), 0);
-        lv_obj_set_style_bg_color(items[INFO_ATT], lv_color_black(), 0);
+        lv_obj_set_style_text_color(items[INFO_ATT], TC(pill_off_text), 0);
+        lv_obj_set_style_bg_color(items[INFO_ATT], TC(panel), 0);
         lv_obj_set_style_bg_opa(items[INFO_ATT], LV_OPA_0, 0);
     }
 }
 
 static void pre_label_update(Subject *subj, void * user_data) {
     if (cparam_i_get(cfg_cur_pre)) {
-        lv_obj_set_style_text_color(items[INFO_PRE], lv_color_black(), 0);
-        lv_obj_set_style_bg_color(items[INFO_PRE], lv_color_white(), 0);
-        lv_obj_set_style_bg_opa(items[INFO_PRE], LV_OPA_50, 0);
+        lv_obj_set_style_text_color(items[INFO_PRE], TC(focus_text), 0);
+        lv_obj_set_style_bg_color(items[INFO_PRE], TC(focus), 0);
+        lv_obj_set_style_bg_opa(items[INFO_PRE], PILL_ON_OPA, 0);
     } else {
-        lv_obj_set_style_text_color(items[INFO_PRE], lv_color_white(), 0);
-        lv_obj_set_style_bg_color(items[INFO_PRE], lv_color_black(), 0);
+        lv_obj_set_style_text_color(items[INFO_PRE], TC(pill_off_text), 0);
+        lv_obj_set_style_bg_color(items[INFO_PRE], TC(panel), 0);
         lv_obj_set_style_bg_opa(items[INFO_PRE], LV_OPA_0, 0);
     }
 }

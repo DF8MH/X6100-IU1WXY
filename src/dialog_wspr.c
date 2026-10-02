@@ -35,6 +35,7 @@
 #include "scheduler.h"
 #include "station.h"
 #include "styles.h"
+#include "theme.h"
 #include "tx_player.h"
 #include "wspr/wspr.h"
 #include "wspr/wsprnet.h"
@@ -421,14 +422,14 @@ static void timer_cb(lv_timer_t *t) {
             lv_label_set_text_fmt(frame.head_right, "RX  %d:%02d", (int)s / 60, (int)s % 60);
             break;
         case ST_TX:
-            lv_label_set_text_fmt(frame.head_right, "#ff6060 TX#  %d:%02d", (int)s / 60, (int)s % 60);
+            lv_label_set_text_fmt(frame.head_right, "#%06x TX#  %d:%02d", theme_hex(TC_tx), (int)s / 60, (int)s % 60);
             break;
         default:
             lv_label_set_text_fmt(frame.head_right, "%s  %d:%02d", atomic_load(&decoding) ? "Decoding" : "Wait",
                                   (int)(CYCLE_S - s) / 60, (int)(CYCLE_S - s) % 60);
             break;
     }
-    app_frame_bar(&frame, (int)(s * 1000 / CYCLE_S), st == ST_TX ? 0xff4040 : st == ST_RX ? 0x40c060 : 0x607080);
+    app_frame_bar(&frame, (int)(s * 1000 / CYCLE_S), st == ST_TX ? theme_hex(TC_tx) : st == ST_RX ? theme_hex(TC_ok_bar) : theme_hex(TC_text_faint));
 
     char up[48] = "Upload off";
 
@@ -436,7 +437,7 @@ static void timer_cb(lv_timer_t *t) {
         if (!my_call[0]) {
             snprintf(up, sizeof(up), "Upload: no callsign");
         } else if (atomic_load(&upload_failed)) {
-            snprintf(up, sizeof(up), "Uploaded %d, #ff8080 %d failed#", atomic_load(&uploaded),
+            snprintf(up, sizeof(up), "Uploaded %d, #%06x %d failed#", atomic_load(&uploaded), theme_hex(TC_err),
                      atomic_load(&upload_failed));
         } else {
             snprintf(up, sizeof(up), "Uploaded %d", atomic_load(&uploaded));
@@ -586,7 +587,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_border_width(table, 0, LV_PART_ITEMS);
     lv_obj_set_style_bg_opa(table, LV_OPA_TRANSP, LV_PART_ITEMS);
     lv_obj_set_style_text_font(table, &sony_22, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(table, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(table, TC(text), LV_PART_ITEMS);
     lv_obj_set_style_pad_ver(table, 3, LV_PART_ITEMS);
     lv_obj_set_style_pad_hor(table, 5, LV_PART_ITEMS);
     lv_table_set_col_cnt(table, 9);

@@ -83,6 +83,7 @@ extern buttons_group_t buttons_group_msg_voice;
 
 void            buttons_init(lv_obj_t *parent);
 void            buttons_refresh(button_data_t *data);
+void            buttons_refresh_marks();
 void            buttons_screen_rec_update();
 void            buttons_mark(button_data_t *data, bool val);
 void            buttons_disabled(button_data_t *data, bool val);

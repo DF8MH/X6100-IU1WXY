@@ -8,6 +8,7 @@
 #include "freq_scale.h"
 
 #include "styles.h"
+#include "theme.h"
 #include "util.h"
 
 #define WIDTH    800
@@ -56,7 +57,7 @@ void freq_scale_lines_init(lv_obj_t *parent, lv_coord_t y, lv_coord_t h) {
     for (int i = 0; i < MAX_REFS; i++) {
         lines[i] = lv_line_create(parent);
         lv_line_set_points(lines[i], pts, 2);
-        lv_obj_set_style_line_color(lines[i], lv_color_white(), 0);
+        lv_obj_set_style_line_color(lines[i], TC(text), 0);
         lv_obj_set_style_line_opa(lines[i], LV_OPA_40, 0);
         lv_obj_set_style_line_width(lines[i], 1, 0);
         lv_obj_set_style_line_dash_width(lines[i], 4, 0);

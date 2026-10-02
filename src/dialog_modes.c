@@ -14,6 +14,7 @@
 #include "params/params.h"
 #include "radio.h"
 #include "styles.h"
+#include "theme.h"
 #include "cfg/cfg_api.h"
 
 #include <ft8lib/constants.h>
@@ -70,7 +71,7 @@ static void show_sel(void) {
         bool on = i == sel;
         lv_obj_set_style_bg_opa(rows[i], on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(rows[i], on ? 2 : 0, 0);
-        lv_obj_set_style_text_color(lv_obj_get_child(rows[i], 0), on ? lv_color_hex(0xffd24a) : lv_color_white(), 0);
+        lv_obj_set_style_text_color(lv_obj_get_child(rows[i], 0), on ? TC(sel_text) : TC(text), 0);
     }
 }
 
@@ -141,16 +142,16 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_remove_style_all(box);
     lv_obj_set_size(box, BOX_W, BOX_H);
     lv_obj_set_pos(box, (800 - BOX_W) / 2, BOX_Y);
-    lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1622), 0);
+    lv_obj_set_style_bg_color(box, TC(popup), 0);
     lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(box, lv_color_hex(0x99aaaa), 0);
+    lv_obj_set_style_border_color(box, TC(popup_border), 0);
     lv_obj_set_style_border_width(box, 2, 0);
-    lv_obj_set_style_radius(box, 10, 0);
+    lv_obj_set_style_radius(box, theme_shape.radius_popup, 0);
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *head = lv_label_create(box);
     lv_obj_set_style_text_font(head, &sony_20, 0);
-    lv_obj_set_style_text_color(head, lv_color_hex(0x90f0d0), 0);
+    lv_obj_set_style_text_color(head, TC(text_head), 0);
     lv_label_set_text(head, "DIGITAL MODES");
     lv_obj_set_pos(head, 22, 9);
 
@@ -160,8 +161,8 @@ static void construct_cb(lv_obj_t *parent) {
         lv_obj_remove_style_all(row);
         lv_obj_set_size(row, BOX_W - 4, ROW_H);
         lv_obj_set_pos(row, 0, HEAD_H + i * ROW_H);
-        lv_obj_set_style_bg_color(row, lv_color_hex(0x5a4818), 0);
-        lv_obj_set_style_border_color(row, lv_color_white(), 0);
+        lv_obj_set_style_bg_color(row, TC(sel_bg), 0);
+        lv_obj_set_style_border_color(row, TC(sel_border), 0);
         lv_obj_set_style_border_side(row, LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM, 0);
         lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(row, row_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
@@ -173,14 +174,14 @@ static void construct_cb(lv_obj_t *parent) {
 
         lv_obj_t *note = lv_label_create(row);
         lv_obj_set_style_text_font(note, &sony_18, 0);
-        lv_obj_set_style_text_color(note, lv_color_hex(0x90a0b0), 0);
+        lv_obj_set_style_text_color(note, TC(text_dim), 0);
         lv_label_set_text(note, i == last_used ? "last used" : modes[i].note);
         lv_obj_align(note, LV_ALIGN_RIGHT_MID, -22, 0);
     }
 
     lv_obj_t *hint = lv_label_create(box);
     lv_obj_set_style_text_font(hint, &sony_16, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(0x90a0b0), 0);
+    lv_obj_set_style_text_color(hint, TC(text_dim), 0);
     lv_label_set_text(hint, "MFK: choose - press: open - Modes: close");
     lv_obj_set_pos(hint, 22, HEAD_H + MODES_N * ROW_H + 8);
 

@@ -16,6 +16,7 @@
 #include "cfg/cfg_api.h"
 #include "scheduler.h"
 #include "styles.h"
+#include "theme.h"
 #include "util.h"
 #include "info.h"
 
@@ -73,11 +74,11 @@ static void draw_bar(lv_draw_ctx_t *draw_ctx, lv_coord_t x1, lv_coord_t y1, floa
         float v = min + (max - min) * i / SLICES;
 
         if (i >= lit) {
-            rect_dsc.bg_color = lv_color_hex(0x2a2f36);
+            rect_dsc.bg_color = TC(chip);
         } else if (swr && v >= 3.0f) {
-            rect_dsc.bg_color = lv_color_hex(0xcc3333);
+            rect_dsc.bg_color = TC(bar_high);
         } else if (swr && v >= 2.0f) {
-            rect_dsc.bg_color = lv_color_hex(0xcccc33);
+            rect_dsc.bg_color = TC(bar_mid);
         } else {
             rect_dsc.bg_color = lv_color_hex(on_color);
         }
@@ -93,9 +94,9 @@ static void panel_draw_cb(lv_event_t *e) {
     lv_coord_t     x1       = o->coords.x1 + BARS_X;
     lv_coord_t     y1       = o->coords.y1 + ROW_Y + 4;
 
-    draw_bar(draw_ctx, x1, y1, min_pwr, max_pwr, pwr, false, 0xaaaaaa);
-    draw_bar(draw_ctx, x1, y1 + ROW_STEP, min_swr, max_swr, vswr, true, 0xaaaaaa);
-    draw_bar(draw_ctx, x1, y1 + 2 * ROW_STEP, 0.0f, 10.0f, alc, false, 0x66aabb);
+    draw_bar(draw_ctx, x1, y1, min_pwr, max_pwr, pwr, false, theme_hex(TC_line));
+    draw_bar(draw_ctx, x1, y1 + ROW_STEP, min_swr, max_swr, vswr, true, theme_hex(TC_line));
+    draw_bar(draw_ctx, x1, y1 + 2 * ROW_STEP, 0.0f, 10.0f, alc, false, theme_hex(TC_alc));
 
     /* PWR scale under its bar */
     lv_draw_label_dsc_t label_dsc;
@@ -103,7 +104,7 @@ static void panel_draw_cb(lv_event_t *e) {
     char                text[4];
 
     lv_draw_label_dsc_init(&label_dsc);
-    label_dsc.color = lv_color_hex(0x88aa99);
+    label_dsc.color = TC(text_dim);
     label_dsc.font  = &sony_18;
     for (int w = 0; w <= 10; w += 2) {
         snprintf(text, sizeof(text), "%i", w);
@@ -170,12 +171,12 @@ lv_obj_t *tx_info_init(lv_obj_t *parent) {
     obj = lv_obj_create(parent);
     lv_obj_add_style(obj, &tx_info_style, 0);
     /* Solid: LVGL caches gradients by size, the S-meter's would be reused */
-    lv_obj_set_style_bg_color(obj, lv_color_hex(0x7a1818), 0);
+    lv_obj_set_style_bg_color(obj, TC(tx_box), 0);
     lv_obj_set_style_bg_grad_dir(obj, LV_GRAD_DIR_NONE, 0);
-    lv_obj_set_style_border_color(obj, lv_color_hex(0xff6666), 0);
+    lv_obj_set_style_border_color(obj, TC(err), 0);
     lv_obj_set_scrollbar_mode(obj, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_t *tx = make_label(obj, &sony_30, 0xffffff);
+    lv_obj_t *tx = make_label(obj, &sony_30, theme_hex(TC_text));
     lv_label_set_text(tx, "TX");
     lv_obj_center(tx);
 
@@ -184,43 +185,43 @@ lv_obj_t *tx_info_init(lv_obj_t *parent) {
     lv_obj_remove_style_all(panel);
     lv_obj_set_size(panel, PANEL_W, PANEL_H);
     lv_obj_set_x(panel, (800 - PANEL_W) / 2);
-    lv_obj_set_style_bg_color(panel, lv_color_hex(0x0b1622), 0);
+    lv_obj_set_style_bg_color(panel, TC(popup), 0);
     lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(panel, lv_color_hex(0xff6b6b), 0);
+    lv_obj_set_style_border_color(panel, TC(err), 0);
     lv_obj_set_style_border_width(panel, 2, 0);
-    lv_obj_set_style_radius(panel, 10, 0);
+    lv_obj_set_style_radius(panel, theme_shape.radius_popup, 0);
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(panel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_event_cb(panel, panel_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
 
-    lv_obj_t *badge = make_label(panel, &sony_22, 0xffffff);
+    lv_obj_t *badge = make_label(panel, &sony_22, theme_hex(TC_text));
     lv_label_set_text(badge, "TX");
-    lv_obj_set_style_bg_color(badge, lv_color_hex(0xb01e1e), 0);
+    lv_obj_set_style_bg_color(badge, TC(tx_bg), 0);
     lv_obj_set_style_bg_opa(badge, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(badge, 5, 0);
     lv_obj_set_style_pad_hor(badge, 10, 0);
     lv_obj_set_style_pad_ver(badge, 2, 0);
     lv_obj_set_pos(badge, 16, 10);
 
-    head_label = make_label(panel, &sony_22, 0x90f0d0);
+    head_label = make_label(panel, &sony_22, theme_hex(TC_text_head));
     lv_obj_align(head_label, LV_ALIGN_TOP_MID, 0, 12);
-    time_label = make_label(panel, &sony_22, 0xffffff);
+    time_label = make_label(panel, &sony_22, theme_hex(TC_text));
     lv_obj_align(time_label, LV_ALIGN_TOP_RIGHT, -16, 12);
 
     lv_obj_t *line = lv_obj_create(panel);
     lv_obj_remove_style_all(line);
     lv_obj_set_size(line, PANEL_W - 36, 1);
     lv_obj_set_pos(line, 16, 50);
-    lv_obj_set_style_bg_color(line, lv_color_hex(0x334455), 0);
+    lv_obj_set_style_bg_color(line, TC(panel_border), 0);
     lv_obj_set_style_bg_opa(line, LV_OPA_COVER, 0);
 
     static const char *names[] = {"PWR", "SWR", "ALC"};
     lv_obj_t          *values[3];
     for (int i = 0; i < 3; i++) {
-        lv_obj_t *n = make_label(panel, &sony_26, 0xccddee);
+        lv_obj_t *n = make_label(panel, &sony_26, theme_hex(TC_text_value));
         lv_label_set_text(n, names[i]);
         lv_obj_set_pos(n, 16, ROW_Y + i * ROW_STEP);
-        values[i] = make_label(panel, &sony_34, 0xffffff);
+        values[i] = make_label(panel, &sony_34, theme_hex(TC_text));
         lv_obj_set_width(values[i], 130);
         lv_obj_set_style_text_align(values[i], LV_TEXT_ALIGN_RIGHT, 0);
         lv_obj_set_pos(values[i], PANEL_W - 16 - 4 - 130, ROW_Y - 5 + i * ROW_STEP);

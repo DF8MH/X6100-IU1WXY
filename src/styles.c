@@ -7,6 +7,7 @@
  */
 
 #include "styles.h"
+#include "theme.h"
 
 #define PATH "A:/dev/shm/"
 
@@ -80,8 +81,6 @@ const uint32_t wf_palette_gauss[256] = {
     0xf4e2e2, 0xf6e7e6, 0xf6e7e6, 0xf7ebeb, 0xf9f0f0, 0xfbf5f5, 0xfcfafa, 0xffffff,
 };
 
-static uint32_t wf_palette_outdoor[256];
-static bool     outdoor;
 
 const uint32_t *wf_palette;
 
@@ -95,6 +94,7 @@ lv_style_t  btn_active_style;
 lv_style_t  btn_disabled_style;
 lv_style_t  btn_mark_style;
 lv_style_t  btn_mark_assigned_style;
+lv_style_t  btn_mark_active_style;
 
 lv_style_t  msg_style;
 lv_style_t  msg_tiny_style;
@@ -124,28 +124,20 @@ lv_style_t  card_style;
 
 lv_color_t  bg_color;
 
-static void setup_theme_legacy();
-static void setup_theme_simple();
-static void setup_theme_outdoor();
 
-/* Drawn box of the top bar panels: vertical gradient, thin border. */
-static void top_bar_box(uint32_t top, uint32_t bottom, uint32_t border, int bw) {
-    lv_style_t *styles[] = { &clock_style, &info_style, &meter_style, &tx_info_style };
-
-    for (int i = 0; i < 4; i++) {
-        lv_style_t *s = styles[i];
-
-        lv_style_set_bg_opa(s, LV_OPA_COVER);
-        lv_style_set_bg_color(s, lv_color_hex(top));
-        lv_style_set_bg_grad_color(s, lv_color_hex(bottom));
-        lv_style_set_bg_grad_dir(s, top == bottom ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER);
-        lv_style_set_border_width(s, bw);
-        lv_style_set_border_color(s, lv_color_hex(border));
-        lv_style_set_radius(s, 7);
-    }
+/* A drawn box: the colour, its gradient (when the theme has them), border */
+static void box(lv_style_t *s, theme_color_t top, theme_color_t bottom, theme_color_t border, int radius) {
+    lv_style_set_bg_opa(s, LV_OPA_COVER);
+    lv_style_set_bg_color(s, lv_color_hex(theme_hex(top)));
+    lv_style_set_bg_grad_color(s, lv_color_hex(theme_hex(bottom)));
+    lv_style_set_bg_grad_dir(s, theme_shape.box_gradient && theme_hex(top) != theme_hex(bottom) ? LV_GRAD_DIR_VER
+                                                                                               : LV_GRAD_DIR_NONE);
+    lv_style_set_border_width(s, theme_shape.border);
+    lv_style_set_border_color(s, lv_color_hex(theme_hex(border)));
+    lv_style_set_radius(s, radius);
 }
 
-void styles_init(themes_t theme) {
+void styles_init(void) {
     /* * */
     lv_style_t *style;
 
@@ -194,13 +186,13 @@ void styles_init(themes_t theme) {
     lv_style_set_width(style, 4),
     lv_style_set_height(style, BUTTONS_H - 2 - 20),
     lv_style_set_radius(style, 2);
-    lv_style_set_bg_color(style, lv_color_hex(0x66ff66));
     lv_style_set_bg_opa(style, LV_OPA_COVER);
     lv_style_set_outline_width(style, 0);
     lv_style_set_border_width(style, 0);
 
     style = &btn_mark_assigned_style;
     lv_style_init(style);
+    lv_style_init(&btn_mark_active_style);
 
     /* Message style */
     lv_style_init(&msg_style);
@@ -345,216 +337,162 @@ void styles_init(themes_t theme) {
     lv_style_set_x(&cw_tune_style, 30);
     lv_style_set_y(&cw_tune_style, FREQ_STRIP_Y + FREQ_STRIP_H + 18);
 
-    styles_set_theme(theme);
+    styles_apply();
 }
 
-/* Values the Outdoor theme overrides: back to Simple / Legacy defaults */
-static void theme_defaults() {
-    lv_style_t *props[] = { &msg_style, &msg_tiny_style, &panel_style };
+/* The theme's image of a surface in place of its colours (the image draws
+ * its own border); without one the colours, the style back as it was */
+static void surface_img(lv_style_t *s, theme_image_t img, lv_coord_t w, lv_coord_t h) {
+    const lv_img_dsc_t *d = theme_image(img, w, h);
 
-    for (int i = 0; i < 3; i++) {
-        lv_style_remove_prop(props[i], LV_STYLE_BG_OPA);
-        lv_style_remove_prop(props[i], LV_STYLE_BG_COLOR);
-        lv_style_remove_prop(props[i], LV_STYLE_BORDER_WIDTH);
-        lv_style_remove_prop(props[i], LV_STYLE_BORDER_COLOR);
+    if (d) {
+        lv_style_set_bg_img_src(s, d);
+        lv_style_set_bg_opa(s, LV_OPA_TRANSP);
+        lv_style_set_border_width(s, 0);
+    } else {
+        lv_style_remove_prop(s, LV_STYLE_BG_IMG_SRC);
+    }
+}
+
+/* The shared styles from the theme's roles and shapes */
+void styles_apply(void) {
+    lv_style_t *bar[]   = { &clock_style, &info_style, &meter_style, &tx_info_style };
+    lv_style_t *boxes[] = { &msg_style, &msg_tiny_style, &panel_style };
+    bool        strong  = theme_shape.border >= 3;     /* high contrast boxes */
+
+    wf_palette = theme_waterfall();
+
+    bg_color = TC(bg);
+    lv_style_set_bg_color(&background_style, bg_color);
+
+    for (int i = 0; i < 4; i++) {
+        box(bar[i], TC_bar, TC_bar_grad, TC_bar_border, theme_shape.radius);
+    }
+    box(&dialog_style, TC_dialog, TC_dialog_grad, TC_dialog_border, theme_shape.radius);
+    box(&freq_strip_style, TC_strip, TC_strip_grad, TC_strip_border, theme_shape.radius);
+
+    /* Messages and the panel: background images, or drawn like a popup */
+    if (theme_shape.images) {
+        bool dark = theme_shape.images == 1;
+
+        for (int i = 0; i < 3; i++) {
+            lv_style_remove_prop(boxes[i], LV_STYLE_BG_OPA);
+            lv_style_remove_prop(boxes[i], LV_STYLE_BG_COLOR);
+            lv_style_remove_prop(boxes[i], LV_STYLE_BORDER_WIDTH);
+            lv_style_remove_prop(boxes[i], LV_STYLE_BORDER_COLOR);
+        }
+        lv_style_set_bg_img_src(&msg_style, dark ? PATH "images/msg_dark.bin" : PATH "images/msg.bin");
+        lv_style_set_bg_img_src(&panel_style, dark ? PATH "images/panel_dark.bin" : PATH "images/panel.bin");
+        lv_style_set_bg_img_src(&msg_tiny_style, dark ? PATH "images/msg_tiny_dark.bin" : PATH "images/msg_tiny.bin");
+    } else {
+        for (int i = 0; i < 3; i++) {
+            lv_style_remove_prop(boxes[i], LV_STYLE_BG_IMG_SRC);
+            lv_style_set_bg_opa(boxes[i], LV_OPA_COVER);
+            lv_style_set_bg_color(boxes[i], TC(popup));
+            lv_style_set_border_width(boxes[i], strong ? 3 : theme_shape.border);
+            lv_style_set_border_color(boxes[i], TC(popup_border));
+        }
     }
 
-    lv_style_set_bg_color(&btn_style, lv_color_hex(0x0b1622));
-    lv_style_set_border_width(&btn_style, 1);
-    lv_style_set_border_color(&btn_style, lv_color_hex(0x99aaaa));
+    /* Buttons */
+    lv_style_set_bg_color(&btn_style, TC(btn));
+    lv_style_set_bg_grad_color(&btn_style, TC(btn_grad));
+    lv_style_set_bg_grad_dir(&btn_style, theme_shape.btn_gradient ? LV_GRAD_DIR_VER : LV_GRAD_DIR_NONE);
+    lv_style_set_border_width(&btn_style, theme_shape.border);
+    lv_style_set_border_color(&btn_style, TC(btn_border));
+    lv_style_set_text_color(&btn_style, TC(btn_text));
+    lv_style_set_radius(&btn_style, theme_shape.radius_btn);
 
-    lv_style_set_bg_color(&btn_active_style, lv_color_hex(0x2a220c));
-    lv_style_set_border_color(&btn_active_style, lv_color_hex(0xffd24a));
-    lv_style_set_border_width(&btn_active_style, 2);
-    lv_style_remove_prop(&btn_active_style, LV_STYLE_TEXT_COLOR);
+    lv_style_set_bg_color(&btn_active_style, TC(btn_active));
+    lv_style_set_bg_grad_color(&btn_active_style, TC(btn_active_grad));
+    lv_style_set_bg_grad_dir(&btn_active_style, theme_shape.btn_gradient ? LV_GRAD_DIR_VER : LV_GRAD_DIR_NONE);
+    lv_style_set_border_color(&btn_active_style, TC(btn_active_border));
+    lv_style_set_border_width(&btn_active_style, theme_shape.border < 2 ? 2 : theme_shape.border);
+    lv_style_set_text_color(&btn_active_style, TC(btn_active_text));
 
     /* Disabled: same opaque button, dimmed text and border (not see-through) */
     lv_style_set_opa(&btn_disabled_style, LV_OPA_COVER);
-    lv_style_set_text_color(&btn_disabled_style, lv_color_hex(0x55606C));
-    lv_style_set_border_color(&btn_disabled_style, lv_color_hex(0x2A323C));
-    lv_style_set_opa(&btn_mark_assigned_style, LV_OPA_40);
-    lv_style_set_bg_color(&btn_mark_assigned_style, lv_color_hex(0x80ff80));
+    lv_style_set_text_color(&btn_disabled_style, TC(btn_off_text));
+    lv_style_set_border_color(&btn_disabled_style, TC(btn_off_border));
+    lv_style_set_bg_color(&btn_mark_style, TC(btn_mark));
+    lv_style_set_opa(&btn_mark_assigned_style, theme_shape.focus_solid ? LV_OPA_COVER : LV_OPA_40);
+    lv_style_set_bg_color(&btn_mark_assigned_style, TC(btn_mark_assigned));
+    lv_style_set_opa(&btn_mark_active_style, LV_OPA_COVER);
+    lv_style_set_bg_color(&btn_mark_active_style, TC(btn_mark_active));
 
-    lv_style_set_text_color(&panel_info_style, lv_color_hex(0x808080));
-    lv_style_set_blend_mode(&panel_info_style, LV_BLEND_MODE_ADDITIVE);
+    lv_style_set_text_color(&panel_info_style, TC(text_mute));
+    lv_style_set_blend_mode(&panel_info_style, theme_shape.images ? LV_BLEND_MODE_ADDITIVE : LV_BLEND_MODE_NORMAL);
 
-    lv_style_set_bg_opa(&dialog_style, LV_OPA_COVER);
-    lv_style_set_bg_grad_dir(&dialog_style, LV_GRAD_DIR_VER);
-    lv_style_set_border_width(&dialog_style, 1);
-    lv_style_set_bg_opa(&freq_strip_style, LV_OPA_COVER);
-    lv_style_set_bg_grad_dir(&freq_strip_style, LV_GRAD_DIR_VER);
-    lv_style_set_border_width(&freq_strip_style, 1);
-
-    lv_style_set_bg_opa(&dialog_item_focus_style, 128);
-    lv_style_remove_prop(&dialog_item_focus_style, LV_STYLE_BG_COLOR);
-    lv_style_set_border_width(&dialog_item_focus_style, 2);
-    lv_style_remove_prop(&dialog_item_edited_style, LV_STYLE_BG_COLOR);
-
-    lv_style_set_bg_opa(&knobs_style, LV_OPA_60);
-    lv_style_set_border_width(&knobs_style, 0);
-    lv_style_set_opa(&cw_tune_style, LV_OPA_50);
-    lv_style_set_border_width(&cw_tune_style, 0);
-
-    lv_style_set_bg_color(&card_style, lv_color_white());
-    lv_style_set_bg_opa(&card_style, LV_OPA_10);
-    lv_style_set_border_width(&card_style, 1);
-    lv_style_set_border_color(&card_style, lv_color_hex(0x506070));
-}
-
-/* Dim / secondary colour: nothing darker than light grey in Outdoor */
-uint32_t styles_dim(uint32_t color) {
-    return outdoor ? 0xDDDDDD : color;
-}
-
-bool styles_outdoor() {
-    return outdoor;
-}
-
-void styles_set_theme(themes_t theme) {
-    outdoor = theme == THEME_OUTDOOR;
-    theme_defaults();
-    switch (theme) {
-        case THEME_OUTDOOR:
-            setup_theme_outdoor();
-            break;
-        case THEME_LEGACY:
-            setup_theme_legacy();
-            break;
-        case THEME_SIMPLE:
-        default:
-            setup_theme_simple();
-            break;
+    /* Settings controls: focused and being edited */
+    lv_style_set_text_color(&dialog_item_focus_style, TC(focus_text));
+    lv_style_set_text_color(&dialog_item_edited_style, TC(focus_text));
+    if (theme_shape.focus_solid) {
+        lv_style_set_bg_opa(&dialog_item_focus_style, LV_OPA_COVER);
+        lv_style_set_bg_color(&dialog_item_focus_style, TC(focus));
+        lv_style_set_border_width(&dialog_item_focus_style, strong ? 3 : 2);
+        lv_style_set_border_color(&dialog_item_focus_style, TC(sel_border));
+        lv_style_set_bg_color(&dialog_item_edited_style, TC(edited));
+    } else {
+        lv_style_set_bg_opa(&dialog_item_focus_style, 128);
+        lv_style_remove_prop(&dialog_item_focus_style, LV_STYLE_BG_COLOR);
+        lv_style_set_border_width(&dialog_item_focus_style, 2);
+        lv_style_set_border_color(&dialog_item_focus_style, TC(focus));
+        lv_style_remove_prop(&dialog_item_edited_style, LV_STYLE_BG_COLOR);
     }
+
+    /* Knob info and CW tune: see-through, or framed in high contrast */
+    lv_style_set_bg_color(&knobs_style, TC(panel));
+    lv_style_set_bg_opa(&knobs_style, strong ? LV_OPA_COVER : LV_OPA_60);
+    lv_style_set_border_width(&knobs_style, strong ? 2 : 0);
+    lv_style_set_border_color(&knobs_style, TC(panel_border));
+    lv_style_set_bg_color(&cw_tune_style, TC(panel));
+    lv_style_set_opa(&cw_tune_style, strong ? LV_OPA_COVER : LV_OPA_50);
+    lv_style_set_border_width(&cw_tune_style, strong ? 2 : 0);
+    lv_style_set_border_color(&cw_tune_style, TC(panel_border));
+
+    /* Settings cards: a light veil over the window, or black and framed */
+    lv_style_set_bg_color(&card_style, strong ? TC(panel) : lv_color_white());
+    lv_style_set_bg_opa(&card_style, strong ? LV_OPA_COVER : LV_OPA_10);
+    lv_style_set_border_width(&card_style, strong ? 3 : theme_shape.border);
+    lv_style_set_border_color(&card_style, TC(card));
+
+    /* Images of the theme, at the size of each surface (buttons.h BTN_WIDTH 160, 1 px apart) */
+    lv_style_set_bg_opa(&btn_style, LV_OPA_COVER);
+    lv_style_remove_prop(&btn_active_style, LV_STYLE_BG_OPA);
+    lv_style_remove_prop(&btn_disabled_style, LV_STYLE_BG_OPA);
+    lv_style_remove_prop(&btn_disabled_style, LV_STYLE_BORDER_WIDTH);
+    surface_img(&background_style, TI_bg, 800, 480);
+    lv_style_set_bg_opa(&background_style, LV_OPA_COVER);  /* the colour stays under the image */
+    surface_img(&btn_style, TI_btn, 160 - 2, BUTTONS_H - 2);
+    surface_img(&btn_active_style, TI_btn_active, 160 - 2, BUTTONS_H - 2);
+    surface_img(&btn_disabled_style, TI_btn_off, 160 - 2, BUTTONS_H - 2);
+    surface_img(&info_style, TI_bar, 360, TOP_BAR_BOX_H);
+    surface_img(&meter_style, TI_bar, TOP_BAR_METER_W, TOP_BAR_BOX_H);
+    surface_img(&tx_info_style, TI_bar, TOP_BAR_METER_W, TOP_BAR_BOX_H);
+    surface_img(&clock_style, TI_bar, CLOCK_W, TOP_BAR_BOX_H);
+    surface_img(&freq_strip_style, TI_strip, 800 - 2 * TOP_BAR_MARGIN, FREQ_STRIP_H);
+    surface_img(&dialog_style, TI_dialog, 796, DIALOG_H);
+
+    /* Info box items: framed or not */
+    lv_style_set_border_width(&info_item_style, theme_shape.pill_border);
+    lv_style_set_border_color(&info_item_style, TC(pill_border));
+
+    /* Encoder marks: the theme's LED, or the bar on the left edge */
+    if (theme_shape.mark[1] > 0) {
+        lv_style_set_width(&btn_mark_style, theme_shape.mark[1]);
+        lv_style_set_height(&btn_mark_style, theme_shape.mark[2]);
+        surface_img(&btn_mark_style, TI_mark, theme_shape.mark[1], theme_shape.mark[2]);
+        surface_img(&btn_mark_active_style, TI_mark_active, theme_shape.mark[1], theme_shape.mark[2]);
+    } else {
+        lv_style_remove_prop(&btn_mark_active_style, LV_STYLE_BG_IMG_SRC);
+        lv_style_remove_prop(&btn_mark_active_style, LV_STYLE_BG_OPA);
+        lv_style_set_width(&btn_mark_style, 4);
+        lv_style_set_height(&btn_mark_style, BUTTONS_H - 2 - 20);
+        lv_style_set_bg_opa(&btn_mark_style, LV_OPA_COVER);
+        lv_style_remove_prop(&btn_mark_style, LV_STYLE_BG_IMG_SRC);
+    }
+
     /* LVGL caches gradients by size, not colors: drop the old ones */
     lv_gradient_set_cache_size(LV_GRAD_CACHE_DEF_SIZE);
-}
-
-static void setup_theme_legacy() {
-    wf_palette = wf_palette_legacy;
-
-    bg_color = lv_color_hex(0x0040A0);
-    lv_style_set_bg_color(&background_style, bg_color);
-
-    /* Buttons */
-
-    lv_style_set_bg_img_src(&msg_style, PATH "images/msg.bin");
-    /* Top bar: clock, info, meter, TX info */
-    top_bar_box(0x2a5aa0, 0x103060, 0x8aa8d8, 1);
-
-    lv_style_set_bg_img_src(&panel_style, PATH "images/panel.bin");
-    lv_style_set_bg_img_src(&msg_tiny_style, PATH "images/msg_tiny.bin");
-    /* Dialogs: drawn like the top bar, so any height fits */
-    lv_style_set_bg_color(&dialog_style, lv_color_hex(0x2a5aa0));
-    lv_style_set_bg_grad_color(&dialog_style, lv_color_hex(0x103060));
-    lv_style_set_border_color(&dialog_style, lv_color_hex(0x8aa8d8));
-    lv_style_set_bg_color(&freq_strip_style, lv_color_hex(0x1a4078));
-    lv_style_set_bg_grad_color(&freq_strip_style, lv_color_hex(0x0c2448));
-    lv_style_set_border_color(&freq_strip_style, lv_color_hex(0x8aa8d8));
-
-    lv_obj_invalidate(lv_scr_act());
-}
-
-static void setup_theme_simple() {
-    wf_palette = wf_palette_gauss;
-
-    bg_color = lv_color_hex(0x27313a);
-    lv_style_set_bg_color(&background_style, bg_color);
-
-    /* Buttons */
-
-    lv_style_set_bg_img_src(&msg_style, PATH "images/msg_dark.bin");
-    /* Top bar: clock, info, meter, TX info */
-    top_bar_box(0x3a3f47, 0x23272d, 0x777777, 1);
-
-    lv_style_set_bg_img_src(&panel_style, PATH "images/panel_dark.bin");
-    lv_style_set_bg_img_src(&msg_tiny_style, PATH "images/msg_tiny_dark.bin");
-    /* Dialogs: drawn like the top bar, so any height fits */
-    lv_style_set_bg_color(&dialog_style, lv_color_hex(0x49636f));
-    lv_style_set_bg_grad_color(&dialog_style, lv_color_hex(0x2c3a45));
-    lv_style_set_border_color(&dialog_style, lv_color_hex(0xe0e4e8));
-    lv_style_set_bg_color(&freq_strip_style, lv_color_hex(0x1c2a38));
-    lv_style_set_bg_grad_color(&freq_strip_style, lv_color_hex(0x101a24));
-    lv_style_set_border_color(&freq_strip_style, lv_color_hex(0x4a6a8a));
-
-    lv_obj_invalidate(lv_scr_act());
-}
-
-/* Strong steps: black -> blue -> white -> yellow, 16 levels each 16 wide */
-static void make_palette_outdoor() {
-    static const uint32_t stops[] = { 0x000000, 0x0000FF, 0xFFFFFF, 0xFFE000 };
-
-    for (int i = 0; i < 256; i++) {
-        int      lvl = (i / 16) * 16 * 255 / 240;    /* 0..255, quantized */
-        int      seg = lvl * 3 / 256, t = lvl * 3 - seg * 256;   /* t: 0..~255 in segment */
-        uint32_t a = stops[seg], b = stops[seg + 1], c = 0;
-
-        for (int sh = 0; sh <= 16; sh += 8) {
-            int ca = (a >> sh) & 0xff, cb = (b >> sh) & 0xff;
-            c |= (uint32_t)(ca + (cb - ca) * t / 256) << sh;
-        }
-        wf_palette_outdoor[i] = c;
-    }
-}
-
-static void setup_theme_outdoor() {
-    const lv_color_t black = lv_color_black(), white = lv_color_white(), yellow = lv_color_hex(0xFFE000);
-    lv_style_t *boxes[] = { &msg_style, &msg_tiny_style, &panel_style };
-
-    make_palette_outdoor();
-    wf_palette = wf_palette_outdoor;
-
-    bg_color = black;
-    lv_style_set_bg_color(&background_style, bg_color);
-
-    for (int i = 0; i < 3; i++) {
-        lv_style_remove_prop(boxes[i], LV_STYLE_BG_IMG_SRC);
-        lv_style_set_bg_opa(boxes[i], LV_OPA_COVER);
-        lv_style_set_bg_color(boxes[i], black);
-        lv_style_set_border_width(boxes[i], 3);
-        lv_style_set_border_color(boxes[i], white);
-    }
-    top_bar_box(0x000000, 0x000000, 0xFFFFFF, 3);
-
-    lv_style_set_bg_color(&btn_style, black);
-    lv_style_set_border_width(&btn_style, 3);
-    lv_style_set_border_color(&btn_style, white);
-    lv_style_set_bg_color(&btn_active_style, yellow);
-    lv_style_set_border_color(&btn_active_style, white);
-    lv_style_set_border_width(&btn_active_style, 3);
-    lv_style_set_text_color(&btn_active_style, black);
-    lv_style_set_opa(&btn_disabled_style, LV_OPA_COVER);
-    lv_style_set_text_color(&btn_disabled_style, lv_color_hex(0xDDDDDD));
-    lv_style_set_opa(&btn_mark_assigned_style, LV_OPA_COVER);
-    lv_style_set_bg_color(&btn_mark_assigned_style, yellow);
-
-    lv_style_set_text_color(&panel_info_style, lv_color_hex(0xDDDDDD));
-    lv_style_set_blend_mode(&panel_info_style, LV_BLEND_MODE_NORMAL);
-
-    lv_style_set_bg_color(&dialog_style, black);
-    lv_style_set_bg_grad_dir(&dialog_style, LV_GRAD_DIR_NONE);
-    lv_style_set_border_width(&dialog_style, 3);
-    lv_style_set_border_color(&dialog_style, white);
-    lv_style_set_bg_color(&freq_strip_style, black);
-    lv_style_set_bg_grad_dir(&freq_strip_style, LV_GRAD_DIR_NONE);
-    lv_style_set_border_width(&freq_strip_style, 3);
-    lv_style_set_border_color(&freq_strip_style, white);
-
-    lv_style_set_bg_opa(&dialog_item_focus_style, LV_OPA_COVER);
-    lv_style_set_bg_color(&dialog_item_focus_style, yellow);
-    lv_style_set_border_width(&dialog_item_focus_style, 3);
-    lv_style_set_bg_color(&dialog_item_edited_style, white);
-
-    lv_style_set_bg_opa(&knobs_style, LV_OPA_COVER);
-    lv_style_set_border_width(&knobs_style, 2);
-    lv_style_set_border_color(&knobs_style, white);
-    lv_style_set_opa(&cw_tune_style, LV_OPA_COVER);
-    lv_style_set_border_width(&cw_tune_style, 2);
-    lv_style_set_border_color(&cw_tune_style, white);
-
-    lv_style_set_bg_color(&card_style, black);
-    lv_style_set_bg_opa(&card_style, LV_OPA_COVER);
-    lv_style_set_border_width(&card_style, 3);
-    lv_style_set_border_color(&card_style, white);
-
     lv_obj_invalidate(lv_scr_act());
 }

@@ -7,6 +7,7 @@
 #include "cluster/client.h"
 #include "cfg/cfg_api.h"
 #include "styles.h"
+#include "theme.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,7 +19,7 @@
 #define ROW_H    (SPOT_MARKS_H / ROWS)
 #define POOL     24
 #define GAP      6      /* between labels of a row */
-#define SPOT_COLOR 0x40E8FF   /* cyan */
+#define SPOT_COLOR theme_hex(TC_spot)
 
 typedef struct {
     lv_obj_t *label;
@@ -88,7 +89,7 @@ static void redraw(void) {
             end[row][cnt[row]++] = lx + w;
 
             /* Cyan on the waterfall; an alert call stays pink */
-            uint32_t color = cluster_alert_match(flt, s) >= 0 ? 0xFF4FC0 : SPOT_COLOR;
+            uint32_t color = cluster_alert_match(flt, s) >= 0 ? theme_hex(TC_alert) : SPOT_COLOR;
             mark_t  *m     = &marks[n++];
 
             lv_label_set_text(m->label, s->dx);
@@ -153,7 +154,7 @@ void spot_marks_init(lv_obj_t *parent, lv_coord_t line_y, lv_coord_t line_h, lv_
         lv_obj_set_style_text_font(l, &sony_18, 0);
         lv_obj_set_style_pad_hor(l, 2, 0);
         /* Readable on the waterfall too */
-        lv_obj_set_style_bg_color(l, lv_color_black(), 0);
+        lv_obj_set_style_bg_color(l, TC(panel), 0);
         lv_obj_set_style_bg_opa(l, LV_OPA_50, 0);
         lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
         marks[i].label = l;

@@ -35,6 +35,7 @@
 #include "textarea_window.h"
 #include "msg.h"
 #include "radio.h"
+#include "theme.h"
 
 #define BUF_SIZE     1024
 #define MAX_ITEMS    64
@@ -54,10 +55,10 @@
 #define SIDE_X       494
 #define SIDE_W       290
 
-#define COLOR_HEAD   0x90f0d0
-#define COLOR_DIM    0x90a0b0
-#define COLOR_SEL_BG 0x5a4818
-#define COLOR_SEL    0xffd24a
+#define COLOR_HEAD   theme_hex(TC_text_head)
+#define COLOR_DIM    theme_hex(TC_text_dim)
+#define COLOR_SEL_BG theme_hex(TC_sel_bg)
+#define COLOR_SEL    theme_hex(TC_sel_text)
 
 typedef struct {
     char  name[NAME_LEN + 1];
@@ -453,26 +454,26 @@ static void update_status(void) {
         long s = rec_frames / AUDIO_CAPTURE_RATE;
         char text[32];
         snprintf(text, sizeof(text), "REC %02li:%02li", s / 60, s % 60);
-        set_state(text, 0x4a1515, 0xff7070);
+        set_state(text, theme_hex(TC_err_bg), theme_hex(TC_err));
         lv_label_set_text(name_lbl, rec_name);
         lv_bar_set_value(bar, rec_peak * 100 / 32768, LV_ANIM_OFF);
-        lv_obj_set_style_bg_color(bar, lv_color_hex(rec_peak > 26000 ? 0xcc3333 : 0x33cc33), LV_PART_INDICATOR);
+        lv_obj_set_style_bg_color(bar, (rec_peak > 26000 ? TC(bar_high) : TC(ok_bar)), LV_PART_INDICATOR);
         lv_label_set_text_fmt(info_lbl, "Mic level: keep out of the red\nMax %i s", REC_MAX_S);
         lv_label_set_text(hint, "Stop: save the message");
         return;
     }
 
     lv_label_set_text(name_lbl, name ? name : "-");
-    lv_obj_set_style_bg_color(bar, lv_color_hex(0xff6666), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(bar, TC(tx), LV_PART_INDICATOR);
     int pct = play_total > 0 ? (int)(play_pos * 100 / play_total) : 0;
 
     if (sending()) {
         if (pausing) {
             char text[32];
             snprintf(text, sizeof(text), "AUTO %i s", pause_left);
-            set_state(text, 0x1f2a35, 0xffd24a);
+            set_state(text, theme_hex(TC_chip), theme_hex(TC_warn));
         } else {
-            set_state("ON AIR", 0xb01e1e, 0xffffff);
+            set_state("ON AIR", theme_hex(TC_tx_bg), theme_hex(TC_text));
         }
         lv_bar_set_value(bar, pausing ? 0 : pct, LV_ANIM_OFF);
         if (!job_loop)
@@ -483,13 +484,13 @@ static void update_status(void) {
             lv_label_set_text_fmt(info_lbl, "Auto call: repeats every %i s", interval_s());
         lv_label_set_text(hint, job_loop ? "Auto call, TX or PTT: stop" : "TX or PTT: stop");
     } else if (listening()) {
-        set_state("LISTEN", 0x153a1c, 0x88ff88);
-        lv_obj_set_style_bg_color(bar, lv_color_hex(0x66cc66), LV_PART_INDICATOR);
+        set_state("LISTEN", theme_hex(TC_ok_bg), theme_hex(TC_ok));
+        lv_obj_set_style_bg_color(bar, TC(ok_bar), LV_PART_INDICATOR);
         lv_bar_set_value(bar, pct, LV_ANIM_OFF);
         lv_label_set_text(info_lbl, "Playing on the speaker only");
         lv_label_set_text(hint, "Listen: stop");
     } else {
-        set_state("READY", 0x1f2a35, 0x90f0d0);
+        set_state("READY", theme_hex(TC_chip), theme_hex(TC_text_head));
         lv_bar_set_value(bar, 0, LV_ANIM_OFF);
         lv_label_set_text_fmt(info_lbl, "Auto call every %i s\nInterval: page 2", interval_s());
         lv_label_set_text(hint, adjusting ? "MFK or VOL: interval - press MFK: done"
@@ -518,7 +519,7 @@ static void list_draw_cb(lv_event_t *e) {
     uint32_t r = dsc->id / 2, c = dsc->id % 2;
 
     dsc->rect_dsc->bg_opa   = LV_OPA_COVER;
-    dsc->rect_dsc->bg_color = lv_color_black();
+    dsc->rect_dsc->bg_color = TC(panel);
     if (c == 1) dsc->label_dsc->color = lv_color_hex(COLOR_DIM);
     if (count == 0) {
         dsc->label_dsc->color = lv_color_hex(COLOR_DIM);
@@ -526,7 +527,7 @@ static void list_draw_cb(lv_event_t *e) {
     }
     if ((int)r == sel) {
         dsc->rect_dsc->bg_color     = lv_color_hex(COLOR_SEL_BG);
-        dsc->rect_dsc->border_color = lv_color_white();
+        dsc->rect_dsc->border_color = TC(sel_border);
         dsc->rect_dsc->border_width = 2;
         dsc->rect_dsc->border_opa   = LV_OPA_COVER;
         dsc->rect_dsc->border_side  = LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM;
@@ -777,7 +778,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_obj_t *head = label(dialog.obj, &sony_20, COLOR_HEAD);
     lv_label_set_recolor(head, true);
-    lv_label_set_text_fmt(head, "VOICE KEYER (TX) - #ffffff %s#", info_params_mode_label_get());
+    lv_label_set_text_fmt(head, "VOICE KEYER (TX) - #%06x %s#", theme_hex(TC_text), info_params_mode_label_get());
     lv_obj_set_pos(head, 16, 10);
     head_right = label(dialog.obj, &sony_20, COLOR_HEAD);
     lv_obj_set_width(head_right, 250);
@@ -789,12 +790,12 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_size(list, LIST_W, LIST_H);
     lv_obj_set_pos(list, LIST_X, LIST_Y);
     lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(list, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_border_width(list, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(list, lv_color_hex(0x445566), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(list, TC(panel), LV_PART_MAIN);
+    lv_obj_set_style_border_width(list, theme_shape.border, LV_PART_MAIN);
+    lv_obj_set_style_border_color(list, TC(panel_border), LV_PART_MAIN);
     lv_obj_set_style_border_width(list, 0, LV_PART_ITEMS);
     lv_obj_set_style_text_font(list, &sony_22, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(list, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(list, TC(text), LV_PART_ITEMS);
     lv_obj_set_style_pad_ver(list, 5, LV_PART_ITEMS);
     lv_obj_set_style_pad_hor(list, 10, LV_PART_ITEMS);
     lv_table_set_col_cnt(list, 2);
@@ -806,14 +807,14 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_remove_style_all(side);
     lv_obj_set_size(side, SIDE_W, LIST_H);
     lv_obj_set_pos(side, SIDE_X, LIST_Y);
-    lv_obj_set_style_bg_color(side, lv_color_hex(0x121a22), 0);
+    lv_obj_set_style_bg_color(side, TC(side), 0);
     lv_obj_set_style_bg_opa(side, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(side, lv_color_hex(0x445566), 0);
-    lv_obj_set_style_border_width(side, 1, 0);
+    lv_obj_set_style_border_color(side, TC(panel_border), 0);
+    lv_obj_set_style_border_width(side, theme_shape.border, 0);
     lv_obj_set_style_radius(side, 8, 0);
     lv_obj_clear_flag(side, LV_OBJ_FLAG_SCROLLABLE);
 
-    state_lbl = label(side, &sony_28, 0x90f0d0);
+    state_lbl = label(side, &sony_28, COLOR_HEAD);
     lv_obj_set_size(state_lbl, SIDE_W - 24, 48);
     lv_obj_set_pos(state_lbl, 12, 12);
     lv_obj_set_style_bg_opa(state_lbl, LV_OPA_COVER, 0);
@@ -821,7 +822,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_text_align(state_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_pad_top(state_lbl, 8, 0);
 
-    name_lbl = label(side, &sony_22, 0xffffff);
+    name_lbl = label(side, &sony_22, theme_hex(TC_text));
     lv_obj_set_width(name_lbl, SIDE_W - 24);
     lv_obj_set_style_text_align(name_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(name_lbl, LV_LABEL_LONG_DOT);
@@ -831,7 +832,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_size(bar, SIDE_W - 24, 14);
     lv_obj_set_pos(bar, 12, 116);
     lv_bar_set_range(bar, 0, 100);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(0x333333), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bar, TC(row), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(bar, 3, LV_PART_MAIN);
     lv_obj_set_style_radius(bar, 3, LV_PART_INDICATOR);

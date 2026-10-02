@@ -36,6 +36,7 @@
 #include "styles.h"
 #include "textarea_window.h"
 #include "tx_player.h"
+#include "theme.h"
 #include "util.h"
 #include "widgets/lv_finder.h"
 #include "widgets/lv_waterfall.h"
@@ -82,7 +83,7 @@
 #define WF_QUEUE         16     /* rows waiting to be drawn (jitter buffer) */
 #define WF_TICK_MS       5      /* how often the drawing timer looks at the clock */
 #define HB_ADJUST_MS     8000   /* setting the HB interval ends after this idle */
-#define ALERT_COLOR      0x6a2ca0 /* rows matching an alert word */
+#define ALERT_COLOR      theme_hex(TC_row_alert) /* rows matching an alert word */
 /* params.js8_alerts bits: what beeps (alert words always highlight). */
 #define JS8_ALERT_BEEP     0x01 /* beeping at all */
 #define JS8_ALERT_TO_ME    0x02 /* a message to your call (not a heartbeat ack) */
@@ -860,29 +861,29 @@ static void table_draw_cb(lv_event_t *e) {
 
     if (h < 0) {
         dsc->label_dsc->align   = LV_TEXT_ALIGN_CENTER;
-        dsc->rect_dsc->bg_color = lv_color_hex(0x303030);
+        dsc->rect_dsc->bg_color = TC(row);
     } else if (view_stations) {
         /* Stations that heard us stand out, like desktop's star. */
         dsc->rect_dsc->bg_color = st_alert[h]           ? lv_color_hex(ALERT_COLOR)
-                                  : st_rows[h].heard_me ? lv_color_hex(0x5a4400)
-                                                        : lv_color_black();
+                                  : st_rows[h].heard_me ? TC(row_heard)
+                                                        : TC(panel);
     } else {
         const js8_rx_msg_t *m = &history[h];
         if (m->tx) {
-            dsc->rect_dsc->bg_color = lv_color_hex(0x1830a0);
+            dsc->rect_dsc->bg_color = TC(row_tx);
         } else if (m->alert) {
             dsc->rect_dsc->bg_color = lv_color_hex(ALERT_COLOR);
         } else if (m->to_me) {
-            dsc->rect_dsc->bg_color = lv_color_hex(0xB00000);
+            dsc->rect_dsc->bg_color = TC(row_to_me);
         } else if (m->cq) {
-            dsc->rect_dsc->bg_color = lv_color_hex(0x006000);
+            dsc->rect_dsc->bg_color = TC(row_cq);
         } else if (m->heartbeat) {
-            dsc->rect_dsc->bg_color = lv_color_black();
-            dsc->label_dsc->color   = lv_color_hex(0x808080);
+            dsc->rect_dsc->bg_color = TC(panel);
+            dsc->label_dsc->color   = TC(text_mute);
         } else if (m->to_group) {
-            dsc->rect_dsc->bg_color = lv_color_hex(0x102a60);
+            dsc->rect_dsc->bg_color = TC(row_group);
         } else {
-            dsc->rect_dsc->bg_color = lv_color_black();
+            dsc->rect_dsc->bg_color = TC(panel);
         }
         if (m->low_confidence) dsc->label_dsc->opa = LV_OPA_60;
     }
@@ -916,7 +917,7 @@ static void table_draw_end_cb(lv_event_t *e) {
     if (row_is_selected_station(h)) {
         lv_draw_rect_dsc_t bar;
         lv_draw_rect_dsc_init(&bar);
-        bar.bg_color   = lv_color_hex(0x40ff40);
+        bar.bg_color   = TC(row_sel_bar);
         lv_area_t area = *dsc->draw_area;
         area.x2        = area.x1 + 3;
         lv_draw_rect(dsc->draw_ctx, &bar, &area);
@@ -943,7 +944,7 @@ static void table_draw_end_cb(lv_event_t *e) {
 
     /* Calls already in the log in green, like desktop's worked-before tick. */
     lv_draw_label_dsc_t worked = *dsc->label_dsc;
-    worked.color               = lv_color_hex(0x80ff80);
+    worked.color               = TC(ok);
 
     for (size_t i = 0; i < sizeof(cols) / sizeof(cols[0]); i++) {
         area.x1 = x0 + cols[i].x;
@@ -1399,14 +1400,14 @@ static void update_tx_bar(void) {
     if (cq_adjusting && tx_status.state == JS8_TX_IDLE) {
         snprintf(line, sizeof(line), "Auto CQ %u min after each CQ: turn the knob (%d-%d), press CQ when done",
                  params.js8_cq_interval.x, CQ_MIN_INTERVAL, CQ_MAX_INTERVAL);
-        lv_obj_set_style_bg_color(tx_bar, lv_color_hex(0x5a4a00), 0);
+        lv_obj_set_style_bg_color(tx_bar, TC(warn_bg), 0);
         lv_label_set_text(tx_bar, line);
         return;
     }
     if (hb_adjusting && tx_status.state == JS8_TX_IDLE) {
         snprintf(line, sizeof(line), "HB every %u min: turn the knob (5-30), press HB when done",
                  params.js8_hb_interval.x);
-        lv_obj_set_style_bg_color(tx_bar, lv_color_hex(0x5a4a00), 0);
+        lv_obj_set_style_bg_color(tx_bar, TC(warn_bg), 0);
         lv_label_set_text(tx_bar, line);
         return;
     }
@@ -1420,13 +1421,13 @@ static void update_tx_bar(void) {
         snprintf(line, sizeof(line), "TX %4.0f Hz %s  %d/%d %s %d s   %s", tx_status.offset_hz,
                  js8_speed_name(tx_status.speed), tx_status.frame, tx_status.frames,
                  tx_status.frame == 1 ? "starts in" : "next in", secs, tx_status.text);
-        lv_obj_set_style_bg_color(tx_bar, lv_color_hex(0x5a4a00), 0);
+        lv_obj_set_style_bg_color(tx_bar, TC(warn_bg), 0);
         break;
     }
     case JS8_TX_KEYING:
         snprintf(line, sizeof(line), "TX %4.0f Hz %s  sending %d/%d   %s", tx_status.offset_hz,
                  js8_speed_name(tx_status.speed), tx_status.frame, tx_status.frames, tx_status.text);
-        lv_obj_set_style_bg_color(tx_bar, lv_color_hex(0xa00000), 0);
+        lv_obj_set_style_bg_color(tx_bar, TC(tx_bg), 0);
         break;
     default:
         snprintf(line, sizeof(line), "TX %4u Hz %s   ready%s%s", offset, js8_speed_name(cur_speed()),
@@ -1434,7 +1435,7 @@ static void update_tx_bar(void) {
                  sel_call[0] ? "      selected: " : "");
         if (sel_call[0]) strncat(line, sel_call, sizeof(line) - strlen(line) - 1);
         if (auto_cq) strncat(line, "      auto CQ", sizeof(line) - strlen(line) - 1);
-        lv_obj_set_style_bg_color(tx_bar, lv_color_hex(0x202020), 0);
+        lv_obj_set_style_bg_color(tx_bar, TC(list), 0);
         break;
     }
     lv_label_set_text(tx_bar, line);
@@ -1442,7 +1443,7 @@ static void update_tx_bar(void) {
     /* A red frame round the waterfall while keyed. */
     bool on = tx_status.state == JS8_TX_KEYING;
     lv_obj_set_style_border_width(waterfall, on ? 3 : 0, 0);
-    lv_obj_set_style_border_color(waterfall, lv_color_hex(0xff2020), 0);
+    lv_obj_set_style_border_color(waterfall, TC(tx), 0);
 }
 
 /* Queue `text` at our offset. Returns false (with a message shown) if it
@@ -1887,7 +1888,7 @@ static void construct_cb(lv_obj_t *parent) {
      * screen's waterfall. */
     lv_obj_t *wf_box = lv_obj_create(dialog.obj);
     lv_obj_remove_style_all(wf_box);
-    lv_obj_set_style_bg_color(wf_box, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(wf_box, TC(panel), 0);
     lv_obj_set_style_bg_opa(wf_box, LV_OPA_COVER, 0);
     lv_obj_clear_flag(wf_box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_size(wf_box, WIDTH, WF_HEIGHT);
@@ -1930,13 +1931,13 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_bg_color(finder, bg_color, LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(finder, LV_OPA_50, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(finder, 1, LV_PART_INDICATOR);
-    lv_obj_set_style_border_color(finder, lv_color_white(), LV_PART_INDICATOR);
+    lv_obj_set_style_border_color(finder, TC(text), LV_PART_INDICATOR);
     lv_obj_set_style_border_opa(finder, LV_OPA_50, LV_PART_INDICATOR);
 
     status = lv_label_create(waterfall);
     lv_obj_set_style_text_font(status, &sony_18, 0);
-    lv_obj_set_style_text_color(status, lv_color_white(), 0);
-    lv_obj_set_style_bg_color(status, lv_color_black(), 0);
+    lv_obj_set_style_text_color(status, TC(text), 0);
+    lv_obj_set_style_bg_color(status, TC(panel), 0);
     lv_obj_set_style_bg_opa(status, LV_OPA_50, 0);
     lv_obj_align(status, LV_ALIGN_TOP_RIGHT, -4, 4);
 
@@ -1966,11 +1967,11 @@ static void construct_cb(lv_obj_t *parent) {
     lv_table_set_col_width(table, 0, WIDTH - 2);
     lv_obj_set_style_border_width(table, 0, LV_PART_ITEMS);
     lv_obj_set_style_bg_opa(table, 150, LV_PART_MAIN); /* waterfall shows through */
-    lv_obj_set_style_bg_color(table, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_border_width(table, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(table, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(table, TC(panel), LV_PART_MAIN);
+    lv_obj_set_style_border_width(table, theme_shape.border, LV_PART_MAIN);
+    lv_obj_set_style_border_color(table, TC(text), LV_PART_MAIN);
     lv_obj_set_style_border_opa(table, 128, LV_PART_MAIN);
-    lv_obj_set_style_text_color(table, lv_color_hex(0xC0C0C0), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(table, TC(text_soft), LV_PART_ITEMS);
     /* JS8 messages are long; the dialog's 36 px font fits only two rows. */
     lv_obj_set_style_text_font(table, &sony_24, LV_PART_ITEMS);
     lv_obj_set_style_pad_top(table, 3, LV_PART_ITEMS);
@@ -2565,9 +2566,9 @@ static void list_item_focused_cb(lv_event_t *e) {
 
 static lv_obj_t *list_add_item(lv_obj_t *list, const char *label) {
     lv_obj_t *b = lv_list_add_btn(list, NULL, label);
-    lv_obj_set_style_bg_color(b, lv_color_hex(0x303030), 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(0x1830a0), LV_STATE_FOCUSED);
-    lv_obj_set_style_text_color(b, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(b, TC(row), 0);
+    lv_obj_set_style_bg_color(b, TC(focus_bg), LV_STATE_FOCUSED);
+    lv_obj_set_style_text_color(b, TC(text), 0);
     lv_obj_set_style_pad_ver(b, 6, 0);
     lv_obj_clear_flag(b, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     lv_obj_add_event_cb(b, list_item_focused_cb, LV_EVENT_FOCUSED, NULL);
@@ -2642,8 +2643,8 @@ static void query_cb(button_data_t *btn) {
     lv_obj_set_size(query_list, 300, WF_HEIGHT - 10);
     lv_obj_align(query_list, LV_ALIGN_TOP_RIGHT, -20, 18);
     lv_obj_set_style_text_font(query_list, &sony_24, 0);
-    lv_obj_set_style_bg_color(query_list, lv_color_hex(0x202020), 0);
-    lv_obj_set_style_border_color(query_list, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(query_list, TC(list), 0);
+    lv_obj_set_style_border_color(query_list, TC(text), 0);
 
     char title[40];
     snprintf(title, sizeof(title), "To %s (%+d dB)", call, snr);
@@ -2660,14 +2661,14 @@ static void query_cb(button_data_t *btn) {
     }
     for (int i = 0; i < QUERY_MSG_ITEMS; i++) {
         lv_obj_t *b = list_add_item(query_list, query_msg_items[i].label);
-        lv_obj_set_style_text_color(b, lv_color_hex(0x80ff80), 0);
+        lv_obj_set_style_text_color(b, TC(ok), 0);
         lv_obj_add_event_cb(b, query_msg_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
         lv_obj_add_event_cb(b, query_key_cb, LV_EVENT_KEY, NULL);
         lv_group_add_obj(keyboard_group, b);
     }
     /* Last, so one step back from the first item (the group wraps). */
     lv_obj_t *close = list_add_item(query_list, "Close");
-    lv_obj_set_style_text_color(close, lv_color_hex(0xffc040), 0);
+    lv_obj_set_style_text_color(close, TC(action), 0);
     lv_obj_add_event_cb(close, query_close_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(close, query_key_cb, LV_EVENT_KEY, NULL);
     lv_group_add_obj(keyboard_group, close);
@@ -3081,7 +3082,7 @@ static void texts_cb(button_data_t *btn) {
     lv_obj_set_size(texts_list, 560, 290);
     lv_obj_align(texts_list, LV_ALIGN_TOP_RIGHT, -20, 18);
     lv_obj_set_style_text_font(texts_list, &sony_24, 0);
-    lv_obj_set_style_bg_color(texts_list, lv_color_hex(0x202020), 0);
+    lv_obj_set_style_bg_color(texts_list, TC(list), 0);
     lv_obj_t *title = lv_list_add_text(texts_list, "Settings");
     lv_obj_set_style_text_font(title, &sony_22, 0);
 
@@ -3095,7 +3096,7 @@ static void texts_cb(button_data_t *btn) {
     settings_add(label, EDIT_GROUPS);
 
     lv_obj_t *close = list_add_item(texts_list, "Close");
-    lv_obj_set_style_text_color(close, lv_color_hex(0xffc040), 0);
+    lv_obj_set_style_text_color(close, TC(action), 0);
     lv_obj_add_event_cb(close, texts_close_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(close, texts_key_cb, LV_EVENT_KEY, NULL);
     lv_group_add_obj(keyboard_group, close);
@@ -3388,8 +3389,8 @@ static void aprs_cb(button_data_t *btn) {
     lv_obj_set_size(aprs_list, 300, WF_HEIGHT - 10);
     lv_obj_align(aprs_list, LV_ALIGN_TOP_RIGHT, -20, 18);
     lv_obj_set_style_text_font(aprs_list, &sony_24, 0);
-    lv_obj_set_style_bg_color(aprs_list, lv_color_hex(0x202020), 0);
-    lv_obj_set_style_border_color(aprs_list, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(aprs_list, TC(list), 0);
+    lv_obj_set_style_border_color(aprs_list, TC(text), 0);
     lv_obj_t *t = lv_list_add_text(aprs_list, "APRS via @APRSIS");
     lv_obj_set_style_text_font(t, &sony_22, 0);
 
@@ -3402,7 +3403,7 @@ static void aprs_cb(button_data_t *btn) {
         if (!first) first = b;
     }
     lv_obj_t *close = list_add_item(aprs_list, "Close");
-    lv_obj_set_style_text_color(close, lv_color_hex(0xffc040), 0);
+    lv_obj_set_style_text_color(close, TC(action), 0);
     lv_obj_add_event_cb(close, aprs_close_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_event_cb(close, aprs_key_cb, LV_EVENT_KEY, NULL);
     lv_group_add_obj(keyboard_group, close);
@@ -3620,14 +3621,14 @@ static void spot_show(bool sota, spot_item_t focus) {
     lv_obj_set_size(spot_list, 560, WF_HEIGHT - 10);
     lv_obj_align(spot_list, LV_ALIGN_TOP_RIGHT, -20, 18);
     lv_obj_set_style_text_font(spot_list, &sony_24, 0);
-    lv_obj_set_style_bg_color(spot_list, lv_color_hex(0x202020), 0);
-    lv_obj_set_style_border_color(spot_list, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(spot_list, TC(list), 0);
+    lv_obj_set_style_border_color(spot_list, TC(text), 0);
     lv_obj_t *t = lv_list_add_text(spot_list, sota ? "SOTA spot via APRS2SOTA (registration needed)"
                                                    : "POTA spot via APSPOT (your pota.app account)");
     lv_obj_set_style_text_font(t, &sony_22, 0);
     spot_preview = lv_list_add_text(spot_list, "");
     lv_obj_set_style_text_font(spot_preview, &sony_22, 0);
-    lv_obj_set_style_text_color(spot_preview, lv_color_hex(0x1030a0), 0); /* on the list's light title bar */
+    lv_obj_set_style_text_color(spot_preview, TC(title_text), 0); /* on the list's light title bar */
 
     char line[96];
     for (int i = 0; i < SP_COUNT; i++) {
@@ -3639,8 +3640,8 @@ static void spot_show(bool sota, spot_item_t focus) {
         lv_label_set_long_mode(lv_obj_get_child(b, 0), LV_LABEL_LONG_DOT);
         spot_items[i] = b;
     }
-    lv_obj_set_style_text_color(spot_items[SP_SEND], lv_color_hex(0x80ff80), 0);
-    lv_obj_set_style_text_color(spot_items[SP_CLOSE], lv_color_hex(0xffc040), 0);
+    lv_obj_set_style_text_color(spot_items[SP_SEND], TC(ok), 0);
+    lv_obj_set_style_text_color(spot_items[SP_CLOSE], TC(action), 0);
     spot_refresh();
     lv_group_set_editing(keyboard_group, false);
     lv_group_focus_obj(spot_items[focus]);
@@ -3815,8 +3816,8 @@ static void log_list_open(log_item_t focus) {
     lv_obj_set_size(log_list, 560, WF_HEIGHT - 10);
     lv_obj_align(log_list, LV_ALIGN_TOP_RIGHT, -20, 18);
     lv_obj_set_style_text_font(log_list, &sony_24, 0);
-    lv_obj_set_style_bg_color(log_list, lv_color_hex(0x202020), 0);
-    lv_obj_set_style_border_color(log_list, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(log_list, TC(list), 0);
+    lv_obj_set_style_border_color(log_list, TC(text), 0);
 
     char      line[160], on[8], off[8];
     time_t    t_on = (time_t)(log_entry.on_ms / 1000), t_off = (time_t)(log_entry.off_ms / 1000);
@@ -3832,7 +3833,7 @@ static void log_list_open(log_item_t focus) {
 
     lv_obj_t *items[LOG_CANCEL + 1];
     items[LOG_SAVE] = log_add(LOG_SAVE, "Save to log");
-    lv_obj_set_style_text_color(items[LOG_SAVE], lv_color_hex(0x80ff80), 0);
+    lv_obj_set_style_text_color(items[LOG_SAVE], TC(ok), 0);
     snprintf(line, sizeof(line), "Grid: %s", log_entry.grid[0] ? log_entry.grid : "(none)");
     log_grid_btn = items[LOG_GRID] = log_add(LOG_GRID, line);
     snprintf(line, sizeof(line), "Name: %s", log_entry.name[0] ? log_entry.name : "(none)");
@@ -3846,7 +3847,7 @@ static void log_list_open(log_item_t focus) {
         lv_obj_set_style_text_font(t, &sony_22, 0);
     }
     items[LOG_CANCEL] = log_add(LOG_CANCEL, "Cancel");
-    lv_obj_set_style_text_color(items[LOG_CANCEL], lv_color_hex(0xffc040), 0);
+    lv_obj_set_style_text_color(items[LOG_CANCEL], TC(action), 0);
     lv_group_set_editing(keyboard_group, false);
     lv_group_focus_obj(items[focus]);
 }
@@ -4286,8 +4287,8 @@ static void inbox_show(int id) {
     lv_obj_set_size(inbox_list, 600, WF_HEIGHT - 10);
     lv_obj_align(inbox_list, LV_ALIGN_TOP_RIGHT, -20, 18);
     lv_obj_set_style_text_font(inbox_list, &sony_24, 0);
-    lv_obj_set_style_bg_color(inbox_list, lv_color_hex(0x202020), 0);
-    lv_obj_set_style_border_color(inbox_list, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(inbox_list, TC(list), 0);
+    lv_obj_set_style_border_color(inbox_list, TC(text), 0);
 
     char      line[JS8_RX_TEXT_LEN + 48];
     lv_obj_t *first = NULL;
@@ -4308,8 +4309,8 @@ static void inbox_show(int id) {
         lv_obj_set_style_text_font(t, &sony_22, 0);
         lv_obj_t *body = lv_list_add_text(inbox_list, m.text);
         lv_label_set_long_mode(body, LV_LABEL_LONG_WRAP);
-        lv_obj_set_style_bg_color(body, lv_color_hex(0x202020), 0);
-        lv_obj_set_style_text_color(body, lv_color_white(), 0);
+        lv_obj_set_style_bg_color(body, TC(list), 0);
+        lv_obj_set_style_text_color(body, TC(text), 0);
         lv_obj_set_style_pad_ver(body, 8, 0);
         if (m.group)
             snprintf(line, sizeof(line), "For any %s member to fetch for 2 days; fetched by %d", m.to, m.got);
@@ -4318,7 +4319,7 @@ static void inbox_show(int id) {
         lv_obj_set_style_text_font(t, &sony_22, 0);
         first = inbox_add("Delete", INBOX_DELETE);
         lv_obj_t *back = inbox_add("Back", INBOX_BACK);
-        lv_obj_set_style_text_color(back, lv_color_hex(0xffc040), 0);
+        lv_obj_set_style_text_color(back, TC(action), 0);
     } else if (id) {
         js8_inbox_msg_t m;
         if (!js8_inbox_get(inbox, id, &m)) {
@@ -4339,8 +4340,8 @@ static void inbox_show(int id) {
         lv_obj_set_style_text_font(t, &sony_22, 0);
         lv_obj_t *body = lv_list_add_text(inbox_list, m.text);
         lv_label_set_long_mode(body, LV_LABEL_LONG_WRAP);
-        lv_obj_set_style_bg_color(body, lv_color_hex(0x202020), 0);
-        lv_obj_set_style_text_color(body, lv_color_white(), 0);
+        lv_obj_set_style_bg_color(body, TC(list), 0);
+        lv_obj_set_style_text_color(body, TC(text), 0);
         lv_obj_set_style_pad_ver(body, 8, 0);
         /* Desktop's Reply choices: to the path it came by; and for a
          * delivered message ("... FROM N0XYZ"), to its sender through the
@@ -4371,7 +4372,7 @@ static void inbox_show(int id) {
         lv_obj_t *del = inbox_add("Delete", INBOX_DELETE);
         if (!first) first = del;
         lv_obj_t *back = inbox_add("Back", INBOX_BACK);
-        lv_obj_set_style_text_color(back, lv_color_hex(0xffc040), 0);
+        lv_obj_set_style_text_color(back, TC(action), 0);
     } else {
         static js8_inbox_msg_t rows[INBOX_ROWS];
         int                    n = js8_inbox_list(inbox, rows, INBOX_ROWS);
@@ -4386,7 +4387,7 @@ static void inbox_show(int id) {
         if (selected_station(call, sizeof(call), &freq, &snr)) snprintf(line, sizeof(line), "New message to %s...", call);
         else snprintf(line, sizeof(line), "New message...");
         first = inbox_add(line, INBOX_NEW);
-        lv_obj_set_style_text_color(first, lv_color_hex(0x80ff80), 0);
+        lv_obj_set_style_text_color(first, TC(ok), 0);
 
         lv_obj_t *oldest_new = NULL;
         for (int i = 0; i < n; i++) {
@@ -4397,7 +4398,7 @@ static void inbox_show(int id) {
             snprintf(line, sizeof(line), "%s%s  %s  %s", rows[i].read ? "" : "* ", when, from, rows[i].text);
             lv_obj_t *b = inbox_add(line, rows[i].id);
             if (!rows[i].read) {
-                lv_obj_set_style_text_color(b, lv_color_hex(0xffe080), 0);
+                lv_obj_set_style_text_color(b, TC(accent_soft), 0);
                 oldest_new = b;
             }
         }
@@ -4420,10 +4421,10 @@ static void inbox_show(int id) {
             snprintf(line, sizeof(line), "%sfor %s%s from %s  %s", held_rows[i].delivered ? "(sent) " : "",
                      held_rows[i].to, got, from, held_rows[i].text);
             lv_obj_t *b = inbox_add(line, INBOX_HELD + held_rows[i].id);
-            if (held_rows[i].delivered) lv_obj_set_style_text_color(b, lv_color_hex(0x909090), 0);
+            if (held_rows[i].delivered) lv_obj_set_style_text_color(b, TC(text_mute), 0);
         }
         lv_obj_t *close = inbox_add("Close", INBOX_CLOSE);
-        lv_obj_set_style_text_color(close, lv_color_hex(0xffc040), 0);
+        lv_obj_set_style_text_color(close, TC(action), 0);
         if (oldest_new) first = oldest_new; /* straight to what's unread */
     }
     lv_group_set_editing(keyboard_group, false);
@@ -4663,8 +4664,8 @@ static void alerts_show(void) {
     lv_obj_set_size(alerts_list, 560, WF_HEIGHT - 10);
     lv_obj_align(alerts_list, LV_ALIGN_TOP_RIGHT, -20, 18);
     lv_obj_set_style_text_font(alerts_list, &sony_24, 0);
-    lv_obj_set_style_bg_color(alerts_list, lv_color_hex(0x202020), 0);
-    lv_obj_set_style_border_color(alerts_list, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(alerts_list, TC(list), 0);
+    lv_obj_set_style_border_color(alerts_list, TC(text), 0);
     lv_obj_t *t = lv_list_add_text(alerts_list, "Alerts: beep, and alert words in purple");
     lv_obj_set_style_text_font(t, &sony_22, 0);
 
@@ -4677,10 +4678,10 @@ static void alerts_show(void) {
     }
     snprintf(line, sizeof(line), "Alert words: %s", alert_words[0] ? alert_words : "(none)");
     lv_obj_t *words = alerts_add(AL_WORDS, line);
-    lv_obj_set_style_text_color(words, lv_color_hex(0xd0a0ff), 0);
+    lv_obj_set_style_text_color(words, TC(row_alert_text), 0);
     alerts_add(AL_TEST, "Test beep");
     lv_obj_t *close = alerts_add(AL_CLOSE, "Close");
-    lv_obj_set_style_text_color(close, lv_color_hex(0xffc040), 0);
+    lv_obj_set_style_text_color(close, TC(action), 0);
     lv_group_set_editing(keyboard_group, false);
     lv_group_focus_obj(first);
 }
@@ -4924,8 +4925,8 @@ static void freq_show(void) {
     lv_obj_set_size(freq_list, 560, WF_HEIGHT - 10);
     lv_obj_align(freq_list, LV_ALIGN_TOP_RIGHT, -20, 18);
     lv_obj_set_style_text_font(freq_list, &sony_24, 0);
-    lv_obj_set_style_bg_color(freq_list, lv_color_hex(0x202020), 0);
-    lv_obj_set_style_border_color(freq_list, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(freq_list, TC(list), 0);
+    lv_obj_set_style_border_color(freq_list, TC(text), 0);
     char line[64];
     snprintf(line, sizeof(line), "Now: %s", where_label());
     lv_obj_t *t = lv_list_add_text(freq_list, line);
@@ -4943,10 +4944,10 @@ static void freq_show(void) {
     }
     lv_obj_t *cu    = freq_add(FQ_CUSTOM, line);
     lv_obj_t *close = freq_add(FQ_CLOSE, "Close");
-    lv_obj_set_style_text_color(close, lv_color_hex(0xffc040), 0);
+    lv_obj_set_style_text_color(close, TC(action), 0);
     /* The one in use stands out and has the knob. */
     lv_obj_t *cur = custom ? cu : ghost ? gn : js8;
-    lv_obj_set_style_text_color(cur, lv_color_hex(0x60ff60), 0);
+    lv_obj_set_style_text_color(cur, TC(ok), 0);
     lv_group_set_editing(keyboard_group, false);
     lv_group_focus_obj(cur);
 }

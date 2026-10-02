@@ -6,6 +6,7 @@
 #include "navtex/decoder.h"
 #include "dialog.h"
 #include "styles.h"
+#include "theme.h"
 #include "buttons.h"
 #include "keyboard.h"
 #include "radio.h"
@@ -390,7 +391,8 @@ static void header_update(void)
             name = navtex_freqs[i].name;
     }
     snprintf(l, sizeof(l), "%s   %.1f kHz", name, f / 1000.0);
-    snprintf(r, sizeof(r), "%s", test_mode ? "#ffd24a Test WAV#" : "RX");
+    if (test_mode) snprintf(r, sizeof(r), "#%06x Test WAV#", theme_hex(TC_warn));
+    else snprintf(r, sizeof(r), "RX");
     if (strcmp(l, lv_label_get_text(frame.head_left)))
         lv_label_set_text(frame.head_left, l);
     if (strcmp(r, lv_label_get_text(frame.head_right)))
@@ -480,7 +482,7 @@ static void construct_cb(lv_obj_t *parent)
     lv_obj_set_style_border_width(label, 0, 0);
     lv_obj_set_style_pad_all(label, 0, 0);
     lv_obj_set_style_text_font(label, &sony_22, 0);
-    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(label, TC(text), 0);
     lv_label_set_text(label, "NAVTEX ready - 100 baud / 170 Hz shift\n");
 
     /* MFK target.  LEFT scrolls towards older text, RIGHT towards

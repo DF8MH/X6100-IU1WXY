@@ -27,6 +27,7 @@
 #include "buttons.h"
 #include "main_screen.h"
 #include "radio.h"
+#include "theme.h"
 
 #define MAX_MSGS     64
 #define TIMER_MS     100
@@ -39,10 +40,10 @@
 #define SIDE_X       494
 #define SIDE_W       290
 
-#define COLOR_HEAD   0x90f0d0
-#define COLOR_DIM    0x90a0b0
-#define COLOR_SEL_BG 0x5a4818
-#define COLOR_SEL    0xffd24a
+#define COLOR_HEAD   theme_hex(TC_text_head)
+#define COLOR_DIM    theme_hex(TC_text_dim)
+#define COLOR_SEL_BG theme_hex(TC_sel_bg)
+#define COLOR_SEL    theme_hex(TC_sel_text)
 
 typedef enum { EDIT_NONE, EDIT_NEW, EDIT_CHANGE } edit_t;
 
@@ -186,24 +187,24 @@ static void update_status(void) {
     const char *text = sel_text();
     int         wpm  = param_i_get(cfg_key_speed);
 
-    lv_label_set_text_fmt(head, "CW KEYER - #ffffff %i WPM#", wpm);
+    lv_label_set_text_fmt(head, "CW KEYER - #%06x %i WPM#", theme_hex(TC_text), wpm);
     lv_label_set_text(text_lbl, text ? text : "-");
 
     switch (cw_encoder_state()) {
         case CW_ENCODER_SEND:
         case CW_ENCODER_BEACON:
-            set_state("ON AIR", 0xb01e1e, 0xffffff);
+            set_state("ON AIR", theme_hex(TC_tx_bg), theme_hex(TC_text));
             lv_label_set_text(hint, "TX or PTT: stop");
             break;
         case CW_ENCODER_BEACON_IDLE: {
             char buf[32];
             snprintf(buf, sizeof(buf), "BEACON %i s", cw_encoder_pause_left());
-            set_state(buf, 0x1f2a35, 0xffd24a);
+            set_state(buf, theme_hex(TC_chip), theme_hex(TC_warn));
             lv_label_set_text(hint, "TX or PTT: stop");
             break;
         }
         default:
-            set_state("READY", 0x1f2a35, 0x90f0d0);
+            set_state("READY", theme_hex(TC_chip), theme_hex(TC_text_head));
             lv_label_set_text(hint, count ? "MFK: choose - press MFK: edit" : "New: write the first message");
             break;
     }
@@ -230,14 +231,14 @@ static void list_draw_cb(lv_event_t *e) {
     uint32_t r = dsc->id;
 
     dsc->rect_dsc->bg_opa   = LV_OPA_COVER;
-    dsc->rect_dsc->bg_color = lv_color_black();
+    dsc->rect_dsc->bg_color = TC(panel);
     if (count == 0) {
         dsc->label_dsc->color = lv_color_hex(COLOR_DIM);
         return;
     }
     if ((int)r == sel) {
         dsc->rect_dsc->bg_color     = lv_color_hex(COLOR_SEL_BG);
-        dsc->rect_dsc->border_color = lv_color_white();
+        dsc->rect_dsc->border_color = TC(sel_border);
         dsc->rect_dsc->border_width = 2;
         dsc->rect_dsc->border_opa   = LV_OPA_COVER;
         dsc->rect_dsc->border_side  = LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM;
@@ -436,12 +437,12 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_size(list, LIST_W, LIST_H);
     lv_obj_set_pos(list, LIST_X, LIST_Y);
     lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(list, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_border_width(list, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(list, lv_color_hex(0x445566), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(list, TC(panel), LV_PART_MAIN);
+    lv_obj_set_style_border_width(list, theme_shape.border, LV_PART_MAIN);
+    lv_obj_set_style_border_color(list, TC(panel_border), LV_PART_MAIN);
     lv_obj_set_style_border_width(list, 0, LV_PART_ITEMS);
     lv_obj_set_style_text_font(list, &sony_22, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(list, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(list, TC(text), LV_PART_ITEMS);
     lv_obj_set_style_pad_ver(list, 5, LV_PART_ITEMS);
     lv_obj_set_style_pad_hor(list, 10, LV_PART_ITEMS);
     lv_table_set_col_cnt(list, 1);
@@ -452,14 +453,14 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_remove_style_all(side);
     lv_obj_set_size(side, SIDE_W, LIST_H);
     lv_obj_set_pos(side, SIDE_X, LIST_Y);
-    lv_obj_set_style_bg_color(side, lv_color_hex(0x121a22), 0);
+    lv_obj_set_style_bg_color(side, TC(side), 0);
     lv_obj_set_style_bg_opa(side, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(side, lv_color_hex(0x445566), 0);
-    lv_obj_set_style_border_width(side, 1, 0);
+    lv_obj_set_style_border_color(side, TC(panel_border), 0);
+    lv_obj_set_style_border_width(side, theme_shape.border, 0);
     lv_obj_set_style_radius(side, 8, 0);
     lv_obj_clear_flag(side, LV_OBJ_FLAG_SCROLLABLE);
 
-    state_lbl = label(side, &sony_28, 0x90f0d0);
+    state_lbl = label(side, &sony_28, COLOR_HEAD);
     lv_obj_set_size(state_lbl, SIDE_W - 24, 48);
     lv_obj_set_pos(state_lbl, 12, 12);
     lv_obj_set_style_bg_opa(state_lbl, LV_OPA_COVER, 0);
@@ -467,7 +468,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_text_align(state_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_pad_top(state_lbl, 8, 0);
 
-    text_lbl = label(side, &sony_20, 0xd0e0f0);
+    text_lbl = label(side, &sony_20, theme_hex(TC_text_value));
     lv_obj_set_width(text_lbl, SIDE_W - 24);
     lv_label_set_long_mode(text_lbl, LV_LABEL_LONG_WRAP);
     lv_obj_set_pos(text_lbl, 12, 72);

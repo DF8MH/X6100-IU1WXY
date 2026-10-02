@@ -10,6 +10,7 @@
 
 #include "knobs.h"
 #include "cluster_column.h"
+#include "buttons.h"
 
 #include "buttons.h"
 #include "cfg/settings_manager.h"
@@ -21,6 +22,7 @@
 
 extern "C" {
     #include "styles.h"
+    #include "theme.h"
 
     #include <stdio.h>
     #include <stdlib.h>
@@ -31,8 +33,8 @@ extern "C" {
 #define KNOBS_PADDING 2
 #define KNOBS_DYNAMIC_WIDTH 400
 
-#define COLOR_ACTIVE "70ff70"
-#define COLOR_INACTIVE "b0b0b0"
+#define COLOR_ACTIVE theme_hex(TC_btn_mark)
+#define COLOR_INACTIVE theme_hex(TC_text_soft)
 #define MFK_FMT
 
 enum modes_t {
@@ -137,7 +139,7 @@ class KnobInfo {
         }
         std::string val = item->to_str();
         char buf[64];
-        snprintf(buf, 64, "%s #%s %s:# #%s %s#", arrow_symbol.c_str(),
+        snprintf(buf, 64, "%s #%06x %s:# #%06x %s#", arrow_symbol.c_str(),
                  mode == MODE_EDIT ? COLOR_INACTIVE : COLOR_ACTIVE, item->name,
                  mode == MODE_SELECT ? COLOR_INACTIVE : COLOR_ACTIVE, val.c_str());
         lv_label_set_text(*label, buf);
@@ -295,6 +297,7 @@ void knobs_set_vol_param(cfg_ctrl_t control) {
         return;
     }
     vol_knob_info->set_ctrl(item);
+    buttons_refresh_marks();
 }
 
 /* MFK */
@@ -312,6 +315,7 @@ void knobs_set_mfk_param(cfg_ctrl_t control) {
         return;
     }
     mfk_knob_info->set_ctrl(item);
+    buttons_refresh_marks();
 }
 
 

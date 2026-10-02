@@ -11,6 +11,7 @@
 #include "util.h"
 #include "knobs.h"
 #include "controls.h"
+#include "theme.h"
 
 extern "C" {
     #include "msg.h"
@@ -33,10 +34,10 @@ void vol_update(int16_t diff) {
     std::string msg(64, '\0');
     controls_encoder_update(vol_ctrl, diff, msg);
 
-    uint32_t    color = vol->state == VOL_STATE_EDIT ? 0xFFFFFF : 0xBBBBBB;
+    uint32_t    color = vol->state == VOL_STATE_EDIT ? theme_hex(TC_text) : theme_hex(TC_text_soft);
 
     if (!knobs_visible()) {
-        msg_update_text_fmt("#%3X %s", color, msg.c_str());
+        msg_update_text_fmt("#%06x %s", color, msg.c_str());
     }
 }
 
@@ -48,6 +49,10 @@ void vol_change_ctrl(int16_t dir) {
     vol_ctrl = controls_encoder_get_next(ENCODER_BIND_VOL, vol_ctrl, dir);
     knobs_set_vol_param(vol_ctrl);
     vol_update(0);
+}
+
+cfg_ctrl_t vol_get_ctrl() {
+    return vol_ctrl;
 }
 
 void vol_set_ctrl(cfg_ctrl_t ctrl) {

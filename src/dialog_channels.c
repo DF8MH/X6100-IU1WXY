@@ -8,6 +8,7 @@
 #include "textarea_window.h"
 #include "cfg/cfg_api.h"
 #include "styles.h"
+#include "theme.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -495,7 +496,7 @@ static void build_table(void) {
      */
     lv_obj_set_style_bg_color(
         table,
-        lv_color_hex(0x27313a),
+        TC(bg),
         LV_PART_MAIN
     );
 
@@ -527,7 +528,7 @@ static void build_table(void) {
 
     lv_obj_set_style_text_color(
         table,
-        lv_color_white(),
+        TC(text),
         LV_PART_ITEMS
     );
 
@@ -569,7 +570,7 @@ static void build_table(void) {
      */
     lv_obj_set_style_text_color(
         table,
-        lv_color_hex(0x808080),
+        TC(text_mute),
         LV_PART_ITEMS | LV_STATE_EDITED
     );
 
@@ -1725,7 +1726,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_obj_set_style_bg_color(
         channels_frame,
-        lv_color_hex(0x182028),
+        TC(frame),
         LV_PART_MAIN
     );
 
@@ -1743,7 +1744,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_obj_set_style_border_color(
         channels_frame,
-        lv_color_white(),
+        TC(dialog_border),
         LV_PART_MAIN
     );
 

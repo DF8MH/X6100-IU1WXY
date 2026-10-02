@@ -13,6 +13,7 @@
 #include "msg.h"
 #include "radio.h"
 #include "styles.h"
+#include "theme.h"
 #include "freq_strip.h"
 
 #include <stdio.h>
@@ -22,12 +23,12 @@
 #define HEADER_Y   12
 #define TABLE_Y    44
 #define TABLE_H    (DIALOG_H - 86)
-#define COLOR_HEAD 0x90f0d0
-#define COLOR_GRP  0x90f0d0
-#define COLOR_DIM  0x90a0b0
-#define COLOR_SEL  0x5a4818
-#define COLOR_CUR  0x3a2f12
-#define COLOR_NEAR 0xffd24a
+#define COLOR_HEAD theme_hex(TC_text_head)
+#define COLOR_GRP  theme_hex(TC_text_head)
+#define COLOR_DIM  theme_hex(TC_text_dim)
+#define COLOR_SEL  theme_hex(TC_sel_bg)
+#define COLOR_CUR  theme_hex(TC_near_bg)
+#define COLOR_NEAR theme_hex(TC_sel_text)
 
 static lv_obj_t               *panel;
 static lv_obj_t               *table;
@@ -129,14 +130,14 @@ static void draw_cb(lv_event_t *e) {
     if (r >= (uint32_t)count) return;
 
     dsc->rect_dsc->bg_opa   = LV_OPA_COVER;
-    dsc->rect_dsc->bg_color = lv_color_black();
+    dsc->rect_dsc->bg_color = TC(panel);
     if (items[r].group) {
         dsc->label_dsc->color = lv_color_hex(COLOR_GRP);
         return;
     }
     if ((int)r == sel) {
         dsc->rect_dsc->bg_color     = lv_color_hex(COLOR_SEL);
-        dsc->rect_dsc->border_color = lv_color_white();
+        dsc->rect_dsc->border_color = TC(sel_border);
         dsc->rect_dsc->border_width = 2;
         dsc->rect_dsc->border_opa   = LV_OPA_COVER;
         dsc->rect_dsc->border_side  = LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM | (c == 0 ? LV_BORDER_SIDE_LEFT : 0) |
@@ -146,7 +147,7 @@ static void draw_cb(lv_event_t *e) {
     }
     if (c == 1) dsc->label_dsc->color = lv_color_hex(COLOR_DIM);
     if (c == 2 && ((int)r == sel || is_current(r))) dsc->label_dsc->color = lv_color_hex(COLOR_NEAR);
-    if (c == 3) dsc->label_dsc->color = lv_color_hex(0xd0d0d0);
+    if (c == 3) dsc->label_dsc->color = TC(text_value);
 }
 
 void freq_list_open(lv_obj_t *parent, const char *title, const freq_list_item_t *list, int n, int32_t audio,
@@ -167,7 +168,7 @@ void freq_list_open(lv_obj_t *parent, const char *title, const freq_list_item_t 
     lv_obj_set_style_text_font(head, &sony_20, 0);
     lv_obj_set_style_text_color(head, lv_color_hex(COLOR_HEAD), 0);
     lv_label_set_recolor(head, true);
-    lv_label_set_text_fmt(head, "%s #ffffff - VFO %d.%03d.%02d USB#", title, vfo / 1000000, (vfo / 1000) % 1000,
+    lv_label_set_text_fmt(head, "%s #%06x - VFO %d.%03d.%02d USB#", title, theme_hex(TC_text), vfo / 1000000, (vfo / 1000) % 1000,
                           (vfo % 1000) / 10);
     lv_obj_set_pos(head, 18, HEADER_Y);
 
@@ -182,13 +183,13 @@ void freq_list_open(lv_obj_t *parent, const char *title, const freq_list_item_t 
     lv_obj_set_size(table, WIDTH, TABLE_H);
     lv_obj_set_pos(table, 13, TABLE_Y);
     lv_obj_set_style_bg_opa(table, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(table, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(table, TC(panel), LV_PART_MAIN);
     lv_obj_set_style_border_width(table, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(table, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_border_color(table, TC(dialog_border), LV_PART_MAIN);
     lv_obj_set_style_border_opa(table, 96, LV_PART_MAIN);
     lv_obj_set_style_border_width(table, 0, LV_PART_ITEMS);
     lv_obj_set_style_text_font(table, &sony_22, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(table, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(table, TC(text), LV_PART_ITEMS);
     lv_obj_set_style_pad_ver(table, 4, LV_PART_ITEMS);
     lv_obj_set_style_pad_hor(table, 8, LV_PART_ITEMS);
     lv_table_set_col_cnt(table, 4);

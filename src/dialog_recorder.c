@@ -11,6 +11,7 @@
 #include "recorder.h"
 #include "dialog.h"
 #include "styles.h"
+#include "theme.h"
 #include "params/params.h"
 #include "events.h"
 #include "util.h"
@@ -279,14 +280,14 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_border_width(table, 0, LV_PART_ITEMS);
 
     lv_obj_set_style_bg_opa(table, LV_OPA_TRANSP, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(table, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(table, TC(text), LV_PART_ITEMS);
     lv_obj_set_style_pad_top(table, 5, LV_PART_ITEMS);
     lv_obj_set_style_pad_bottom(table, 5, LV_PART_ITEMS);
     lv_obj_set_style_pad_left(table, 0, LV_PART_ITEMS);
     lv_obj_set_style_pad_right(table, 0, LV_PART_ITEMS);
 
-    lv_obj_set_style_text_color(table, lv_color_black(), LV_PART_ITEMS | LV_STATE_EDITED);
-    lv_obj_set_style_bg_color(table, lv_color_white(), LV_PART_ITEMS | LV_STATE_EDITED);
+    lv_obj_set_style_text_color(table, TC(focus_text), LV_PART_ITEMS | LV_STATE_EDITED);
+    lv_obj_set_style_bg_color(table, TC(focus), LV_PART_ITEMS | LV_STATE_EDITED);
     lv_obj_set_style_bg_opa(table, 128, LV_PART_ITEMS | LV_STATE_EDITED);
 
     lv_obj_add_event_cb(table, key_cb, LV_EVENT_KEY, NULL);
@@ -311,7 +312,7 @@ static void construct_cb(lv_obj_t *parent) {
     static lv_style_t style_level_indic;
 
     lv_style_init(&style_level_bg);
-    lv_style_set_border_color(&style_level_bg, lv_palette_main(LV_PALETTE_BLUE));
+    lv_style_set_border_color(&style_level_bg, TC(toggle_on));
     lv_style_set_border_width(&style_level_bg, 2);
     lv_style_set_pad_all(&style_level_bg, 6); /*To make the indicator smaller*/
     lv_style_set_radius(&style_level_bg, 6);
@@ -319,7 +320,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_style_init(&style_level_indic);
     lv_style_set_bg_opa(&style_level_indic, LV_OPA_COVER);
-    lv_style_set_bg_color(&style_level_indic, lv_palette_main(LV_PALETTE_BLUE));
+    lv_style_set_bg_color(&style_level_indic, TC(toggle_on));
     lv_style_set_radius(&style_level_indic, 3);
 
     level = lv_bar_create(dialog.obj);

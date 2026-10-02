@@ -6,6 +6,7 @@
 #include "keyboard.h"
 #include "params/params.h"
 #include "styles.h"
+#include "theme.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,7 +17,8 @@ extern buttons_page_t *stub_page;
 void ui_init(void) {
     EVENT_BAND_UP   = lv_event_register_id();
     EVENT_BAND_DOWN = lv_event_register_id();
-    styles_init(THEME_SIMPLE);
+    theme_init(NULL);
+    styles_init();
     lv_obj_set_style_bg_color(lv_scr_act(), bg_color, 0);
     keyboard_group = lv_group_create();
     strcpy(params.callsign.x, "K2XYZ");

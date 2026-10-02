@@ -28,6 +28,7 @@ void vol_init();
 void vol_update(int16_t diff);
 void vol_change_ctrl(int16_t dir);
 void vol_set_ctrl(cfg_ctrl_t mode);
+cfg_ctrl_t vol_get_ctrl();
 
 #ifdef __cplusplus
 }

@@ -48,6 +48,7 @@
 #include "usb_devices.h"
 #include "dialog_cluster.h"
 #include "sstv_resources.h"
+#include "theme.h"
 
 #define DISP_BUF_SIZE (800 * 480 * 4)
 
@@ -63,7 +64,7 @@ void * tick_thread (void *args);
 
 /* Display settings that would break the screen are put right at every start
  * (an old or hand-edited params.db, a backup restored from another version):
- * the spectrum is disabled in this firmware, the theme is IU1WXY, the font
+ * the spectrum is disabled in this firmware, the font
  * must exist and the legacy spectrum values must stay in their ranges. */
 static void fix_uint8(params_uint8_t *p) {
     if (p->max > p->min && (p->x < p->min || p->x > p->max)) {
@@ -78,11 +79,6 @@ static void display_settings_check(void) {
     if (param_i_get(cfg_spectrum_show)) {
         fprintf(stderr, "Settings: spectrum_show on, set off (the spectrum is disabled)\n");
         param_i_set(cfg_spectrum_show, 0);
-    }
-    /* Only the IU1WXY theme for now (Legacy and Outdoor are out of the menu) */
-    if (params.theme.x != THEME_SIMPLE) {
-        fprintf(stderr, "Settings: theme %u, set to IU1WXY\n", params.theme.x);
-        params_uint8_set(&params.theme, THEME_SIMPLE);
     }
     if (params.font.x > FONT_DEJAVU) {
         fprintf(stderr, "Settings: font %u unknown, set to the default\n", params.font.x);
@@ -144,8 +140,9 @@ int main(void) {
     audio_set_rec_vol(params.rec_gain_db_f.x);
     mfk_init();
     vol_init();
-    fonts_apply(params.font.x);
-    styles_init(params.theme.x);
+    theme_init(params.theme_name.x);    /* an unknown one falls back to IU1WXY */
+    fonts_apply(theme_shape.font >= 0 ? theme_shape.font : params.font.x);
+    styles_init();
 
     radio_init();
     audio_mixer_setup(x6100_control_get_base_ver());

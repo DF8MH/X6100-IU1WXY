@@ -9,6 +9,7 @@
  *********************/
 
 #include "lv_finder.h"
+#include "../theme.h"
 
 /*********************
  *      DEFINES
@@ -148,7 +149,7 @@ static void lv_finder_event(const lv_obj_class_t * class_p, lv_event_t * e) {
 
         lv_draw_rect_dsc_init(&draw_dsc);
         lv_obj_init_draw_rect_dsc(obj, LV_PART_INDICATOR, &draw_dsc);
-        draw_dsc.border_color = lv_color_hex(0xFF5050);
+        draw_dsc.border_color = TC(finder_band);
         draw_dsc.bg_color = draw_dsc.border_color;
         draw_dsc.bg_opa = LV_OPA_30;
         draw_dsc.border_opa = LV_OPA_70;
@@ -159,7 +160,7 @@ static void lv_finder_event(const lv_obj_class_t * class_p, lv_event_t * e) {
 
         if ((finder->cursor != CURSOR_NO_VALUE) && (finder->cursor != finder->value)) {
 
-            draw_dsc.border_color = lv_color_hex(0x50FF50);
+            draw_dsc.border_color = TC(finder_cursor);
             draw_dsc.bg_color = draw_dsc.border_color;
 
             lv_area_t       cursor_area;

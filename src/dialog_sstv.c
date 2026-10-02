@@ -4,6 +4,7 @@
 
 #include "dialog_sstv.h"
 #include "styles.h"
+#include "theme.h"
 #include "dialog.h"
 #include "buttons.h"
 #include "main_screen.h"
@@ -914,14 +915,14 @@ static void construct_cb(lv_obj_t *parent)
 
     status_label = lv_label_create(dialog.obj);
     lv_label_set_text(status_label, "Stand by.\nPress Start Auto RX to start Autodecoder.\nPress Start Manual RX to start Manual decoder, press Mode button to cycle all available modes for the Manual decoder.");
-    lv_obj_set_style_text_color(status_label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(status_label, TC(text), 0);
     lv_obj_set_style_text_font(status_label, &sony_22, 0);
     lv_obj_set_width(status_label, APP_FRAME_W - SSTV_IMAGE_W - 30);
     lv_obj_set_pos(status_label, SSTV_IMAGE_X + SSTV_IMAGE_W + 15, APP_FRAME_BODY_Y + 10);
     lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_LEFT, 0);
 
     progress_bar = frame.bar;
-    lv_obj_set_style_bg_color(progress_bar, lv_color_hex(0x40c060), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(progress_bar, TC(ok_bar), LV_PART_INDICATOR);
     lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
     lv_obj_add_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
     set_receiver_ui_stopped();
@@ -1247,7 +1248,7 @@ static void ui_timer_cb(lv_timer_t *timer)
                 }
             }
             tx_progress = v;
-            app_frame_bar(&frame, v, 0xff4040);   /* red while transmitting, as in WSPR */
+            app_frame_bar(&frame, v, theme_hex(TC_tx));   /* red while transmitting, as in WSPR */
         }
         if (tx_started) { char msg[96]; snprintf(msg,sizeof(msg),"Transmitting %s...",cont_mode_name(tx_mode)); set_status(msg); }
     } else if (tx_thread_valid) {
@@ -1256,7 +1257,7 @@ static void ui_timer_cb(lv_timer_t *timer)
         if (progress_bar) {
             lv_bar_set_value(progress_bar, tx_result == 1 ? 1000 : 0, LV_ANIM_OFF);
             lv_obj_add_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_set_style_bg_color(progress_bar, lv_color_hex(0x40c060), LV_PART_INDICATOR);
+            lv_obj_set_style_bg_color(progress_bar, TC(ok_bar), LV_PART_INDICATOR);
         }
         if (tx_ui_state == SSTV_TX_UI_RF) {
             if (tx_result == 1) {
@@ -1854,11 +1855,11 @@ static void tx_instruction_show(const char *title, const char *hint)
     lv_obj_remove_style_all(box);
     lv_obj_set_pos(box, SSTV_TX_LIST_X, SSTV_TX_LIST_Y);
     lv_obj_set_size(box, SSTV_TX_LIST_W, SSTV_TX_LIST_H);
-    lv_obj_set_style_bg_color(box, lv_color_hex(0x0b1622), 0);
+    lv_obj_set_style_bg_color(box, TC(popup), 0);
     lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(box, lv_color_hex(0x99aaaa), 0);
+    lv_obj_set_style_border_color(box, TC(popup_border), 0);
     lv_obj_set_style_border_width(box, 2, 0);
-    lv_obj_set_style_radius(box, 10, 0);
+    lv_obj_set_style_radius(box, theme_shape.radius_popup, 0);
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     lv_obj_t *head = lv_label_create(box);
@@ -1879,14 +1880,14 @@ static void tx_list_draw_cb(lv_event_t *e)
     lv_table_get_selected_cell(lv_event_get_target(e), &row, &col);
     bool on = d->id == row;
 
-    d->rect_dsc->bg_color = lv_color_hex(0x5a4818);
+    d->rect_dsc->bg_color = TC(sel_bg);
     d->rect_dsc->bg_opa = on ? LV_OPA_COVER : LV_OPA_TRANSP;
-    d->rect_dsc->border_color = lv_color_white();
+    d->rect_dsc->border_color = TC(sel_border);
     d->rect_dsc->border_opa = LV_OPA_COVER;
     d->rect_dsc->border_width = on ? 2 : 0;
     d->rect_dsc->border_side = LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_BOTTOM;
     d->rect_dsc->outline_width = 0;
-    if (on && d->label_dsc) d->label_dsc->color = lv_color_hex(0xffd24a);
+    if (on && d->label_dsc) d->label_dsc->color = TC(sel_text);
 }
 
 /* A list in the box of tx_instruction_show(): the MFK chooses, a press confirms */
@@ -1898,7 +1899,7 @@ static lv_obj_t *tx_list_create(uint16_t rows)
     lv_obj_set_size(t, SSTV_TX_LIST_W - 4, SSTV_TX_LIST_H - SSTV_TX_HEAD_H - 8);
     lv_obj_set_style_border_width(t, 0, LV_PART_ITEMS);
     lv_obj_set_style_text_font(t, &sony_22, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(t, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(t, TC(text), LV_PART_ITEMS);
     lv_obj_set_style_pad_ver(t, 3, LV_PART_ITEMS);
     lv_obj_set_style_pad_left(t, 18, LV_PART_ITEMS);
     lv_table_set_col_cnt(t, 1);
@@ -2888,7 +2889,7 @@ static void tx_type_draw_cb(lv_event_t *e)
     if (!d || d->part!=LV_PART_ITEMS || !d->label_dsc) return;
     if (((d->id==1 || d->id==2) && !tx_target_callsign[0]) ||
         (d->id==4 && !tx_last_valid))
-        d->label_dsc->color=lv_palette_main(LV_PALETTE_GREY);
+        d->label_dsc->color=TC(text_mute);
 }
 
 static void tx_type_update_help(void)
@@ -3597,18 +3598,18 @@ static void sstv_browser_build(void)
     lv_table_set_col_cnt(sstv_browser_table, 1);
     lv_table_set_col_width(sstv_browser_table, 0, 690);
 
-    lv_obj_set_style_bg_color(sstv_browser_table, lv_color_hex(0x27313a),
+    lv_obj_set_style_bg_color(sstv_browser_table, TC(bg),
                               LV_PART_MAIN);
     lv_obj_set_style_bg_opa(sstv_browser_table, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(sstv_browser_table, 0, LV_PART_ITEMS);
     lv_obj_set_style_bg_opa(sstv_browser_table, LV_OPA_TRANSP, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(sstv_browser_table, lv_color_white(),
+    lv_obj_set_style_text_color(sstv_browser_table, TC(text),
                                 LV_PART_ITEMS);
     lv_obj_set_style_text_font(sstv_browser_table, &sony_24, LV_PART_ITEMS);
     lv_obj_set_style_pad_top(sstv_browser_table, 5, LV_PART_ITEMS);
     lv_obj_set_style_pad_bottom(sstv_browser_table, 5, LV_PART_ITEMS);
     lv_obj_set_style_pad_left(sstv_browser_table, 12, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(sstv_browser_table, lv_color_hex(0x808080),
+    lv_obj_set_style_text_color(sstv_browser_table, TC(text_mute),
                                 LV_PART_ITEMS | LV_STATE_EDITED);
     lv_obj_set_style_bg_opa(sstv_browser_table, LV_OPA_TRANSP,
                             LV_PART_ITEMS | LV_STATE_EDITED);

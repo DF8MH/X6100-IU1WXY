@@ -34,6 +34,7 @@
 #include "buttons.h"
 #include "msg.h"
 #include "styles.h"
+#include "theme.h"
 #include "lvgl/lvgl.h"
 #include "lv_drivers/display/fbdev.h"
 
@@ -352,9 +353,9 @@ static bool start() {
         }
         atexit(screen_rec_shutdown);
         label = lv_label_create(lv_layer_top());
-        lv_obj_set_style_text_color(label, lv_color_hex(0xff3030), 0);
+        lv_obj_set_style_text_color(label, TC(tx), 0);
         lv_obj_set_style_text_font(label, &sony_24, 0);
-        lv_obj_set_style_bg_color(label, lv_color_black(), 0);
+        lv_obj_set_style_bg_color(label, TC(panel), 0);
         lv_obj_set_style_bg_opa(label, LV_OPA_70, 0);
         lv_obj_set_style_pad_left(label, 26, 0);
         lv_obj_set_style_pad_right(label, 6, 0);
@@ -365,7 +366,7 @@ static bool start() {
         lv_obj_remove_style_all(dot);
         lv_obj_set_size(dot, 14, 14);
         lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_color(dot, lv_color_hex(0xff3030), 0);
+        lv_obj_set_style_bg_color(dot, TC(tx), 0);
         lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
         lv_obj_align(dot, LV_ALIGN_LEFT_MID, -20, 0);
     }

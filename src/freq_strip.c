@@ -14,6 +14,7 @@
 #include "params/params.h"
 #include "station.h"
 #include "styles.h"
+#include "theme.h"
 #include "util.h"
 
 #include <stdio.h>
@@ -44,7 +45,7 @@ static void update_cb(Subject *subj, void *user_data) {
 
     /* The open app in front of the band, so it's clear where the keys go */
     if (app[0]) {
-        lv_label_set_text_fmt(band_label, "#ffd24a %s# %s", app, band);
+        lv_label_set_text_fmt(band_label, "#%06x %s# %s", theme_hex(TC_accent), app, band);
     } else {
         lv_label_set_text(band_label, band);
     }
@@ -79,7 +80,7 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_add_style(strip, &freq_strip_style, 0);
     lv_obj_clear_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
 
-    band_label = make_label(strip, LV_ALIGN_LEFT_MID, 14, &sony_24, 0x90f0d0);
+    band_label = make_label(strip, LV_ALIGN_LEFT_MID, 14, &sony_24, theme_hex(TC_text_head));
     lv_label_set_recolor(band_label, true);
     /* Centre: frequency, then the mode */
     lv_obj_t *mid = lv_obj_create(strip);
@@ -89,9 +90,19 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_set_flex_align(mid, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
     lv_obj_set_style_pad_column(mid, 14, 0);
     lv_obj_align(mid, LV_ALIGN_CENTER, 0, 0);
-    freq_label = make_label(mid, LV_ALIGN_DEFAULT, 0, &sony_36, 0xffffff);
-    mode_label = make_label(mid, LV_ALIGN_DEFAULT, 0, &sony_24, 0xff6666);
+    freq_label = make_label(mid, LV_ALIGN_DEFAULT, 0, &sony_36, theme_hex(TC_text));
+    mode_label = make_label(mid, LV_ALIGN_DEFAULT, 0, &sony_24, theme_hex(TC_mode_text));
     lv_obj_set_style_pad_bottom(mode_label, 3, 0);
+    if (theme_shape.mode_box) {     /* in a box, as an indicator */
+        lv_obj_set_style_bg_color(mode_label, TC(mode_bg), 0);
+        lv_obj_set_style_bg_opa(mode_label, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_color(mode_label, TC(mode_border), 0);
+        lv_obj_set_style_border_width(mode_label, 1, 0);
+        lv_obj_set_style_radius(mode_label, 3, 0);
+        lv_obj_set_style_pad_hor(mode_label, 10, 0);
+        lv_obj_set_style_pad_top(mode_label, 2, 0);
+        lv_obj_set_style_pad_bottom(mode_label, 6, 0);   /* the box sits on the baseline, as the text did */
+    }
 
     /* Right: [dot] locator */
     lv_obj_t *right = lv_obj_create(strip);
@@ -106,9 +117,9 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_remove_style_all(qth_dot);
     lv_obj_set_size(qth_dot, 10, 10);
     lv_obj_set_style_radius(qth_dot, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(qth_dot, lv_color_hex(COLOR_LIGHT_GREEN), 0);
+    lv_obj_set_style_bg_color(qth_dot, TC(ok), 0);
     lv_obj_set_style_bg_opa(qth_dot, LV_OPA_COVER, 0);
-    qth_label = make_label(right, LV_ALIGN_DEFAULT, 0, &sony_28, 0xffffff);
+    qth_label = make_label(right, LV_ALIGN_DEFAULT, 0, &sony_28, theme_hex(TC_text));
 
     subject_subscribe_delayed((Subject *)cfg_fg_freq, update_cb, NULL);
     subject_subscribe_delayed((Subject *)cfg_bg_freq, update_cb, NULL);

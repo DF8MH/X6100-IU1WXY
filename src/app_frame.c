@@ -33,7 +33,7 @@ void app_frame_create(app_frame_t *f, lv_obj_t *dialog_obj) {
     lv_obj_set_size(f->bar, APP_FRAME_W, 4);
     lv_obj_set_pos(f->bar, APP_FRAME_X, APP_FRAME_BODY_Y - 10);
     lv_bar_set_range(f->bar, 0, 1000);
-    lv_obj_set_style_bg_color(f->bar, lv_color_hex(0x304050), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(f->bar, TC(track), LV_PART_MAIN);
     lv_obj_set_style_radius(f->bar, 2, LV_PART_MAIN);
     lv_obj_set_style_radius(f->bar, 2, LV_PART_INDICATOR);
     lv_obj_add_flag(f->bar, LV_OBJ_FLAG_HIDDEN);
@@ -49,9 +49,9 @@ void app_frame_body(lv_obj_t *obj) {
     lv_obj_set_size(obj, APP_FRAME_W, APP_FRAME_BODY_H);
     lv_obj_set_style_radius(obj, 0, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(obj, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(obj, TC(panel), LV_PART_MAIN);
     lv_obj_set_style_border_width(obj, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(obj, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_border_color(obj, TC(dialog_border), LV_PART_MAIN);
     lv_obj_set_style_border_opa(obj, 96, LV_PART_MAIN);
 }
 
