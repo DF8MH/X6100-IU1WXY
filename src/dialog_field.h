@@ -17,6 +17,11 @@ extern "C" {
 
 extern dialog_t *dialog_field;
 
+/* Companion app: field_screen (text SOTA, POTA, BANDS, LOG, HOME), field_ref (text), field_start,
+ * field_end, field_log (text "CALL|rst sent|rst received"), field_spot, field_update */
+void dialog_field_remote(const char *cmd, int32_t val, const char *text);
+int  dialog_field_remote_state(char *buf, size_t size);
+
 #ifdef __cplusplus
 }
 #endif

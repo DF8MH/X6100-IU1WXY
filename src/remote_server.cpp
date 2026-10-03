@@ -35,6 +35,7 @@ extern "C" {
     #include "cJSON.h"
     #include "dialog.h"
     #include "dialog_cw_kbd.h"
+    #include "dialog_field.h"
     #include "dialog_ft8.h"
     #include "dialog_js8.h"
     #include "dialog_navtex.h"
@@ -111,7 +112,7 @@ static const char *mode_names[] = {"LSB", "LSB-D", "USB", "USB-D", "CW", "CW-R",
 static const char *agc_names[]  = {"OFF", "SLOW", "FAST", "AUTO"};
 
 /* "app" values; cont_modes[] order in dialog_sstv.c */
-static const char *app_names[]  = {"off", "FT8", "FT4", "JS8", "WSPR", "SSTV", "WeFax", "NavTex", "RTTY", "CW"};
+static const char *app_names[]  = {"off", "FT8", "FT4", "JS8", "WSPR", "SSTV", "WeFax", "NavTex", "RTTY", "CW", "Field"};
 static const char *sstv_modes[] = {"R8BW", "R36", "R72", "M1", "M2", "S1", "S2"};
 
 /* Commands of the app that is open: app is current_app() or its start ("FT": FT8 and FT4); a name
@@ -152,6 +153,13 @@ static const struct {
     {"cw_stop",     "CW",     dialog_cw_kbd_remote, 1, 0,         INT32_MAX, INT32_MAX},
     {"cw_wpm",      "CW",     dialog_cw_kbd_remote, 5, 60,        INT32_MAX, INT32_MIN},
     {"cw_dec",      "CW",     dialog_cw_kbd_remote, 0, 1,         INT32_MAX, INT32_MIN},
+    {"field_screen", "Field", dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
+    {"field_ref",   "Field",  dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
+    {"field_start", "Field",  dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
+    {"field_end",   "Field",  dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
+    {"field_log",   "Field",  dialog_field_remote,  1, 0,         INT32_MAX, INT32_MAX},   /* also while transmitting */
+    {"field_spot",  "Field",  dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
+    {"field_update", "Field", dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
     {"app_base",    "FT",     dialog_ft8_remote,    1, 0,         INT32_MAX, INT32_MIN},
     {"app_base",    "JS8",    dialog_js8_remote,    1, 0,         INT32_MAX, INT32_MIN},
     {"app_base",    "WSPR",   dialog_wspr_remote,   1, 0,         INT32_MAX, INT32_MIN},
@@ -168,6 +176,7 @@ static const struct {
     {"FT", dialog_ft8_remote_state},    {"JS8", dialog_js8_remote_state},     {"WSPR", dialog_wspr_remote_state},
     {"SSTV", dialog_sstv_remote_state}, {"WeFax", dialog_wefax_remote_state}, {"NavTex", dialog_navtex_remote_state},
     {"RTTY", rtty_remote_state},        {"CW", dialog_cw_kbd_remote_state},
+    {"Field", dialog_field_remote_state},
 };
 
 static client_t          clients[MAX_CLIENTS];
@@ -261,6 +270,8 @@ static const char *current_app() {
         return "NavTex";
     if (dialog_type_is_run(dialog_cw_kbd))
         return "CW";
+    if (dialog_type_is_run(dialog_field))
+        return "Field";
     if (rtty_get_state() != RTTY_OFF)
         return "RTTY";
     return "";
@@ -276,7 +287,7 @@ static bool app_open(size_t i) {
 static void open_app(int32_t app) {
     static const press_action_t actions[] = {ACTION_NONE,     ACTION_APP_FT8,   ACTION_APP_FT8,    ACTION_APP_JS8,
                                              ACTION_APP_WSPR, ACTION_APP_SSTV,  ACTION_APP_WEFAX,  ACTION_APP_NAVTEX,
-                                             ACTION_APP_RTTY, ACTION_APP_CW_KBD};
+                                             ACTION_APP_RTTY, ACTION_APP_CW_KBD, ACTION_APP_FIELD};
     const char *cur = current_app();
 
     if (!app) {
@@ -444,7 +455,7 @@ static int state_line(char *buf, size_t size) {
     int32_t     mode = cfg_sm.cp_cur_mode.get();
     int32_t     agc  = cfg_sm.cp_cur_agc.get();
     const char *app  = current_app();
-    char        ax[256];
+    char        ax[1600];   /* Field Ops: the nearest references */
     int         l    = -1;
 
     /* The app's state from its scalars: safe from this thread */
@@ -472,7 +483,7 @@ static int state_line(char *buf, size_t size) {
 }
 
 static void send_state(client_t *c) {
-    char buf[1024];
+    char buf[2048];
     int  l = state_line(buf, sizeof(buf));
 
     if (l > 0 && (size_t)l < sizeof(buf))
@@ -650,6 +661,9 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
             cmd->val != 50)   /* the steps of the TX % button */
             return "Invalid value";
         if (!strcmp(name, "js8_send") && (!cmd->text[0] || strlen(cmd->text) > 160))   /* TX_TEXT_MAX, dialog_js8.c */
+            return "Invalid text";
+        if ((!strcmp(name, "field_screen") || !strcmp(name, "field_ref") || !strcmp(name, "field_log")) &&
+            !cmd->text[0])
             return "Invalid text";
         if ((!strcmp(name, "rtty_send") || !strcmp(name, "cw_send")) && !cmd->text[0])
             return "Invalid text";

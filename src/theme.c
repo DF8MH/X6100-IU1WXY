@@ -316,6 +316,33 @@ const lv_img_dsc_t *theme_image(theme_image_t img, lv_coord_t w, lv_coord_t h) {
     return d;
 }
 
+const lv_img_dsc_t *theme_png(const char *path) {
+    static struct {
+        char         path[96];
+        lv_img_dsc_t dsc;
+    } pngs[24];
+    static int n;
+    int        w, h;
+
+    for (int i = 0; i < n; i++) {
+        if (!strcmp(pngs[i].path, path)) return &pngs[i].dsc;
+    }
+    if (n == 24) return NULL;
+    uint8_t *data = load_png(path, &w, &h);
+    if (!data) return NULL;
+
+    lv_img_dsc_t *d = &pngs[n].dsc;
+    snprintf(pngs[n].path, sizeof(pngs[n].path), "%s", path);
+    memset(d, 0, sizeof(*d));
+    d->header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
+    d->header.w  = w;
+    d->header.h  = h;
+    d->data_size = (uint32_t)w * h * 4;
+    d->data      = data;
+    n++;
+    return d;
+}
+
 /* 256 colours through the stops, smooth or in flat bands */
 static void make_palette(void) {
     const uint32_t *s = theme_shape.waterfall;

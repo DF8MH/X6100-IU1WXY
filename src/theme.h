@@ -224,6 +224,9 @@ typedef enum {
  * the same size. NULL when the theme has no image there. */
 const lv_img_dsc_t *theme_image(theme_image_t img, lv_coord_t w, lv_coord_t h);
 
+/* A PNG file as it is (icons), loaded once and kept; NULL when it can't be read */
+const lv_img_dsc_t *theme_png(const char *path);
+
 #ifdef __cplusplus
 }
 #endif

@@ -44,7 +44,7 @@ set_source_files_properties(${X}/src/dialog_cw_trainer.c PROPERTIES COMPILE_DEFI
 set_source_files_properties(${X}/src/dialog_sstv.c PROPERTIES COMPILE_DEFINITIONS "SSTV_TX_PICS_DIR=\"sstv_demo/tx_pics\";SSTV_TX_TEXT_DIR=\"sstv_demo/tx_text\";SSTV_TX_PNG=\"sstv_demo/sstv-tx.png\"")
 set_source_files_properties(main.c PROPERTIES COMPILE_DEFINITIONS "SSTV_DEFAULTS=\"${X}/rootfs/usr/share/x6100/sstv\"")
 set_source_files_properties(${X}/src/theme.c PROPERTIES COMPILE_DEFINITIONS "THEMES_DIR=\"themes_demo\"")
-set_source_files_properties(${X}/src/dialog_field.c PROPERTIES COMPILE_DEFINITIONS "FIELD_DIR=\"field_demo\"")
+set_source_files_properties(${X}/src/dialog_field.c PROPERTIES COMPILE_DEFINITIONS "FIELD_DIR=\"field_demo\";FIELD_ICONS=\"${X}/rootfs/usr/share/x6100/field\"")
 set_source_files_properties(${X}/src/scheduler.cpp PROPERTIES COMPILE_OPTIONS "-include;cstdlib")
 add_executable(apps_ui_harness main.c stubs.c $<TARGET_OBJECTS:apps> ${CMAKE_BINARY_DIR}/stubs_auto.S)
 # No network from the harness: the cluster client must not log in anywhere
