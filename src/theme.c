@@ -55,7 +55,7 @@ static const theme_shape_t builtin_shapes[B_COUNT] = {
                    .font = -1, .waterfall = {0x000000, 0x0000ff, 0xffffff, 0xffe000}, .waterfall_n = 4,
                    .waterfall_steps = 16},
     [B_CLASSIC] = {.radius = 3, .radius_btn = 4, .radius_popup = 4, .border = 1, .btn_gradient = true,
-                   .focus_solid = true, .font = FONT_ROBOTO,
+                   .focus_solid = true, .font = FONT_ARIAL,
                    .waterfall = {0x000000, 0x000060, 0x0040e0, 0x00c8ff, 0xffff00, 0xff6000, 0xffffff},
                    .waterfall_n = 7},
 };
