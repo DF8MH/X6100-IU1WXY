@@ -150,13 +150,26 @@ or newer is recommended for the TX audio options.
 
 ## Credits
 
-Built on the **R1CBU** GUI by Oleg Belousov R1CBU, maintained by Georgy
+**Giovanni Ricciardi IU1WXY** designed and wrote this firmware:
+
+- the deep **rewrite of the GUI** and the **theme system**, with the IU1WXY,
+  Classic and RS themes and the new settings;
+- the **X6100 Companion** app and the **remote control** of the radio (remote
+  API, web Remote page, gallery, backup);
+- the **DX Cluster** (waterfall spots, column, app, filters, alerts, spot snap);
+- **WSPR**, **SSTV TX**, **RTTY** and **WeFax TX**, the **CW Keyboard**, the
+  integration of JS8, SSTV, WeFax and NavTex into the radio;
+- **Bluetooth** CAT, headphones and keyboards, **wfview** server (Icom LAN
+  protocol), IARU band plan strip, configurable long-press actions, CW trainer
+  stats, and the SD image itself.
+
+Standing on the work of: the **R1CBU** GUI by Oleg Belousov R1CBU and Georgy
 Dyuldin R2RFE ([gdyuldin/x6100_gui](https://github.com/gdyuldin/x6100_gui)),
-with the apps of **1KO125** by Hany El Imam / TheMurusTeam (WeFax, NavTex,
-SSTV), **JS8** by randal007 on the JS8Call engine (Jordan Sherer KN4CRD), and
-**wsprd** from WSJT-X (K1JT, K9AN). Libraries: LVGL, cJSON, FFTW, liquid-dsp,
-libpng, bottle, PulseAudio, BlueZ. Fonts: Roboto, DejaVu, Arial, Sony Sketch.
-Hardware: Xiegu. Themes, companion app and the rest: **Giovanni Ricciardi IU1WXY**.
+**1KO125** by Hany El Imam / TheMurusTeam (WeFax, NavTex, SSTV decoders),
+**JS8** by randal007 on the JS8Call engine (Jordan Sherer KN4CRD), **wsprd**
+from WSJT-X (K1JT, K9AN). Libraries: LVGL, cJSON, FFTW, liquid-dsp, libpng,
+bottle, PulseAudio, BlueZ. Fonts: Roboto, DejaVu, Arial, Sony Sketch.
+Hardware: Xiegu.
 
 ## License
 
