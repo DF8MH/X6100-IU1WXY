@@ -177,6 +177,9 @@ int main(void) {
     pthread_detach(thread);
 
     lv_scr_load(main_obj);
+    if (param_i_get(cfg_field_boot)) {
+        main_screen_start_app(ACTION_APP_FIELD);
+    }
 
     int64_t next_loop_time, sleep_time, loop_start_time;
     while (1) {

@@ -356,6 +356,120 @@ def set_wfview():
     return read_wfview_conf()
 
 
+# Field Ops routes: x6100-field (rootfs/usr/sbin) does the downloads, same files as the GUI:
+# <FIELD_DIR>/refs.tsv, qrz.conf ("key=..."), logs/*.adi
+
+field_lock = threading.Lock()
+field_update = {"running": False, "result": ""}
+field_refs_counts = (None, 0, 0)   # (mtime, size), parks, summits
+
+
+def field_path(*names):
+    return os.path.join(settings.FIELD_DIR, *names)
+
+
+def qrz_key_set():
+    try:
+        with open(field_path("qrz.conf"), errors="replace") as f:
+            return any(line.startswith("key=") and line[4:].strip() for line in f)
+    except OSError:
+        return False
+
+
+def field_refs():
+    global field_refs_counts
+    try:
+        st = os.stat(field_path("refs.tsv"))
+    except OSError:
+        return None
+    stamp = (st.st_mtime, st.st_size)
+    if field_refs_counts[0] != stamp:   # counted once per new file
+        parks = summits = 0
+        with open(field_path("refs.tsv"), "rb") as f:
+            for line in f:
+                parks += line.startswith(b"P\t")
+                summits += line.startswith(b"S\t")
+        field_refs_counts = (stamp, parks, summits)
+    return {"date": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)), "size": fmt_size(st.st_size),
+            "parks": field_refs_counts[1], "summits": field_refs_counts[2]}
+
+
+def field_logs():
+    try:
+        names = os.listdir(field_path("logs"))
+    except OSError:
+        return []
+    logs = []
+    for name in names:
+        path = field_path("logs", name)
+        if name.endswith(".adi") and os.path.isfile(path):
+            st = os.stat(path)
+            logs.append({"name": name, "size": fmt_size(st.st_size), "mtime": st.st_mtime,
+                         "date": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime))})
+    return sorted(logs, key=lambda x: x["mtime"], reverse=True)
+
+
+def run_field_update():
+    env = dict(os.environ, X6100_FIELD_DIR=settings.FIELD_DIR, X6100_CALL=read_callsign())
+    try:
+        r = subprocess.run([settings.FIELD_CMD, "update"], capture_output=True, text=True, timeout=600, env=env)
+        lines = r.stdout.strip().splitlines()
+        result = lines[-1] if lines else f"error exit code {r.returncode}"
+    except (OSError, subprocess.SubprocessError) as e:
+        result = f"error {e}"
+    with field_lock:
+        field_update.update(running=False, result=result)
+
+
+@app.route('/field')
+def field():
+    return bottle.template('field')
+
+
+@app.get('/api/field')
+def get_field():
+    with field_lock:
+        update = dict(field_update)
+    return {"qrz_key": qrz_key_set(), "update": update, "refs": field_refs(), "logs": field_logs()}
+
+
+@app.post('/api/field/qrz')
+def set_field_qrz():
+    key = str((bottle.request.json or {}).get("key", "")).strip()
+    if key and not re.fullmatch(r"[!-~]{1,64}", key):
+        return api_error(400, "Invalid key: 1-64 printable characters, no spaces")
+    path = field_path("qrz.conf")
+    try:
+        os.makedirs(settings.FIELD_DIR, exist_ok=True)
+        if key:
+            tmp = path + ".tmp"
+            with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+                f.write(f"key={key}\n")
+            os.rename(tmp, path)
+        elif os.path.exists(path):
+            os.remove(path)
+    except OSError as e:
+        return api_error(500, f"Can't save: {e}")
+    return get_field()
+
+
+@app.post('/api/field/update')
+def start_field_update():
+    with field_lock:
+        if field_update["running"]:
+            return api_error(409, "An update is already running")
+        field_update.update(running=True, result="")
+    threading.Thread(target=run_field_update, daemon=True).start()
+    return get_field()
+
+
+@app.get('/field/logs/<name>')
+def field_log_file(name):
+    if not name.endswith(".adi"):
+        raise bottle.HTTPError(404, "Not found")
+    return bottle.static_file(name, root=field_path("logs"), download=True, mimetype="text/plain")
+
+
 # Web remote: control and spectrum through the GUI's local socket (src/remote_server.cpp,
 # one JSON object per line), RX audio from PulseAudio. No PTT: only the apps transmit
 # (docs/REMOTE_API.md), when the radio's Remote TX setting allows it.

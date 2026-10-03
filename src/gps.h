@@ -24,3 +24,7 @@ gps_status_t gps_status();
 
 /* Latest 2D/3D fix from gpsd and its age in seconds; false if none yet. */
 bool gps_last_fix(double *lat, double *lon, int *age_s);
+
+/* The phone's position (companion app, remote "location"), any thread; and the latest one */
+void gps_phone_set(double lat, double lon);
+bool gps_phone_fix(double *lat, double *lon, int *age_s);

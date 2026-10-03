@@ -41,6 +41,7 @@
 #include "dialog_swrscan.h"
 #include "dialog_ft8.h"
 #include "dialog_gps.h"
+#include "dialog_field.h"
 #include "dialog_qth.h"
 #include "dialog_recorder.h"
 #include "dialog_wifi.h"
@@ -583,6 +584,7 @@ static const char *app_name(press_action_t a) {
         case ACTION_APP_CWTRAINER:  return "CW Trainer";
         case ACTION_APP_WSPR:       return "WSPR";
         case ACTION_APP_CW_KBD:     return "CW Keyboard";
+        case ACTION_APP_FIELD:      return "Field Ops";
         default:                    return NULL;    /* Modes menu: a menu, not an app */
     }
 }
@@ -676,6 +678,10 @@ void main_screen_start_app(press_action_t app_action) {
             dialog_construct(dialog_cw_kbd, obj);
             break;
 
+        case ACTION_APP_FIELD:
+            dialog_construct(dialog_field, obj);
+            break;
+
         default:
             break;
     }
@@ -756,6 +762,7 @@ void main_screen_action(press_action_t action) {
         case ACTION_APP_CWTRAINER:
         case ACTION_APP_WSPR:
         case ACTION_APP_CW_KBD:
+        case ACTION_APP_FIELD:
             main_screen_start_app(action);
             break;
 

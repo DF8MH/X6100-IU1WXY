@@ -33,6 +33,11 @@ target_compile_definitions(test_cluster PRIVATE CLUSTER_CONF="test_cluster.conf"
 target_link_libraries(test_cluster PRIVATE CLUSTER Catch2::Catch2WithMain)
 add_test(NAME test_cluster COMMAND $<TARGET_FILE:test_cluster> --colour-mode=ansi )
 
+add_subdirectory(../src/field ${CMAKE_BINARY_DIR}/src/field)
+add_executable(test_field test_field.cpp)
+target_link_libraries(test_field PRIVATE FIELD Catch2::Catch2WithMain)
+add_test(NAME test_field COMMAND $<TARGET_FILE:test_field> --colour-mode=ansi )
+
 # liquid-dsp is not a host package: the UI harness deps have it
 find_package(Threads REQUIRED)
 # (tools/js8_ui_harness/fetch_deps.sh)

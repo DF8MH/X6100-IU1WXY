@@ -88,6 +88,7 @@ extern ParamInt *cfg_spot_snap_hold; // p_spot_snap_hold
 extern ParamInt *cfg_spot_snap_slow; // p_spot_snap_slow
 extern ParamInt *cfg_wspr_tx_freq;   // p_wspr_tx_freq
 extern ParamInt *cfg_wspr_upload;    // p_wspr_upload
+extern ParamInt *cfg_field_boot;     // p_field_boot
 extern ParamInt *cfg_ft8_max_repeats; // p_ft8_max_repeats
 
 // SWR scan

@@ -31,6 +31,7 @@ add_library(apps OBJECT
     ${X}/src/dialog_wspr.c ${X}/src/app_frame.c ${X}/src/wspr/wspr.c ${X}/src/wspr/wsprnet.c
     ${X}/third-party/wsprd/fano.c ${X}/third-party/wsprd/nhash.c ${X}/third-party/wsprd/tab.c ${X}/third-party/wsprd/wsprd.c ${X}/third-party/wsprd/wsprd_utils.c ${X}/third-party/wsprd/wsprsim_utils.c
     ${X}/src/dialog_cluster.c ${X}/src/cluster/spots.c ${X}/src/cluster/client.c ${X}/src/freq_list.c ${X}/src/dialog_modes.c ${X}/src/dialog_cw_trainer.c ${X}/src/cJSON.c ${X}/src/freq_strip.c ${X}/src/freq_scale.c ${X}/src/spot_marks.c ${X}/src/band_plan.c ${X}/src/cluster_column.c
+    ${X}/src/dialog_field.c ${X}/src/field/refs.c ${X}/src/field/flog.c ${X}/src/field/rbn.c
     ${X}/src/dialog_msg_voice.c ${X}/src/dialog_msg_cw.c ${X}/src/dialog_cw_kbd.c ${X}/src/cw_encoder.c
     ${X}/src/info.c ${X}/src/meter.c ${X}/src/clock.c ${X}/src/tx_info.c
     ${X}/src/cfg/settings_manager.cpp ${X}/src/cfg/pending_writes.cpp ${X}/src/cfg/storage_policy.cpp
@@ -43,6 +44,7 @@ set_source_files_properties(${X}/src/dialog_cw_trainer.c PROPERTIES COMPILE_DEFI
 set_source_files_properties(${X}/src/dialog_sstv.c PROPERTIES COMPILE_DEFINITIONS "SSTV_TX_PICS_DIR=\"sstv_demo/tx_pics\";SSTV_TX_TEXT_DIR=\"sstv_demo/tx_text\";SSTV_TX_PNG=\"sstv_demo/sstv-tx.png\"")
 set_source_files_properties(main.c PROPERTIES COMPILE_DEFINITIONS "SSTV_DEFAULTS=\"${X}/rootfs/usr/share/x6100/sstv\"")
 set_source_files_properties(${X}/src/theme.c PROPERTIES COMPILE_DEFINITIONS "THEMES_DIR=\"themes_demo\"")
+set_source_files_properties(${X}/src/dialog_field.c PROPERTIES COMPILE_DEFINITIONS "FIELD_DIR=\"field_demo\"")
 set_source_files_properties(${X}/src/scheduler.cpp PROPERTIES COMPILE_OPTIONS "-include;cstdlib")
 add_executable(apps_ui_harness main.c stubs.c $<TARGET_OBJECTS:apps> ${CMAKE_BINARY_DIR}/stubs_auto.S)
 # No network from the harness: the cluster client must not log in anywhere

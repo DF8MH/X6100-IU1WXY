@@ -54,6 +54,7 @@ ParamInt         *cfg_spot_snap_hold      = nullptr;
 ParamInt         *cfg_spot_snap_slow      = nullptr;
 ParamInt         *cfg_wspr_tx_freq        = nullptr;
 ParamInt         *cfg_wspr_upload         = nullptr;
+ParamInt         *cfg_field_boot          = nullptr;
 ParamInt         *cfg_ft8_max_repeats     = nullptr;
 ParamInt         *cfg_swrscan_linear      = nullptr;
 ParamInt         *cfg_swrscan_span        = nullptr;
@@ -186,6 +187,7 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_spot_snap_slow   = &cfg_sm.p_spot_snap_slow;
     cfg_wspr_tx_freq     = &cfg_sm.p_wspr_tx_freq;
     cfg_wspr_upload      = &cfg_sm.p_wspr_upload;
+    cfg_field_boot       = &cfg_sm.p_field_boot;
     cfg_ft8_max_repeats  = &cfg_sm.p_ft8_max_repeats;
     cfg_swrscan_linear   = &cfg_sm.p_swrscan_linear;
     cfg_swrscan_span     = &cfg_sm.p_swrscan_span;

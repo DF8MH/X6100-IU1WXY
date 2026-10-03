@@ -45,6 +45,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     dialog_wifi.c wifi.cpp btaudio.cpp controls.cpp usb_devices.cpp
     knobs.cpp
     dialog_wspr.c app_frame.c
+    dialog_field.c
 )
 
 add_subdirectory(fonts)
@@ -54,6 +55,7 @@ add_subdirectory(widgets)
 add_subdirectory(params)
 add_subdirectory(qth)
 add_subdirectory(cluster)
+add_subdirectory(field)
 add_subdirectory(wspr)
 add_subdirectory(cfg)
 add_subdirectory(cw_decoder)
@@ -71,7 +73,7 @@ pkg_check_modules(deps REQUIRED IMPORTED_TARGET
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
 PkgConfig::deps
-FT8 QTH CLUSTER
+FT8 QTH CLUSTER FIELD
 WSPR
 CW_DECODER
 JS8

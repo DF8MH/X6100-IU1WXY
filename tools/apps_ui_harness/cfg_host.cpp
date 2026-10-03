@@ -11,3 +11,5 @@ static int cwt_init = (cfg_cwt_level = &cfg_sm.p_cwt_level, cfg_cwt_group = &cfg
 // WSPR
 static int wspr_init = (cfg_wspr_tx_pct = &cfg_sm.p_wspr_tx_pct, cfg_wspr_tx_freq = &cfg_sm.p_wspr_tx_freq,
                         cfg_wspr_upload = &cfg_sm.p_wspr_upload, 0);
+// Field Ops
+static int field_init = (cfg_field_boot = &cfg_sm.p_field_boot, 0);

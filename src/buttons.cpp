@@ -331,6 +331,7 @@ static button_data_t btn_cluster = make_app_btn("Cluster", ACTION_APP_CLUSTER);
 static button_data_t btn_modes   = make_app_btn("Modes", ACTION_APP_MODES);
 static button_data_t btn_cwt     = make_app_btn("CW\nTrainer", ACTION_APP_CWTRAINER);
 static button_data_t btn_cw_kbd  = make_app_btn("CW\nKeyboard", ACTION_APP_CW_KBD);
+static button_data_t btn_field   = make_app_btn("Field\nOps", ACTION_APP_FIELD);
 
 /* RTTY */
 static button_data_t btn_rtty_p1 = {
@@ -446,8 +447,9 @@ static buttons_page_t page_dfl_1 = {
 };
 
 /* App pages */
-static button_data_t btn_app_p1 = make_page_btn("(APP 1:2)");
-static button_data_t btn_app_p2 = make_page_btn("(APP 2:2)");
+static button_data_t btn_app_p1 = make_page_btn("(APP 1:3)");
+static button_data_t btn_app_p2 = make_page_btn("(APP 2:3)");
+static button_data_t btn_app_p3 = make_page_btn("(APP 3:3)");
 
 /* The digital mode apps are in the Modes menu. */
 static buttons_page_t page_app_1 = {
@@ -455,6 +457,9 @@ static buttons_page_t page_app_1 = {
 };
 static buttons_page_t page_app_2 = {
     {&btn_app_p2, &btn_rec, &btn_settings, &btn_cwt, &btn_cw_kbd}
+};
+static buttons_page_t page_app_3 = {
+    {&btn_app_p3, &btn_field}
 };
 
 /* RTTY */
@@ -474,6 +479,7 @@ buttons_group_t buttons_group_gen = {
 buttons_group_t buttons_group_app = {
     &page_app_1,
     &page_app_2,
+    &page_app_3,
 };
 
 buttons_group_t buttons_group_key = {

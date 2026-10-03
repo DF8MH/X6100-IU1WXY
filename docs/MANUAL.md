@@ -5,7 +5,7 @@ overview is the [README](../README.md).
 
 ## Contents
 
-- [Usage](#usage): digital modes, JS8, WSPR, SSTV/WeFax/NavTex, RTTY and WeFax TX, CW decoder, CW Keyboard, DX Cluster, Bluetooth, themes
+- [Usage](#usage): digital modes, JS8, WSPR, SSTV/WeFax/NavTex, RTTY and WeFax TX, CW decoder, CW Keyboard, DX Cluster, Field Ops (SOTA/POTA), Bluetooth, themes
 - [Web configurator](#web-configurator) and [companion app](#companion-app-android)
 - [wfview server](#wfview-server), [Settings](#settings)
 - [Reference](#reference): Bluetooth CAT, CI-V commands, btcat-ctl, btaudio-ctl, files on /mnt
@@ -25,6 +25,7 @@ APP buttons:
 |---|---|
 | 1 | Modes, Cluster, SWR Scan, GPS |
 | 2 | Recorder, Settings, CW Trainer, CW Keyboard |
+| 3 | Field Ops |
 
 Your callsign and QTH locator are set in Settings → General → **STATION**.
 Callsign is needed by JS8, FT8, WSPR (TX and upload) and the DX Cluster.
@@ -290,6 +291,42 @@ GB7DJK, AE5E). The default is `dxc.ve7cc.net` port 23. Add and remove servers
 from the [web configurator](#web-configurator) or in the file
 ([format](#files-on-mnt)).
 
+### Field Ops (SOTA / POTA)
+
+A full-screen interface for portable activations: APP (page 3) → **Field Ops**,
+or a long-press action. **GEN** or **Radio** goes back to the normal screen;
+everything (the reference, the activation running, its log, the screen you
+were on) is kept on the SD card in `/mnt/field`, so coming back, or a restart in
+the middle of an activation, finds it as it was. **Start here** (home screen)
+opens Field Ops at power on.
+
+- **Home**: the SOTA, POTA, Bands and Log tiles (MFK to choose, press to open).
+- **SOTA / POTA**: the nearest summits or parks with their distance; the nearest
+  one is taken, the MFK and a press choose another, **Ref...** types one. The
+  position comes from the radio's GPS, else from the phone (the companion app
+  sends it), else from the QTH locator.
+  - **Start** begins the activation and its ADIF log
+    (`/mnt/field/logs/<date>-<time>_<ref>.adi`, with `MY_SOTA_REF` or
+    `MY_SIG POTA` / `MY_POTA_REF`); **End**, pressed twice, ends it.
+  - **Log QSO**: type `CALL`, or `CALL rst_rcvd rst_sent` (default 599 in CW,
+    59 otherwise); each QSO is written to the SD card at once.
+  - **Spot**: POTA self-spot on pota.app with the frequency and mode of the
+    radio (WiFi needed). SOTAwatch spots are not available yet (they need an
+    API client approved by SOTA): post an alert on SOTAwatch and call CQ in CW,
+    RBNHole spots you from the Reverse Beacon Network.
+  - **Update list** (page 2): downloads the parks and summits (about 35 MB,
+    once; then it works offline).
+- **Bands**: for each band the cluster spots of the last 30 minutes, the RBN
+  skimmer spots of the last 15 and the skimmers that heard you in the last 10,
+  with the best band marked. **Test beacon** sends `TEST DE <call>` in CW (the
+  radio must be in CW) so you can see who hears you; **Use band** (or a press)
+  tunes a typical activation frequency of the band.
+- **Log**: the QSOs of the activation; **Upload QRZ** sends them to the QRZ
+  Logbook (the API key goes in the web configurator's **Field** page; QSOs
+  already there are skipped). The logs can be downloaded from the same page.
+
+No POTA or SOTA spot goes to the DX cluster: neither program reads them there.
+
 ### Bluetooth headphones
 
 Radio RX audio to A2DP headphones. Pairing and connection are in Settings →
@@ -388,6 +425,7 @@ same network. Pages:
 | Remote | tune the radio from the browser: frequency, mode, band, filter, RF gain, PRE/ATT/AGC/NB/NR, live spectrum and waterfall (click or drag to tune), RX audio (HTTPS page, one listener). The page itself is receive only (no PTT); transmitting remotely is done by the [companion app](#companion-app-android) |
 | Backup | download settings, memories, cluster, wfview, QSO log, voice messages (optionally CW trainer and WiFi) as one file, and restore the parts you choose |
 | Gallery | a folder per kind (screen recordings, voice recordings, screenshots, SSTV and WeFax received and to send) with count and size; multi-select (tap, checkbox, shift for a range, all/none), delete the selection with one confirmation or download it as a ZIP; upload several pictures into the SSTV and WeFax TX folders (other formats are converted to PNG in the browser); convert AVI to MP4 in the browser or on the radio (ffmpeg) |
+| Field | QRZ Logbook API key, update the parks and summits list, download the activation logs |
 | Files | browse `/mnt` |
 | Time | local and server time, NTP sync, timezone |
 

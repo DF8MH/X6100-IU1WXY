@@ -10,6 +10,7 @@
  *                                     until the client closes
  *    {"cmd":"freq","val":14074000} {"cmd":"tune","val":-100} {"cmd":"mode","val":"USB"} {"cmd":"band","val":40}
  *    {"cmd":"pre|att|nb|nr","val":0|1} {"cmd":"agc"} (next) {"cmd":"rfgain","val":0..100} {"cmd":"filter","val":Hz}
+ *    {"cmd":"location","text":"45.0,7.7"} (the phone's position, for Field Ops)
  *    {"cmd":"app","text":"FT8"} and the app commands (app_cmds[]), with "val" and/or "text"
  *                                  -> {"t":"ok"} or {"t":"err","err":"..."}
  *  Commands are applied on the LVGL thread through the scheduler. There is no PTT: only the
@@ -40,6 +41,7 @@ extern "C" {
     #include "dialog_sstv.h"
     #include "dialog_wefax.h"
     #include "dialog_wspr.h"
+    #include "gps.h"
     #include "main_screen.h"
     #include "meter.h"
     #include "radio.h"
@@ -93,13 +95,14 @@ typedef struct {
 
 typedef enum {
     CMD_FREQ, CMD_TUNE, CMD_MODE, CMD_BAND, CMD_PRE, CMD_ATT, CMD_AGC, CMD_NB, CMD_NR, CMD_RFGAIN, CMD_FILTER,
-    CMD_APP, CMD_APP_CMD
+    CMD_APP, CMD_APP_CMD, CMD_LOCATION
 } cmd_id_t;
 
 typedef struct {
     cmd_id_t id;
     int32_t  val;
     size_t   app_cmd;   /* CMD_APP_CMD: index in app_cmds[] */
+    double   lat, lon;  /* CMD_LOCATION */
     char     text[201];
 } cmd_t;
 
@@ -364,6 +367,9 @@ static void apply_cmd(void *arg) {
         case CMD_FILTER:
             cfg_sm.cp_cur_filter_bw.set(c->val);
             break;
+        case CMD_LOCATION:
+            gps_phone_set(c->lat, c->lon);
+            break;
     }
 }
 
@@ -597,6 +603,13 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
         if (!cJSON_IsString(text) || strlen(text->valuestring) >= sizeof(cmd->text))
             return "Invalid text";
         strcpy(cmd->text, text->valuestring);
+    }
+    if (!strcmp(name, "location")) {
+        if (sscanf(cmd->text, "%lf,%lf", &cmd->lat, &cmd->lon) != 2 || !(fabs(cmd->lat) <= 90) ||
+            !(fabs(cmd->lon) <= 180))   /* NaN fails too */
+            return "Invalid position";
+        cmd->id = CMD_LOCATION;
+        return NULL;
     }
     if (!strcmp(name, "app")) {
         const char *s = text ? cmd->text : cJSON_IsString(val) ? val->valuestring : "";

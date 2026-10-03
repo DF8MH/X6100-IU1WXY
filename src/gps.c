@@ -31,6 +31,8 @@ static pthread_cond_t  cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t fix_lock = PTHREAD_MUTEX_INITIALIZER;
 static double          fix_lat, fix_lon;
 static time_t          fix_when; /* 0: none yet */
+static double          phone_lat, phone_lon;
+static time_t          phone_when;
 
 static bool connect() {
     if (gps_open("localhost", "2947", &gpsdata) == -1) {
@@ -118,6 +120,26 @@ bool gps_last_fix(double *lat, double *lon, int *age_s) {
         *lat   = fix_lat;
         *lon   = fix_lon;
         *age_s = (int)(time(NULL) - fix_when);
+    }
+    pthread_mutex_unlock(&fix_lock);
+    return ok;
+}
+
+void gps_phone_set(double lat, double lon) {
+    pthread_mutex_lock(&fix_lock);
+    phone_lat  = lat;
+    phone_lon  = lon;
+    phone_when = time(NULL);
+    pthread_mutex_unlock(&fix_lock);
+}
+
+bool gps_phone_fix(double *lat, double *lon, int *age_s) {
+    pthread_mutex_lock(&fix_lock);
+    bool ok = phone_when != 0;
+    if (ok) {
+        *lat   = phone_lat;
+        *lon   = phone_lon;
+        *age_s = (int)(time(NULL) - phone_when);
     }
     pthread_mutex_unlock(&fix_lock);
     return ok;

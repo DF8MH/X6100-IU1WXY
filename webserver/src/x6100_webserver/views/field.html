@@ -1,0 +1,87 @@
+% rebase('base.html', title='Field')
+<h2>Field Ops</h2>
+<p class="sub">POTA and SOTA portable operation: park and summit lists for the radio, QRZ Logbook upload, activation logs.</p>
+
+<form class="card" id="qrz">
+  <h3>QRZ Logbook</h3>
+  <p class="sub">API key from your QRZ Logbook settings. Key: <b id="key-state"></b></p>
+  <label for="key">API key</label>
+  <input id="key" type="password" autocomplete="off" maxlength="64" placeholder="New key (empty = remove)">
+  <div class="actions">
+    <button type="submit" class="primary">Save</button>
+    <span class="status" id="status"></span>
+  </div>
+</form>
+
+<div class="card">
+  <h3>Parks and summits</h3>
+  <p class="sub" id="refs"></p>
+  <div class="actions">
+    <button type="button" class="primary" id="update">Update parks and summits</button>
+    <span class="status" id="ustatus"></span>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Activation logs</h3>
+  <div class="table-wrap">
+  <table id="logs">
+    <thead>
+      <tr><th>File</th><th>Size</th><th>Date</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  </div>
+</div>
+
+<script>
+var showStatus = function(id, text, error=false) {
+  const el = $(id);
+  el.toggleClass("error", error);
+  el.html('<span class="dot"></span>').append(document.createTextNode(text));
+}
+
+var timer = null;
+
+var render = function(data) {
+  $("#key-state").text(data.qrz_key ? "set (hidden)" : "not set");
+  $("#refs").text(data.refs ? `${data.refs.parks} parks, ${data.refs.summits} summits · updated ${data.refs.date} · ${data.refs.size}` : "No list yet: press Update (needs internet on the radio).");
+  $("#update").prop("disabled", data.update.running);
+  if (data.update.running) {
+    showStatus("#ustatus", "Downloading… (about a minute)");
+  } else if (data.update.result) {
+    showStatus("#ustatus", data.update.result, data.update.result.startsWith("error"));
+  }
+  clearTimeout(timer);
+  if (data.update.running) timer = setTimeout(load, 3000);
+  const body = $("#logs tbody").empty();
+  data.logs.forEach(function(log) {
+    const a = $("<a>").attr("href", "/field/logs/" + encodeURIComponent(log.name)).text(log.name);
+    body.append($("<tr>").append($("<td>").append(a), $("<td>").text(log.size), $("<td>").text(log.date)));
+  });
+  if (!data.logs.length) body.append($("<tr>").append($("<td colspan=3>").text("No logs yet")));
+}
+
+var load = function() { $.get('/api/field', {}, render); }
+load();
+
+var post = function(url, data, ok, statusId) {
+  $.ajax({
+    url: url,
+    type: "POST",
+    data: JSON.stringify(data),
+    contentType: "application/json; charset=utf-8",
+    dataType: "json",
+    success: function(r) { render(r); if (ok) showStatus(statusId, ok); },
+    error: function(xhr) { showStatus(statusId, xhr.responseJSON ? xhr.responseJSON.msg : "Failed", true); }
+  });
+}
+
+$("#qrz").on("submit", function(e) {
+  e.preventDefault();
+  post("/api/field/qrz", {key: $("#key").val().trim()}, "Saved", "#status");
+  $("#key").val("");
+});
+
+$("#update").on("click", function() { post("/api/field/update", {}, null, "#ustatus"); });
+</script>

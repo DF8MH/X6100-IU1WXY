@@ -25,6 +25,9 @@
 #include "dialog_cw_kbd.h"
 #include "dialog_cw_trainer.h"
 #include "dialog_wspr.h"
+#include "dialog_field.h"
+#include "field/flog.h"
+#include "field/rbn.h"
 #include "wspr/wspr.h"
 #include "cw_encoder.h"
 #include "cluster/client.h"
@@ -1097,6 +1100,82 @@ static void crash(int sig) {
     _exit(128 + sig);
 }
 
+
+/* Field Ops: home, SOTA with the nearest summits, an activation with QSOs, the log, the bands */
+static void field_key(uint32_t key) {
+    lv_event_send(dialog_field->obj, LV_EVENT_KEY, &key);
+    pump(100);
+}
+
+static void field_press(int n) {
+    buttons_page_t *pg = buttons_get_cur_page();
+    pg->items[n]->press(pg->items[n]);
+    pump(100);
+}
+
+static void field_demo(void) {
+    system("rm -rf field_demo; mkdir -p field_demo");
+    FILE *f = fopen("field_demo/refs.tsv", "w");
+    fputs("S\tI/LO-318\tMonte Levanna\t45.40000\t7.20000\t3619\t10\n"
+          "S\tI/LO-120\tMonte Penice\t44.79000\t9.31700\t1460\t4\n"
+          "S\tI/LO-205\tMonte Lesima\t44.68300\t9.25800\t1724\t6\n"
+          "S\tHB/TI-157\tMonte Generoso\t45.92800\t9.01800\t1701\t6\n"
+          "S\tI/LO-001\tPizzo Coca\t46.07000\t10.00000\t3050\t10\n"
+          "P\tIT-0216\tParco del Ticino\t45.40000\t8.90000\t\t\n"
+          "P\tIT-0420\tParco Nord Milano\t45.53000\t9.19000\t\t\n"
+          "P\tIT-0011\tParco dello Stelvio\t46.48000\t10.50000\t\t\n", f);
+    fclose(f);
+    dialog_construct(dialog_field, lv_scr_act());
+    pump(300);
+    shot("field_1_home.ppm");
+    field_key(LV_KEY_ENTER);            /* SOTA */
+    pump(1500);                         /* the lookup thread */
+    shot("field_2_sota.ppm");
+    field_key(LV_KEY_DOWN);
+    field_key(LV_KEY_ENTER);            /* the second nearest */
+    field_press(1);                     /* Start */
+    char log[200] = "", line[300];
+    f = fopen("field_demo/state", "r");
+    while (f && fgets(line, sizeof line, f))
+        if (!strncmp(line, "log=", 4))
+            sscanf(line + 4, "%199s", log);
+    if (f)
+        fclose(f);
+    field_station_t st = {"IU1WXY/P", "JN45", 'S', "I/LO-120"};
+    const char *calls[] = {"DL8ABC", "F5XYZ", "IK1ABC", "SP9XYZ", "G4ABC"};
+    for (int k = 0; k < 5; k++) {
+        field_qso_t q = {time(NULL) - 600 + k * 120, "", 14285000, "SSB", "59", "57"};
+        strcpy(q.call, calls[k]);
+        field_log_add(log, &q, &st);
+    }
+    field_key(LV_KEY_ESC);
+    field_key(LV_KEY_ENTER);            /* SOTA again: active, QSOs counted? (read at the log screen) */
+    shot("field_3_active.ppm");
+    field_key(LV_KEY_ESC);
+    field_key(LV_KEY_RIGHT);
+    field_key(LV_KEY_RIGHT);
+    field_key(LV_KEY_RIGHT);
+    field_key(LV_KEY_ENTER);            /* LOG */
+    shot("field_4_log.ppm");
+    field_key(LV_KEY_ESC);
+    field_key(LV_KEY_LEFT);
+    field_rbn_start("IU1WXY");
+    time_t now = time(NULL);
+    const char *rbn[] = {
+        "DX de DL8ABC-#:  14062.0  IU1WXY  CW  7 dB  22 WPM  CQ  1234Z",
+        "DX de F5XYZ-#:   14062.1  IU1WXY  CW  4 dB  22 WPM  CQ  1234Z",
+        "DX de G4ABC-#:   14062.0  IU1WXY  CW  -2 dB  22 WPM  CQ  1234Z",
+        "DX de EA8DEF-#:  14025.0  K1ABC   CW  12 dB  25 WPM  CQ  1234Z",
+        "DX de W1ABC-#:    7025.0  K1XYZ   CW  12 dB  25 WPM  CQ  1234Z",
+    };
+    for (int r = 0; r < 40; r++)
+        field_rbn_feed_line(rbn[r % 5], now);
+    field_key(LV_KEY_ENTER);            /* BANDS */
+    shot("field_5_bands.ppm");
+    dialog_destruct();
+    pump(100);
+}
+
 int main(int argc, char **argv) {
     signal(SIGSEGV, crash);
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -1207,6 +1286,7 @@ int main(int argc, char **argv) {
     if (!only || !strcmp(only, "wireless")) wireless_demo();
     if (only && !strcmp(only, "settings_nav")) settings_nav();
     if (!only || !strcmp(only, "cwkbd")) cwkbd_demo();
+    if (only && !strcmp(only, "field")) field_demo();
     if (only && !strcmp(only, "cluster_filters")) cluster_filters_demo();
     if (!only || !strcmp(only, "bookmarks")) {
         bookmarks("navtex", dialog_navtex, 517000, 0, 1);
