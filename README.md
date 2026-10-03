@@ -47,34 +47,92 @@ over USB or Bluetooth.
   </tr>
 </table>
 
-## On the radio
+## Features on the radio
 
-| | |
-|---|---|
-| **Digital modes** | FT8/FT4, JS8 (all speeds, inbox, APRS), WSPR (beacon, WSPRnet upload), SSTV RX/TX, WeFax, NavTex, RTTY, CW decoder, CW Keyboard (USB or Bluetooth keyboard) |
-| **DX Cluster** | spots on the waterfall, a column beside it and a full app; filters, alerts, spot snap |
-| **Themes** | IU1WXY, Classic and RS built in, or your own from the SD card ([docs/THEMES.md](docs/THEMES.md)); the button on the encoder lights red |
-| **Bluetooth** | CAT for up to 3 clients, headphones, keyboards |
-| **More** | IARU band plan strip, S-meter, CW trainer, SWR scan, GPS, recorders, long-press actions, editable bands and memories |
+### Digital modes, all inside the radio
+
+No PC, no sound card cable: APP → **Modes** opens them, the radio decodes and
+transmits by itself.
+
+- **FT8 / FT4**: decode, CQ, reply, auto sequence, QSO log in ADIF.
+- **JS8**: JS8Call compatible, all four speeds decoded at once, inbox,
+  relays, heartbeats, ADIF log with POTA/SOTA, **APRS** (position, spots,
+  SMS, email).
+- **WSPR**: decode every cycle, random beacon (TX %), upload to WSPRnet.
+- **SSTV**: receive with automatic VIS, **transmit** CQ, replies and pictures
+  with text templates (Martin, Scottie, Robot).
+- **WeFax** and **NavTex**: station lists, faxes saved as pictures, big or
+  full-screen view. WeFax and RTTY also transmit from the phone.
+- **CW decoder**: a new receiver that copies down to about 0 dB SNR, shows the
+  WPM and does not print noise.
+- **CW Keyboard**: type on a USB or Bluetooth keyboard and the radio keys it,
+  with a send queue.
+
+### DX Cluster
+
+- Spots drawn **on the waterfall**, in a **column** beside it, and in a full
+  **Cluster app** that follows the VFO; tap or press to tune.
+- Filters by mode, band and POTA/SOTA; **alerts** on callsigns and prefixes
+  with a popup.
+- **Spot snap**: turning the knob slowly stops the VFO on a spot.
+- Ten public servers built in, add your own from the web page.
+
+### Radio and screen
+
+- **IARU band plan** strip over the waterfall, **S-meter**.
+- **Long press** on every front key and on the mic F1/F2 keys: screenshot,
+  recorder, mute, open any app or tool.
+- Editable bands, memories and digital frequencies; transverters.
+- RX recorder, screen recording, screenshots, voice messages.
+- CW trainer, SWR scan, GPS, QTH grid.
+- Settings rewritten as cards, all reachable with the MFK.
+
+### Wireless
+
+- **Bluetooth CAT** for up to 3 clients at once, together with USB CAT.
+- **Bluetooth headphones** (RX audio, volume, speaker mute) and **keyboards**;
+  pairings survive a new image.
+- **wfview**: the radio appears as an IC-705 on the network.
+- **Web server** on the radio, HTTP and HTTPS (see [Remote control](#remote-control)).
 
 <table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/theme_rs.png" alt="RS theme"><br><sub><b>RS</b> theme</sub></td>
-    <td align="center"><img src="docs/screenshots/theme_classic.png" alt="Classic theme"><br><sub><b>Classic</b> theme</sub></td>
-  </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/theme_rs_sstv.png" alt="SSTV TX"><br><sub><b>SSTV TX</b>: picture and text template</sub></td>
     <td align="center"><img src="docs/screenshots/cluster_app.png" alt="DX Cluster"><br><sub><b>DX Cluster</b> app</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/js8_app.png" alt="JS8"><br><sub><b>JS8</b></sub></td>
+    <td align="center"><img src="docs/screenshots/wspr_app.png" alt="WSPR"><br><sub><b>WSPR</b></sub></td>
+  </tr>
+  <tr>
     <td align="center"><img src="docs/screenshots/cw_keyboard.png" alt="CW Keyboard"><br><sub><b>CW Keyboard</b></sub></td>
+    <td align="center"><img src="docs/screenshots/digital_modes_menu.png" alt="Modes menu"><br><sub><b>Modes</b> menu</sub></td>
+  </tr>
+</table>
+
+## Themes
+
+The GUI has a new **theme system**: colours, buttons, corners, gradients,
+fonts and the waterfall palette all come from the theme, and a theme can draw
+every surface with PNG images. Three are built in, choose them in Settings →
+Display → **Theme**; your own go on the SD card
+([how to make one](docs/THEMES.md)). The control the encoder is adjusting
+lights its red LED.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/theme_iu1wxy.png" alt="IU1WXY theme"><br><sub><b>IU1WXY</b> (default): dark blue-grey</sub></td>
+    <td align="center"><img src="docs/screenshots/theme_classic.png" alt="Classic theme"><br><sub><b>Classic</b>: black, grey keys</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/theme_rs.png" alt="RS theme"><br><sub><b>RS</b>: glossy buttons with LEDs, black LCD</sub></td>
+    <td align="center"><img src="docs/screenshots/theme_rs_settings.png" alt="RS settings"><br><sub><b>RS</b>: settings</sub></td>
   </tr>
 </table>
 
 ## Install
 
-1. Download `sdcard.<version>.img.zip` from **Releases**.
+1. Download `sdcard.v0.9.img.zip` from the **[latest release](https://github.com/IU1WXY/X6100-custom-firmware/releases/latest)** and unzip it.
 2. Write it to a microSD card with [balenaEtcher](https://etcher.balena.io/) or Rufus.
 3. Put the card in the radio and switch on. Settings and logs live on the card's
    DATA partition (`/mnt`).
