@@ -6,7 +6,7 @@
  * APT start and stop detection and that the picture comes back (polarity,
  * timing) by correlation.
  *
- *   cd ~/X6100-custom-firmware
+ *   cd ~/X6100-IU1WXY
  *   gcc -O2 -o /tmp/wefax_loopback tools/wefax_loopback.c src/wefax/encoder.c \
  *       src/wefax/decoder.c src/sstv/encoder.c -Isrc -lpng -lm && /tmp/wefax_loopback
  *
