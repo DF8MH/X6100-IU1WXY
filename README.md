@@ -132,7 +132,7 @@ lights its red LED.
 
 ## Install
 
-1. Download `sdcard.v0.9.img.zip` from the **[latest release](https://github.com/IU1WXY/X6100-custom-firmware/releases/latest)** and unzip it.
+1. Download `sdcard.v0.9.img.zip` from the **[latest release](https://github.com/IU1WXY/X6100-IU1WXY/releases/latest)** and unzip it.
 2. Write it to a microSD card with [balenaEtcher](https://etcher.balena.io/) or Rufus.
 3. Put the card in the radio and switch on. Settings and logs live on the card's
    DATA partition (`/mnt`).
