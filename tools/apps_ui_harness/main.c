@@ -26,6 +26,7 @@
 #include "dialog_cw_trainer.h"
 #include "dialog_wspr.h"
 #include "dialog_field.h"
+#include "dialog_swrscan.h"
 #include "field/flog.h"
 #include "field/rbn.h"
 #include "wspr/wspr.h"
@@ -1287,6 +1288,12 @@ int main(int argc, char **argv) {
     if (only && !strcmp(only, "settings_nav")) settings_nav();
     if (!only || !strcmp(only, "cwkbd")) cwkbd_demo();
     if (only && !strcmp(only, "field")) field_demo();
+    if (only && !strcmp(only, "swrscan")) {
+        dialog_construct(dialog_swrscan, lv_scr_act());
+        pump(300);
+        shot("swrscan.ppm");
+        dialog_destruct();
+    }
     if (only && !strcmp(only, "cluster_filters")) cluster_filters_demo();
     if (!only || !strcmp(only, "bookmarks")) {
         bookmarks("navtex", dialog_navtex, 517000, 0, 1);

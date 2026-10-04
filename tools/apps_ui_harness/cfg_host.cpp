@@ -13,3 +13,5 @@ static int wspr_init = (cfg_wspr_tx_pct = &cfg_sm.p_wspr_tx_pct, cfg_wspr_tx_fre
                         cfg_wspr_upload = &cfg_sm.p_wspr_upload, 0);
 // Field Ops
 static int field_init = (cfg_field_boot = &cfg_sm.p_field_boot, 0);
+// SWR scan
+static int swr_init = (cfg_swrscan_linear = &cfg_sm.p_swrscan_linear, cfg_swrscan_span = &cfg_sm.p_swrscan_span, 0);

@@ -161,10 +161,11 @@ static void draw_cb(lv_event_t * e) {
     lv_draw_line_dsc_init(&line_dsc);
 
     lv_coord_t x1 = obj->coords.x1;
-    lv_coord_t y1 = obj->coords.y1 - 5;
+    /* Room for half a label above the top line and below the bottom one */
+    lv_coord_t y1 = obj->coords.y1 + 14;
 
     lv_coord_t w = lv_obj_get_width(obj);
-    lv_coord_t h = lv_obj_get_height(obj) - 5;
+    lv_coord_t h = lv_obj_get_height(obj) - 28;
 
     lv_point_t a, b;
 
@@ -219,8 +220,9 @@ static void draw_cb(lv_event_t * e) {
         snprintf(str, sizeof(str), "%i.%03i.%03i", mhz, khz, hz);
         lv_txt_get_size(&label_size, str, dsc_label.font, 0, 0, LV_COORD_MAX, 0);
 
+        /* At the bottom, where SWR 1.0 leaves room (the top lines are close together) */
         area.x1 = a.x - label_size.x / 2;
-        area.y1 = y1 + label_size.y / 2;
+        area.y1 = y1 + h - label_size.y;
         area.x2 = area.x1 + label_size.x;
         area.y2 = area.y1 + label_size.y;
 
@@ -264,7 +266,7 @@ static void construct_cb(lv_obj_t *parent) {
     chart  = lv_obj_create(dialog.obj);
 
     w = 780;
-    h = 330;
+    h = DIALOG_H - 8;   /* the labels on top must stay inside the dialog */
 
     lv_obj_add_event_cb(chart, draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
     lv_obj_set_size(chart, w, h);
