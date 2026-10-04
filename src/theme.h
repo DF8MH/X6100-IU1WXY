@@ -108,6 +108,7 @@ extern "C" {
     X(track,             0x304050, 0x304050, 0xafbfcf, 0x303030) /* progress bar track */ \
     X(frame,             0x182028, 0x182028, 0xd7dfe7, 0x0a0a0a) /* WeFax / channels frame */ \
     X(off,               0x555555, 0x555555, 0x8a8a8a, 0x4a4a4a) /* unlit bars, spectrum peak */ \
+    X(switch_off,        0xe0e0e0, 0xe0e0e0, 0x9a9a9a, 0xe0e0e0) /* Settings switch, off */ \
     X(icon_off,          0x151515, 0x151515, 0x8c8c8c, 0x1a1a1a) /* top bar icons that are off */ \
     X(lock,              0xe0a030, 0xe0a030, 0xaf7103, 0xffa000) /* secured WiFi padlock */ \
     X(control_border,    0x8a8a8a, 0x8a8a8a, 0x585858, 0x8a8a8a) /* Settings sliders, toggles */ \

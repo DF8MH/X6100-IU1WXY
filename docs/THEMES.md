@@ -100,7 +100,7 @@ The authoritative list, with the value of each built-in theme, is
 - Bottom buttons: `btn`, `btn_grad`, `btn_border`, `btn_text`; `btn_active`, `btn_active_grad`, `btn_active_border`,
   `btn_active_text`; `btn_page`, `btn_page_text`; `btn_off_text`, `btn_off_border` (disabled); `btn_mark`,
   `btn_mark_assigned`, `btn_mark_active`
-- Settings: `card`, `focus`, `focus_text`, `edited`, `control_border`, `toggle_on`, `toggle_focus`, `lock`, `off`
+- Settings: `card`, `focus`, `focus_text`, `edited`, `control_border`, `toggle_on`, `toggle_focus`, `switch_off`, `lock`, `off`
 - App content: `panel`, `panel_border`, `list`, `row`, `popup`, `popup_border`, `side`, `chip`, `sel_bg`, `sel_text`,
   `sel_border`, `focus_bg`, `near_bg`, `vfo`, `vfo_bg`, `veil`, `alert_box`, `track`, `frame`
 - Text: `text`, `text_value`, `text_dim`, `text_soft`, `text_mute`, `text_faint`, `text_head`, `line`, `action`,

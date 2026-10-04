@@ -514,11 +514,11 @@ Audio, Wireless (page 1), Keys, Cluster and Info (page 2).
 | Tab | Cards |
 |---|---|
 | General | STATION (callsign, QTH locator), DATE / TIME, CONTROLS (frequency acceleration, charger), TX CALIBRATION (IQ offsets, band output gain), TRANSVERTERS (from, to, shift) |
-| Display | BACKLIGHT, WATERFALL (mode, auto level, manual min/max, line and zoom, smooth scroll), MAIN SCREEN (band plan, cluster spots, spot snap hold and speed, cluster column), INTERFACE (popups, knob info, font, theme) |
+| Display | BACKLIGHT, WATERFALL (mode, auto level, manual min/max, line and zoom, smooth scroll), MAIN SCREEN (band plan, cluster spots, cluster column), INTERFACE (popups, knob info, font, theme) |
 | Audio | RX AUDIO, TX AUDIO (codec gain, compressor, filter, CESSB, FM emphasis), MICROPHONE, VOX, AGC, BT HEADPHONES |
 | Wireless | WIFI (power, status, IP, networks), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones, also keyboards), WFVIEW SERVER (on/off, user, password, port and client), WEB REMOTE (Remote TX: lets the companion app transmit, default off) |
 | Keys | FRONT KEYS, LONG PRESS (GEN, APP, KEY, MSG, DFN, DFL), HAND MIC KEYS (F1, F2, F1 long, F2 long) |
-| Cluster | CLUSTER FILTERS (modes, bands, POTA/SOTA activity) |
+| Cluster | CLUSTER FILTERS (modes, bands, POTA/SOTA activity), CLUSTER VIEW (newest first, all bands, spot snap hold and speed) |
 | Info | app and base firmware versions |
 
 The MFK walks the controls and stops at the first and last one; there the

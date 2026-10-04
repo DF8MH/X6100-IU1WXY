@@ -278,6 +278,7 @@ static void theme_update_cb(lv_event_t * e) {
 static lv_obj_t * create_switch(lv_obj_t *parent){
     lv_obj_t *obj = lv_switch_create(parent);
     dialog_item(&dialog, obj);
+    lv_obj_set_style_bg_color(obj, TC(switch_off), LV_PART_MAIN);
     lv_obj_center(obj);
     return obj;
 }
@@ -3576,6 +3577,14 @@ static void make_cluster_page() {
     row++;
 
     card_end(row);
+
+    /* The same settings as the Cluster app's Order and Band / All and the MFK items */
+    row = card_begin(LV_SYMBOL_LIST, "CLUSTER VIEW");
+    row = make_switch_row(row, "Newest first", cfg_sm.p_cluster_order);
+    row = make_switch_row(row, "All bands", cfg_sm.p_cluster_all_bands);
+    row = make_param_slider(row, "Spot snap hold", &snap_hold_slider);
+    row = make_param_slider(row, "Spot snap speed", &snap_slow_slider);
+    card_end(row);
 }
 
 static void make_display_page() {
@@ -3601,12 +3610,7 @@ static void make_display_page() {
     row = card_begin(LV_SYMBOL_LIST, "MAIN SCREEN");
     row = make_band_plan(row);
     row = make_cluster_spots_wf(row);
-    row = make_param_slider(row, "Spot snap hold", &snap_hold_slider);
-    row = make_param_slider(row, "Spot snap speed", &snap_slow_slider);
     row = make_cluster_column(row);
-    /* The same settings as the Cluster app's Order and Band / All and the MFK items */
-    row = make_switch_row(row, "Cluster: newest first", cfg_sm.p_cluster_order);
-    row = make_switch_row(row, "Cluster: all bands", cfg_sm.p_cluster_all_bands);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_SETTINGS, "INTERFACE");
