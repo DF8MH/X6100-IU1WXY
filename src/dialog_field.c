@@ -431,7 +431,7 @@ static lv_obj_t *panel(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_coord_t 
     lv_obj_remove_style_all(p);
     lv_obj_set_pos(p, x, y);
     lv_obj_set_size(p, w, h);
-    lv_obj_set_style_bg_color(p, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(p, TC(panel), 0);
     lv_obj_set_style_bg_opa(p, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(p, TC(panel_border), 0);
     lv_obj_set_style_border_width(p, 1, 0);
@@ -687,8 +687,8 @@ static void home_select(int k) {
 
         lv_obj_set_style_border_width(t, on ? 4 : 2, 0);
         lv_obj_set_style_border_opa(t, on ? LV_OPA_COVER : LV_OPA_60, 0);
-        lv_obj_set_style_bg_color(t, lv_color_mix(accent(i), lv_color_black(), on ? 80 : 30), 0);
-        lv_obj_set_style_bg_grad_color(t, lv_color_black(), 0);
+        lv_obj_set_style_bg_color(t, lv_color_mix(accent(i), TC(panel), on ? 80 : 30), 0);
+        lv_obj_set_style_bg_grad_color(t, TC(panel), 0);
     }
 }
 
@@ -822,7 +822,7 @@ static void act_update(void) {
     int db = meter_get_raw_db();
     int n  = db <= S1 ? 0 : db <= S9 ? 1 + (db - S1) / 6 : 9 + (db - S9) / 10;
     for (int i = 0; i < 13; i++)
-        lv_obj_set_style_bg_color(act_smeter[i], i >= n ? lv_color_hex(0x303840) : i < 9 ? TC(ok) : TC(err), 0);
+        lv_obj_set_style_bg_color(act_smeter[i], i >= n ? TC(chip) : i < 9 ? TC(ok) : TC(err), 0);
     if (db <= S9)
         snprintf(buf, sizeof(buf), "S%d", db <= S1 ? 0 : 1 + (db - S1) / 6);
     else
@@ -974,9 +974,9 @@ static void bands_fill(void) {
         lv_obj_set_size(bar, 20 + level * 18, 14);
         lv_obj_align(bar, LV_ALIGN_LEFT_MID, 0, 0);
         lv_obj_set_style_radius(bar, 3, 0);
-        lv_obj_set_style_bg_color(bar, lv_color_hex(level ? color : 0x303840), 0);
+        lv_obj_set_style_bg_color(bar, (level ? lv_color_hex(color) : TC(chip)), 0);
         lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_grad_color(bar, lv_color_mix(lv_color_hex(level ? color : 0x303840), lv_color_black(), 140), 0);
+        lv_obj_set_style_bg_grad_color(bar, lv_color_mix((level ? lv_color_hex(color) : TC(chip)), lv_color_black(), 140), 0);
         lv_obj_set_style_bg_grad_dir(bar, LV_GRAD_DIR_HOR, 0);
     }
     list_select(sel);
@@ -1466,7 +1466,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_size(dialog.obj, W, h);
     lv_obj_set_style_radius(dialog.obj, 0, 0);
     lv_obj_set_style_border_width(dialog.obj, 0, 0);
-    lv_obj_set_style_bg_color(dialog.obj, lv_color_mix(TC(bg), lv_color_black(), 120), 0);
+    lv_obj_set_style_bg_color(dialog.obj, TC(bg), 0);
     lv_obj_set_style_bg_opa(dialog.obj, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(dialog.obj, 0, 0);
     lv_obj_move_foreground(dialog.obj);
@@ -1474,15 +1474,15 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_t *head = lv_obj_create(dialog.obj);
     lv_obj_remove_style_all(head);
     lv_obj_set_size(head, W, HEAD_H);
-    lv_obj_set_style_bg_color(head, lv_color_hex(0x181c22), 0);
-    lv_obj_set_style_bg_grad_color(head, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(head, TC(bar), 0);
+    lv_obj_set_style_bg_grad_color(head, TC(bar_grad), 0);
     lv_obj_set_style_bg_grad_dir(head, LV_GRAD_DIR_VER, 0);
     lv_obj_set_style_bg_opa(head, LV_OPA_COVER, 0);
     lv_obj_set_style_border_side(head, LV_BORDER_SIDE_BOTTOM, 0);
     lv_obj_set_style_border_width(head, 1, 0);
     lv_obj_set_style_border_color(head, TC(panel_border), 0);
     lv_obj_clear_flag(head, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *x = label(head, &sony_26, lv_color_white(), 14, 9, 0);
+    lv_obj_t *x = label(head, &sony_26, TC(text), 14, 9, 0);
     lv_label_set_text(x, "X6100");
     head_icon  = NULL;
     title      = label(head, &sony_24, TC(text), 104, 10, 440);

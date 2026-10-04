@@ -51,9 +51,10 @@ static const theme_shape_t builtin_shapes[B_COUNT] = {
                    .images = 1, .font = -1, .waterfall_table = 0},
     [B_LEGACY]  = {.radius = 7, .radius_btn = 10, .radius_popup = 10, .border = 1, .box_gradient = true,
                    .images = 2, .font = -1, .waterfall_table = 1},
-    [B_OUTDOOR] = {.radius = 7, .radius_btn = 10, .radius_popup = 10, .border = 3, .focus_solid = true,
-                   .font = -1, .waterfall = {0x000000, 0x0000ff, 0xffffff, 0xffe000}, .waterfall_n = 4,
-                   .waterfall_steps = 16},
+    /* Light and high contrast for the sun: weak signals white, strong ones dark */
+    [B_OUTDOOR] = {.radius = 6, .radius_btn = 8, .radius_popup = 8, .border = 2, .focus_solid = true,
+                   .font = -1, .waterfall = {0xffffff, 0xa8d0ff, 0x0050ff, 0x7000c0, 0xd00000, 0x000000},
+                   .waterfall_n = 6},
     [B_CLASSIC] = {.radius = 3, .radius_btn = 4, .radius_popup = 4, .border = 1, .btn_gradient = true,
                    .focus_solid = true, .font = FONT_ARIAL,
                    .waterfall = {0x000000, 0x000060, 0x0040e0, 0x00c8ff, 0xffff00, 0xff6000, 0xffffff},
@@ -388,14 +389,14 @@ const uint32_t *theme_waterfall(void) {
     return theme_shape.waterfall_table == 1 ? wf_palette_legacy : wf_palette_gauss;
 }
 
-/* Legacy and Outdoor are kept but not offered: IU1WXY, Classic, the files */
+/* Legacy is kept but not offered: IU1WXY, Outdoor, Classic, the files */
 int theme_list(char names[][32], int max) {
     int            n = 0;
     DIR           *d;
     struct dirent *e;
 
     for (int i = 0; i < B_COUNT && n < max; i++) {
-        if (i != B_LEGACY && i != B_OUTDOOR) snprintf(names[n++], 32, "%s", builtin_names[i]);
+        if (i != B_LEGACY) snprintf(names[n++], 32, "%s", builtin_names[i]);
     }
     d = opendir(THEMES_DIR);
     while (d && (e = readdir(d)) && n < max) {

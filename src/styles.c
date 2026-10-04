@@ -423,6 +423,20 @@ void styles_apply(void) {
     lv_style_set_text_color(&panel_info_style, TC(text_mute));
     lv_style_set_blend_mode(&panel_info_style, theme_shape.images ? LV_BLEND_MODE_ADDITIVE : LV_BLEND_MODE_NORMAL);
 
+    lv_style_set_bg_color(&spectrum_style, TC(panel));
+    lv_style_set_bg_color(&waterfall_style, TC(panel));
+
+    /* Text on the theme's surfaces; the background images are dark, their text stays white */
+    lv_color_t text = TC(text);
+    lv_style_set_text_color(&freq_style, text);
+    lv_style_set_text_color(&dialog_style, text);
+    lv_style_set_text_color(&dialog_item_style, text);
+    lv_style_set_text_color(&clock_style, text);
+    lv_style_set_text_color(&knobs_style, text);
+    for (int i = 0; i < 3; i++) {
+        lv_style_set_text_color(boxes[i], theme_shape.images ? lv_color_white() : text);
+    }
+
     /* Settings controls: focused and being edited */
     lv_style_set_text_color(&dialog_item_focus_style, TC(focus_text));
     lv_style_set_text_color(&dialog_item_edited_style, TC(focus_text));

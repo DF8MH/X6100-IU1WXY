@@ -449,17 +449,17 @@ static void topbar(void) {
     lv_obj_remove_style_all(spectrum);
     lv_obj_set_pos(spectrum, 0, FREQ_STRIP_Y + FREQ_STRIP_H);
     lv_obj_set_size(spectrum, 800, 96);
-    lv_obj_set_style_bg_color(spectrum, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(spectrum, TC(panel), 0);
     lv_obj_set_style_bg_opa(spectrum, LV_OPA_COVER, 0);
     freq_scale_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96);
     lv_obj_t *wf = lv_obj_create(stack);
     lv_obj_remove_style_all(wf);
     lv_obj_set_pos(wf, 0, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H);
     lv_obj_set_size(wf, 800, 480);
-    lv_obj_set_style_bg_color(wf, lv_color_hex(0x0a1a44), 0);
+    lv_obj_set_style_bg_color(wf, (lv_color_t){.full = theme_waterfall()[16]}, 0);   /* the noise floor */
     lv_obj_set_style_bg_opa(wf, LV_OPA_COVER, 0);
     freq_scale_lines_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H, 480);
-    freq_scale_update(f, 50000, 0xffffff);
+    freq_scale_update(f, 50000, theme_hex(TC_text));
     {   /* fake spots across 7.077-7.177 (age in min); the last ones crowd */
         static const struct { const char *call; int khz10, age; } sp[] = {
             {"IK1ABC", 70780, 1}, {"DL2XYZ", 70915, 5}, {"F5LMN", 71035, 20}, {"OK1AB", 71200, 45},
@@ -523,7 +523,7 @@ static void topbar(void) {
     pump(300);
     shot("topbar_1.ppm");          /* GPS fix: locator with the dot */
     {   /* Waterfall Fixed: the span stays put, the VFO line is 30 kHz right of the centre */
-        freq_scale_update(f - 30000, 50000, 0xffffff);
+        freq_scale_update(f - 30000, 50000, theme_hex(TC_text));
         spot_marks_update(f - 30000, 50000);
         band_plan_update(f - 30000, 50000);
         lv_obj_t *l1 = lv_obj_create(spectrum), *l2 = lv_obj_create(wf);
@@ -539,7 +539,7 @@ static void topbar(void) {
         shot("wf_mode_fixed_raw.ppm");
         lv_obj_del(l1);
         lv_obj_del(l2);
-        freq_scale_update(f, 50000, 0xffffff);
+        freq_scale_update(f, 50000, theme_hex(TC_text));
         spot_marks_update(f, 50000);
         band_plan_update(f, 50000);
     }
@@ -560,43 +560,43 @@ static void topbar(void) {
     styles_apply();
     lv_obj_report_style_change(NULL);
     /* Band plan: zoom x8 on the CW/DIG edge, a band edge with beacons, out of any band */
-    freq_scale_update(7040000, 50000 / 8, 0xffffff);
+    freq_scale_update(7040000, 50000 / 8, theme_hex(TC_text));
     band_plan_update(7040000, 50000 / 8);
     pump(100);
     shot("topbar_bp1.ppm");
-    freq_scale_update(14100000, 50000, 0xffffff);
+    freq_scale_update(14100000, 50000, theme_hex(TC_text));
     band_plan_update(14100000, 50000);
     pump(100);
     shot("topbar_bp2.ppm");
-    freq_scale_update(13500000, 50000, 0xffffff);
+    freq_scale_update(13500000, 50000, theme_hex(TC_text));
     band_plan_update(13500000, 50000);
     pump(100);
     shot("topbar_bp3.ppm");
-    freq_scale_update(f, 50000, 0xffffff);
+    freq_scale_update(f, 50000, theme_hex(TC_text));
     band_plan_update(f, 50000);
     /* Spectrum off: the row right under the strip; zoom x8 */
     band_plan_set_y(FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H); /* top of the waterfall */
     lv_obj_add_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_y(stack, -96);
     spot_marks_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H, 24, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36); /* lines: top of the waterfall */
-    freq_scale_update(f, 50000 / 8, 0xffffff);
+    freq_scale_update(f, 50000 / 8, theme_hex(TC_text));
     spot_marks_update(f, 50000 / 8);
     band_plan_update(f, 50000 / 8);
     pump(1100);
     shot("topbar_4.ppm");
-    freq_scale_update(f, 50000, 0xffffff);
+    freq_scale_update(f, 50000, theme_hex(TC_text));
     spot_marks_update(f, 50000);
     band_plan_update(f, 50000);
     pump(100);
     shot("topbar_4b.ppm");         /* spectrum off, zoom x1 */
-    freq_scale_update(f, 50000 / 8, 0xffffff);
+    freq_scale_update(f, 50000 / 8, theme_hex(TC_text));
     spot_marks_update(f, 50000 / 8);
     band_plan_update(f, 50000 / 8);
     spot_marks_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
     lv_obj_clear_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
     band_plan_set_y(FREQ_STRIP_Y + FREQ_STRIP_H + 96 - BAND_PLAN_H);
     lv_obj_set_y(stack, 0);
-    freq_scale_update(f, 50000, 0xffffff);
+    freq_scale_update(f, 50000, theme_hex(TC_text));
     spot_marks_update(f, 50000);
     band_plan_update(f, 50000);
     harness_gps_fix = true;
@@ -686,7 +686,7 @@ static void topbar(void) {
         harness_cluster_column = 1;
         cluster_column_layout(y + BAND_PLAN_H);
         cluster_column_refresh();
-        freq_scale_update(7127000, 50000, 0xffffff);
+        freq_scale_update(7127000, 50000, theme_hex(TC_text));
         spot_marks_update(7127000, 50000);
         band_plan_update(7127000, 50000);
         pump(1100);

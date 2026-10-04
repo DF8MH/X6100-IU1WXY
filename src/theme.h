@@ -24,142 +24,142 @@ extern "C" {
 /* role, IU1WXY, Legacy, Outdoor, Classic (IC-7300 style) */
 #define THEME_COLORS(X) \
     /* screen and the shared boxes (styles.c) */ \
-    X(bg,                0x27313a, 0x0040a0, 0x000000, 0x000000) /* screen background */ \
-    X(bar,               0x3a3f47, 0x2a5aa0, 0x000000, 0x0e0e0e) /* top bar boxes: info, S-meter, clock */ \
-    X(bar_grad,          0x23272d, 0x103060, 0x000000, 0x0e0e0e) \
-    X(bar_border,        0x777777, 0x8aa8d8, 0xffffff, 0x4c4c4c) \
-    X(strip,             0x1c2a38, 0x1a4078, 0x000000, 0x000000) /* frequency strip */ \
-    X(strip_grad,        0x101a24, 0x0c2448, 0x000000, 0x000000) \
-    X(strip_border,      0x4a6a8a, 0x8aa8d8, 0xffffff, 0x4c4c4c) \
-    X(dialog,            0x49636f, 0x2a5aa0, 0x000000, 0x101010) /* app windows */ \
-    X(dialog_grad,       0x2c3a45, 0x103060, 0x000000, 0x000000) \
-    X(dialog_border,     0xe0e4e8, 0x8aa8d8, 0xffffff, 0x5a5a5a) \
-    X(btn,               0x0b1622, 0x0b1622, 0x000000, 0x5e5e5e) /* bottom buttons */ \
-    X(btn_grad,          0x0b1622, 0x0b1622, 0x000000, 0x262626) \
-    X(btn_border,        0x99aaaa, 0x99aaaa, 0xffffff, 0x8a8a8a) \
-    X(btn_text,          0xffffff, 0xffffff, 0xffffff, 0xffffff) \
-    X(btn_active,        0x2a220c, 0x2a220c, 0xffe000, 0x2f72d6) \
-    X(btn_active_grad,   0x2a220c, 0x2a220c, 0xffe000, 0x123e86) \
-    X(btn_active_border, 0xffd24a, 0xffd24a, 0xffffff, 0x9fd2ff) \
+    X(bg,                0x27313a, 0x0040a0, 0xffffff, 0x000000) /* screen background */ \
+    X(bar,               0x3a3f47, 0x2a5aa0, 0xf2f2f2, 0x0e0e0e) /* top bar boxes: info, S-meter, clock */ \
+    X(bar_grad,          0x23272d, 0x103060, 0xf2f2f2, 0x0e0e0e) \
+    X(bar_border,        0x777777, 0x8aa8d8, 0x000000, 0x4c4c4c) \
+    X(strip,             0x1c2a38, 0x1a4078, 0xffffff, 0x000000) /* frequency strip */ \
+    X(strip_grad,        0x101a24, 0x0c2448, 0xffffff, 0x000000) \
+    X(strip_border,      0x4a6a8a, 0x8aa8d8, 0x000000, 0x4c4c4c) \
+    X(dialog,            0x49636f, 0x2a5aa0, 0xffffff, 0x101010) /* app windows */ \
+    X(dialog_grad,       0x2c3a45, 0x103060, 0xffffff, 0x000000) \
+    X(dialog_border,     0xe0e4e8, 0x8aa8d8, 0x000000, 0x5a5a5a) \
+    X(btn,               0x0b1622, 0x0b1622, 0xe6e6e6, 0x5e5e5e) /* bottom buttons */ \
+    X(btn_grad,          0x0b1622, 0x0b1622, 0xe6e6e6, 0x262626) \
+    X(btn_border,        0x99aaaa, 0x99aaaa, 0x000000, 0x8a8a8a) \
+    X(btn_text,          0xffffff, 0xffffff, 0x000000, 0xffffff) \
+    X(btn_active,        0x2a220c, 0x2a220c, 0xffd400, 0x2f72d6) \
+    X(btn_active_grad,   0x2a220c, 0x2a220c, 0xffd400, 0x123e86) \
+    X(btn_active_border, 0xffd24a, 0xffd24a, 0x000000, 0x9fd2ff) \
     X(btn_active_text,   0xffffff, 0xffffff, 0x000000, 0xffffff) \
-    X(btn_page,          0x16232f, 0x16232f, 0x000000, 0x2a2a2a) /* the page button, bottom left */ \
-    X(btn_page_text,     0xccddee, 0xccddee, 0xffffff, 0xb4b4b4) \
-    X(btn_off_text,     0x55606c, 0x55606c, 0xdddddd, 0x6a6a6a) /* disabled */ \
-    X(btn_off_border,    0x2a323c, 0x2a323c, 0xffffff, 0x3a3a3a) \
-    X(btn_mark,          0x66ff66, 0x66ff66, 0xffe000, 0xffa000) /* encoder mark on a button */ \
-    X(btn_mark_assigned, 0x80ff80, 0x80ff80, 0xffe000, 0xffc060) \
+    X(btn_page,          0x16232f, 0x16232f, 0xc8c8c8, 0x2a2a2a) /* the page button, bottom left */ \
+    X(btn_page_text,     0xccddee, 0xccddee, 0x000000, 0xb4b4b4) \
+    X(btn_off_text,     0x55606c, 0x55606c, 0x8a8a8a, 0x6a6a6a) /* disabled */ \
+    X(btn_off_border,    0x2a323c, 0x2a323c, 0x8a8a8a, 0x3a3a3a) \
+    X(btn_mark,          0x66ff66, 0x66ff66, 0x008a00, 0xffa000) /* encoder mark on a button */ \
+    X(btn_mark_assigned, 0x80ff80, 0x80ff80, 0x50b050, 0xffc060) \
     X(btn_mark_active,   0xff4040, 0xff4040, 0xff0000, 0xff3030) /* the control the encoder is on now */ \
-    X(card,              0x506070, 0x506070, 0xffffff, 0x4c4c4c) /* Settings cards: border */ \
-    X(focus,             0xffffff, 0xffffff, 0xffe000, 0x2f72d6) /* focused control in Settings */ \
-    X(focus_text,        0x000000, 0x000000, 0x000000, 0xffffff) \
-    X(edited,            0xffffff, 0xffffff, 0xffffff, 0xffa000) /* control being edited */ \
+    X(card,              0x506070, 0x506070, 0x000000, 0x4c4c4c) /* Settings cards: border */ \
+    X(focus,             0xffffff, 0xffffff, 0x0040d0, 0x2f72d6) /* focused control in Settings */ \
+    X(focus_text,        0x000000, 0x000000, 0xffffff, 0xffffff) \
+    X(edited,            0xffffff, 0xffffff, 0xff7000, 0xffa000) /* control being edited */ \
     \
     /* app content */ \
-    X(panel,             0x000000, 0x000000, 0x000000, 0x000000) /* content panels, lists, tables */ \
-    X(panel_border,      0x445566, 0x445566, 0xffffff, 0x4c4c4c) \
-    X(list,              0x202020, 0x202020, 0x000000, 0x0a0a0a) /* JS8 lists */ \
-    X(row,               0x303030, 0x303030, 0x202020, 0x1c1c1c) /* alternate / header rows */ \
-    X(popup,             0x0b1622, 0x0b1622, 0x000000, 0x141414) /* menus and popups */ \
-    X(popup_border,      0x99aaaa, 0x99aaaa, 0xffffff, 0x8a8a8a) \
-    X(side,              0x121a22, 0x121a22, 0x000000, 0x0e0e0e) /* side boxes in apps */ \
-    X(chip,              0x1f2a35, 0x1f2a35, 0x000000, 0x262626) /* state labels, small boxes */ \
-    X(sel_bg,            0x5a4818, 0x5a4818, 0xffe000, 0x1f5fbf) /* selected row */ \
+    X(panel,             0x000000, 0x000000, 0xffffff, 0x000000) /* content panels, lists, tables */ \
+    X(panel_border,      0x445566, 0x445566, 0x000000, 0x4c4c4c) \
+    X(list,              0x202020, 0x202020, 0xffffff, 0x0a0a0a) /* JS8 lists */ \
+    X(row,               0x303030, 0x303030, 0xe4e4e4, 0x1c1c1c) /* alternate / header rows */ \
+    X(popup,             0x0b1622, 0x0b1622, 0xffffff, 0x141414) /* menus and popups */ \
+    X(popup_border,      0x99aaaa, 0x99aaaa, 0x000000, 0x8a8a8a) \
+    X(side,              0x121a22, 0x121a22, 0xf2f2f2, 0x0e0e0e) /* side boxes in apps */ \
+    X(chip,              0x1f2a35, 0x1f2a35, 0xe4e4e4, 0x262626) /* state labels, small boxes */ \
+    X(sel_bg,            0x5a4818, 0x5a4818, 0xffd400, 0x1f5fbf) /* selected row */ \
     X(sel_text,          0xffd24a, 0xffd24a, 0x000000, 0xffffff) \
-    X(sel_border,        0xffffff, 0xffffff, 0xffffff, 0x9fd2ff) \
-    X(focus_bg,          0x1830a0, 0x1830a0, 0xffe000, 0x1f5fbf) /* JS8 focused item */ \
-    X(near_bg,           0x3a2f12, 0x3a2f12, 0x202020, 0x10283c) /* cluster: spot near the VFO */ \
-    X(vfo,               0x7cc4ff, 0x7cc4ff, 0x00ffff, 0x40c8ff) /* VFO marker, SSB */ \
-    X(vfo_bg,            0x0a1f3a, 0x0a1f3a, 0x000000, 0x00203c) \
+    X(sel_border,        0xffffff, 0xffffff, 0x000000, 0x9fd2ff) \
+    X(focus_bg,          0x1830a0, 0x1830a0, 0xffd400, 0x1f5fbf) /* JS8 focused item */ \
+    X(near_bg,           0x3a2f12, 0x3a2f12, 0xfff1a8, 0x10283c) /* cluster: spot near the VFO */ \
+    X(vfo,               0x7cc4ff, 0x7cc4ff, 0x0040ff, 0x40c8ff) /* VFO marker, SSB */ \
+    X(vfo_bg,            0x0a1f3a, 0x0a1f3a, 0xdde6ff, 0x00203c) \
     \
     /* text */ \
-    X(text,              0xffffff, 0xffffff, 0xffffff, 0xffffff) \
-    X(text_value,        0xd0e0f0, 0xd0e0f0, 0xffffff, 0xe6e6e6) /* values, frequencies */ \
-    X(text_dim,          0x90a0b0, 0x90a0b0, 0xdddddd, 0xa0a0a0) /* hints, notes, secondary */ \
-    X(text_soft,         0xbbbbbb, 0xbbbbbb, 0xdddddd, 0xb4b4b4) /* inactive knob / lock */ \
-    X(text_mute,         0x808080, 0x808080, 0xdddddd, 0x787878) /* greyed items */ \
-    X(text_faint,        0x607080, 0x607080, 0xdddddd, 0x5a5a5a) /* queued, idle */ \
-    X(text_head,         0x90f0d0, 0x90f0d0, 0xffffff, 0x40c8ff) /* app headers and titles */ \
-    X(line,              0xaaaaaa, 0xaaaaaa, 0xffffff, 0xa0a0a0) /* scales, axis lines */ \
-    X(action,            0xffc040, 0xffc040, 0xffe000, 0xffa000) /* back / close / cancel items */ \
+    X(text,              0xffffff, 0xffffff, 0x000000, 0xffffff) \
+    X(text_value,        0xd0e0f0, 0xd0e0f0, 0x000000, 0xe6e6e6) /* values, frequencies */ \
+    X(text_dim,          0x90a0b0, 0x90a0b0, 0x3a3a3a, 0xa0a0a0) /* hints, notes, secondary */ \
+    X(text_soft,         0xbbbbbb, 0xbbbbbb, 0x4a4a4a, 0xb4b4b4) /* inactive knob / lock */ \
+    X(text_mute,         0x808080, 0x808080, 0x5a5a5a, 0x787878) /* greyed items */ \
+    X(text_faint,        0x607080, 0x607080, 0x6a6a6a, 0x5a5a5a) /* queued, idle */ \
+    X(text_head,         0x90f0d0, 0x90f0d0, 0x0030a0, 0x40c8ff) /* app headers and titles */ \
+    X(line,              0xaaaaaa, 0xaaaaaa, 0x303030, 0xa0a0a0) /* scales, axis lines */ \
+    X(action,            0xffc040, 0xffc040, 0xb04a00, 0xffa000) /* back / close / cancel items */ \
     \
     /* state */ \
-    X(ok,                0x88ff88, 0x88ff88, 0x00ff00, 0x40e040) \
-    X(ok_bg,             0x1f4a24, 0x1f4a24, 0x000000, 0x0c3010) \
-    X(ok_bar,            0x40c060, 0x40c060, 0x00ff00, 0x30c040) /* progress bars */ \
-    X(warn,              0xffb040, 0xffb040, 0xffe000, 0xffa000) /* also CW */ \
-    X(warn_bg,           0x4a3a10, 0x4a3a10, 0x000000, 0x3a2800) \
-    X(err,               0xff6060, 0xff6060, 0xff4040, 0xff4040) \
+    X(ok,                0x88ff88, 0x88ff88, 0x007a00, 0x40e040) \
+    X(ok_bg,             0x1f4a24, 0x1f4a24, 0xd6f5d6, 0x0c3010) \
+    X(ok_bar,            0x40c060, 0x40c060, 0x00a000, 0x30c040) /* progress bars */ \
+    X(warn,              0xffb040, 0xffb040, 0x9a5a00, 0xffa000) /* also CW */ \
+    X(warn_bg,           0x4a3a10, 0x4a3a10, 0xfff0c0, 0x3a2800) \
+    X(err,               0xff6060, 0xff6060, 0xd00000, 0xff4040) \
     X(err_strong,        0xff0000, 0xff0000, 0xff0000, 0xff2020) \
-    X(err_bg,            0x4a1515, 0x4a1515, 0x000000, 0x400808) \
-    X(tx,                0xff4040, 0xff4040, 0xff4040, 0xff3030) /* TX bars and text */ \
+    X(err_bg,            0x4a1515, 0x4a1515, 0xffd6d6, 0x400808) \
+    X(tx,                0xff4040, 0xff4040, 0xd00000, 0xff3030) /* TX bars and text */ \
     X(tx_bg,             0xb01e1e, 0xb01e1e, 0xff0000, 0xd01010) /* ON AIR */ \
-    X(info,              0x55ccff, 0x55ccff, 0x00ffff, 0x40c8ff) \
-    X(digi,              0xc890ff, 0xc890ff, 0xff80ff, 0xc080ff) /* digital modes */ \
-    X(alert,             0xff4fc0, 0xff4fc0, 0xff40ff, 0xff40c0) /* cluster alerts */ \
-    X(alert_text,        0xff9be0, 0xff9be0, 0xff80ff, 0xff90e0) \
-    X(alert_bg,          0x7a1f5c, 0x7a1f5c, 0x000000, 0x5a1040) \
-    X(new,               0x60ff60, 0x60ff60, 0x00ff00, 0x40e040) /* fresh spots */ \
+    X(info,              0x55ccff, 0x55ccff, 0x0058c0, 0x40c8ff) \
+    X(digi,              0xc890ff, 0xc890ff, 0x7000c0, 0xc080ff) /* digital modes */ \
+    X(alert,             0xff4fc0, 0xff4fc0, 0xc00088, 0xff40c0) /* cluster alerts */ \
+    X(alert_text,        0xff9be0, 0xff9be0, 0x9a006e, 0xff90e0) \
+    X(alert_bg,          0x7a1f5c, 0x7a1f5c, 0xffd0f0, 0x5a1040) \
+    X(new,               0x60ff60, 0x60ff60, 0x007700, 0x40e040) /* fresh spots */ \
     \
     /* accents and small surfaces */ \
-    X(accent,            0xffd24a, 0xffd24a, 0xffe000, 0xffa000) /* highlighted text: app name, next char, icons */ \
-    X(accent_soft,       0xffe080, 0xffe080, 0xffe000, 0xffc060) /* unread messages */ \
-    X(veil,              0x1c2a33, 0x1c2a33, 0x000000, 0x101010) /* behind a popup */ \
-    X(alert_box,         0x2a0f22, 0x2a0f22, 0x000000, 0x2a0818) /* cluster alert popup */ \
-    X(track,             0x304050, 0x304050, 0x202020, 0x303030) /* progress bar track */ \
-    X(frame,             0x182028, 0x182028, 0x000000, 0x0a0a0a) /* WeFax / channels frame */ \
-    X(off,               0x555555, 0x555555, 0x808080, 0x4a4a4a) /* unlit bars, spectrum peak */ \
-    X(icon_off,          0x151515, 0x151515, 0x404040, 0x1a1a1a) /* top bar icons that are off */ \
-    X(lock,              0xe0a030, 0xe0a030, 0xffe000, 0xffa000) /* secured WiFi padlock */ \
-    X(control_border,    0x8a8a8a, 0x8a8a8a, 0xffffff, 0x8a8a8a) /* Settings sliders, toggles */ \
-    X(toggle_on,         0x2196f3, 0x2196f3, 0xffe000, 0x2f72d6) /* toggle on, level bars */ \
-    X(toggle_focus,      0x7cc4ff, 0x7cc4ff, 0xffffff, 0x9fd2ff) \
+    X(accent,            0xffd24a, 0xffd24a, 0x886600, 0xffa000) /* highlighted text: app name, next char, icons */ \
+    X(accent_soft,       0xffe080, 0xffe080, 0x5f4800, 0xffc060) /* unread messages */ \
+    X(veil,              0x1c2a33, 0x1c2a33, 0xccdae3, 0x101010) /* behind a popup */ \
+    X(alert_box,         0x2a0f22, 0x2a0f22, 0xf0d5e8, 0x2a0818) /* cluster alert popup */ \
+    X(track,             0x304050, 0x304050, 0xafbfcf, 0x303030) /* progress bar track */ \
+    X(frame,             0x182028, 0x182028, 0xd7dfe7, 0x0a0a0a) /* WeFax / channels frame */ \
+    X(off,               0x555555, 0x555555, 0xaaaaaa, 0x4a4a4a) /* unlit bars, spectrum peak */ \
+    X(icon_off,          0x151515, 0x151515, 0xeaeaea, 0x1a1a1a) /* top bar icons that are off */ \
+    X(lock,              0xe0a030, 0xe0a030, 0xaf7103, 0xffa000) /* secured WiFi padlock */ \
+    X(control_border,    0x8a8a8a, 0x8a8a8a, 0x585858, 0x8a8a8a) /* Settings sliders, toggles */ \
+    X(toggle_on,         0x2196f3, 0x2196f3, 0x0062b0, 0x2f72d6) /* toggle on, level bars */ \
+    X(toggle_focus,      0x7cc4ff, 0x7cc4ff, 0x003662, 0x9fd2ff) \
     \
     /* main screen */ \
     X(vfo_line,          0xffa000, 0xffa000, 0xffa000, 0xff6000) /* VFO line on spectrum / waterfall */ \
-    X(spot,              0x40e8ff, 0x40e8ff, 0x00ffff, 0x40e8ff) /* cluster spots on the waterfall */ \
-    X(mode_dig,          0xff8080, 0xff8080, 0xff8080, 0xff8080) /* digital mode name in the info box */ \
-    X(mode_text,         0xff6060, 0xff6060, 0xff4040, 0xff4040) /* mode next to the frequency */ \
-    X(mode_bg,           0x5a4818, 0x5a4818, 0x000000, 0x1f5fbf) /* its box (theme_shape.mode_box) */ \
-    X(mode_border,       0xffffff, 0xffffff, 0xffffff, 0x9fd2ff) \
-    X(pill_off_text,     0xffffff, 0xffffff, 0xffffff, 0xffffff) /* info box: PRE, ATT, ATU when off */ \
-    X(pill_border,       0x777777, 0x777777, 0xffffff, 0x5a5a5a) /* info box items (theme_shape.pill_border) */ \
-    X(meter_bar,         0xaaaaaa, 0xaaaaaa, 0xffffff, 0xa0a0a0) /* S-meter bars up to S9 */ \
-    X(meter_over,        0xffffff, 0xffffff, 0xffffff, 0xff4040) /* S-meter +20 +40 labels */ \
-    X(meter_low,         0x20c040, 0x20c040, 0x00ff00, 0x40e040) /* S-meter above S9: from this... */ \
-    X(meter_high,        0xe02020, 0xe02020, 0xff0000, 0xff3030) /* ...to this */ \
-    X(bar_high,          0xcc3333, 0xcc3333, 0xff0000, 0xe03030) /* SWR high, mic clipping */ \
-    X(bar_mid,           0xcccc33, 0xcccc33, 0xffff00, 0xe0e030) /* SWR raised */ \
-    X(alc,               0x66aabb, 0x66aabb, 0x00ffff, 0x40c8ff) /* ALC bar */ \
-    X(tx_box,            0x7a1818, 0x7a1818, 0x000000, 0x5a0000) /* TX panel */ \
-    X(tune_good,         0xffff30, 0xffff30, 0xffff00, 0xffff30) /* CW tune: on the signal */ \
-    X(bp_cw,             0x4aa3ff, 0x4aa3ff, 0x4aa3ff, 0x4aa3ff) /* band plan segments */ \
-    X(bp_dig,            0xffd24a, 0xffd24a, 0xffd24a, 0xffa000) \
-    X(bp_ssb,            0x60d060, 0x60d060, 0x60d060, 0x60d060) \
-    X(bp_bcn,            0xff6060, 0xff6060, 0xff6060, 0xff6060) \
-    X(bp_text,           0x000000, 0x000000, 0x000000, 0x000000) \
-    X(finder_band,       0xff5050, 0xff5050, 0xff5050, 0xff5050) /* app waterfalls: passband */ \
-    X(finder_cursor,     0x50ff50, 0x50ff50, 0x50ff50, 0x50ff50) \
+    X(spot,              0x40e8ff, 0x40e8ff, 0x007e8f, 0x40e8ff) /* cluster spots on the waterfall */ \
+    X(mode_dig,          0xff8080, 0xff8080, 0x5f0000, 0xff8080) /* digital mode name in the info box */ \
+    X(mode_text,         0xff6060, 0xff6060, 0x770000, 0xff4040) /* mode next to the frequency */ \
+    X(mode_bg,           0x5a4818, 0x5a4818, 0xe7d5a5, 0x1f5fbf) /* its box (theme_shape.mode_box) */ \
+    X(mode_border,       0xffffff, 0xffffff, 0x000000, 0x9fd2ff) \
+    X(pill_off_text,     0xffffff, 0xffffff, 0x000000, 0xffffff) /* info box: PRE, ATT, ATU when off */ \
+    X(pill_border,       0x777777, 0x777777, 0x888888, 0x5a5a5a) /* info box items (theme_shape.pill_border) */ \
+    X(meter_bar,         0xaaaaaa, 0xaaaaaa, 0x404040, 0xa0a0a0) /* S-meter bars up to S9 */ \
+    X(meter_over,        0xffffff, 0xffffff, 0x000000, 0xff4040) /* S-meter +20 +40 labels */ \
+    X(meter_low,         0x20c040, 0x20c040, 0x3fdf5f, 0x40e040) /* S-meter above S9: from this... */ \
+    X(meter_high,        0xe02020, 0xe02020, 0xbd0202, 0xff3030) /* ...to this */ \
+    X(bar_high,          0xcc3333, 0xcc3333, 0xcc3333, 0xe03030) /* SWR high, mic clipping */ \
+    X(bar_mid,           0xcccc33, 0xcccc33, 0xcccc33, 0xe0e030) /* SWR raised */ \
+    X(alc,               0x66aabb, 0x66aabb, 0x296c7c, 0x40c8ff) /* ALC bar */ \
+    X(tx_box,            0x7a1818, 0x7a1818, 0xe78585, 0x5a0000) /* TX panel */ \
+    X(tune_good,         0xffff30, 0xffff30, 0x9b9b00, 0xffff30) /* CW tune: on the signal */ \
+    X(bp_cw,             0x4aa3ff, 0x4aa3ff, 0x004388, 0x4aa3ff) /* band plan segments */ \
+    X(bp_dig,            0xffd24a, 0xffd24a, 0x886600, 0xffa000) \
+    X(bp_ssb,            0x60d060, 0x60d060, 0x178417, 0x60d060) \
+    X(bp_bcn,            0xff6060, 0xff6060, 0x770000, 0xff6060) \
+    X(bp_text,           0x000000, 0x000000, 0xffffff, 0x000000) \
+    X(finder_band,       0xff5050, 0xff5050, 0x830000, 0xff5050) /* app waterfalls: passband */ \
+    X(finder_cursor,     0x50ff50, 0x50ff50, 0x008300, 0x50ff50) \
     \
     /* categories */ \
-    X(pill_hp,           0x4b3c14, 0x4b3c14, 0x000000, 0x3a2800) /* Bluetooth: headphones (text: accent) */ \
-    X(pill_cat,          0x3a2f5a, 0x3a2f5a, 0x000000, 0x2a2040) \
-    X(pill_cat_text,     0xccbbff, 0xccbbff, 0xff80ff, 0xccbbff) \
-    X(pill_kbd,          0x14404b, 0x14404b, 0x000000, 0x103040) \
-    X(pill_kbd_text,     0x88e0ff, 0x88e0ff, 0x00ffff, 0x88e0ff) \
-    X(age_mid,           0xe8e070, 0xe8e070, 0xffff00, 0xe0e060) /* cluster spot age < 10 min */ \
-    X(age_old,           0xc08a4a, 0xc08a4a, 0xffa000, 0xb08040) /* < 30 min */ \
-    X(row_alert,         0x6a2ca0, 0x6a2ca0, 0x6a2ca0, 0x5a2090) /* JS8 rows */ \
-    X(row_alert_text,    0xd0a0ff, 0xd0a0ff, 0xff80ff, 0xd0a0ff) \
-    X(row_heard,         0x5a4400, 0x5a4400, 0x5a4400, 0x4a3800) \
-    X(row_tx,            0x1830a0, 0x1830a0, 0x1830a0, 0x1830a0) \
-    X(row_to_me,         0xb00000, 0xb00000, 0xb00000, 0xa00000) \
-    X(row_cq,            0x006000, 0x006000, 0x006000, 0x006000) \
-    X(row_group,         0x102a60, 0x102a60, 0x102a60, 0x102a60) \
-    X(row_sel_bar,       0x40ff40, 0x40ff40, 0x00ff00, 0x40ff40) \
-    X(title_text,        0x1030a0, 0x1030a0, 0x000000, 0x1030a0) /* on a light title bar */ \
-    X(ft8_cq,            0x00dd00, 0x00dd00, 0x00dd00, 0x00b000) /* FT8 rows: CQ not worked */ \
-    X(ft8_cq_worked,     0x2e5a00, 0x2e5a00, 0x2e5a00, 0x2e5a00) \
-    X(ft8_cq_same,       0x224400, 0x224400, 0x224400, 0x224400) /* worked in this mode */ \
+    X(pill_hp,           0x4b3c14, 0x4b3c14, 0xebdcb4, 0x3a2800) /* Bluetooth: headphones (text: accent) */ \
+    X(pill_cat,          0x3a2f5a, 0x3a2f5a, 0xb0a5d0, 0x2a2040) \
+    X(pill_cat_text,     0xccbbff, 0xccbbff, 0x0d0033, 0xccbbff) \
+    X(pill_kbd,          0x14404b, 0x14404b, 0xb4e0eb, 0x103040) \
+    X(pill_kbd_text,     0x88e0ff, 0x88e0ff, 0x004259, 0x88e0ff) \
+    X(age_mid,           0xe8e070, 0xe8e070, 0x797104, 0xe0e060) /* cluster spot age < 10 min */ \
+    X(age_old,           0xc08a4a, 0xc08a4a, 0x956022, 0xb08040) /* < 30 min */ \
+    X(row_alert,         0x6a2ca0, 0x6a2ca0, 0x9d5fd3, 0x5a2090) /* JS8 rows */ \
+    X(row_alert_text,    0xd0a0ff, 0xd0a0ff, 0x240047, 0xd0a0ff) \
+    X(row_heard,         0x5a4400, 0x5a4400, 0xffe9a5, 0x4a3800) \
+    X(row_tx,            0x1830a0, 0x1830a0, 0x5f77e7, 0x1830a0) \
+    X(row_to_me,         0xb00000, 0xb00000, 0xff4f4f, 0xa00000) \
+    X(row_cq,            0x006000, 0x006000, 0x9fff9f, 0x006000) \
+    X(row_group,         0x102a60, 0x102a60, 0x9fb9ef, 0x102a60) \
+    X(row_sel_bar,       0x40ff40, 0x40ff40, 0x008f00, 0x40ff40) \
+    X(title_text,        0x1030a0, 0x1030a0, 0x0030a0, 0x1030a0) /* on a light title bar */ \
+    X(ft8_cq,            0x00dd00, 0x00dd00, 0x22ff22, 0x00b000) /* FT8 rows: CQ not worked */ \
+    X(ft8_cq_worked,     0x2e5a00, 0x2e5a00, 0xd3ffa5, 0x2e5a00) \
+    X(ft8_cq_same,       0x224400, 0x224400, 0xddffbb, 0x224400) /* worked in this mode */ \
     X(ft8_to_me,         0xff0000, 0xff0000, 0xff0000, 0xd01010) \
     X(ft8_tx,            0x0000ff, 0x0000ff, 0x0000ff, 0x1f5fbf)
 
