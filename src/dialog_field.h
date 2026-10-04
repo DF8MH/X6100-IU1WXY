@@ -22,6 +22,10 @@ extern dialog_t *dialog_field;
 void dialog_field_remote(const char *cmd, int32_t val, const char *text);
 int  dialog_field_remote_state(char *buf, size_t size);
 
+/* Shared with the Bands app: TEST DE <call> in CW; a typical frequency of the band (cluster_band_of()) */
+void dialog_field_test_beacon(void);
+void dialog_field_tune_band(int band);
+
 #ifdef __cplusplus
 }
 #endif

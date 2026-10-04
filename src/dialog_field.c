@@ -22,6 +22,7 @@
 #include "cw_encoder.h"
 #include "dialog.h"
 #include "events.h"
+#include "field/bands.h"
 #include "field/flog.h"
 #include "field/rbn.h"
 #include "field/refs.h"
@@ -68,9 +69,9 @@
 #define STATUS_H    34
 #define MAX_NEAR    30
 #define MAX_QSO     200
+#define HOME_TILES  3       /* SOTA, POTA, Bands; 4 shows LOG again (hidden for now) */
 #define GPS_MAX_AGE 600     /* s */
 #define PHONE_MAX_AGE 1800
-#define HEARD_S     600     /* the skimmers of the last 10 minutes */
 
 typedef enum { SCR_HOME, SCR_PROG, SCR_BANDS, SCR_LOG } screen_t;
 
@@ -158,7 +159,8 @@ static void state_save(void) {
     f = fopen(tmp, "w");
     if (!f)
         return;
-    fprintf(f, "screen=%d\nhome=%d\nprog=%c\nactive=%d\nstart=%lld\nlog=%s\n", st.screen, st.home_sel, st.prog,
+    fprintf(f, "screen=%d\nhome=%d\nprog=%c\nactive=%d\nstart=%lld\nlog=%s\n", st.screen, st.home_sel,
+            st.prog,
             st.active, (long long)st.start, st.log);
     if (st.have_ref)
         fprintf(f, "ref=%c\t%s\t%s\t%.5f\t%.5f\t%d\t%d\n", st.ref.type, st.ref.ref, st.ref.name, st.ref.lat,
@@ -198,8 +200,10 @@ static void state_load(void) {
             st.have_ref = field_ref_parse(v, &st.ref);
     }
     fclose(f);
-    if (st.screen > SCR_LOG)
+    if (st.screen >= SCR_LOG && HOME_TILES < 4)
         st.screen = SCR_HOME;
+    if (st.home_sel >= HOME_TILES)
+        st.home_sel = 0;
 }
 
 /* Helpers */
@@ -588,7 +592,7 @@ static button_data_t b_ref    = {.type = BTN_TEXT, .label = "Ref...", .press = r
 static button_data_t b_update = {.type = BTN_TEXT, .label = "Update\nlist", .press = update_cb};
 static button_data_t b_cq     = {.type = BTN_TEXT, .label = "CQ", .press = cq_cb};
 static button_data_t b_band   = {.type = BTN_TEXT, .label = "Bands", .press = bands_cb};
-static button_data_t b_book   = {.type = BTN_TEXT, .label = "Log\nbook", .press = logbook_cb};
+static button_data_t b_book __attribute__((unused)) = {.type = BTN_TEXT, .label = "Log\nbook", .press = logbook_cb};
 static button_data_t b_bands  = {.type = BTN_TEXT, .label = "BANDS"};
 static button_data_t b_beacon = {.type = BTN_TEXT, .label = "Test\nbeacon", .press = beacon_cb};
 static button_data_t b_tune   = {.type = BTN_TEXT, .label = "Use\nband", .press = tune_cb};
@@ -599,7 +603,7 @@ static buttons_page_t page_home  = {.items = {&b_home, &b_open, &b_boot, NULL, &
 static buttons_page_t page_ref1  = {.items = {&b_ref1, &b_act, &b_spot, &b_ref, &b_back}};
 static buttons_page_t page_ref2  = {.items = {&b_ref2, &b_update, NULL, NULL, &b_back}};
 static buttons_page_t page_act1  = {.items = {&b_act1, &b_cq, &b_log, &b_spot, &b_back}};
-static buttons_page_t page_act2  = {.items = {&b_act2, &b_act, &b_band, &b_book, &b_back}};
+static buttons_page_t page_act2  = {.items = {&b_act2, &b_act, &b_band, NULL, &b_back}};   /* b_book: LOG hidden */
 static buttons_page_t page_bands = {.items = {&b_bands, &b_beacon, &b_tune, NULL, &b_back}};
 static buttons_page_t page_log   = {.items = {&b_logpg, &b_log, &b_qrz, NULL, &b_back}};
 
@@ -680,8 +684,8 @@ static void open_cb(button_data_t *b) {
 }
 
 static void home_select(int k) {
-    sel = (k + 4) % 4;
-    for (int i = 0; i < 4; i++) {
+    sel = (k + HOME_TILES) % HOME_TILES;
+    for (int i = 0; i < HOME_TILES; i++) {
         lv_obj_t *t  = lv_obj_get_child(body, i);
         bool      on = i == sel;
 
@@ -701,12 +705,13 @@ static void tile_click_cb(lv_event_t *e) {
 
 static void build_home(void) {
     static const char *subs[] = {"Summits\nOn The Air", "Parks\nOn The Air", "Activity\nRBN, beacon", "Activation\nlog"};
-    lv_coord_t          tw = 182, gap = 10, x0 = (W - 4 * tw - 3 * gap) / 2, th = body_h - STATUS_H - 30;
+    lv_coord_t          tw = HOME_TILES == 4 ? 182 : 240, gap = 12;
+    lv_coord_t          x0 = (W - HOME_TILES * tw - (HOME_TILES - 1) * gap) / 2, th = body_h - STATUS_H - 30;
 
     head_set(NULL, "FIELD OPERATIONS");
     list   = NULL;
-    rows_n = 4;
-    for (int k = 0; k < 4; k++) {
+    rows_n = HOME_TILES;
+    for (int k = 0; k < HOME_TILES; k++) {
         lv_obj_t *t = panel(body, x0 + k * (tw + gap), 16, tw, th);
 
         lv_obj_set_style_border_color(t, accent(k), 0);
@@ -899,72 +904,24 @@ static void build_prog(void) {
         build_ref();
 }
 
-/* Bands: from the cluster spots of the last 30 minutes and RBN */
-
-static int band_scores(int spots[FIELD_RBN_BANDS], int rbn[FIELD_RBN_BANDS], int heard[FIELD_RBN_BANDS],
-                       int best_snr[FIELD_RBN_BANDS]) {
-    static cluster_spot_t snap[CLUSTER_MAX_SPOTS];
-    static int            snap_n;
-    static uint32_t       gen;
-    field_rbn_hit_t       hits[32];
-    int                   n, best = -1, best_score = 0;
-
-    memset(spots, 0, sizeof(int) * FIELD_RBN_BANDS);
-    memset(heard, 0, sizeof(int) * FIELD_RBN_BANDS);
-    for (int b = 0; b < FIELD_RBN_BANDS; b++)
-        best_snr[b] = -99;
-    n = cluster_client_snapshot(snap, CLUSTER_MAX_SPOTS, &gen);
-    if (n >= 0)
-        snap_n = n;
-    struct tm tm;
-    time_t    now = time(NULL);
-    gmtime_r(&now, &tm);
-    for (int k = 0; k < snap_n; k++) {
-        int b = cluster_band_of(snap[k].freq_hz);
-        if (b >= 0 && b < FIELD_RBN_BANDS && cluster_age_min(snap[k].utc_min, tm.tm_hour * 60 + tm.tm_min) <= 30)
-            spots[b]++;
-    }
-    field_rbn_activity(rbn);
-    n = field_rbn_heard(HEARD_S, hits, 32);
-    for (int k = 0; k < n; k++) {
-        int b = cluster_band_of(hits[k].freq_hz);
-        if (b >= 0 && b < FIELD_RBN_BANDS) {
-            heard[b]++;
-            if (hits[k].snr > best_snr[b])
-                best_snr[b] = hits[k].snr;
-        }
-    }
-    /* Who hears you counts most, then the activity */
-    for (int b = 0; b < FIELD_RBN_BANDS; b++) {
-        int score = heard[b] * 1000 + spots[b] * 10 + rbn[b];
-        if (score > best_score) {
-            best_score = score;
-            best       = b;
-        }
-    }
-    return best;
-}
+/* Bands: field/bands.c */
 
 static void bands_fill(void) {
-    int spots[FIELD_RBN_BANDS], rbn[FIELD_RBN_BANDS], heard[FIELD_RBN_BANDS], snr[FIELD_RBN_BANDS];
-    int best = band_scores(spots, rbn, heard, snr);
-    int max  = 1;
+    field_bands_t fb;
 
-    for (int b = 0; b < FIELD_RBN_BANDS; b++)
-        if (spots[b] * 5 + rbn[b] > max)
-            max = spots[b] * 5 + rbn[b];
+    field_bands(&fb);
     lv_obj_clean(list);
     rows_n = 0;
     for (int b = 0; b < FIELD_RBN_BANDS; b++) {
-        int         level = (spots[b] * 5 + rbn[b]) * 5 / max + ((spots[b] || rbn[b]) ? 1 : 0);   /* 0..6 */
-        const char *word  = level >= 5 ? "HIGH" : level >= 4 ? "GOOD" : level >= 2 ? "FAIR" : level ? "POOR" : "-";
+        int         level = fb.level[b];
+        const char *word  = field_band_word(level);
         uint32_t    color = level >= 4 ? theme_hex(TC_ok) : level >= 2 ? theme_hex(TC_warn) : theme_hex(TC_err);
         char        row[160], heard_txt[40] = "";
 
-        if (heard[b])
-            snprintf(heard_txt, sizeof(heard_txt), "#%06x %d  %+d dB#", theme_hex(TC_ok), heard[b], snr[b]);
-        snprintf(row, sizeof(row), "%s\t\t#%06x %s#\t%d\t%d\t%s\t%s", cluster_band_name(b), color, word, spots[b],
-                 rbn[b], heard_txt, b == best ? "BEST" : "");
+        if (fb.heard[b])
+            snprintf(heard_txt, sizeof(heard_txt), "#%06x %d  %+d dB#", theme_hex(TC_ok), fb.heard[b], fb.best_snr[b]);
+        snprintf(row, sizeof(row), "%s\t\t#%06x %s#\t%d\t%d\t%s\t%s", cluster_band_name(b), color, word, fb.spots[b],
+                 fb.rbn[b], heard_txt, b == fb.best ? "BEST" : "");
         lv_obj_t *r = list_add(row);
 
         /* The activity bar, in the empty second column */
@@ -982,7 +939,7 @@ static void bands_fill(void) {
     list_select(sel);
 
     field_rbn_hit_t hits[6];
-    int             n = field_rbn_heard(HEARD_S, hits, 6), p = 0;
+    int             n = field_rbn_heard(FIELD_HEARD_S, hits, 6), p = 0;
     char            line[200];
 
     p = snprintf(line, sizeof(line), "RBN %s.  ", field_rbn_state());
@@ -1109,7 +1066,7 @@ static void activation_end(void) {
     state_save();
     msg_update_text_fmt("Activation complete: %s, %d QSO%s, %d min", st.ref.ref, qsos_n, qsos_n == 1 ? "" : "s", s / 60);
     if (dialog.run)
-        show(SCR_LOG);
+        show(SCR_PROG);
 }
 
 static void activate_cb(button_data_t *b) {
@@ -1296,7 +1253,7 @@ static void update_cb(button_data_t *b) {
     list_update();
 }
 
-static void beacon_cb(button_data_t *b) {
+void dialog_field_test_beacon(void) {
     char text[64];
 
     if (!my_call()[0]) {
@@ -1312,25 +1269,26 @@ static void beacon_cb(button_data_t *b) {
     msg_update_text_fmt("Test beacon on the air: watch who hears you");
 }
 
-/* Typical activation frequencies: CW and phone */
-static const int32_t band_freq[FIELD_RBN_BANDS][2] = {
-    {1810000, 1850000},   {3560000, 3760000},   {5355000, 5360000},   {7030000, 7118000},
-    {10118000, 10118000}, {14060000, 14285000}, {18086000, 18130000}, {21060000, 21285000},
-    {24906000, 24950000}, {28060000, 28400000}, {50060000, 50150000},
-};
+static void beacon_cb(button_data_t *b) {
+    dialog_field_test_beacon();
+}
 
-static void tune_cb(button_data_t *b) {
-    if (sel < 0 || sel >= FIELD_RBN_BANDS)
+void dialog_field_tune_band(int band) {
+    if (band < 0 || band >= FIELD_RBN_BANDS)
         return;
     if (main_screen_freq_locked()) {
         msg_update_text_fmt("The frequency is locked");
         return;
     }
-    int32_t f = band_freq[sel][is_cw() ? 0 : 1];
+    int32_t f = field_band_freq(band, is_cw());
     main_screen_set_freq(f);
     if (!is_cw() && !main_screen_mode_locked())
         cparam_i_set(cfg_cur_mode, f < 10000000 ? x6100_mode_lsb : x6100_mode_usb);
-    msg_update_text_fmt("%s: %.3f MHz", cluster_band_name(sel), f / 1e6);
+    msg_update_text_fmt("%s: %.3f MHz", cluster_band_name(band), f / 1e6);
+}
+
+static void tune_cb(button_data_t *b) {
+    dialog_field_tune_band(sel);
 }
 
 static void qrz_done(const char *line) {

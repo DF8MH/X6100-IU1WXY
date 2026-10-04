@@ -46,6 +46,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     knobs.cpp
     dialog_wspr.c app_frame.c
     dialog_field.c
+    dialog_bands.c
 )
 
 add_subdirectory(fonts)

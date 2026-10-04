@@ -62,6 +62,7 @@ typedef enum {
     ACTION_APP_WSPR,    /* appended after CWTRAINER */
     ACTION_APP_CW_KBD,  /* appended after WSPR */
     ACTION_APP_FIELD, /* appended after CW_KBD: Field Ops (POTA/SOTA) */
+    ACTION_APP_BANDS, /* appended after FIELD: the band overview of Field Ops alone */
 } press_action_t;
 
 typedef enum {

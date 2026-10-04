@@ -25,7 +25,7 @@ APP buttons:
 |---|---|
 | 1 | Modes, Cluster, SWR Scan, GPS |
 | 2 | Recorder, Settings, CW Trainer, CW Keyboard |
-| 3 | Field Ops |
+| 3 | Field Ops, Bands |
 
 Your callsign and QTH locator are set in Settings → General → **STATION**.
 Callsign is needed by JS8, FT8, WSPR (TX and upload) and the DX Cluster.
@@ -300,7 +300,8 @@ were on) is kept on the SD card in `/mnt/field`, so coming back, or a restart in
 the middle of an activation, finds it as it was. **Start here** (home screen)
 opens Field Ops at power on.
 
-- **Home**: the SOTA, POTA, Bands and Log tiles (MFK to choose, press to open).
+- **Home**: the SOTA, POTA and Bands tiles (MFK to choose, press to open). The Log screen is
+  hidden for now.
 - **SOTA / POTA**: the nearest summits or parks with their distance; the nearest
   one is taken, the MFK and a press choose another, **Ref...** types one. The
   position comes from the radio's GPS, else from the phone (the companion app
@@ -321,9 +322,11 @@ opens Field Ops at power on.
   with the best band marked. **Test beacon** sends `TEST DE <call>` in CW (the
   radio must be in CW) so you can see who hears you; **Use band** (or a press)
   tunes a typical activation frequency of the band.
-- **Log**: the QSOs of the activation; **Upload QRZ** sends them to the QRZ
-  Logbook (the API key goes in the web configurator's **Field** page; QSOs
-  already there are skipped). The logs can be downloaded from the same page.
+- The activation logs can be downloaded from the web configurator's **Field** page.
+
+**Bands** (APP page 3, or a long-press action) is the same band overview as an app of its own,
+in the look of the other apps: each band with its activity, cluster / RBN spots and who heard
+you, the best one framed. MFK to choose, press (or **Use band**) to tune; **Test beacon** in CW.
 
 No POTA or SOTA spot goes to the DX cluster: neither program reads them there.
 

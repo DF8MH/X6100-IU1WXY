@@ -332,6 +332,7 @@ static button_data_t btn_modes   = make_app_btn("Modes", ACTION_APP_MODES);
 static button_data_t btn_cwt     = make_app_btn("CW\nTrainer", ACTION_APP_CWTRAINER);
 static button_data_t btn_cw_kbd  = make_app_btn("CW\nKeyboard", ACTION_APP_CW_KBD);
 static button_data_t btn_field   = make_app_btn("Field\nOps", ACTION_APP_FIELD);
+static button_data_t btn_bands   = make_app_btn("Bands", ACTION_APP_BANDS);
 
 /* RTTY */
 static button_data_t btn_rtty_p1 = {
@@ -459,7 +460,7 @@ static buttons_page_t page_app_2 = {
     {&btn_app_p2, &btn_rec, &btn_settings, &btn_cwt, &btn_cw_kbd}
 };
 static buttons_page_t page_app_3 = {
-    {&btn_app_p3, &btn_field}
+    {&btn_app_p3, &btn_field, &btn_bands}
 };
 
 /* RTTY */

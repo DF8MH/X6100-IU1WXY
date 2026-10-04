@@ -26,6 +26,7 @@
 #include "dialog_cw_trainer.h"
 #include "dialog_wspr.h"
 #include "dialog_field.h"
+#include "dialog_bands.h"
 #include "dialog_swrscan.h"
 #include "field/flog.h"
 #include "field/rbn.h"
@@ -1155,11 +1156,6 @@ static void field_demo(void) {
     field_key(LV_KEY_ESC);
     field_key(LV_KEY_RIGHT);
     field_key(LV_KEY_RIGHT);
-    field_key(LV_KEY_RIGHT);
-    field_key(LV_KEY_ENTER);            /* LOG */
-    shot("field_4_log.ppm");
-    field_key(LV_KEY_ESC);
-    field_key(LV_KEY_LEFT);
     field_rbn_start("IU1WXY");
     time_t now = time(NULL);
     const char *rbn[] = {
@@ -1173,6 +1169,12 @@ static void field_demo(void) {
         field_rbn_feed_line(rbn[r % 5], now);
     field_key(LV_KEY_ENTER);            /* BANDS */
     shot("field_5_bands.ppm");
+    dialog_destruct();
+    pump(100);
+    /* The same numbers in the Bands app */
+    dialog_construct(dialog_bands, lv_scr_act());
+    pump(300);
+    shot("bands_app.ppm");
     dialog_destruct();
     pump(100);
 }
