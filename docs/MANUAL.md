@@ -5,7 +5,7 @@ overview is the [README](../README.md).
 
 ## Contents
 
-- [Usage](#usage): digital modes, JS8, WSPR, SSTV/WeFax/NavTex, RTTY and WeFax TX, CW decoder, CW Keyboard, DX Cluster, Field Ops (SOTA/POTA), Bluetooth, themes
+- [Usage](#usage): digital modes, JS8, WSPR, SSTV/WeFax/NavTex, RTTY and WeFax TX, CW decoder, CW Keyboard, DX Cluster, Field Ops (SOTA/POTA), Bands, Bluetooth, themes
 - [Web configurator](#web-configurator) and [companion app](#companion-app-android)
 - [wfview server](#wfview-server), [Settings](#settings)
 - [Reference](#reference): Bluetooth CAT, CI-V commands, btcat-ctl, btaudio-ctl, files on /mnt
@@ -294,41 +294,75 @@ from the [web configurator](#web-configurator) or in the file
 ### Field Ops (SOTA / POTA)
 
 A full-screen interface for portable activations: APP (page 3) → **Field Ops**,
-or a long-press action. **GEN** or **Radio** goes back to the normal screen;
-everything (the reference, the activation running, its log, the screen you
-were on) is kept on the SD card in `/mnt/field`, so coming back, or a restart in
-the middle of an activation, finds it as it was. **Start here** (home screen)
-opens Field Ops at power on.
+or a long-press action. **GEN** or **Radio** goes back to the normal screen.
+Everything (the reference, the activation running, its log, the screen you were
+on) is kept on the SD card in `/mnt/field`, so coming back, or a restart in the
+middle of an activation, finds it as it was. **Start here** (home screen) opens
+Field Ops at power on. The main knob still tunes; MFK and touch choose.
 
-- **Home**: the SOTA, POTA and Bands tiles (MFK to choose, press to open). The Log screen is
-  hidden for now.
-- **SOTA / POTA**: the nearest summits or parks with their distance; the nearest
-  one is taken, the MFK and a press choose another, **Ref...** types one. The
-  position comes from the radio's GPS, else from the phone (the companion app
-  sends it), else from the QTH locator.
-  - **Start** begins the activation and its ADIF log
-    (`/mnt/field/logs/<date>-<time>_<ref>.adi`, with `MY_SOTA_REF` or
-    `MY_SIG POTA` / `MY_POTA_REF`); **End**, pressed twice, ends it.
-  - **Log QSO**: type `CALL`, or `CALL rst_rcvd rst_sent` (default 599 in CW,
-    59 otherwise); each QSO is written to the SD card at once.
-  - **Spot**: POTA self-spot on pota.app with the frequency and mode of the
-    radio (WiFi needed). SOTAwatch spots are not available yet (they need an
-    API client approved by SOTA): post an alert on SOTAwatch and call CQ in CW,
-    RBNHole spots you from the Reverse Beacon Network.
-  - **Update list** (page 2): downloads the parks and summits (about 35 MB,
-    once; then it works offline).
-- **Bands**: for each band the cluster spots of the last 30 minutes, the RBN
-  skimmer spots of the last 15 and the skimmers that heard you in the last 10,
-  with the best band marked. **Test beacon** sends `TEST DE <call>` in CW (the
-  radio must be in CW) so you can see who hears you; **Use band** (or a press)
-  tunes a typical activation frequency of the band.
-- The activation logs can be downloaded from the web configurator's **Field** page.
+| Home | SOTA, before the activation |
+|---|---|
+| ![Field Ops home](screenshots/field_home.png) | ![SOTA mode](screenshots/field_sota.png) |
+| **Activation** | **Bands** |
+| ![Activation](screenshots/field_activation.png) | ![Band overview](screenshots/field_bands.png) |
 
-**Bands** (APP page 3, or a long-press action) is the same band overview as an app of its own,
-in the look of the other apps: each band with its activity, cluster / RBN spots and who heard
-you, the best one framed. MFK to choose, press (or **Use band**) to tune; **Test beacon** in CW.
+**Home**: the SOTA, POTA and Bands tiles; MFK to choose, a press (or a tap) opens.
+
+**SOTA / POTA, before the activation**
+- On the left the reference: summit or park, name, altitude and points (SOTA),
+  locator, coordinates and where the position comes from. On the right the nearest
+  references with their distance: the nearest one is taken, the MFK and a press
+  choose another, **Ref...** (page 2) types one.
+- The position comes from the radio's GPS, else from the phone (the companion
+  app sends it), else from the QTH locator. The dot in the header is green for a
+  real position (GPS, phone), yellow for the locator.
+- **Update list** (page 2): downloads the parks (POTA) and summits (SOTA), about
+  35 MB once, in about 3 minutes; then it works offline. Also from the web
+  configurator's **Field** page.
+- **Start** begins the activation and its ADIF log.
+
+**SOTA / POTA, during the activation**: the band, the frequency and the mode,
+the S-meter, the CQ text with the reference, the QSO count, the time since the
+start and the last call.
+- **CQ** sends `CQ CQ SOTA DE <call>` in CW (on the mic in the other modes).
+- **Log QSO**: type `CALL`, or `CALL rst_rcvd rst_sent` (default 599 in CW, 59
+  otherwise). Each QSO goes to the SD card at once, in
+  `/mnt/field/logs/<date>-<time>_<ref>.adi` with `MY_SOTA_REF` or `MY_SIG POTA` /
+  `MY_POTA_REF`. The logs can be downloaded from the web configurator's **Field**
+  page.
+- **Spot**: POTA self-spot on pota.app with the frequency and mode of the radio
+  (WiFi needed). SOTAwatch spots are not available yet (they need an API client
+  approved by SOTA): post an alert on SOTAwatch and call CQ in CW, RBNHole spots
+  you from the Reverse Beacon Network.
+- **End** (page 2), pressed twice, ends the activation.
+
+**Companion app**: while the radio is in Field Ops the phone shows its SOTA/POTA
+page by itself: the reference, the nearby ones to choose, Start and End, and the
+QSO entry with the phone's keyboard (call, RST sent and received), the QSO list,
+Spot. The phone's position goes to the radio when **Send phone position** is on.
+
+**Bands**: for each band the cluster spots of the last 30 minutes, the Reverse
+Beacon Network skimmer spots of the last 15 and the skimmers that heard you in the
+last 10 (with the best SNR); the activity as a bar and HIGH / GOOD / FAIR / POOR,
+the best band marked. **Test beacon** sends `TEST DE <call>` in CW (the radio must
+be in CW) so you can see who hears you; **Use band** (or a press) tunes a typical
+activation frequency of the band. RBN is connected while the screen is open (the
+first minute fills the counts); it needs WiFi and the callsign.
 
 No POTA or SOTA spot goes to the DX cluster: neither program reads them there.
+
+### Bands
+
+The band overview of Field Ops as an app of its own, in the look of the other
+apps: APP (page 3) → **Bands**, or a long-press action.
+
+![Bands app](screenshots/bands_app.png)
+
+Each band shows its activity bar and word, the cluster / RBN spot counts and who
+heard you (skimmers, best SNR); the best band is framed. MFK to choose, a press
+(or **Use band**) tunes a typical frequency of the band (CW or phone, as the
+radio's mode); **Test beacon** sends `TEST DE <call>` in CW; ESC closes. The
+numbers are the same as in Field Ops.
 
 ### Bluetooth headphones
 

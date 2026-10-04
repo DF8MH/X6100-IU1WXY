@@ -83,7 +83,7 @@ transmits by itself.
   you are (radio GPS, the phone's position or the locator), starts the
   activation, logs the QSOs in ADIF with the reference, spots you on POTA.
 - **Bands** with the Reverse Beacon Network: activity per band, who hears you
-  and a CW **test beacon**; upload of the log to **QRZ**.
+  and a CW **test beacon**, also as an app of its own outside Field Ops.
 - Leaving it with GEN, or a restart, loses nothing: it all lives on the SD card.
 
 ### Radio and screen
