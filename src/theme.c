@@ -51,10 +51,13 @@ static const theme_shape_t builtin_shapes[B_COUNT] = {
                    .images = 1, .font = -1, .waterfall_table = 0},
     [B_LEGACY]  = {.radius = 7, .radius_btn = 10, .radius_popup = 10, .border = 1, .box_gradient = true,
                    .images = 2, .font = -1, .waterfall_table = 1},
-    /* Light and high contrast for the sun: weak signals white, strong ones dark */
+    /* Light and high contrast for the sun: the noise floor pale, then quickly blue (the radio's
+     * noise sits low in the 256 levels), strong signals magenta and red */
     [B_OUTDOOR] = {.radius = 6, .radius_btn = 8, .radius_popup = 8, .border = 2, .focus_solid = true,
-                   .font = -1, .waterfall = {0xf4f8ff, 0x5c94ff, 0x0024d8, 0x000070, 0xc00000, 0x000000},
-                   .waterfall_n = 6},
+                   .font = -1,
+                   .waterfall = {0xeef2f8, 0xc8d8ee, 0x6890e0, 0x2858d0, 0x1430a8, 0x6010a0, 0xc00060, 0xe02020,
+                                 0xa00000, 0x500000, 0x000000},
+                   .waterfall_n = 11},
     [B_CLASSIC] = {.radius = 3, .radius_btn = 4, .radius_popup = 4, .border = 1, .btn_gradient = true,
                    .focus_solid = true, .font = FONT_ARIAL,
                    .waterfall = {0x000000, 0x000060, 0x0040e0, 0x00c8ff, 0xffff00, 0xff6000, 0xffffff},
