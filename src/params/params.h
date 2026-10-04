@@ -245,6 +245,7 @@ typedef struct {
 extern params_t params;
 
 void params_init();
+void params_flush();
 
 void params_bool_set(params_bool_t *var, bool x);
 void params_uint8_set(params_uint8_t *var, uint8_t x);

@@ -978,7 +978,7 @@ static void build_log(void) {
     list_head("N\tTIME\tCALL\tBAND\tMODE\tRST S / R", 13, 6);
     qsos_n = st.log[0] ? field_log_read(st.log, qsos, MAX_QSO) : 0;
     for (int k = 0; k < qsos_n; k++) {
-        gmtime_r(&qsos[k].t, &tm);
+        localtime_r(&qsos[k].t, &tm);
         snprintf(row, sizeof(row), "%d\t%02d:%02d\t%s\t%s\t%s\t%s / %s", k + 1, tm.tm_hour, tm.tm_min, qsos[k].call,
                  field_band(qsos[k].freq_hz), qsos[k].mode, qsos[k].rst_s, qsos[k].rst_r);
         list_add(row);
@@ -1384,9 +1384,9 @@ static void timer_cb(lv_timer_t *t) {
     time_t      now = time(NULL);
     struct tm   tm;
 
-    gmtime_r(&now, &tm);
+    localtime_r(&now, &tm);
     position(&lat, &lon, &src, &age);
-    lv_label_set_text_fmt(head_right, "%s   %02d:%02dZ", src[0] ? src : "NO POS", tm.tm_hour, tm.tm_min);
+    lv_label_set_text_fmt(head_right, "%s   %02d:%02d", src[0] ? src : "NO POS", tm.tm_hour, tm.tm_min);
     /* Green: a real position (GPS, phone); yellow: the locator square */
     lv_obj_set_style_bg_color(head_dot, !src[0] ? TC(err) : !strcmp(src, "QTH") ? TC(warn) : TC(ok), 0);
     if (end_armed && now - end_armed_at > 4) {

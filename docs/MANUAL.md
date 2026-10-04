@@ -419,7 +419,8 @@ device exposes an outgoing COM/SPP port. Log files: `/tmp/btcat.log`,
 Every colour of the GUI comes from a **role** (background, button, selected
 row, header text, OK, TX, ...); a theme gives each role a colour, plus
 corners, borders, gradients, the font and the waterfall palette. Choose it in
-Settings → Display → INTERFACE → **Theme**; it applies at the next start.
+Settings → Display → INTERFACE → **Theme**; the radio app restarts at once with it
+(a few seconds, the settings are saved first).
 
 | Theme | Look |
 |---|---|
@@ -560,8 +561,8 @@ Audio, Wireless (page 1), Keys, Cluster and Info (page 2).
 
 The MFK walks the controls and stops at the first and last one; there the
 page shows its top or its end, so status rows below the last control are
-always in view. A new Font or Theme applies at the next start (the screen
-says so when you change it). Some cards depend on the base firmware revision (TX AUDIO, band output
+always in view. A new Font applies at the next start (the screen
+says so when you change it); a new Theme restarts the radio app at once. Some cards depend on the base firmware revision (TX AUDIO, band output
 gain, TX filter, CESSB, FM emphasis).
 
 ## Reference

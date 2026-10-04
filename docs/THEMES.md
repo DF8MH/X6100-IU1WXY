@@ -7,8 +7,8 @@ shapes, the font and the waterfall palette.
 Built in: **IU1WXY** (default), **Classic** (black, grey keys, IC-7300 style)
 and, not offered in the menu, Legacy and Outdoor. More themes are JSON files
 on the SD card in `/mnt/themes/`, one per file: `/mnt/themes/My theme.json`
-shows up as *My theme* in Settings -> Display -> INTERFACE -> Theme. The theme
-is applied at the next start (as the font).
+shows up as *My theme* in Settings -> Display -> INTERFACE -> Theme. Choosing a theme
+restarts the radio app at once with it.
 
 ## File format
 

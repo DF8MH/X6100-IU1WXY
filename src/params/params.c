@@ -433,6 +433,13 @@ static void * params_thread(void *arg) {
     }
 }
 
+/* Save now, before the GUI restarts itself */
+void params_flush() {
+    pthread_mutex_lock(&params_mux);
+    params_save();
+    pthread_mutex_unlock(&params_mux);
+}
+
 void params_init() {
     int rc;
     if (database_init()) {

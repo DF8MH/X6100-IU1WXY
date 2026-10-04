@@ -12,6 +12,7 @@
 #include "wifi.h"
 #include "btaudio.h"
 #include "cfg/settings_manager.h"
+#include "cfg/settings_manager_api.h"
 #include <vector>
 #include <thread>
 #include <string>
@@ -265,13 +266,16 @@ static void font_update_cb(lv_event_t * e) {
     msg_update_text_fmt("Font: from the next start");
 }
 
-/* Themes are applied at start too: every window takes its colours when built */
+/* Themes are applied at start: every window takes its colours when built, so the
+ * GUI saves and restarts at once (x6100_daemon starts it again) */
 static void theme_update_cb(lv_event_t * e) {
     char name[32];
 
     lv_dropdown_get_selected_str(lv_event_get_target(e), name, sizeof(name));
     params_str_set(&params.theme_name, name);
-    msg_update_text_fmt("Theme %s: from the next start", name);
+    params_flush();
+    cfg_api_flush_all();
+    exit(0);
 }
 
 /* Shared create */
