@@ -272,16 +272,21 @@ asks for the latest 50 spots (`sh/dx`).
   the waterfall (across the band plan strip) and the callsign under it, in
   two staggered rows on a dark see-through background; alert calls are pink.
   The waterfall does not move.
-- **Spot snap hold** (0-5, 0 = off) and **Spot snap speed** (1-5): with the
-  cluster spots shown, turning the main knob slowly (at most *speed* detents
-  at a time) stops the VFO on a spot it passes for *hold* more detents.
-  Turning fast goes past. Without the cluster spots there is no snap.
 - **Cluster column**: a box at the right of the waterfall (80 % opaque) with
   the spots (kHz, callsign, mode, age) around the VFO marker row, coloured by
   age: green under 2 minutes, yellow under 10, amber under 30, grey older.
   The title shows the view (`Cluster 40m - Freq`). While the column is shown,
   the MFK has two more items, **Cluster order** (Freq / Time) and **Cluster
   bands** (Band / All), the same settings as in the app.
+  In time order the newest spot is on top and there is no VFO marker row.
+
+**Cluster view** (Settings → Cluster → CLUSTER VIEW): **Newest first** and
+**All bands** (the same as Cluster order and Cluster bands), and:
+
+- **Spot snap hold** (0-5, 0 = off) and **Spot snap speed** (1-5): with the
+  cluster spots shown, turning the main knob slowly (at most *speed* detents
+  at a time) stops the VFO on a spot it passes for *hold* more detents.
+  Turning fast goes past. Without the cluster spots there is no snap.
 
 Both use the same client as the app.
 
