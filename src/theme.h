@@ -44,8 +44,8 @@ extern "C" {
     X(btn_active_text,   0xffffff, 0xffffff, 0x000000, 0xffffff) \
     X(btn_page,          0x16232f, 0x16232f, 0xc8c8c8, 0x2a2a2a) /* the page button, bottom left */ \
     X(btn_page_text,     0xccddee, 0xccddee, 0x000000, 0xb4b4b4) \
-    X(btn_off_text,     0x55606c, 0x55606c, 0x8a8a8a, 0x6a6a6a) /* disabled */ \
-    X(btn_off_border,    0x2a323c, 0x2a323c, 0x8a8a8a, 0x3a3a3a) \
+    X(btn_off_text,     0x55606c, 0x55606c, 0x777777, 0x6a6a6a) /* disabled */ \
+    X(btn_off_border,    0x2a323c, 0x2a323c, 0x777777, 0x3a3a3a) \
     X(btn_mark,          0x66ff66, 0x66ff66, 0x008a00, 0xffa000) /* encoder mark on a button */ \
     X(btn_mark_assigned, 0x80ff80, 0x80ff80, 0x50b050, 0xffc060) \
     X(btn_mark_active,   0xff4040, 0xff4040, 0xff0000, 0xff3030) /* the control the encoder is on now */ \
@@ -107,8 +107,8 @@ extern "C" {
     X(alert_box,         0x2a0f22, 0x2a0f22, 0xf0d5e8, 0x2a0818) /* cluster alert popup */ \
     X(track,             0x304050, 0x304050, 0xafbfcf, 0x303030) /* progress bar track */ \
     X(frame,             0x182028, 0x182028, 0xd7dfe7, 0x0a0a0a) /* WeFax / channels frame */ \
-    X(off,               0x555555, 0x555555, 0xaaaaaa, 0x4a4a4a) /* unlit bars, spectrum peak */ \
-    X(icon_off,          0x151515, 0x151515, 0xeaeaea, 0x1a1a1a) /* top bar icons that are off */ \
+    X(off,               0x555555, 0x555555, 0x8a8a8a, 0x4a4a4a) /* unlit bars, spectrum peak */ \
+    X(icon_off,          0x151515, 0x151515, 0x8c8c8c, 0x1a1a1a) /* top bar icons that are off */ \
     X(lock,              0xe0a030, 0xe0a030, 0xaf7103, 0xffa000) /* secured WiFi padlock */ \
     X(control_border,    0x8a8a8a, 0x8a8a8a, 0x585858, 0x8a8a8a) /* Settings sliders, toggles */ \
     X(toggle_on,         0x2196f3, 0x2196f3, 0x0062b0, 0x2f72d6) /* toggle on, level bars */ \

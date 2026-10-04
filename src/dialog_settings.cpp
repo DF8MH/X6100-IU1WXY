@@ -1204,11 +1204,12 @@ static uint8_t make_band_plan(uint8_t row) {
     return row + 1;
 }
 
-static uint8_t make_cluster_column(uint8_t row) {
+/* A label and an on/off switch for a 0/1 parameter */
+static uint8_t make_switch_row(uint8_t row, const char *text, ParamInt &param) {
     lv_obj_t *obj;
 
     obj = lv_label_create(grid);
-    lv_label_set_text(obj, "Cluster column");
+    lv_label_set_text(obj, text);
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     obj = lv_obj_create(grid);
@@ -1217,10 +1218,14 @@ static uint8_t make_cluster_column(uint8_t row) {
     lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_center(obj);
-    obj = switch_bool(obj, cfg_sm.p_cluster_column);
+    obj = switch_bool(obj, param);
     lv_obj_set_width(obj, SMALL_3 - 30);
 
     return row + 1;
+}
+
+static uint8_t make_cluster_column(uint8_t row) {
+    return make_switch_row(row, "Cluster column", cfg_sm.p_cluster_column);
 }
 
 static void auto_level_offset_update_cb(lv_event_t * e) {
@@ -3599,6 +3604,9 @@ static void make_display_page() {
     row = make_param_slider(row, "Spot snap hold", &snap_hold_slider);
     row = make_param_slider(row, "Spot snap speed", &snap_slow_slider);
     row = make_cluster_column(row);
+    /* The same settings as the Cluster app's Order and Band / All and the MFK items */
+    row = make_switch_row(row, "Cluster: newest first", cfg_sm.p_cluster_order);
+    row = make_switch_row(row, "Cluster: all bands", cfg_sm.p_cluster_all_bands);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_SETTINGS, "INTERFACE");

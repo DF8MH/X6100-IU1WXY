@@ -53,7 +53,7 @@ static const theme_shape_t builtin_shapes[B_COUNT] = {
                    .images = 2, .font = -1, .waterfall_table = 1},
     /* Light and high contrast for the sun: weak signals white, strong ones dark */
     [B_OUTDOOR] = {.radius = 6, .radius_btn = 8, .radius_popup = 8, .border = 2, .focus_solid = true,
-                   .font = -1, .waterfall = {0xffffff, 0xa8d0ff, 0x0050ff, 0x7000c0, 0xd00000, 0x000000},
+                   .font = -1, .waterfall = {0xf4f8ff, 0x5c94ff, 0x0024d8, 0x000070, 0xc00000, 0x000000},
                    .waterfall_n = 6},
     [B_CLASSIC] = {.radius = 3, .radius_btn = 4, .radius_popup = 4, .border = 1, .btn_gradient = true,
                    .focus_solid = true, .font = FONT_ARIAL,
