@@ -161,11 +161,12 @@ static void draw_cb(lv_event_t * e) {
     lv_draw_line_dsc_init(&line_dsc);
 
     lv_coord_t x1 = obj->coords.x1;
-    /* Room for half a label above the top line and below the bottom one */
-    lv_coord_t y1 = obj->coords.y1 + 14;
+    /* A strip on top for the frequencies, the grid below it */
+    lv_coord_t top = obj->coords.y1;
+    lv_coord_t y1  = top + 34;
 
     lv_coord_t w = lv_obj_get_width(obj);
-    lv_coord_t h = lv_obj_get_height(obj) - 28;
+    lv_coord_t h = lv_obj_get_height(obj) - 34 - 10;
 
     lv_point_t a, b;
 
@@ -177,7 +178,7 @@ static void draw_cb(lv_event_t * e) {
     lv_draw_label_dsc_init(&dsc_label);
 
     dsc_label.color = TC(text);
-    dsc_label.font = &sony_28;
+    dsc_label.font = &sony_20;
 
     lv_point_t label_size;
 
@@ -207,7 +208,7 @@ static void draw_cb(lv_event_t * e) {
     uint32_t    freq = freq_center - span / 4;
     uint16_t    mhz, khz, hz;
 
-    a.y = y1;
+    a.y = top + 4 + 24;
     b.y = y1 + h;
 
     for (int16_t x = -1; x <= 1; x++, freq += span / 4) {
@@ -220,9 +221,8 @@ static void draw_cb(lv_event_t * e) {
         snprintf(str, sizeof(str), "%i.%03i.%03i", mhz, khz, hz);
         lv_txt_get_size(&label_size, str, dsc_label.font, 0, 0, LV_COORD_MAX, 0);
 
-        /* At the bottom, where SWR 1.0 leaves room (the top lines are close together) */
         area.x1 = a.x - label_size.x / 2;
-        area.y1 = y1 + h - label_size.y;
+        area.y1 = top + 4;
         area.x2 = area.x1 + label_size.x;
         area.y2 = area.y1 + label_size.y;
 
