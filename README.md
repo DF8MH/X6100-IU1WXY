@@ -2,6 +2,9 @@
 
 <p align="center"><i>by Giovanni Ricciardi IU1WXY</i></p>
 
+<p align="center">Heartfelt thanks to <b>Oleg Belousov R1CBU</b>, <b>Georgy Dyuldin R2RFE</b>
+and the whole <b>X6100 community</b>: this firmware stands on their work.</p>
+
 <p align="center"><b>A complete SD-card firmware for the Xiegu X6100: every digital mode on the radio,
 DX cluster on the waterfall, themes, and full remote control from your phone or a browser.</b></p>
 
