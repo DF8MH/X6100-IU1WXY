@@ -25,6 +25,7 @@
 #include <pthread.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <sys/sysmacros.h>
 #include <sys/resource.h>
 #include <jpeglib.h>
 
@@ -335,6 +336,27 @@ static void timer_cb(lv_timer_t *t) {
     }
 }
 
+/* On an SD card, not the radio's internal eMMC: the block device holding the folder says its type */
+static bool on_sd_card(const char *dir) {
+    struct stat st;
+    char        path[64], type[8] = "";
+    FILE       *f;
+
+    if (stat(dir, &st) != 0) {
+        return false;
+    }
+    snprintf(path, sizeof(path), "/sys/dev/block/%u:%u/../device/type", major(st.st_dev), minor(st.st_dev));
+    f = fopen(path, "r");
+    if (!f) {
+        return false;
+    }
+    if (!fgets(type, sizeof(type), f)) {
+        type[0] = 0;
+    }
+    fclose(f);
+    return strncmp(type, "SD", 2) == 0;
+}
+
 static bool start() {
     struct statvfs  fs;
     char            name[32];
@@ -347,6 +369,10 @@ static bool start() {
 
     mkdir(SCREEN_REC_DIR, 0755);
 
+    if (!on_sd_card(SCREEN_REC_DIR)) {
+        msg_update_text_fmt("Screen rec: no SD card");
+        return false;
+    }
     if (statvfs(SCREEN_REC_DIR, &fs) != 0 || (uint64_t) fs.f_bavail * fs.f_frsize < SCREEN_REC_MIN_MB * 1024ULL * 1024) {
         msg_update_text_fmt("Disk full");
         return false;
