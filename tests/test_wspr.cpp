@@ -97,8 +97,8 @@ TEST_CASE("WSPRnet request path", "[wspr]") {
     wspr_spot_t s = {-21, 0.3f, -1, 14097012.0, "K1ABC", "FN42", 37};
     char        path[512];
 
-    wsprnet_path(path, sizeof(path), "IU1WXY/P", "JN35ta", 14095600, 1790856120, &s);   /* 2026-10-01 12:02 UTC */
+    wsprnet_path(path, sizeof(path), "IU1WXY/P", "JN35xx", 14095600, 1790856120, &s);   /* 2026-10-01 12:02 UTC */
     REQUIRE(std::string(path) ==
-            "/post?function=wspr&rcall=IU1WXY%2FP&rgrid=JN35ta&rqrg=14.095600&date=261001&time=1202"
+            "/post?function=wspr&rcall=IU1WXY%2FP&rgrid=JN35xx&rqrg=14.095600&date=261001&time=1202"
             "&sig=-21&dt=0.3&drift=-1&tqrg=14.097012&tcall=K1ABC&tgrid=FN42&dbm=37&version=X6100-IU1WXY&mode=2");
 }

@@ -41,7 +41,7 @@ TEST_CASE("Field refs nearest", "[field]") {
 
 TEST_CASE("Field ADIF log", "[field]") {
     const char     *path = "test_field_log.adi";
-    field_station_t st   = {"IU1WXY/P", "JN35ta", 'S', "I/LO-001"};
+    field_station_t st   = {"IU1WXY/P", "JN35xx", 'S', "I/LO-001"};
     field_qso_t     q    = {1790685660, "DL1ABC", 14062000, "CW", "599", "579"};
     char            rec[512];
 
