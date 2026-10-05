@@ -20,6 +20,7 @@
 #define POOL     24
 #define GAP      6      /* between labels of a row */
 #define SPOT_COLOR theme_hex(TC_spot)
+#define SPOT_FONT  sony_22   /* line height 17: fits ROW_H */
 
 typedef struct {
     lv_obj_t *label;
@@ -30,7 +31,7 @@ static mark_t         marks[POOL];
 static int32_t        shown_hz[POOL];   /* the spots drawn now, for the tuning snap */
 static int            shown_n;
 static bool           ready;
-static lv_coord_t     line_y0, line_h0, tag_y0;
+static lv_coord_t     line_y0, tag_y0;
 static int32_t        span_center, span_half;
 static cluster_spot_t spots[CLUSTER_MAX_SPOTS];
 static int            spots_n;
@@ -68,7 +69,7 @@ static void redraw(void) {
             if (dx < 0 || dx >= WIDTH || !cluster_filter_pass(flt, s, now)) {
                 continue;
             }
-            w  = lv_txt_get_width(s->dx, strlen(s->dx), &sony_18, 0, LV_TEXT_FLAG_NONE) + 4;
+            w  = lv_txt_get_width(s->dx, strlen(s->dx), &SPOT_FONT, 0, LV_TEXT_FLAG_NONE) + 4;
             lx = (x + w > WIDTH) ? x - w + 1 : x;  /* right-aligned at the right edge */
 
             for (row = 0; row < ROWS; row++) {
@@ -98,7 +99,9 @@ static void redraw(void) {
             lv_obj_clear_flag(m->label, LV_OBJ_FLAG_HIDDEN);
 
             shown_hz[n - 1] = s->freq_hz;
+            /* From the frequency on the top bar down to its call, either row */
             lv_obj_set_pos(m->line, x, line_y0);
+            lv_obj_set_height(m->line, tag_y0 + row * ROW_H - line_y0 + 2);
             lv_obj_set_style_bg_color(m->line, lv_color_hex(color), 0);
             lv_obj_clear_flag(m->line, LV_OBJ_FLAG_HIDDEN);
         }
@@ -124,38 +127,57 @@ static void timer_cb(lv_timer_t *t) {
     }
 }
 
-void spot_marks_layout(lv_coord_t line_y, lv_coord_t line_h, lv_coord_t tag_y) {
+/* The call drawn in black 1 px around before the label draws it in colour */
+static void outline_cb(lv_event_t *e) {
+    static const int8_t off[8][2] = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}};
+    lv_obj_t           *l = lv_event_get_target(e);
+    lv_draw_label_dsc_t dsc;
+    lv_area_t           a;
+
+    if (lv_event_get_code(e) == LV_EVENT_REFR_EXT_DRAW_SIZE) {
+        lv_event_set_ext_draw_size(e, 1);
+        return;
+    }
+    if (lv_event_get_code(e) != LV_EVENT_DRAW_MAIN_BEGIN) {
+        return;
+    }
+    lv_draw_label_dsc_init(&dsc);
+    lv_obj_init_draw_label_dsc(l, LV_PART_MAIN, &dsc);
+    dsc.color = lv_color_black();
+    for (int i = 0; i < 8; i++) {
+        lv_obj_get_content_coords(l, &a);
+        lv_area_move(&a, off[i][0], off[i][1]);
+        lv_draw_label(lv_event_get_draw_ctx(e), &dsc, &a, lv_label_get_text(l), NULL);
+    }
+}
+
+void spot_marks_layout(lv_coord_t line_y, lv_coord_t tag_y) {
     line_y0 = line_y;
-    line_h0 = line_h;
     tag_y0  = tag_y;
     if (ready) {
-        for (int i = 0; i < POOL; i++) {
-            lv_obj_set_height(marks[i].line, line_h);
-        }
         redraw();
     }
 }
 
-void spot_marks_init(lv_obj_t *parent, lv_coord_t line_y, lv_coord_t line_h, lv_coord_t tag_y) {
+void spot_marks_init(lv_obj_t *parent, lv_coord_t line_y, lv_coord_t tag_y) {
     line_y0 = line_y;
-    line_h0 = line_h;
     tag_y0  = tag_y;
 
     for (int i = 0; i < POOL; i++) {
         lv_obj_t *l = lv_obj_create(parent);
         lv_obj_remove_style_all(l);
-        lv_obj_set_size(l, 1, line_h);
+        lv_obj_set_width(l, 2);
         lv_obj_set_style_bg_opa(l, LV_OPA_COVER, 0);
         lv_obj_clear_flag(l, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
         marks[i].line = l;
 
         l = lv_label_create(parent);
-        lv_obj_set_style_text_font(l, &sony_18, 0);
+        lv_obj_set_style_text_font(l, &SPOT_FONT, 0);
         lv_obj_set_style_pad_hor(l, 2, 0);
-        /* Readable on the waterfall too */
-        lv_obj_set_style_bg_color(l, TC(panel), 0);
-        lv_obj_set_style_bg_opa(l, LV_OPA_50, 0);
+        /* Readable on the waterfall in every theme: a black outline */
+        lv_obj_add_event_cb(l, outline_cb, LV_EVENT_ALL, NULL);
+        lv_obj_refresh_ext_draw_size(l);
         lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
         marks[i].label = l;
     }

@@ -1640,14 +1640,14 @@ static void on_cluster_spots_wf_change(Subject *subj, void *user_data) {
         y += param_i_get(cfg_cluster_spots_wf) ? SPOT_MARKS_H : 0;
         lv_obj_set_y(waterfall, y);
         freq_scale_lines_set_y(y);
-        spot_marks_layout(spot_tag_y - 36 - 36, 36, spot_tag_y);
+        spot_marks_layout(spot_tag_y - 36 - 36, spot_tag_y);
     } else {
         lv_coord_t strip = param_i_get(cfg_band_plan) ? BAND_PLAN_H : 0;
 
         lv_obj_set_y(waterfall, y);
         freq_scale_lines_set_y(y);
         band_plan_set_y(y);
-        spot_marks_layout(y, strip + SPOT_LINE_H, y + strip + SPOT_LINE_H);
+        spot_marks_layout(y, y + strip + SPOT_LINE_H);
         /* The cluster column starts under the band plan strip, not over it */
         y += strip;
     }
@@ -1734,7 +1734,7 @@ lv_obj_t * main_screen() {
     freq_scale_lines_init(obj, y, 480 - y);
     /* Cluster spots: tags under the frequency labels, lines at the bottom of
      * the spectrum, or at the top of the waterfall when it is off */
-    spot_marks_init(obj, param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, 36, spot_tag_y);
+    spot_marks_init(obj, param_i_get(cfg_spectrum_show) ? spot_tag_y - 36 - 36 : y, spot_tag_y);
     cluster_column_init(obj, wf_y);
     subject_subscribe_delayed_and_notify((Subject*)cfg_cluster_spots_wf, on_cluster_spots_wf_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_band_plan, on_band_plan_change, NULL);
