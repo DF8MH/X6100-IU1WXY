@@ -42,6 +42,11 @@ static bool           active;                   /* MFK item "Cluster" */
 static bool           has_sel;
 static cluster_spot_t sel;                      /* highlighted spot, kept by call + freq */
 
+/* Themes with black text (Outdoor): the whole column in black, the colours fade in the sun */
+static uint32_t ink(uint32_t c) {
+    return theme_hex(TC_text) == 0x000000 ? 0x000000 : c;
+}
+
 static uint32_t age_color(uint16_t age) {
     if (age < 2)  return theme_hex(TC_new);
     if (age < 10) return theme_hex(TC_age_mid);
@@ -56,7 +61,7 @@ static void set_mode(lv_obj_t *l, const cluster_spot_t *s) {
     cluster_mode_t         m = cluster_guess_mode(s);
 
     lv_label_set_text(l, name[m]);
-    lv_obj_set_style_text_color(l, lv_color_hex(theme_hex(color[m])), 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(ink(theme_hex(color[m]))), 0);
 }
 
 static int by_freq(const void *a, const void *b) {
@@ -97,14 +102,14 @@ static void show_spot(row_t *r, const cluster_spot_t *s, bool highlighted, const
     lv_label_set_text(r->freq, buf);
     lv_obj_set_width(r->freq, FREQ_W);
     lv_obj_set_style_text_align(r->freq, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(r->freq, TC(text_value), 0);
+    lv_obj_set_style_text_color(r->freq, lv_color_hex(ink(theme_hex(TC_text_value))), 0);
     set_alert_bg(r, alert && !highlighted);
     lv_label_set_text(r->call, s->dx);
     set_mode(r->mode, s);
     snprintf(buf, sizeof buf, "%um", age);
     lv_label_set_text(r->age, buf);
-    lv_obj_set_style_text_color(r->call, lv_color_hex(alert ? theme_hex(TC_alert_text) : c), 0);
-    lv_obj_set_style_text_color(r->age, lv_color_hex(c), 0);
+    lv_obj_set_style_text_color(r->call, lv_color_hex(ink(alert ? theme_hex(TC_alert_text) : c)), 0);
+    lv_obj_set_style_text_color(r->age, lv_color_hex(ink(c)), 0);
     show_row(r, true);
 }
 
@@ -218,7 +223,7 @@ static void redraw(void) {
             lv_label_set_text(r->freq, buf);
             lv_obj_set_width(r->freq, COL_W - 12);
             lv_obj_set_style_text_align(r->freq, LV_TEXT_ALIGN_CENTER, 0);
-            lv_obj_set_style_text_color(r->freq, TC(vfo), 0);
+            lv_obj_set_style_text_color(r->freq, lv_color_hex(ink(theme_hex(TC_vfo))), 0);
             set_alert_bg(r, false);
             lv_obj_set_style_bg_opa(r->freq, LV_OPA_COVER, 0);
             show_row(r, true);
@@ -332,7 +337,7 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
     lv_obj_add_flag(hl, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(hl, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
-    title = cell(box, 0, COL_W - 2, 2, LV_TEXT_ALIGN_CENTER, theme_hex(TC_text_head), &sony_22);
+    title = cell(box, 0, COL_W - 2, 2, LV_TEXT_ALIGN_CENTER, ink(theme_hex(TC_text_head)), &sony_22);
     lv_label_set_text(title, "DX Cluster");
     lv_obj_clear_flag(title, LV_OBJ_FLAG_HIDDEN);
 

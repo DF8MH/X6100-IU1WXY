@@ -51,12 +51,12 @@ static const theme_shape_t builtin_shapes[B_COUNT] = {
                    .images = 1, .font = -1, .waterfall_table = 0},
     [B_LEGACY]  = {.radius = 7, .radius_btn = 10, .radius_popup = 10, .border = 1, .box_gradient = true,
                    .images = 2, .font = -1, .waterfall_table = 1},
-    /* Light and high contrast for the sun: the noise floor pale, then quickly blue (the radio's
-     * noise sits low in the 256 levels), strong signals magenta and red */
+    /* Light and high contrast for the sun, in grey: the noise light, weak signals already mid grey,
+     * then darker at an even pace up to black, so a strong signal shows how strong it is */
     [B_OUTDOOR] = {.radius = 6, .radius_btn = 8, .radius_popup = 8, .border = 2, .focus_solid = true,
-                   .font = -1,
-                   .waterfall = {0xeef2f8, 0xc8d8ee, 0x6890e0, 0x2858d0, 0x1430a8, 0x6010a0, 0xc00060, 0xe02020,
-                                 0xa00000, 0x500000, 0x000000},
+                   .font = -1, .meter_gradient = true,
+                   .waterfall = {0xfafafa, 0xe6e6e6, 0xc8c8c8, 0xa0a0a0, 0x787878, 0x585858, 0x3c3c3c, 0x282828,
+                                 0x181818, 0x0a0a0a, 0x000000},
                    .waterfall_n = 11},
     [B_CLASSIC] = {.radius = 3, .radius_btn = 4, .radius_popup = 4, .border = 1, .btn_gradient = true,
                    .focus_solid = true, .font = FONT_ARIAL,

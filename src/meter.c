@@ -62,7 +62,11 @@ static void update_db_label() {
     lv_label_set_text_fmt(db_val_label, "%.1f", meter_db_raw);
 }
 
-static lv_color_t bar_color(int16_t db) {
+/* Bar i of n at db */
+static lv_color_t bar_color(int16_t db, uint8_t i, uint8_t n) {
+    if (theme_shape.meter_gradient) {
+        return lv_color_mix(TC(meter_high), TC(meter_weak), i * 255 / (n - 1));
+    }
     if (db >= S9) {
         /* Green at S9 fading to red at +40 */
         uint8_t mix = (db - S9) * 255 / (S9_40 - S9);
@@ -110,7 +114,7 @@ static void meter_draw_cb(lv_event_t * e) {
             peak_i = i;
         if (meter_db < db - 1.5f)
             continue;
-        rect_dsc.bg_color = bar_color(db);
+        rect_dsc.bg_color = bar_color(db, i, slices_total);
         area.x1 = x1 + 30 + i * slice_w - slice_w / 2 + slice_spacing / 2;
         area.x2 = area.x1 + slice_w - slice_spacing;
 
@@ -122,7 +126,8 @@ static void meter_draw_cb(lv_event_t * e) {
         area.x1 = x1 + 30 - slice_w / 2 + slice_w * peak_i + slice_spacing / 2;
         area.x2 = area.x1 + slice_w - slice_spacing;
         rect_dsc.bg_opa = LV_OPA_COVER;    /* bright: gradient colour from S9, white below */
-        rect_dsc.bg_color = bar_db[peak_i] >= S9 ? bar_color(bar_db[peak_i]) : TC(text);
+        rect_dsc.bg_color = bar_db[peak_i] >= S9 || theme_shape.meter_gradient ? bar_color(bar_db[peak_i], peak_i, slices_total)
+                                                                             : TC(text);
         lv_draw_rect(draw_ctx, &rect_dsc, &area);
     }
 

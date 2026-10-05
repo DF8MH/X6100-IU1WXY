@@ -117,17 +117,18 @@ extern "C" {
     \
     /* main screen */ \
     X(vfo_line,          0xff2020, 0xff2020, 0xe00000, 0xff2020) /* VFO line and filter band on spectrum / waterfall */ \
-    X(spot,              0x40e8ff, 0x40e8ff, 0x007e8f, 0x40e8ff) /* cluster spots on the waterfall */ \
+    X(spot,              0x40e8ff, 0x40e8ff, 0x000000, 0x40e8ff) /* cluster spots on the waterfall */ \
     X(mode_dig,          0xff8080, 0xff8080, 0x5f0000, 0xff8080) /* digital mode name in the info box */ \
     X(mode_text,         0xff6060, 0xff6060, 0x770000, 0xff4040) /* mode next to the frequency */ \
     X(mode_bg,           0x5a4818, 0x5a4818, 0xe7d5a5, 0x1f5fbf) /* its box (theme_shape.mode_box) */ \
     X(mode_border,       0xffffff, 0xffffff, 0x000000, 0x9fd2ff) \
     X(pill_off_text,     0xffffff, 0xffffff, 0x000000, 0xffffff) /* info box: PRE, ATT, ATU when off */ \
     X(pill_border,       0x777777, 0x777777, 0x888888, 0x5a5a5a) /* info box items (theme_shape.pill_border) */ \
+    X(meter_weak,        0xaaaaaa, 0xaaaaaa, 0xc8c8c8, 0xa0a0a0) /* S-meter first bar of meter_gradient */ \
     X(meter_bar,         0xaaaaaa, 0xaaaaaa, 0x404040, 0xa0a0a0) /* S-meter bars up to S9 */ \
     X(meter_over,        0xffffff, 0xffffff, 0x000000, 0xff4040) /* S-meter +20 +40 labels */ \
     X(meter_low,         0x20c040, 0x20c040, 0x3fdf5f, 0x40e040) /* S-meter above S9: from this... */ \
-    X(meter_high,        0xe02020, 0xe02020, 0xbd0202, 0xff3030) /* ...to this */ \
+    X(meter_high,        0xe02020, 0xe02020, 0x000000, 0xff3030) /* ...to this; last bar of meter_gradient */ \
     X(bar_high,          0xcc3333, 0xcc3333, 0xcc3333, 0xe03030) /* SWR high, mic clipping */ \
     X(bar_mid,           0xcccc33, 0xcccc33, 0xcccc33, 0xe0e030) /* SWR raised */ \
     X(alc,               0x66aabb, 0x66aabb, 0x296c7c, 0x40c8ff) /* ALC bar */ \
@@ -180,6 +181,7 @@ typedef struct {
     bool    btn_gradient;   /* btn -> btn_grad (else flat btn) */
     bool    box_gradient;   /* bar/strip/dialog -> *_grad */
     bool    focus_solid;    /* focused control: solid focus colour (else half see-through) */
+    bool    meter_gradient; /* S-meter: one even gradient, bar by bar, meter_weak to meter_high */
     uint8_t images;         /* message/panel backgrounds: 0 drawn, 1 dark images, 2 legacy images */
     int8_t  font;           /* FONT_* (fonts/font_select.h), -1 = the Settings choice */
     int16_t mark[3];        /* encoder LED on the buttons: x, width, height (centred); 0 = the bar on the left edge */

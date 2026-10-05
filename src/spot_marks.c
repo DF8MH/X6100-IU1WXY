@@ -19,6 +19,7 @@
 #define ROW_H    (SPOT_MARKS_H / ROWS)
 #define POOL     24
 #define GAP      6      /* between labels of a row */
+#define LINE_W   4      /* the line from a call to its frequency */
 #define SPOT_COLOR theme_hex(TC_spot)
 #define SPOT_FONT  sony_22   /* line height 17: fits ROW_H */
 
@@ -100,7 +101,7 @@ static void redraw(void) {
 
             shown_hz[n - 1] = s->freq_hz;
             /* From the frequency on the top bar down to its call, either row */
-            lv_obj_set_pos(m->line, x, line_y0);
+            lv_obj_set_pos(m->line, x - LINE_W / 2, line_y0);
             lv_obj_set_height(m->line, tag_y0 + row * ROW_H - line_y0 + 2);
             lv_obj_set_style_bg_color(m->line, lv_color_hex(color), 0);
             lv_obj_clear_flag(m->line, LV_OBJ_FLAG_HIDDEN);
@@ -127,7 +128,8 @@ static void timer_cb(lv_timer_t *t) {
     }
 }
 
-/* The call drawn in black 1 px around before the label draws it in colour */
+/* The call drawn 1 px around in the panel colour (black, white in Outdoor) before the label
+ * draws it in colour */
 static void outline_cb(lv_event_t *e) {
     static const int8_t off[8][2] = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}};
     lv_obj_t           *l = lv_event_get_target(e);
@@ -143,7 +145,7 @@ static void outline_cb(lv_event_t *e) {
     }
     lv_draw_label_dsc_init(&dsc);
     lv_obj_init_draw_label_dsc(l, LV_PART_MAIN, &dsc);
-    dsc.color = lv_color_black();
+    dsc.color = TC(panel);
     for (int i = 0; i < 8; i++) {
         lv_obj_get_content_coords(l, &a);
         lv_area_move(&a, off[i][0], off[i][1]);
@@ -166,7 +168,7 @@ void spot_marks_init(lv_obj_t *parent, lv_coord_t line_y, lv_coord_t tag_y) {
     for (int i = 0; i < POOL; i++) {
         lv_obj_t *l = lv_obj_create(parent);
         lv_obj_remove_style_all(l);
-        lv_obj_set_width(l, 2);
+        lv_obj_set_width(l, LINE_W);
         lv_obj_set_style_bg_opa(l, LV_OPA_COVER, 0);
         lv_obj_clear_flag(l, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
@@ -175,7 +177,7 @@ void spot_marks_init(lv_obj_t *parent, lv_coord_t line_y, lv_coord_t tag_y) {
         l = lv_label_create(parent);
         lv_obj_set_style_text_font(l, &SPOT_FONT, 0);
         lv_obj_set_style_pad_hor(l, 2, 0);
-        /* Readable on the waterfall in every theme: a black outline */
+        /* Readable on the waterfall in every theme: an outline */
         lv_obj_add_event_cb(l, outline_cb, LV_EVENT_ALL, NULL);
         lv_obj_refresh_ext_draw_size(l);
         lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
