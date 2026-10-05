@@ -116,7 +116,7 @@ extern "C" {
     X(toggle_focus,      0x7cc4ff, 0x7cc4ff, 0x003662, 0x9fd2ff) \
     \
     /* main screen */ \
-    X(vfo_line,          0xffa000, 0xffa000, 0xffa000, 0xff6000) /* VFO line on spectrum / waterfall */ \
+    X(vfo_line,          0xff2020, 0xff2020, 0xe00000, 0xff2020) /* VFO line and filter band on spectrum / waterfall */ \
     X(spot,              0x40e8ff, 0x40e8ff, 0x007e8f, 0x40e8ff) /* cluster spots on the waterfall */ \
     X(mode_dig,          0xff8080, 0xff8080, 0x5f0000, 0xff8080) /* digital mode name in the info box */ \
     X(mode_text,         0xff6060, 0xff6060, 0x770000, 0xff4040) /* mode next to the frequency */ \
