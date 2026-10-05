@@ -877,6 +877,21 @@ static void change_mode(keypad_key_t key, keypad_state_t state) {
     cparam_i_set(cfg_cur_mode, next_mode);
 }
 
+/* MSG opens the message dialog; pressed again it turns the page, like the other keys */
+static void msg_dialog_open(dialog_t *dialog) {
+    if (dialog_type_is_run(dialog)) {
+        buttons_page_t *page = buttons_get_cur_page();
+
+        if (page && page->items[0] && page->items[0]->press == button_next_page_cb) {
+            buttons_press(0, false);
+        }
+        return;
+    }
+    apps_disable();
+    panel_hide();
+    dialog_construct(dialog, obj);
+}
+
 static void main_screen_keypad_cb(lv_event_t * e) {
     event_keypad_t *keypad = lv_event_get_param(e);
 
@@ -1034,24 +1049,14 @@ static void main_screen_keypad_cb(lv_event_t * e) {
                 switch (cparam_i_get(cfg_cur_mode)) {
                     case x6100_mode_cw:
                     case x6100_mode_cwr:
-                        if (!dialog_type_is_run(dialog_msg_cw)) {
-                            apps_disable();
-                        }
-
-                        panel_hide();
-                        dialog_construct(dialog_msg_cw, obj);
+                        msg_dialog_open(dialog_msg_cw);
                         break;
 
                     case x6100_mode_lsb:
                     case x6100_mode_usb:
                     case x6100_mode_am:
                     case x6100_mode_nfm:
-                        if (!dialog_type_is_run(dialog_msg_voice)) {
-                            apps_disable();
-                        }
-
-                        panel_hide();
-                        dialog_construct(dialog_msg_voice, obj);
+                        msg_dialog_open(dialog_msg_voice);
                         break;
 
                     default:
