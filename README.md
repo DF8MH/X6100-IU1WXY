@@ -2,8 +2,8 @@
 
 <p align="center"><i>by Giovanni Ricciardi IU1WXY</i></p>
 
-<p align="center">Heartfelt thanks to <b>Oleg Belousov R1CBU</b>, <b>Georgy Dyuldin R2RFE</b>
-and the whole <b>X6100 community</b>: this firmware stands on their work.<br>
+<p align="center">Heartfelt thanks to <b>Oleg Belousov R1CBU</b>, <b>Georgy Dyuldin R2RFE</b>,
+<b>1KO125</b> by <b>Hany El Imam / TheMurusTeam</b> and the whole <b>X6100 community</b>: this firmware stands on their work.<br>
 Thanks to <b>Fabio IN3FOB</b> for the support in development and the dedicated, precise beta testing,
 and to <b>Leo CT7AUE</b>, <b>Angelo IU2VWK</b>, <b>Gianluca IW5DUA</b> and <b>Emilio IU8QTM</b>
 for their neverending patience, time and advices.</p>
@@ -234,27 +234,33 @@ app of its own (APP page 3 → **Bands**), in the same look as the other apps.
 
 The GUI has a new **theme system**: colours, buttons, corners, gradients,
 fonts and the waterfall palette all come from the theme, and a theme can draw
-every surface with PNG images. Four come with the firmware: choose one in
+every surface with PNG images. Five come with the firmware: choose one in
 Settings → Display → **Theme** and the radio app restarts with it at once.
 Your own go on the SD card ([how to make one](docs/THEMES.md)). The control
 the encoder is adjusting lights its red LED.
 
 **Outdoor** is made for the sun: light backgrounds, black text, strong
-borders, switches and icons that stay visible when off, and a waterfall
-palette that goes from pale blue to deep red and black, so the signals stand
-out even in full daylight.
+borders, switches and icons that stay visible when off, a grey waterfall
+(the noise light, weak signals already visible, strong ones toward black),
+the S-meter in one even grey gradient and the cluster in black, so
+everything reads even in full daylight. **Outdoor-Negative** is the same
+theme with the lightness inverted: dark background, white text, the colours
+keep their hue (the VFO line stays red).
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/theme_iu1wxy.png" alt="IU1WXY theme"><br><sub><b>IU1WXY</b> (default): dark blue-grey</sub></td>
     <td align="center"><img src="docs/screenshots/theme_outdoor.png" alt="Outdoor theme"><br><sub><b>Outdoor</b>: light, high contrast, for the sun</sub></td>
+    <td align="center"><img src="docs/screenshots/theme_outdoor_negative.png" alt="Outdoor-Negative theme"><br><sub><b>Outdoor-Negative</b>: the same, inverted</sub></td>
   </tr>
   <tr>
+    <td align="center"><img src="docs/screenshots/theme_iu1wxy.png" alt="IU1WXY theme"><br><sub><b>IU1WXY</b> (default): dark blue-grey</sub></td>
     <td align="center"><img src="docs/screenshots/theme_classic.png" alt="Classic theme"><br><sub><b>Classic</b>: black, grey keys</sub></td>
-    <td align="center"><img src="docs/screenshots/theme_rs.png" alt="RS theme"><br><sub><b>RS</b>: glossy buttons with LEDs, black LCD</sub></td>
   </tr>
   <tr>
+    <td align="center"><img src="docs/screenshots/theme_rs.png" alt="RS theme"><br><sub><b>RS</b>: glossy buttons with LEDs, black LCD</sub></td>
     <td align="center"><img src="docs/screenshots/theme_rs_settings.png" alt="RS settings"><br><sub><b>RS</b>: settings</sub></td>
+  </tr>
+  <tr>
     <td align="center"><img src="docs/screenshots/theme_rs_sstv.png" alt="RS SSTV"><br><sub><b>RS</b>: SSTV TX</sub></td>
   </tr>
 </table>
