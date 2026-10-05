@@ -136,6 +136,10 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_waterfall_ref{"waterfall_ref", 0, -40, 20,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Waterfall scroll speed: 5 = a line per spectrum frame (15/s), lower
+    // averages more frames into one line (slower, less noisy)
+    Parameter<int32_t> p_waterfall_speed{"waterfall_speed", 5, 1, 5,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     // Spectrum and waterfall: 0 = VFO centered (the view follows it), 1 = fixed span (the VFO line moves)
     Parameter<int32_t> p_wf_mode{"wf_mode", 0, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};

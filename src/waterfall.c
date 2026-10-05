@@ -158,6 +158,31 @@ void waterfall_data(float *data_buf, uint16_t size, bool tx, uint32_t base_freq,
         delay--;
         return;
     }
+
+    /* Speed: lower settings average several frames into one line */
+    static const uint8_t speed_frames[] = {6, 4, 3, 2, 1};
+    static float    acc[WATERFALL_NFFT];
+    static int      acc_n;
+    static uint32_t acc_freq;
+    int             frames = speed_frames[LV_CLAMP(1, param_i_get(cfg_waterfall_speed), 5) - 1];
+
+    if (frames > 1 && size <= WATERFALL_NFFT) {
+        if (acc_n == 0 || base_freq != acc_freq) {
+            /* first frame, or the radio moved: start a new line */
+            memcpy(acc, data_buf, size * sizeof(float));
+            acc_n = 1;
+            acc_freq = base_freq;
+        } else {
+            liquid_vectorf_add(acc, data_buf, size, acc);
+            acc_n++;
+        }
+        if (acc_n < frames) {
+            return;
+        }
+        liquid_vectorf_mulscalar(acc, size, 1.0f / acc_n, acc);
+        data_buf = acc;
+        acc_n = 0;
+    }
     scroll_down();
 
     float min, max;

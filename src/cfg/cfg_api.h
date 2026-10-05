@@ -69,6 +69,7 @@ extern ParamInt         *cfg_cluster_column;     // p_cluster_column
 extern ParamInt         *cfg_cluster_order;      // p_cluster_order
 extern ParamInt         *cfg_cluster_all_bands;  // p_cluster_all_bands
 extern ParamInt         *cfg_waterfall_ref;      // p_waterfall_ref
+extern ParamInt         *cfg_waterfall_speed;    // p_waterfall_speed
 extern ParamInt         *cfg_wf_mode;            // p_wf_mode
 extern ParamText        *cfg_encoder_bind;       // p_encoder_bind
 

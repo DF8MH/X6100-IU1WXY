@@ -20,3 +20,6 @@ void backlight_set_brightness(int16_t value);
 void backlight_set_buttons(buttons_light_t value);
 
 void backlight_switch();
+
+/* The level shown now (0-9 as the settings), -1 when the screen is off */
+int16_t backlight_level();

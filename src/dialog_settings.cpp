@@ -3264,6 +3264,7 @@ static param_slider_t agc_slope_slider = {&cfg_sm.p_agc_slope, 0, 10, 1, "%i dB"
 static param_slider_t snap_hold_slider = {&cfg_sm.p_spot_snap_hold, 0, 5, 1, "%i"};
 static param_slider_t snap_slow_slider = {&cfg_sm.p_spot_snap_slow, 1, 5, 1, "%i"};
 static param_slider_t accel_onset_slider = {&cfg_sm.p_freq_accel_onset, 1, 5, 1, "%i"};
+static param_slider_t wf_speed_slider = {&cfg_sm.p_waterfall_speed, 1, 5, 1, "%i"};
 
 static void param_slider_cb(lv_event_t *e) {
     lv_obj_t       *obj = lv_event_get_target(e);
@@ -3611,6 +3612,7 @@ static void make_display_page() {
     row = make_spectrum_min_max(row);
     row = make_waterfall_line_zoom(row);
     row = make_waterfall_smooth_scroll(row);
+    row = make_param_slider(row, "Speed", &wf_speed_slider);
     card_end(row);
 
     /* Overlays: shown with or without the spectrum */

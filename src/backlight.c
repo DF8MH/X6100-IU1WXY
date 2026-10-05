@@ -20,6 +20,7 @@
 static int          power;
 static int          brightness;
 static bool         on = true;
+static int16_t      level = -1;
 
 static lv_timer_t   *timer = NULL;
 
@@ -70,6 +71,7 @@ void backlight_tick() {
 
 void backlight_set_brightness(int16_t value) {
     if (on) {
+        level = value < 0 ? -1 : value;
         if (value < 0) {
             set_power(false);
 
@@ -90,6 +92,10 @@ void backlight_set_buttons(buttons_light_t value) {
     x6100_gpio_set(x6100_pin_light, value == BUTTONS_DARK ? 0 : 1);
 }
 
+int16_t backlight_level() {
+    return level;
+}
+
 void backlight_switch() {
     if (on) {
         set_power(false);
@@ -97,11 +103,13 @@ void backlight_switch() {
         x6100_gpio_set(x6100_pin_light, 0);
 
         on = false;
+        level = -1;
         lv_disp_enable_invalidation(lv_disp_get_default(), false);
     } else {
         lv_disp_enable_invalidation(lv_disp_get_default(), true);
         set_power(true);
         set_brightness(params.brightness_normal);
+        level = params.brightness_normal;
         x6100_gpio_set(x6100_pin_light, params.brightness_buttons == BUTTONS_DARK ? 0 : 1);
 
         on = true;

@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <string.h>
+#include <time.h>
+#include <sys/stat.h>
 
 #include <aether_radio/x6100_control/low/flow.h>
 #include <aether_radio/x6100_control/low/gpio.h>
@@ -34,6 +36,7 @@
 #include "audio.h"
 #include "pubsub_ids.h"
 #include "scheduler.h"
+#include "backlight.h"
 
 /*********************
  *      DEFINES
@@ -748,6 +751,44 @@ static void recover_processing_audio_inputs() {
     radio_unlock();
 }
 
+/* Battery log for the discharge curve of the pack, every 30 s: the base
+ * gives the voltage (0.1 V steps) and its own %, no current */
+#define BATTERY_LOG "/mnt/battery_log.csv"
+
+static void battery_log(const x6100_flow_t *p) {
+    static time_t   last;
+    time_t          t = time(NULL);
+    struct stat     st;
+    unsigned        mhz = 0;
+    FILE            *f;
+
+    if (t - last < 30) {
+        return;
+    }
+    last = t;
+    if ((f = fopen("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq", "r"))) {
+        if (fscanf(f, "%u", &mhz) == 1) {
+            mhz /= 1000;
+        }
+        fclose(f);
+    }
+    bool fresh = stat(BATTERY_LOG, &st) != 0;
+
+    if (!fresh && st.st_size > 2 * 1024 * 1024) {
+        rename(BATTERY_LOG, BATTERY_LOG ".1");
+        fresh = true;
+    }
+    if (!(f = fopen(BATTERY_LOG, "a"))) {
+        return;
+    }
+    if (fresh) {
+        fputs("time,vbat,batcap,vext,charging,tx,backlight,cpu_mhz\n", f);
+    }
+    fprintf(f, "%ld,%.1f,%u,%.1f,%u,%u,%d,%u\n", (long) t, p->vbat * 0.1f, p->batcap, p->vext * 0.1f,
+            p->flag.charging, p->flag.tx, backlight_level(), mhz);
+    fclose(f);
+}
+
 static bool radio_tick() {
     if (now_time < prev_time) {
         prev_time = now_time;
@@ -763,6 +804,7 @@ static bool radio_tick() {
         if (delay++ > 10) {
             delay = 0;
             clock_update_power(pack->vext * 0.1f, pack->vbat*0.1f, pack->batcap, pack->flag.charging);
+            battery_log(pack);
             /* Only on a change, with hysteresis: around 6.0 V the 30 s
              * power-off timer was started and stopped over and over */
             bool enter_low = !pack->flag.vext && (pack->vbat <= LOW_BATTERY_VBAT_LOW);
