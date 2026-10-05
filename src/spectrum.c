@@ -329,7 +329,7 @@ static void spectrum_draw_cb(lv_event_t *e) {
 
     /* Center */
 
-    main_line_dsc.width = 1;
+    main_line_dsc.width = 3;
     main_line_dsc.color = TC(vfo_line);   /* VFO line, as the waterfall one */
 
     main_a.x = x1 + markers_offset + w / 2;

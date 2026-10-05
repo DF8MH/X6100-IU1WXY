@@ -556,18 +556,19 @@ Audio, Wireless (page 1), Keys, Cluster and Info (page 2).
 | Tab | Cards |
 |---|---|
 | General | STATION (callsign, QTH locator), DATE / TIME, CONTROLS (frequency acceleration, charger), TX CALIBRATION (IQ offsets, band output gain), TRANSVERTERS (from, to, shift) |
-
-**Main knob acceleration** (General → CONTROLS): the radio times every detent
-of the main knob, and the step grows smoothly with the speed: turning slowly
-it is the tuning step, turning faster up to 10 times it (**Lite**) or 30 times
-(**Strong**); **None** keeps the step. **Accel. onset** (1-5, default 3) sets
-how soon it starts: 1 only when turned fast, 5 already when turned gently.
 | Display | BACKLIGHT, WATERFALL (mode, auto level, manual min/max, line and zoom, smooth scroll), MAIN SCREEN (band plan, cluster spots, cluster column), INTERFACE (popups, knob info, font, theme) |
 | Audio | RX AUDIO, TX AUDIO (codec gain, compressor, filter, CESSB, FM emphasis), MICROPHONE, VOX, AGC, BT HEADPHONES |
 | Wireless | WIFI (power, status, IP, networks), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones, also keyboards), WFVIEW SERVER (on/off, user, password, port and client), WEB REMOTE (Remote TX: lets the companion app transmit, default off) |
 | Keys | FRONT KEYS, LONG PRESS (GEN, APP, KEY, MSG, DFN, DFL), HAND MIC KEYS (F1, F2, F1 long, F2 long) |
 | Cluster | CLUSTER FILTERS (modes, bands, POTA/SOTA activity), CLUSTER VIEW (newest first, all bands, spot snap hold and speed) |
 | Info | app and base firmware versions |
+
+**Main knob acceleration** (General → CONTROLS): the radio times every detent
+of the main knob, and the step grows smoothly with the speed: turning slowly
+it is the tuning step, turning faster up to 6 times it (**Lite**) or 15 times
+(**Strong**, which also starts sooner); **None** keeps the step. **Accel.
+onset** (1-5, default 3) sets how soon it starts: 1 only when turned fast, 5
+already when turned gently.
 
 The MFK walks the controls and stops at the first and last one; there the
 page shows its top or its end, so status rows below the last control are

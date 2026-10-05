@@ -43,6 +43,7 @@ static bool             ready = false;
 
 static lv_style_t       middle_line_style;
 static lv_obj_t         *middle_line;
+static lv_obj_t         *filter_band;
 static lv_point_t       middle_line_points[] = { {0, 0}, {0, 0} };
 
 static lv_coord_t       height;
@@ -93,6 +94,7 @@ static void on_view_changed(Subject *subj, void *user_data);
 static void on_fg_freq_change(Subject *subj, void *user_data);
 static void on_mode_lo_offset_change(Subject *subj, void *user_data);
 static void on_if_shift_changed(Subject *subj, void *user_data);
+static void on_filter_change(Subject *subj, void *user_data);
 static void on_grid_min_change(Subject *subj, void *user_data);
 static void on_grid_max_change(Subject *subj, void *user_data);
 
@@ -114,6 +116,14 @@ lv_obj_t * waterfall_init(lv_obj_t * parent) {
     lv_style_set_line_opa(&middle_line_style, LV_OPA_COVER);
     lv_style_set_pad_all(&middle_line_style, 0);
 
+    /* Filter passband: a light band of the VFO line colour, under the line */
+    filter_band = lv_obj_create(obj);
+    lv_obj_remove_style_all(filter_band);
+    lv_obj_set_style_bg_color(filter_band, TC(vfo_line), 0);
+    lv_obj_set_style_bg_opa(filter_band, LV_OPA_20, 0);
+    lv_obj_set_height(filter_band, LV_PCT(100));
+    lv_obj_clear_flag(filter_band, LV_OBJ_FLAG_CLICKABLE);
+
     middle_line = lv_line_create(obj);
     // lv_line_set_points(middle_line, middle_line_points, 2);
     lv_obj_add_style(middle_line, &middle_line_style, 0);
@@ -122,6 +132,9 @@ lv_obj_t * waterfall_init(lv_obj_t * parent) {
 
     subject_subscribe_delayed_and_notify((Subject*)cfg_mode_zoom, on_zoom_changed, NULL);
     subject_subscribe_delayed_and_notify((Subject*)cfg_band_if_shift, on_if_shift_changed, NULL);
+    subject_subscribe_delayed((Subject*)cfg_cur_filter_low, on_filter_change, NULL);
+    subject_subscribe_delayed((Subject*)cfg_cur_filter_high, on_filter_change, NULL);
+    subject_subscribe_delayed((Subject*)cfg_cur_mode, on_filter_change, NULL);
 
     subject_subscribe_delayed((Subject*)cfg_fg_freq, on_view_changed, NULL);
     subject_subscribe_delayed((Subject*)cfg_wf_mode, on_view_changed, NULL);
@@ -498,9 +511,44 @@ static void on_mode_lo_offset_change(Subject *subj, void *user_data) {
 }
 
 static void update_middle_line() {
-    lv_coord_t width = zoom / 2 + 2;
-    lv_obj_set_pos(middle_line, (if_shift + waterfall_view_shift()) * zoom * WIDTH / width_hz + width / 2, 0);
+    lv_coord_t width = zoom / 2 + 3;
+    lv_coord_t vfo_x = (if_shift + waterfall_view_shift()) * zoom * WIDTH / width_hz;
+
+    lv_obj_set_pos(middle_line, vfo_x + width / 2, 0);
     lv_style_set_line_width(&middle_line_style, width);
+
+    /* The passband, same scale as the line: from the VFO up (USB), down
+     * (LSB, CWR) or both ways (AM, FM), as on the spectrum */
+    int32_t low = subject_i_get((SubjectInt*)cfg_cur_filter_low);
+    int32_t high = subject_i_get((SubjectInt*)cfg_cur_filter_high);
+    int32_t from, to;
+
+    switch ((x6100_mode_t) subject_i_get((SubjectInt*)cfg_cur_mode)) {
+        case x6100_mode_lsb:
+        case x6100_mode_lsb_dig:
+        case x6100_mode_cwr:
+            from = -high;
+            to = -low;
+            break;
+        case x6100_mode_am:
+        case x6100_mode_nfm:
+            from = -high;
+            to = high;
+            break;
+        default:
+            from = low;
+            to = high;
+            break;
+    }
+    lv_coord_t x1 = WIDTH / 2 + vfo_x + from * zoom * WIDTH / width_hz;
+    lv_coord_t x2 = WIDTH / 2 + vfo_x + to * zoom * WIDTH / width_hz;
+
+    lv_obj_set_pos(filter_band, x1, 0);
+    lv_obj_set_width(filter_band, LV_MAX(x2 - x1, 1));
+}
+
+static void on_filter_change(Subject *subj, void *user_data) {
+    update_middle_line();
 }
 
 static void on_grid_min_change(Subject *subj, void *user_data) {

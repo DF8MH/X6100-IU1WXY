@@ -1361,7 +1361,8 @@ static void main_screen_update_cb(lv_event_t * e) {
 }
 
 /* Main knob acceleration from the time per detent (ms, 0: none): grows
- * smoothly with the speed, 2^(k / dt), up to x10 (Lite) or x30 (Strong);
+ * smoothly with the speed, x2 at dt = k (Lite) or 2k (Strong), then half
+ * as steep as upstream's 2^(k / dt), up to x6 (Lite) or x15 (Strong);
  * the onset setting moves k (upstream ae2af22 uses 20 and 40) */
 static uint16_t freq_accel(uint16_t dt) {
     float k = 5.0f + 5.0f * param_i_get(cfg_freq_accel_onset);
@@ -1371,10 +1372,10 @@ static uint16_t freq_accel(uint16_t dt) {
     }
     switch (params.freq_accel.x) {
         case FREQ_ACCEL_LITE:
-            return LV_MIN(exp2f(k / dt), 10.0f);
+            return LV_MIN(exp2f(0.5f + k / (2.0f * dt)), 6.0f);
 
         case FREQ_ACCEL_STRONG:
-            return LV_MIN(exp2f(2.0f * k / dt), 30.0f);
+            return LV_MIN(exp2f(0.5f + k / dt), 15.0f);
 
         default:
             return 1;
