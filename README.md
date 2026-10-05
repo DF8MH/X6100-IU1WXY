@@ -187,8 +187,9 @@ app of its own (APP page 3 → **Bands**), in the same look as the other apps.
 
 ### Smooth screen, smooth knob
 
-- **New display engine (DRM/KMS)**: the screen is updated in step with the
-  panel, so no tearing, and only the parts that change are redrawn. The GUI
+- **New display engine (DRM/KMS, from upstream)**: the screen is updated in
+  step with the panel, so no tearing, and only the parts that change are
+  redrawn. On top of it, a **layer system**: the GUI
   sits on its own transparent layer; the **waterfall** (and the spectrum, when
   it is on) is drawn straight onto the layer under it, one new line at a time.
   The GUI went from about 88% to about 47% of a CPU core: more room for the
@@ -290,12 +291,14 @@ or newer is recommended for the TX audio options.
 - **Bluetooth** CAT, headphones and keyboards, **wfview** server (Icom LAN
   protocol), IARU band plan strip, configurable long-press actions, CW trainer
   stats, and the SD image itself;
-- the **two-layer DRM display** with the waterfall drawn directly, and the
-  **main knob** with timed detents and adjustable acceleration.
+- the **layer system** on top of the DRM output (GUI on a transparent layer,
+  waterfall and spectrum drawn directly underneath), and the **main knob**
+  with timed detents and adjustable acceleration.
 
 Standing on the work of: the **R1CBU** GUI by Oleg Belousov R1CBU and Georgy
 Dyuldin R2RFE ([gdyuldin/x6100_gui](https://github.com/gdyuldin/x6100_gui)),
-whose CW receiver, DRM work and direct spectrum rendering are imported here,
+whose CW receiver, DRM/KMS display output and direct spectrum rendering are
+imported here,
 **1KO125** by Hany El Imam / TheMurusTeam (WeFax, NavTex, SSTV decoders),
 **JS8** by randal007 on the JS8Call engine (Jordan Sherer KN4CRD), **wsprd**
 from WSJT-X (K1JT, K9AN). Libraries: LVGL, cJSON, FFTW, liquid-dsp, libpng,
