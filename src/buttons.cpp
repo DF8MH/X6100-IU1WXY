@@ -454,13 +454,13 @@ static button_data_t btn_app_p3 = make_page_btn("(APP 3:3)");
 
 /* The digital mode apps are in the Modes menu. */
 static buttons_page_t page_app_1 = {
-    {&btn_app_p1, &btn_modes, &btn_cluster, &btn_swr, &btn_gps}
+    {&btn_app_p1, &btn_modes, &btn_cluster, &btn_swr, &btn_rec}
 };
 static buttons_page_t page_app_2 = {
-    {&btn_app_p2, &btn_rec, &btn_settings, &btn_cwt, &btn_cw_kbd}
+    {&btn_app_p2, &btn_settings, &btn_cwt, &btn_cw_kbd, &btn_field}
 };
 static buttons_page_t page_app_3 = {
-    {&btn_app_p3, &btn_field, &btn_bands}
+    {&btn_app_p3, &btn_bands, &btn_gps}
 };
 
 /* RTTY */

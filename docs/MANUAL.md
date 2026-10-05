@@ -297,7 +297,7 @@ from the [web configurator](#web-configurator) or in the file
 
 ### Field Ops (SOTA / POTA)
 
-A full-screen interface for portable activations: APP (page 3) → **Field Ops**,
+A full-screen interface for portable activations: APP (page 2) → **Field Ops**,
 or a long-press action. **GEN** or **Radio** goes back to the normal screen.
 Everything (the reference, the activation running, its log, the screen you were
 on) is kept on the SD card in `/mnt/field`, so coming back, or a restart in the

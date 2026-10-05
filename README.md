@@ -94,7 +94,7 @@ transmits by itself.
 ### Field Ops: SOTA and POTA
 
 A second, separate interface made for portable activations, with big tiles and
-big text that read well outdoors and work with gloves: APP (page 3) →
+big text that read well outdoors and work with gloves: APP (page 2) →
 **Field Ops**, a long-press action, or straight at power on (**Start here**).
 The main knob still tunes, the MFK chooses, a press (or a tap) opens.
 **GEN** goes back to the normal radio screen.
