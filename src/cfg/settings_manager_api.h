@@ -22,7 +22,7 @@ void cfg_api_init(void (*on_db_error)(const char *));
 // [from, to] range contains freq, or 0 when none covers it.
 int32_t cfg_transverter_shift_for(int32_t freq);
 
-// True when freq is usable by the hardware: HF 0.5-55 MHz or inside any
+// True when freq is usable by the hardware: HF 0.1-55 MHz or inside any
 // transverter range.
 bool cfg_is_valid_hw_freq(int32_t freq);
 

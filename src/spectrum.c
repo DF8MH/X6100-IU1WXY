@@ -478,7 +478,12 @@ static void update_filters(Subject *subj, void *user_data) {
     }
 }
 
+/* The manual notch on the spectrum: shown only when DNF is on, not automatic
+ * and the mode has a sideband; centred on dnf_center (upstream 8e4f1d6) */
 static void update_dnf(Subject *subj, void *user_data) {
+    /* Redrawn on the next loop: the change may come from another thread (CAT) */
+    lv_async_call((void (*)(void *))lv_obj_invalidate, obj);
+    dnf_show = false;
     int32_t en = subject_i_get((SubjectInt*)cfg_dnf);
     if (!en) {
         return;
@@ -491,8 +496,9 @@ static void update_dnf(Subject *subj, void *user_data) {
     if ((mode == x6100_mode_am) || (mode == x6100_mode_nfm)) {
         return;
     }
+    dnf_show = true;
     dnf_width = subject_i_get((SubjectInt*)cfg_dnf_width);
-    int32_t center = subject_i_get((SubjectInt*)cfg_dnf_auto);
+    int32_t center = subject_i_get((SubjectInt*)cfg_dnf_center);
     switch (mode)
     {
     case x6100_mode_lsb:

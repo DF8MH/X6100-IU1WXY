@@ -293,9 +293,9 @@ class SettingsManager {
     // BAND VFO params (context_id = bands_id). These are NOT in the band
     // registry: load_band_vfo() loads them in explicit dependency order so the
     // DB restore/clamp rules can reference already-loaded siblings.
-    Parameter<int32_t> p_band_vfoa_freq{"vfoa_freq", 14'100'000, 0, 500'000'000,
+    Parameter<int32_t> p_band_vfoa_freq{"vfoa_freq", 14'100'000, 100'000, 500'000'000,
         StorageType::BAND, pending_writes_};
-    Parameter<int32_t> p_band_vfob_freq{"vfob_freq", 14'150'000, 0, 500'000'000,
+    Parameter<int32_t> p_band_vfob_freq{"vfob_freq", 14'150'000, 100'000, 500'000'000,
         StorageType::BAND, pending_writes_};
     Parameter<int32_t> p_band_vfoa_mode{"vfoa_mode", x6100_mode_usb, (int32_t)x6100_mode_lsb, (int32_t)x6100_mode_nfm,
         StorageType::BAND, pending_writes_};
@@ -425,8 +425,8 @@ class SettingsManager {
     int current_mode_group_id() const { return mode_group_id_; }
 
     // Hardware-usable frequency range limits (in Hz). HF is the native
-    // 0.5-55 MHz band; anything above must be covered by a transverter.
-    static constexpr int32_t HF_MIN_FREQ = 500'000;
+    // 0.1-55 MHz band; anything above must be covered by a transverter.
+    static constexpr int32_t HF_MIN_FREQ = 100'000;     /* upstream f6c97fa */
     static constexpr int32_t HF_MAX_FREQ = 55'000'000;
 
     // -- VFO operations --
@@ -444,7 +444,7 @@ class SettingsManager {
         return 0;
     }
 
-    // True when `freq` is usable by the hardware: HF 0.5-55 MHz or inside any
+    // True when `freq` is usable by the hardware: HF 0.1-55 MHz or inside any
     // transverter [from, to] range. Bands-table ranges are informational only.
     bool is_valid_hw_freq(int32_t freq) const {
         if (freq >= HF_MIN_FREQ && freq <= HF_MAX_FREQ) {
@@ -454,7 +454,7 @@ class SettingsManager {
     }
 
     // If `freq` is hardware-usable, return it unchanged. Otherwise clamp to the
-    // nearest boundary of any hardware-usable frequency range (HF 0.5-55 MHz or
+    // nearest boundary of any hardware-usable frequency range (HF 0.1-55 MHz or
     // the configured transverter [from, to] ranges).
     int32_t clamp_to_valid_hw_freq(int32_t freq) const;
 

@@ -611,7 +611,7 @@ def remote_audio():
 MODES = ["LSB", "LSB-D", "USB", "USB-D", "CW", "CWR", "AM", "NFM"]
 AGCS = ["OFF", "SLOW", "FAST", "AUTO"]
 MEM_SLOTS = range(1, 10)  # MEM_HKEY_MAX_ID in src/main_screen.h; 10 is the GUI's backup slot
-FREQ_MIN, FREQ_MAX = 500000, 56000000
+FREQ_MIN, FREQ_MAX = 100000, 56000000  # the GUI HF range (HF_MIN_FREQ)
 CHANNELS_MAX = 100
 CHANNEL_NAME_RE = re.compile(r"[ -~]{0,31}")
 
