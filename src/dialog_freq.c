@@ -69,8 +69,10 @@ static void construct_cb(lv_obj_t *parent) {
     lv_group_add_obj(keyboard_group, text);
     lv_obj_add_event_cb(text, key_cb, LV_EVENT_KEY, NULL);
 
-    lv_obj_set_height(text, 35);
-    lv_obj_set_width(text, 250);
+    /* The whole box wide, one line of the font high, the digits in the middle */
+    lv_obj_set_style_text_align(text, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_height(text, lv_font_get_line_height(&sony_44));
+    lv_obj_set_width(text, lv_pct(100));
     lv_obj_center(text);
 }
 
