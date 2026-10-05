@@ -182,6 +182,7 @@ typedef struct {
     bool    box_gradient;   /* bar/strip/dialog -> *_grad */
     bool    focus_solid;    /* focused control: solid focus colour (else half see-through) */
     bool    meter_gradient; /* S-meter: one even gradient, bar by bar, meter_weak to meter_high */
+    bool    mono_cluster;   /* cluster column all in the text colour (Outdoor: colours fade in the sun) */
     uint8_t images;         /* message/panel backgrounds: 0 drawn, 1 dark images, 2 legacy images */
     int8_t  font;           /* FONT_* (fonts/font_select.h), -1 = the Settings choice */
     int16_t mark[3];        /* encoder LED on the buttons: x, width, height (centred); 0 = the bar on the left edge */

@@ -42,9 +42,9 @@ static bool           active;                   /* MFK item "Cluster" */
 static bool           has_sel;
 static cluster_spot_t sel;                      /* highlighted spot, kept by call + freq */
 
-/* Themes with black text (Outdoor): the whole column in black, the colours fade in the sun */
+/* Outdoor themes: the whole column in the text colour, the colours fade in the sun */
 static uint32_t ink(uint32_t c) {
-    return theme_hex(TC_text) == 0x000000 ? 0x000000 : c;
+    return theme_shape.mono_cluster ? theme_hex(TC_text) : c;
 }
 
 static uint32_t age_color(uint16_t age) {

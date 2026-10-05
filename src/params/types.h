@@ -76,7 +76,7 @@ typedef struct {
 
 typedef struct {
     char        *name;
-    char        x[16];
+    char        x[32];
     uint8_t     max_len;
     bool        dirty;
 } params_str_t;

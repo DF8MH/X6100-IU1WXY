@@ -21,11 +21,11 @@
 #define THEMES_DIR "/mnt/themes"
 #endif
 
-enum { B_IU1WXY, B_LEGACY, B_OUTDOOR, B_CLASSIC, B_COUNT };
+enum { B_IU1WXY, B_LEGACY, B_OUTDOOR, B_CLASSIC, B_OUTDOOR_NEG, B_COUNT };
 
-static const char *const builtin_names[B_COUNT] = {"IU1WXY", "Legacy", "Outdoor", "Classic"};
+static const char *const builtin_names[B_COUNT] = {"IU1WXY", "Legacy", "Outdoor", "Classic", "Outdoor-Negative"};
 
-static const uint32_t builtin_colors[B_COUNT][TC_COUNT] = {
+static const uint32_t builtin_colors[B_OUTDOOR_NEG][TC_COUNT] = {
 #define COL(name, a, b, c, d) a,
     {THEME_COLORS(COL)},
 #undef COL
@@ -46,7 +46,7 @@ static const char *const color_names[TC_COUNT] = {
 #undef NAME
 };
 
-static const theme_shape_t builtin_shapes[B_COUNT] = {
+static const theme_shape_t builtin_shapes[B_OUTDOOR_NEG] = {
     [B_IU1WXY]  = {.radius = 7, .radius_btn = 10, .radius_popup = 10, .border = 1, .box_gradient = true,
                    .images = 1, .font = -1, .waterfall_table = 0},
     [B_LEGACY]  = {.radius = 7, .radius_btn = 10, .radius_popup = 10, .border = 1, .box_gradient = true,
@@ -54,7 +54,7 @@ static const theme_shape_t builtin_shapes[B_COUNT] = {
     /* Light and high contrast for the sun, in grey: the noise light, weak signals already mid grey,
      * then darker at an even pace up to black, so a strong signal shows how strong it is */
     [B_OUTDOOR] = {.radius = 6, .radius_btn = 8, .radius_popup = 8, .border = 2, .focus_solid = true,
-                   .font = -1, .meter_gradient = true,
+                   .font = -1, .meter_gradient = true, .mono_cluster = true,
                    .waterfall = {0xfafafa, 0xe6e6e6, 0xc8c8c8, 0xa0a0a0, 0x787878, 0x585858, 0x3c3c3c, 0x282828,
                                  0x181818, 0x0a0a0a, 0x000000},
                    .waterfall_n = 11},
@@ -88,9 +88,25 @@ static int builtin_index(const char *name) {
     return -1;
 }
 
+/* Lightness inverted, hue and saturation kept: black <-> white, red stays red */
+static uint32_t negative(uint32_t c) {
+    int r = c >> 16 & 0xff, g = c >> 8 & 0xff, b = c & 0xff;
+    int hi = r > g ? (r > b ? r : b) : (g > b ? g : b), lo = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    int d  = 255 - hi - lo;
+
+    return (uint32_t)(r + d) << 16 | (uint32_t)(g + d) << 8 | (uint32_t)(b + d);
+}
+
+/* Outdoor-Negative: Outdoor with every colour and the waterfall through negative() */
 static void use_builtin(int b) {
-    memcpy(colors, builtin_colors[b], sizeof(colors));
-    theme_shape = builtin_shapes[b];
+    int src = b == B_OUTDOOR_NEG ? B_OUTDOOR : b;
+
+    memcpy(colors, builtin_colors[src], sizeof(colors));
+    theme_shape = builtin_shapes[src];
+    if (b == B_OUTDOOR_NEG) {
+        for (int i = 0; i < TC_COUNT; i++) colors[i] = negative(colors[i]);
+        for (int i = 0; i < theme_shape.waterfall_n; i++) theme_shape.waterfall[i] = negative(theme_shape.waterfall[i]);
+    }
     snprintf(theme_shape.name, sizeof(theme_shape.name), "%s", builtin_names[b]);
 }
 
