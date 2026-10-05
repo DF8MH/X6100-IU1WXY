@@ -8,6 +8,7 @@
 
 #include "lvgl/lvgl.h"
 #include "lv_drivers/display/fbdev.h"
+#include "lv_drivers/display/drm.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -95,7 +96,15 @@ int main(void) {
     lv_init();
     // lv_png_init();
 
+#if USE_DRM
+    if (drm_init()) {
+        screen_rec_out = drm_flush;
+    } else {
+        fbdev_init();
+    }
+#else
     fbdev_init();
+#endif
     audio_init();
     event_init();
     usb_devices_monitor_init();
