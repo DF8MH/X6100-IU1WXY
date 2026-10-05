@@ -13,6 +13,7 @@
 #include "params/params.h"
 #include "cfg/cfg_api.h"
 #include "pubsub_ids.h"
+#include "scheduler.h"
 
 #include <math.h>
 
@@ -30,12 +31,19 @@ static lv_color_t color_ok;
 static lv_color_t color_good;
 static lv_color_t color_bad;
 
+static lv_color_t active_color;
+
+static lv_anim_t        fade_anim;
+static volatile uint8_t fade_mix = 0;
+
 static lv_obj_t     *obj;
 
-static int8_t cur_freq=-100;
+static volatile int8_t cur_freq=-100;
 
 static void update_cb(lv_event_t * e);
 static void update_visibility(Subject *subj, void *user_data);
+static void fade_restart(void *arg);
+static void fade_anim_cb(void *var, int32_t val);
 
 void cw_tune_init(lv_obj_t *parent)
 {
@@ -50,9 +58,15 @@ void cw_tune_init(lv_obj_t *parent)
 
     lv_draw_rect_dsc_init(&rect_active_dsc);
     rect_active_dsc.radius = 5;
-    rect_active_dsc.bg_opa = LV_OPA_70;
 
     obj = lv_obj_create(parent);
+
+    lv_anim_init(&fade_anim);
+    lv_anim_set_var(&fade_anim, obj);
+    lv_anim_set_exec_cb(&fade_anim, fade_anim_cb);
+    lv_anim_set_values(&fade_anim, 255, 0);
+    lv_anim_set_time(&fade_anim, 500);
+    lv_anim_set_delay(&fade_anim, 1000);
     lv_obj_set_height(obj, HEIGHT);
     lv_obj_set_width(obj, WIDTH);
     lv_obj_add_style(obj, &cw_tune_style, 0);
@@ -74,22 +88,34 @@ void cw_tune_init(lv_obj_t *parent)
 //     return params.cw_tune;
 // }
 
+/* Audio thread: the block lights up, then fades back (fade_anim, upstream) */
 void cw_tune_set_freq(float hz) {
     int8_t new_id = N_BLOCKS / 2 - roundf(hz / BLOCK_HZ);
     if (new_id < 0) new_id = 0;
     if (new_id > N_BLOCKS - 1) new_id = N_BLOCKS - 1;
 
     if (LV_ABS(hz) <= 10) {
-        rect_active_dsc.bg_color = color_ok;
+        active_color = color_ok;
     } else if (LV_ABS(hz) <= 20) {
-        rect_active_dsc.bg_color = color_good;
+        active_color = color_good;
     } else {
-        rect_active_dsc.bg_color = color_bad;
+        active_color = color_bad;
     }
-    if (cur_freq != new_id){
-        cur_freq = new_id;
-        lv_event_send(obj, LV_EVENT_REFRESH, NULL);
-    }
+    cur_freq = new_id;
+    fade_mix = 255;
+    scheduler_put_noargs(fade_restart);
+}
+
+/* LVGL thread: shown for a second, then faded out in half a second */
+static void fade_restart(void *arg) {
+    lv_anim_del(&fade_anim, fade_anim_cb);
+    lv_anim_start(&fade_anim);
+    lv_obj_invalidate(obj);
+}
+
+static void fade_anim_cb(void *var, int32_t val) {
+    fade_mix = val;
+    lv_obj_invalidate(obj);
 }
 
 static void update_cb(lv_event_t * e) {
@@ -102,6 +128,8 @@ static void update_cb(lv_event_t * e) {
     lv_area_t coords, offset;
 
     lv_obj_get_coords(obj, &offset);
+    rect_active_dsc.bg_color = lv_color_mix(active_color, rect_dsc.bg_color, fade_mix);
+    rect_active_dsc.bg_opa = rect_dsc.bg_opa + fade_mix * (LV_OPA_70 - rect_dsc.bg_opa) / 255;
 
     for (int16_t i = 0; i < N_BLOCKS; i++) {
         x = SPACING + i * (BLOCK_W + SPACING);

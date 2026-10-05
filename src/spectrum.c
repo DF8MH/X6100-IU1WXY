@@ -25,8 +25,12 @@
 #include "theme.h"
 #include "util.h"
 
+#include "lv_drivers/display/drm.h"
+
+#include <math.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define DEFAULT_MIN S4
 #define DEFAULT_MAX S9_20
@@ -73,6 +77,15 @@ static int16_t freq_mod;
 
 static pthread_mutex_t data_mux;
 
+/* Direct mode (DRM planes, spectrum shown): the trace is drawn on the primary
+ * plane under the GUI, like the waterfall; LVGL draws only the markers over
+ * it, redrawn when they change. sbuf is the portrait image of the strip:
+ * landscape x is row 799 - x, landscape y (from the top) is column y */
+static bool     direct = false;
+static uint32_t *sbuf;
+static int32_t  sbuf_h;
+static int32_t  markers_sig[12];
+
 static void on_zoom_changed(Subject *subj, void *user_data);
 static void update_filters(Subject *subj, void *user_data);
 static void update_dnf(Subject *subj, void *user_data);
@@ -85,23 +98,43 @@ static void on_cur_base_lo_freq_change(Subject *subj, void *user_data);
 static void on_rit_change(Subject *subj, void *user_data);
 static void shift_peaks(int32_t df);
 
+/* Shift for filter data, notch, etc. Fixed waterfall mode: the whole view is
+ * shifted against the received data */
+static lv_coord_t markers_offset_get(lv_coord_t w) {
+    return ((mode_lo_offset + if_shift + waterfall_view_shift()) * zoom_factor * w + width_hz / 2) / width_hz;
+}
+
+/* Shift for the spectrum data */
+static lv_coord_t spectrum_offset_get(lv_coord_t w) {
+    if (spectrum_tx) {
+        return markers_offset_get(w);
+    }
+    lv_coord_t data_shift = 0;
+    if (cur_base_lo_freq) {
+        // Handle delay between sending new settings to base and new data flow
+        data_shift = cur_base_lo_freq - (fg_freq + mode_lo_offset - if_shift + rit);
+    }
+    return ((mode_lo_offset + data_shift + waterfall_view_shift()) * zoom_factor * w + width_hz / 2) / width_hz;
+}
+
+static void levels_get(float *min, float *max) {
+    if (spectrum_tx) {
+        *min = DEFAULT_MIN;
+        *max = DEFAULT_MAX;
+    } else {
+        *min = grid_min;
+        *max = grid_max;
+    }
+}
+
 static void spectrum_draw_cb(lv_event_t *e) {
     lv_obj_t          *obj      = lv_event_get_target(e);
     lv_draw_ctx_t     *draw_ctx = lv_event_get_draw_ctx(e);
     lv_draw_line_dsc_t main_line_dsc;
     lv_draw_line_dsc_t peak_line_dsc;
 
-    if (!spectrum_buf) {
-        return;
-    }
     float min, max;
-    if (spectrum_tx) {
-        min = DEFAULT_MIN;
-        max = DEFAULT_MAX;
-    } else {
-        min = grid_min;
-        max = grid_max;
-    }
+    levels_get(&min, &max);
 
     /* Lines */
 
@@ -121,22 +154,8 @@ static void spectrum_draw_cb(lv_event_t *e) {
     lv_coord_t w = lv_obj_get_width(obj);
     lv_coord_t h = lv_obj_get_height(obj);
 
-    lv_coord_t spectrum_offset, markers_offset;
-    // spectrum_offset: shift for the spectrum data
-    // markers_offset: shift for filter data, notch, etc
-    /* Fixed waterfall mode: the whole view is shifted against the received data */
-    int32_t view_shift = waterfall_view_shift();
-    markers_offset = ((mode_lo_offset + if_shift + view_shift) * zoom_factor * w + width_hz / 2) / width_hz;
-    if (spectrum_tx) {
-        spectrum_offset = markers_offset;
-    } else {
-        lv_coord_t data_shift = 0;
-        if (cur_base_lo_freq) {
-            // Handle delay between sending new settings to base and new data flow
-            data_shift = cur_base_lo_freq - (fg_freq + mode_lo_offset - if_shift + rit);
-        }
-        spectrum_offset = ((mode_lo_offset + data_shift + view_shift) * zoom_factor * w + width_hz / 2) / width_hz;
-    }
+    lv_coord_t spectrum_offset = spectrum_offset_get(w);
+    lv_coord_t markers_offset = markers_offset_get(w);
 
     lv_point_t main_a, main_b;
     lv_point_t peak_a, peak_b;
@@ -149,7 +168,8 @@ static void spectrum_draw_cb(lv_event_t *e) {
     peak_b.x = x1;
     peak_b.y = y1 + h;
 
-    for (uint16_t i = 0; i < SPECTRUM_SIZE; i++) {
+    /* Direct mode: the trace is on the primary plane, only the markers here */
+    for (uint16_t i = 0; i < SPECTRUM_SIZE && !direct; i++) {
         float    v = (spectrum_buf[i] - min) / (max - min);
         uint16_t x = i * w / SPECTRUM_SIZE;
 
@@ -334,8 +354,157 @@ static void rx_cb(lv_event_t *e) {
     visor_height = VISOR_HEIGHT_RX;
 }
 
+static inline uint32_t blend_xrgb(uint32_t dst, uint32_t src, uint8_t a) {
+    uint32_t rb = ((dst & 0x00FF00FFu) * (255u - a) + (src & 0x00FF00FFu) * a + 0x00800080u);
+    uint32_t g  = ((dst & 0x0000FF00u) * (255u - a) + (src & 0x0000FF00u) * a + 0x00008000u);
+    return ((rb >> 8) & 0x00FF00FFu) | ((g >> 8) & 0x0000FF00u) | 0xff000000u;
+}
+
+/* A landscape pixel of the strip, with coverage c (0..1) */
+static void plot(int x, int y, float c, uint32_t color) {
+    if (x < 0 || x >= SPECTRUM_SIZE || y < 0 || y >= sbuf_h || c <= 0.0f) {
+        return;
+    }
+    uint32_t *p = &sbuf[(SPECTRUM_SIZE - 1 - x) * sbuf_h + y];
+
+    *p = blend_xrgb(*p, color, c >= 1.0f ? 255 : (uint8_t)(c * 255.0f + 0.5f));
+}
+
+static float fpart(float v) {
+    return v - floorf(v);
+}
+
+/* Antialiased line, Wu's algorithm (upstream spectrum_wu_line, landscape) */
+static void wu_line(float x0, float y0, float x1, float y1, uint32_t color) {
+    bool steep = fabsf(y1 - y0) > fabsf(x1 - x0);
+    float t;
+
+    if (steep) {
+        t = x0; x0 = y0; y0 = t;
+        t = x1; x1 = y1; y1 = t;
+    }
+    if (x0 > x1) {
+        t = x0; x0 = x1; x1 = t;
+        t = y0; y0 = y1; y1 = t;
+    }
+    float dx = x1 - x0;
+    float gradient = (dx == 0.0f) ? 1.0f : (y1 - y0) / dx;
+
+    int   xa = (int)roundf(x0), xb = (int)roundf(x1);
+    float y  = y0 + gradient * (xa - x0);
+
+    for (int x = xa; x <= xb; x++) {
+        int   yi = (int)floorf(y);
+        float f  = fpart(y);
+
+        if (steep) {
+            plot(yi, x, 1.0f - f, color);
+            plot(yi + 1, x, f, color);
+        } else {
+            plot(x, yi, 1.0f - f, color);
+            plot(x, yi + 1, f, color);
+        }
+        y += gradient;
+    }
+}
+
+static void polyline(const float *v, float min, float max, lv_coord_t offset, uint32_t color) {
+    float px = 0, py = 0;
+
+    for (int i = 0; i < SPECTRUM_SIZE; i++) {
+        float x = i + offset;
+        float y = (1.0f - (v[i] - min) / (max - min)) * sbuf_h;
+
+        y = LV_CLAMP(0.0f, y, (float)sbuf_h);
+        if (i) {
+            wu_line(px, py, x, y, color);
+        }
+        px = x;
+        py = y;
+    }
+}
+
+/* The markers drawn by LVGL: redrawn only when one of them changes */
+static void markers_check(void) {
+    int32_t sig[sizeof(markers_sig) / sizeof(markers_sig[0])] = {
+        markers_offset_get(SPECTRUM_SIZE), filter_from, filter_to, dnf_show, dnf_center, dnf_width,
+        rtty_get_state(), params.rtty_center, params.rtty_shift,
+        dialog_navtex_is_active() | dialog_wefax_is_active() << 1, center_line_show, recorder_is_on()
+    };
+
+    if (memcmp(sig, markers_sig, sizeof(sig))) {
+        memcpy(markers_sig, sig, sizeof(sig));
+        lv_obj_invalidate(obj);
+    }
+}
+
+static void direct_render(void) {
+    lv_coord_t h = lv_obj_get_height(obj);
+    float      min, max;
+
+    markers_check();
+    if (!lv_obj_is_visible(obj) || h <= 0) {
+        return;
+    }
+    if (h != sbuf_h) {
+        free(sbuf);
+        sbuf = malloc(SPECTRUM_SIZE * h * sizeof(uint32_t));
+        sbuf_h = sbuf ? h : 0;
+        if (!sbuf) {
+            return;
+        }
+    }
+    uint32_t bg = TC(panel).full | 0xff000000u;
+    uint32_t line = TC(line).full | 0xff000000u;
+
+    for (int32_t i = 0; i < SPECTRUM_SIZE * h; i++) {
+        sbuf[i] = bg;
+    }
+    levels_get(&min, &max);
+    if (max <= min) {
+        max = min + 1.0f;
+    }
+    lv_coord_t offset = spectrum_offset_get(SPECTRUM_SIZE);
+
+    pthread_mutex_lock(&data_mux);
+    if (params.spectrum_peak.x && !spectrum_tx) {
+        float peak[SPECTRUM_SIZE];
+
+        for (int i = 0; i < SPECTRUM_SIZE; i++) {
+            peak[i] = spectrum_peak[i].val;
+        }
+        polyline(peak, min, max, offset, TC(off).full);
+    }
+    if (params.spectrum_filled.x) {
+        for (int i = 0; i < SPECTRUM_SIZE; i++) {
+            int x = i + offset;
+
+            if (x < 0 || x >= SPECTRUM_SIZE) {
+                continue;
+            }
+            int top = (1.0f - (spectrum_buf[i] - min) / (max - min)) * h;
+            uint32_t *p = &sbuf[(SPECTRUM_SIZE - 1 - x) * h];
+
+            for (int y = LV_MAX(top, 0); y < h; y++) {
+                p[y] = line;
+            }
+        }
+    } else {
+        polyline(spectrum_buf, min, max, offset, line);
+    }
+    pthread_mutex_unlock(&data_mux);
+
+#if USE_DRM
+    drm_wf_present(sbuf, obj->coords.y1, h);
+#endif
+}
+
 static void spectrum_refresh(void *data) {
-    lv_obj_invalidate(obj);
+    if (direct) {
+        direct_render();
+    } else {
+        lv_obj_invalidate(obj);
+    }
 }
 
 lv_obj_t *spectrum_init(lv_obj_t *parent) {
@@ -350,6 +519,14 @@ lv_obj_t *spectrum_init(lv_obj_t *parent) {
     obj = lv_obj_create(parent);
 
     lv_obj_add_style(obj, &spectrum_style, 0);
+#if USE_DRM
+    direct = drm_planes() && param_i_get(cfg_spectrum_show);
+#endif
+    if (direct) {
+        /* Transparent, then the markers over the primary plane */
+        lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, 0);
+        lv_obj_add_event_cb(obj, direct_hole_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+    }
     lv_obj_add_event_cb(obj, spectrum_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
     lv_obj_add_event_cb(obj, tx_cb, EVENT_RADIO_TX, NULL);
     lv_obj_add_event_cb(obj, rx_cb, EVENT_RADIO_RX, NULL);

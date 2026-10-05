@@ -39,8 +39,8 @@ bool drm_init(void);
 bool drm_planes(void);
 /* flush_cb, partial rendering: area-sized color_p */
 void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p);
-/* The waterfall into the primary plane: portrait columns x .. x + w - 1, all
- * 800 rows of src (w pixels each, XRGB) */
+/* A strip (waterfall, spectrum) into the primary plane: portrait columns
+ * x .. x + w - 1, all 800 rows of src (w pixels each, XRGB) */
 void drm_wf_present(const uint32_t *src, int32_t x, int32_t w);
 /* Shows what was flushed or presented since the last call, at the next vblank:
  * once per main loop, after lv_timer_handler() */

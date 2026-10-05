@@ -30,5 +30,9 @@ void waterfall_get_levels(bool tx, float *min, float *max);
  * always 0 in Centered mode. Re-centres the view when the VFO nears an edge. */
 int32_t waterfall_view_shift(void);
 
+/* LV_EVENT_DRAW_MAIN_END of an object drawn on the DRM primary plane (waterfall,
+ * spectrum): its area of the GUI fully transparent, whatever is behind it */
+void direct_hole_cb(lv_event_t *e);
+
 void waterfall_refresh_reset();
 void waterfall_refresh_period_set(uint8_t k);

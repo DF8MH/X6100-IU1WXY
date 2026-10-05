@@ -82,6 +82,9 @@ static uint64_t       waterfall_time;
  * UI paint pass is skipped entirely. */
 static std::atomic<bool> waterfall_enabled{true};
 static std::atomic<bool> spectrum_enabled{true};
+/* The spectrum is not on the screen (spectrum_show, read at start like the
+ * layout): its FFT is never run */
+static bool spectrum_shown = true;
 
 static cfloat buf_filtered[RADIO_SAMPLES * 2];
 
@@ -307,6 +310,7 @@ void dsp_init() {
     firdecim_rrrf_set_scale(audio_decim, 1.0f / AUDIO_DECIM);
     audio_dc_blocker = iirfilt_rrrf_create_dc_blocker(2.0f * M_PI_2f32 * 50.0f * AUDIO_DECIM / AUDIO_CAPTURE_RATE);
 
+    spectrum_shown = cfg_sm.p_spectrum_show.get();
     cfg_sm.p_mode_zoom.subscribe_and_notify(on_zoom_change);
 
     cfg_sm.p_band_if_shift.subscribe(update_filters);
@@ -349,7 +353,7 @@ static void process_samples(cfloat *buf_samples, uint16_t size, firdecim_crcf sp
     size_t wf_n_samples = size;
     size_t sp_n_samples = size;
 
-    if (spectrum_enabled.load(std::memory_order_relaxed)) {
+    if (spectrum_shown && spectrum_enabled.load(std::memory_order_relaxed)) {
         if ((spectrum_factor > 1) && !fw_decim) {
             sp_n_samples = size / spectrum_factor;
             firdecim_crcf_execute_block(sp_decim, buf_filtered, sp_n_samples, spectrum_dec_buf);
@@ -488,7 +492,7 @@ void dsp_samples(cfloat *buf_samples, uint16_t size, bool tx, uint32_t base_freq
         wf_sg = NULL;
     }
     process_samples(buf_samples, size, sp_decim, sp_sg, wf_sg, tx);
-    if (spectrum_enabled.load(std::memory_order_relaxed)) {
+    if (spectrum_shown && spectrum_enabled.load(std::memory_order_relaxed)) {
         update_spectrum(sp_sg, now, tx, base_freq, fft_dec);
     }
     pthread_mutex_unlock(&spectrum_mux);

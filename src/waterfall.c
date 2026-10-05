@@ -85,7 +85,6 @@ static bool             view_fixed = false;
 
 static void refresh_waterfall( void * arg);
 static void do_scroll_timer(lv_timer_t *t);
-static void hole_cb(lv_event_t *e);
 static void update_middle_line();
 static void middle_line_cb(lv_event_t * event);
 static void redraw_cb(lv_event_t * e);
@@ -232,7 +231,7 @@ void waterfall_set_height(lv_coord_t h) {
         /* The GUI stays transparent here: the primary plane shows through */
         wfp = calloc(WIDTH * height, sizeof(uint32_t));
         lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, 0);
-        lv_obj_add_event_cb(obj, hole_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+        lv_obj_add_event_cb(obj, direct_hole_cb, LV_EVENT_DRAW_MAIN_END, NULL);
         lv_timer_create(do_scroll_timer, 20, NULL);
     } else {
         frame = lv_img_buf_alloc(WIDTH, height, LV_IMG_CF_TRUE_COLOR);
@@ -376,12 +375,12 @@ static void direct_column(const wf_data_row_t *row, uint32_t bandwidth, int32_t 
 /* Direct mode: the waterfall area of the GUI fully transparent (alpha 0), drawn
  * after the parents and before the children (VFO line, grid, spots), so the
  * primary plane shows through whatever is behind in the GUI */
-static void hole_cb(lv_event_t *e) {
+void direct_hole_cb(lv_event_t *e) {
     lv_draw_ctx_t   *ctx = lv_event_get_draw_ctx(e);
     lv_area_t       a;
     int32_t         stride = lv_area_get_width(ctx->buf_area);
 
-    if (!_lv_area_intersect(&a, &obj->coords, ctx->clip_area)) {
+    if (!_lv_area_intersect(&a, &lv_event_get_target(e)->coords, ctx->clip_area)) {
         return;
     }
     for (int32_t y = a.y1; y <= a.y2; y++) {

@@ -480,7 +480,12 @@ void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p
 }
 
 void drm_wf_present(const uint32_t *src, int32_t x, int32_t w) {
+    /* Columns written to one buffer and not yet to the other (several strips:
+     * waterfall, spectrum): the other one gets them on its next present */
+    static int32_t     stale_x1[2] = {PANEL_W, PANEL_W}, stale_x2[2];
     struct drm_buffer *buf;
+    int                b;
+    int32_t            x1, x2;
 
     if (!planes || x < 0 || w <= 0 || x + w > PANEL_W) {
         return;
@@ -489,10 +494,17 @@ void drm_wf_present(const uint32_t *src, int32_t x, int32_t w) {
         memcpy(wf_shadow + y * PANEL_W + x, src + y * w, w * 4);
     }
     wait_flip();
-    buf = &primary.bufs[primary.back];
+    b = primary.back;
+    buf = &primary.bufs[b];
+    x1 = LV_MIN(x, stale_x1[b]);
+    x2 = LV_MAX(x + w, stale_x2[b]);
     for (int32_t y = 0; y < PANEL_H; y++) {
-        memcpy(buf->map + y * buf->pitch + x * 4, wf_shadow + y * PANEL_W + x, w * 4);
+        memcpy(buf->map + y * buf->pitch + x1 * 4, wf_shadow + y * PANEL_W + x1, (x2 - x1) * 4);
     }
+    stale_x1[b] = PANEL_W;
+    stale_x2[b] = 0;
+    stale_x1[b ^ 1] = LV_MIN(x, stale_x1[b ^ 1]);
+    stale_x2[b ^ 1] = LV_MAX(x + w, stale_x2[b ^ 1]);
     primary.ready = true;
 }
 
