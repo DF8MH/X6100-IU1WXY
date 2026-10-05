@@ -163,6 +163,8 @@ def test_qrz_upload(field, base, d):
 
 
 def main():
+    # The GUI and the web server run it directly: without the exec bit every job is "error no answer"
+    assert os.access(SCRIPT, os.X_OK), "x6100-field is not executable (git update-index --chmod=+x)"
     with tempfile.TemporaryDirectory() as d:
         os.environ["X6100_FIELD_DIR"] = os.path.join(d, "field")
         os.environ.pop("X6100_CALL", None)
