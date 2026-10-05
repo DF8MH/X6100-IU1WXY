@@ -131,6 +131,10 @@ int main(void) {
     // disp_drv.ver_res    = 800;
     disp_drv.hor_res    = 800;
     disp_drv.ver_res    = 480;
+#if USE_DRM
+    /* GUI over the waterfall plane: see-through parts keep their alpha */
+    disp_drv.screen_transp = drm_planes();
+#endif
     // disp_drv.sw_rotate  = 1;
     // disp_drv.rotated    = LV_DISP_ROT_90;
 
@@ -211,6 +215,7 @@ int main(void) {
         scheduler_work();
         next_loop_time = lv_timer_handler() + loop_start_time;
 #if USE_DRM
+        drm_commit();
         if (dump_requested) {
             dump_requested = 0;
             drm_dump("/tmp/screen.raw.tmp");

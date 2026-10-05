@@ -15,6 +15,7 @@
  * their timestamps: late ones are dropped, gaps are filled with the previous
  * frame, so audio and video stay in sync. */
 
+#include "lv_drivers/display/drm.h"
 #include <stdlib.h>
 #include <string.h>
 #include <setjmp.h>
@@ -299,6 +300,9 @@ static void timer_cb(lv_timer_t *t) {
 
         if (i >= 0) {                               /* else the writer is late: drop the frame */
             memcpy(queue[i].px, shadow, W * H * 4);
+#if USE_DRM
+            drm_compose_landscape((uint32_t *) queue[i].px);   /* + the waterfall plane */
+#endif
             queue[i].ms = ms;
             pthread_mutex_lock(&mut);
             q_head = (q_head + 1) % QUEUE;

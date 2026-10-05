@@ -20,6 +20,7 @@
 #include "util.h"
 #include "pubsub_ids.h"
 #include "scheduler.h"
+#include "lv_drivers/display/drm.h"
 
 #include <stdlib.h>
 #include <math.h>
@@ -66,11 +67,25 @@ static uint8_t          refresh_counter = 0;
 
 static uint8_t          zoom = 1;
 
+/* Direct mode (DRM planes): the waterfall is drawn on the primary plane under
+ * the GUI, which is transparent there. wfp is its portrait image: landscape
+ * row y of the waterfall is portrait column y, landscape x is row 799 - x.
+ * A new row shifts the image by one column and draws only that column; a new
+ * centre or zoom redraws it all */
+static bool             direct = false;
+static uint32_t         *wfp;
+static int32_t          wfp_center = 0;
+static uint32_t         wfp_bw = 0;
+static bool             wfp_full = true;
+static int              new_rows = 0;       /* rows from the DSP thread not drawn yet */
+
 /* Fixed mode: RF frequency at the display centre, valid while view_fixed */
 static int32_t          view_center = 0;
 static bool             view_fixed = false;
 
 static void refresh_waterfall( void * arg);
+static void do_scroll_timer(lv_timer_t *t);
+static void hole_cb(lv_event_t *e);
 static void update_middle_line();
 static void middle_line_cb(lv_event_t * event);
 static void redraw_cb(lv_event_t * e);
@@ -161,6 +176,7 @@ void waterfall_data(float *data_buf, uint16_t size, bool tx, uint32_t base_freq,
 
         wf_rows[last_row_id].values[x] = id;
     }
+    __atomic_add_fetch(&new_rows, 1, __ATOMIC_RELEASE);
     scheduler_put_noargs(refresh_waterfall);
 }
 
@@ -182,6 +198,11 @@ int32_t waterfall_view_shift(void) {
 }
 
 static void do_scroll_cb(lv_event_t * event) {
+    do_scroll_timer(NULL);
+}
+
+/* One step of the horizontal scroll towards the VFO (direct mode: every 20 ms) */
+static void do_scroll_timer(lv_timer_t *t) {
     int32_t target = radio_center_freq - waterfall_view_shift();
 
     if (wf_center_freq == target) {
@@ -204,11 +225,22 @@ void waterfall_set_height(lv_coord_t h) {
 
     height = lv_obj_get_height(obj);
 
-    frame = lv_img_buf_alloc(WIDTH, height, LV_IMG_CF_TRUE_COLOR);
+#if USE_DRM
+    direct = drm_planes();
+#endif
+    if (direct) {
+        /* The GUI stays transparent here: the primary plane shows through */
+        wfp = calloc(WIDTH * height, sizeof(uint32_t));
+        lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, 0);
+        lv_obj_add_event_cb(obj, hole_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+        lv_timer_create(do_scroll_timer, 20, NULL);
+    } else {
+        frame = lv_img_buf_alloc(WIDTH, height, LV_IMG_CF_TRUE_COLOR);
 
-    img = lv_img_create(obj);
-    lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
-    lv_img_set_src(img, frame);
+        img = lv_img_create(obj);
+        lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
+        lv_img_set_src(img, frame);
+    }
 
     wf_rows = calloc(height, sizeof(*wf_rows));
     for (size_t i = 0; i < height; i++) {
@@ -217,13 +249,17 @@ void waterfall_set_height(lv_coord_t h) {
     }
     last_row_id = 0;
 
-    lv_obj_add_event_cb(img, do_scroll_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+    if (!direct) {
+        lv_obj_add_event_cb(img, do_scroll_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+    }
 
     waterfall_min_max_reset();
     band_info_init(obj);
     middle_line_points[1].y = height;
     lv_line_set_points(middle_line, middle_line_points, 2);
-    lv_obj_move_background(img);
+    if (!direct) {
+        lv_obj_move_background(img);
+    }
     ready = true;
 }
 
@@ -327,6 +363,74 @@ static inline void lerp_row(wf_data_row_t *row_data, uint32_t dst_center_freq, u
     }
 }
 
+/* A landscape row (newest first) into portrait column col of wfp */
+static void direct_column(const wf_data_row_t *row, uint32_t bandwidth, int32_t col) {
+    uint8_t dst[WIDTH];
+
+    lerp_row((wf_data_row_t *) row, wf_center_freq, bandwidth, dst);
+    for (size_t i = 0; i < WIDTH; i++) {
+        wfp[(WIDTH - 1 - i) * height + col] = wf_palette[dst[i]] | 0xff000000;
+    }
+}
+
+/* Direct mode: the waterfall area of the GUI fully transparent (alpha 0), drawn
+ * after the parents and before the children (VFO line, grid, spots), so the
+ * primary plane shows through whatever is behind in the GUI */
+static void hole_cb(lv_event_t *e) {
+    lv_draw_ctx_t   *ctx = lv_event_get_draw_ctx(e);
+    lv_area_t       a;
+    int32_t         stride = lv_area_get_width(ctx->buf_area);
+
+    if (!_lv_area_intersect(&a, &obj->coords, ctx->clip_area)) {
+        return;
+    }
+    for (int32_t y = a.y1; y <= a.y2; y++) {
+        lv_color_t *row = (lv_color_t *) ctx->buf + (y - ctx->buf_area->y1) * stride + (a.x1 - ctx->buf_area->x1);
+
+        memset(row, 0, lv_area_get_width(&a) * sizeof(lv_color_t));
+    }
+}
+
+static bool shown(lv_obj_t *o) {
+    for (; o; o = lv_obj_get_parent(o)) {
+        if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void direct_redraw(int new_row) {
+    uint32_t    bandwidth = params.waterfall_zoom.x ? width_hz / zoom : width_hz;
+    lv_area_t   a;
+
+    if (!shown(obj)) {
+        wfp_full = true;            /* not up to date when shown again */
+        return;
+    }
+    if (wfp_full || new_row > 1 || wfp_center != wf_center_freq || wfp_bw != bandwidth) {
+        for (int32_t col = 0; col < height; col++) {
+            direct_column(&wf_rows[(last_row_id - col + height) % height], bandwidth, col);
+        }
+        wfp_full = false;
+        wfp_center = wf_center_freq;
+        wfp_bw = bandwidth;
+    } else if (new_row) {
+        for (size_t y = 0; y < WIDTH; y++) {
+            uint32_t *r = wfp + y * height;
+
+            memmove(r + 1, r, (height - 1) * sizeof(uint32_t));
+        }
+        direct_column(&wf_rows[last_row_id], bandwidth, 0);
+    } else {
+        return;
+    }
+    lv_obj_get_coords(obj, &a);
+#if USE_DRM
+    drm_wf_present(wfp, a.y1, height);
+#endif
+}
+
 static void redraw_cb(lv_event_t * e) {
     int32_t src_x_offset;
     uint16_t src_y, src_x0, dst_y, dst_x;
@@ -359,8 +463,12 @@ static void refresh_waterfall( void * arg) {
     refresh_counter++;
     if (refresh_counter >= refresh_period) {
         refresh_counter = 0;
-        redraw_cb(NULL);
-        lv_obj_invalidate(img);
+        if (direct) {
+            direct_redraw(__atomic_exchange_n(&new_rows, 0, __ATOMIC_ACQUIRE));
+        } else {
+            redraw_cb(NULL);
+            lv_obj_invalidate(img);
+        }
     }
 }
 

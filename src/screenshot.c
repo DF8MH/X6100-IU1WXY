@@ -6,6 +6,7 @@
  *  Copyright (c) 2022-2023 Belousov Oleg aka R1CBU
  */
 
+#include "lv_drivers/display/drm.h"
 #include <stdlib.h>
 #include <stdint.h>
 #include <png.h>
@@ -102,6 +103,12 @@ void screenshot_take() {
     buf = (uint8_t *) malloc(buf_size);
 
     lv_snapshot_take_to_buf(lv_scr_act(), LV_IMG_CF_TRUE_COLOR_ALPHA, &snapshot, buf, buf_size);
+#if USE_DRM
+    /* The waterfall is on its own plane, under the transparent GUI */
+    if (snapshot.header.w == 800 && snapshot.header.h == 480) {
+        drm_compose_landscape((uint32_t *) buf);
+    }
+#endif
 
     pthread_t thread;
 

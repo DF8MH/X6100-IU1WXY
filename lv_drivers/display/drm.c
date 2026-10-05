@@ -1,14 +1,21 @@
 /**
  * @file drm.c
  *
- * Single plane DRM/KMS output: LVGL renders landscape 800x480 areas, they are
- * rotated 90 ccw into a cached portrait shadow, and on the last area of a
- * frame the dirty rectangles are copied to the back dumb buffer, which is
- * shown with a page flip at vblank (no tearing).
+ * DRM/KMS output on two planes:
+ * - the overlay plane (ARGB) shows the GUI: LVGL renders landscape 800x480
+ *   areas, they are rotated 90 ccw into a cached portrait shadow, and on the
+ *   last area of a frame the dirty rectangles are copied to the back buffer;
+ * - the primary plane (XRGB) under it shows what the GUI leaves transparent:
+ *   the waterfall, drawn there directly (drm_wf_present), not by LVGL.
+ * Both are double buffered and shown together with one atomic commit at
+ * vblank (drm_commit, from the main loop): no tearing.
  *
- * The back buffer misses the previous frame too (it went to the other
- * buffer), so the rectangles of the previous frame are copied again: only
- * dirty areas are moved, never the whole screen.
+ * A back buffer misses the previous frame too (it went to the other buffer),
+ * so the rectangles of the previous frame are copied again: only dirty areas
+ * are moved, never the whole screen.
+ *
+ * Without a usable overlay plane the GUI goes on the primary plane alone and
+ * drm_planes() is false: the waterfall stays an LVGL image.
  */
 
 /*********************
@@ -31,6 +38,7 @@
 
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#include <drm_fourcc.h>
 
 /*********************
  *      DEFINES
@@ -61,17 +69,30 @@ typedef struct {
     bool        full;
 } rects_t;
 
+/* A plane with two buffers: back is the one not on screen */
+typedef struct {
+    uint32_t            id;
+    struct drm_buffer   bufs[2];
+    int                 back;
+    bool                ready;      /* back buffer filled, to be shown */
+    /* property ids */
+    uint32_t            p_fb, p_crtc, p_sx, p_sy, p_sw, p_sh, p_cx, p_cy, p_cw, p_ch;
+} plane_t;
+
 /**********************
  *  STATIC VARIABLES
  **********************/
 static int                  fd = -1;
 static uint32_t             conn_id, crtc_id;
+static int                  crtc_idx;
 static drmModeModeInfo      mode;
-static struct drm_buffer    bufs[2];
-static int                  back;           /* index of the buffer not on screen */
+static plane_t              primary, overlay;
+static plane_t              *gui;           /* the plane LVGL draws to */
+static bool                 planes;         /* the GUI on the overlay, the waterfall on the primary */
 static bool                 crtc_set;
 static volatile bool        flip_pending;
-static uint32_t             *shadow;        /* portrait copy of the screen, cached RAM */
+static uint32_t             *shadow;        /* portrait copy of the GUI, cached RAM */
+static uint32_t             *wf_shadow;     /* portrait copy of the primary plane (screen dump) */
 static rects_t              frame[2];       /* this frame, previous frame */
 static int                  cur;
 
@@ -123,6 +144,11 @@ static bool find_output(void) {
                 }
                 drmModeFreeEncoder(enc);
             }
+            for (int k = 0; k < res->count_crtcs; k++) {
+                if (res->crtcs[k] == crtc_id) {
+                    crtc_idx = k;
+                }
+            }
             conn_id = conn->connector_id;
             ok = crtc_id != 0;
         }
@@ -133,9 +159,73 @@ static bool find_output(void) {
     return ok;
 }
 
-static bool alloc_buf(struct drm_buffer *buf) {
+static uint32_t prop_id(drmModeObjectProperties *props, const char *name) {
+    for (uint32_t i = 0; i < props->count_props; i++) {
+        drmModePropertyRes *p = drmModeGetProperty(fd, props->props[i]);
+        uint32_t           id = 0;
+
+        if (p && strcmp(p->name, name) == 0) {
+            id = p->prop_id;
+        }
+        drmModeFreeProperty(p);
+        if (id) {
+            return id;
+        }
+    }
+    return 0;
+}
+
+/* The first plane of this type on our CRTC that takes the format */
+static bool find_plane(plane_t *pl, uint64_t type, uint32_t fourcc, uint32_t skip) {
+    drmModePlaneRes *res = drmModeGetPlaneResources(fd);
+    bool            ok = false;
+
+    if (!res) {
+        return false;
+    }
+    for (uint32_t i = 0; i < res->count_planes && !ok; i++) {
+        drmModePlane            *p = drmModeGetPlane(fd, res->planes[i]);
+        drmModeObjectProperties *props;
+        bool                    fmt = false;
+
+        if (!p) {
+            continue;
+        }
+        for (uint32_t f = 0; f < p->count_formats; f++) {
+            fmt |= p->formats[f] == fourcc;
+        }
+        props = drmModeObjectGetProperties(fd, p->plane_id, DRM_MODE_OBJECT_PLANE);
+        if (props && fmt && p->plane_id != skip && (p->possible_crtcs & (1 << crtc_idx))) {
+            uint32_t t = prop_id(props, "type");
+
+            for (uint32_t j = 0; j < props->count_props; j++) {
+                if (props->props[j] == t && props->prop_values[j] == type) {
+                    pl->id = p->plane_id;
+                    pl->p_fb = prop_id(props, "FB_ID");
+                    pl->p_crtc = prop_id(props, "CRTC_ID");
+                    pl->p_sx = prop_id(props, "SRC_X");
+                    pl->p_sy = prop_id(props, "SRC_Y");
+                    pl->p_sw = prop_id(props, "SRC_W");
+                    pl->p_sh = prop_id(props, "SRC_H");
+                    pl->p_cx = prop_id(props, "CRTC_X");
+                    pl->p_cy = prop_id(props, "CRTC_Y");
+                    pl->p_cw = prop_id(props, "CRTC_W");
+                    pl->p_ch = prop_id(props, "CRTC_H");
+                    ok = pl->p_fb && pl->p_crtc && pl->p_ch;
+                }
+            }
+        }
+        drmModeFreeObjectProperties(props);
+        drmModeFreePlane(p);
+    }
+    drmModeFreePlaneResources(res);
+    return ok;
+}
+
+static bool alloc_buf(struct drm_buffer *buf, uint32_t fourcc) {
     struct drm_mode_create_dumb creq = { .width = PANEL_W, .height = PANEL_H, .bpp = 32 };
     struct drm_mode_map_dumb    mreq = { 0 };
+    uint32_t                    handles[4] = { 0 }, pitches[4] = { 0 }, offsets[4] = { 0 };
 
     if (drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq) < 0) {
         err("create dumb: %s", strerror(errno));
@@ -152,17 +242,33 @@ static bool alloc_buf(struct drm_buffer *buf) {
     }
     buf->map = mmap(0, creq.size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, mreq.offset);
     if (buf->map == MAP_FAILED) {
+        buf->map = NULL;
         err("mmap: %s", strerror(errno));
         return false;
     }
     memset(buf->map, 0, creq.size);
 
-    /* depth 24, 32 bpp: XRGB8888, the byte order of lv_color32_t (B, G, R, A) */
-    if (drmModeAddFB(fd, PANEL_W, PANEL_H, 24, 32, buf->pitch, buf->handle, &buf->fb_id)) {
+    /* The byte order of lv_color32_t (B, G, R, A) */
+    handles[0] = buf->handle;
+    pitches[0] = buf->pitch;
+    if (drmModeAddFB2(fd, PANEL_W, PANEL_H, fourcc, handles, pitches, offsets, &buf->fb_id, 0)) {
         err("add fb: %s", strerror(errno));
         return false;
     }
     return true;
+}
+
+static bool alloc_plane(plane_t *pl, uint32_t fourcc) {
+    return alloc_buf(&pl->bufs[0], fourcc) && alloc_buf(&pl->bufs[1], fourcc);
+}
+
+static void free_plane(plane_t *pl) {
+    for (int i = 0; i < 2; i++) {
+        if (pl->bufs[i].map) {
+            munmap(pl->bufs[i].map, pl->bufs[i].size);
+            pl->bufs[i].map = NULL;
+        }
+    }
 }
 
 static bool open_card(const char *path) {
@@ -272,44 +378,40 @@ static void copy_rects(struct drm_buffer *buf, const rects_t *r) {
     }
 }
 
-/* Last area of a frame: back buffer <- dirty rects of this and the previous frame, then flip */
-static void present(void) {
-    static bool failed;
-    rects_t     *now = &frame[cur], *prev = &frame[cur ^ 1];
-    int         ret;
+static void add_prop(drmModeAtomicReq *req, uint32_t obj, uint32_t prop, uint64_t val) {
+    if (prop) {
+        drmModeAtomicAddProperty(req, obj, prop, val);
+    }
+}
 
-    wait_flip();                        /* the back buffer was on screen until this flip */
+/* Full-screen plane on our CRTC (first commit only) */
+static void add_plane_setup(drmModeAtomicReq *req, plane_t *pl) {
+    add_prop(req, pl->id, pl->p_crtc, crtc_id);
+    add_prop(req, pl->id, pl->p_sx, 0);
+    add_prop(req, pl->id, pl->p_sy, 0);
+    add_prop(req, pl->id, pl->p_sw, (uint64_t) PANEL_W << 16);
+    add_prop(req, pl->id, pl->p_sh, (uint64_t) PANEL_H << 16);
+    add_prop(req, pl->id, pl->p_cx, 0);
+    add_prop(req, pl->id, pl->p_cy, 0);
+    add_prop(req, pl->id, pl->p_cw, PANEL_W);
+    add_prop(req, pl->id, pl->p_ch, PANEL_H);
+}
 
-    copy_rects(&bufs[back], prev);
-    copy_rects(&bufs[back], now);
+/* The first frame: modeset with the primary plane (synchronous), then the overlay on */
+static int first_commit(void) {
+    int ret = drmModeSetCrtc(fd, crtc_id, primary.bufs[primary.back].fb_id, 0, 0, &conn_id, 1, &mode);
 
-    if (crtc_set) {
-        /* shown at the next vblank, the event clears flip_pending */
-        ret = drmModePageFlip(fd, crtc_id, bufs[back].fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
-        flip_pending = ret == 0;
-    } else {
-        /* first frame: modeset, synchronous */
-        ret = drmModeSetCrtc(fd, crtc_id, bufs[back].fb_id, 0, 0, &conn_id, 1, &mode);
-        crtc_set = ret == 0;
+    if (ret || !planes) {
+        return ret;
     }
 
-    if (ret) {
-        if (!failed) {
-            err("%s: %s", crtc_set ? "page flip" : "set crtc", strerror(errno));
-        }
-        failed = true;
-        /* Not shown, buffers not swapped: both get the whole screen once flips work again */
-        now->full = true;
-        prev->full = true;
-        return;
-    }
-    failed = false;
-    back ^= 1;
+    drmModeAtomicReq *req = drmModeAtomicAlloc();
 
-    /* this frame becomes the previous one */
-    cur ^= 1;
-    frame[cur].cnt = 0;
-    frame[cur].full = false;
+    add_plane_setup(req, &overlay);
+    add_prop(req, overlay.id, overlay.p_fb, overlay.bufs[overlay.back].fb_id);
+    ret = drmModeAtomicCommit(fd, req, 0, NULL);
+    drmModeAtomicFree(req);
+    return ret;
 }
 
 /**********************
@@ -324,26 +426,40 @@ bool drm_init(void) {
         return false;
     }
 
+    drmSetClientCap(fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
+    planes = drmSetClientCap(fd, DRM_CLIENT_CAP_ATOMIC, 1) == 0 &&
+             find_plane(&primary, DRM_PLANE_TYPE_PRIMARY, DRM_FORMAT_XRGB8888, 0) &&
+             find_plane(&overlay, DRM_PLANE_TYPE_OVERLAY, DRM_FORMAT_ARGB8888, primary.id);
+
     shadow = calloc(PANEL_W * PANEL_H, 4);
-    if (!shadow || !alloc_buf(&bufs[0]) || !alloc_buf(&bufs[1])) {
+    wf_shadow = planes ? calloc(PANEL_W * PANEL_H, 4) : NULL;
+
+    if (!shadow || (planes && !wf_shadow) || !alloc_plane(&primary, DRM_FORMAT_XRGB8888) ||
+        (planes && !alloc_plane(&overlay, DRM_FORMAT_ARGB8888)))
+    {
         err("buffers not allocated, fbdev is used");
-        for (int i = 0; i < 2; i++) {
-            if (bufs[i].map && bufs[i].map != MAP_FAILED) {
-                munmap(bufs[i].map, bufs[i].size);
-            }
-        }
+        free_plane(&primary);
+        free_plane(&overlay);
         free(shadow);
+        free(wf_shadow);
+        shadow = wf_shadow = NULL;
         close(fd);              /* also frees the dumb buffers and their fbs */
         fd = -1;
         return false;
     }
+    gui = planes ? &overlay : &primary;
 
     /* Both buffers are empty: the first two frames copy the whole screen */
     frame[0].full = true;
     frame[1].full = true;
 
-    fprintf(stderr, "drm: %ux%u, connector %u, crtc %u\n", mode.hdisplay, mode.vdisplay, conn_id, crtc_id);
+    fprintf(stderr, "drm: %ux%u, connector %u, crtc %u, %s\n", mode.hdisplay, mode.vdisplay, conn_id, crtc_id,
+            planes ? "GUI on the overlay plane, waterfall on the primary" : "one plane");
     return true;
+}
+
+bool drm_planes(void) {
+    return planes;
 }
 
 void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p) {
@@ -355,9 +471,85 @@ void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p
     }
 
     if (lv_disp_flush_is_last(drv)) {
-        present();
+        wait_flip();                    /* the back buffer was on screen until this flip */
+        copy_rects(&gui->bufs[gui->back], &frame[cur ^ 1]);
+        copy_rects(&gui->bufs[gui->back], &frame[cur]);
+        gui->ready = true;
     }
     lv_disp_flush_ready(drv);
+}
+
+void drm_wf_present(const uint32_t *src, int32_t x, int32_t w) {
+    struct drm_buffer *buf;
+
+    if (!planes || x < 0 || w <= 0 || x + w > PANEL_W) {
+        return;
+    }
+    for (int32_t y = 0; y < PANEL_H; y++) {
+        memcpy(wf_shadow + y * PANEL_W + x, src + y * w, w * 4);
+    }
+    wait_flip();
+    buf = &primary.bufs[primary.back];
+    for (int32_t y = 0; y < PANEL_H; y++) {
+        memcpy(buf->map + y * buf->pitch + x * 4, wf_shadow + y * PANEL_W + x, w * 4);
+    }
+    primary.ready = true;
+}
+
+void drm_commit(void) {
+    static bool failed;
+    int         ret;
+
+    if (fd < 0 || !(gui->ready || (planes && primary.ready))) {
+        return;
+    }
+    wait_flip();
+
+    if (!crtc_set) {
+        ret = first_commit();
+        crtc_set = ret == 0;
+    } else if (planes) {
+        drmModeAtomicReq *req = drmModeAtomicAlloc();
+
+        if (overlay.ready) {
+            add_prop(req, overlay.id, overlay.p_fb, overlay.bufs[overlay.back].fb_id);
+        }
+        if (primary.ready) {
+            add_prop(req, primary.id, primary.p_fb, primary.bufs[primary.back].fb_id);
+        }
+        /* shown at the next vblank, the event clears flip_pending */
+        ret = drmModeAtomicCommit(fd, req, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, NULL);
+        drmModeAtomicFree(req);
+        flip_pending = ret == 0;
+    } else {
+        ret = drmModePageFlip(fd, crtc_id, primary.bufs[primary.back].fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+        flip_pending = ret == 0;
+    }
+
+    if (ret) {
+        if (!failed) {
+            err("%s: %s", crtc_set ? "commit" : "set crtc", strerror(errno));
+        }
+        failed = true;
+        /* Not shown, buffers not swapped: both get the whole GUI once commits work again */
+        frame[0].full = true;
+        frame[1].full = true;
+        return;
+    }
+    failed = false;
+
+    if (gui->ready) {
+        gui->ready = false;
+        gui->back ^= 1;
+        /* this frame becomes the previous one */
+        cur ^= 1;
+        frame[cur].cnt = 0;
+        frame[cur].full = false;
+    }
+    if (planes && primary.ready) {
+        primary.ready = false;
+        primary.back ^= 1;
+    }
 }
 
 bool drm_dump(const char *path) {
@@ -367,8 +559,57 @@ bool drm_dump(const char *path) {
     if (!shadow || !(f = fopen(path, "wb"))) {
         return false;
     }
-    ok = fwrite(shadow, 4, PANEL_W * PANEL_H, f) == PANEL_W * PANEL_H;
+    if (planes) {
+        /* What the panel shows: the GUI over the waterfall */
+        static uint32_t row[PANEL_W];
+
+        ok = true;
+        for (int32_t y = 0; y < PANEL_H && ok; y++) {
+            drm_blend_under(row, shadow + y * PANEL_W, wf_shadow + y * PANEL_W, PANEL_W);
+            ok = fwrite(row, 4, PANEL_W, f) == PANEL_W;
+        }
+    } else {
+        ok = fwrite(shadow, 4, PANEL_W * PANEL_H, f) == PANEL_W * PANEL_H;
+    }
     return fclose(f) == 0 && ok;
+}
+
+void drm_blend_under(uint32_t *dst, const uint32_t *top, const uint32_t *bottom, int32_t n) {
+    for (int32_t i = 0; i < n; i++) {
+        uint32_t t = top[i], b = bottom[i];
+        uint32_t a = t >> 24;
+
+        if (a == 255) {
+            dst[i] = t;
+        } else if (a == 0) {
+            dst[i] = b | 0xff000000;
+        } else {
+            uint32_t r = (((t >> 16) & 0xff) * a + ((b >> 16) & 0xff) * (255 - a) + 127) / 255;
+            uint32_t g = (((t >> 8) & 0xff) * a + ((b >> 8) & 0xff) * (255 - a) + 127) / 255;
+            uint32_t bl = ((t & 0xff) * a + (b & 0xff) * (255 - a) + 127) / 255;
+
+            dst[i] = 0xff000000 | (r << 16) | (g << 8) | bl;
+        }
+    }
+}
+
+const uint32_t * drm_wf_pixels(void) {
+    return planes ? wf_shadow : NULL;
+}
+
+void drm_compose_landscape(uint32_t *px) {
+    if (!planes) {
+        return;
+    }
+    for (int32_t y = 0; y < LAND_H; y++) {
+        uint32_t *row = px + y * LAND_W;
+        uint32_t under[LAND_W];
+
+        for (int32_t x = 0; x < LAND_W; x++) {
+            under[x] = wf_shadow[(LAND_W - 1 - x) * PANEL_W + y];
+        }
+        drm_blend_under(row, row, under, LAND_W);
+    }
 }
 
 #endif

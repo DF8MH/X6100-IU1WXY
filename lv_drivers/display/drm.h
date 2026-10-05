@@ -34,10 +34,26 @@ extern "C" {
  **********************/
 /* false: no usable DRM device, nothing was changed on the screen (use fbdev) */
 bool drm_init(void);
+/* true: the GUI is on the overlay plane and what it leaves transparent shows
+ * the primary plane, where the waterfall is drawn (drm_wf_present) */
+bool drm_planes(void);
 /* flush_cb, partial rendering: area-sized color_p */
 void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p);
+/* The waterfall into the primary plane: portrait columns x .. x + w - 1, all
+ * 800 rows of src (w pixels each, XRGB) */
+void drm_wf_present(const uint32_t *src, int32_t x, int32_t w);
+/* Shows what was flushed or presented since the last call, at the next vblank:
+ * once per main loop, after lv_timer_handler() */
+void drm_commit(void);
 /* The screen as /dev/fb0 would hold it (480x800 BGRX) into path; false if not active */
 bool drm_dump(const char *path);
+/* dst = top (ARGB) over bottom (XRGB), n pixels */
+void drm_blend_under(uint32_t *dst, const uint32_t *top, const uint32_t *bottom, int32_t n);
+/* The primary plane, portrait 480x800 XRGB (NULL without planes) */
+const uint32_t * drm_wf_pixels(void);
+/* A landscape 800x480 ARGB copy of the GUI (snapshot, recorder) completed
+ * with the waterfall under its transparent parts; nothing without planes */
+void drm_compose_landscape(uint32_t *px);
 
 #endif  /*USE_DRM*/
 
