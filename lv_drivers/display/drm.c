@@ -360,4 +360,15 @@ void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p
     lv_disp_flush_ready(drv);
 }
 
+bool drm_dump(const char *path) {
+    FILE *f;
+    bool  ok;
+
+    if (!shadow || !(f = fopen(path, "wb"))) {
+        return false;
+    }
+    ok = fwrite(shadow, 4, PANEL_W * PANEL_H, f) == PANEL_W * PANEL_H;
+    return fclose(f) == 0 && ok;
+}
+
 #endif

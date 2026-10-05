@@ -34,8 +34,10 @@ extern "C" {
  **********************/
 /* false: no usable DRM device, nothing was changed on the screen (use fbdev) */
 bool drm_init(void);
-/* flush_cb for a display with direct_mode and a full 800x480 draw buffer */
+/* flush_cb, partial rendering: area-sized color_p */
 void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p);
+/* The screen as /dev/fb0 would hold it (480x800 BGRX) into path; false if not active */
+bool drm_dump(const char *path);
 
 #endif  /*USE_DRM*/
 

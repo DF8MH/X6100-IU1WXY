@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
+#include <signal.h>
 #include <sys/time.h>
 
 #include "main.h"
@@ -91,15 +92,27 @@ static void display_settings_check(void) {
     fix_uint8(&params.spectrum_peak_speed);
 }
 
+#if USE_DRM
+/* SIGUSR1: the screen to /tmp/screen.raw (with DRM /dev/fb0 no longer shows it) */
+static volatile sig_atomic_t dump_requested;
+
+static void dump_signal(int sig) {
+    dump_requested = 1;
+}
+#endif
+
 int main(void) {
     clock_tz_init();
     lv_init();
     // lv_png_init();
 
 #if USE_DRM
+    signal(SIGUSR1, dump_signal);
     if (drm_init()) {
         screen_rec_out = drm_flush;
+        fclose(fopen("/tmp/x6100_gui.drm", "w"));  /* tells screenshot tools to use SIGUSR1 */
     } else {
+        unlink("/tmp/x6100_gui.drm");
         fbdev_init();
     }
 #else
@@ -197,6 +210,13 @@ int main(void) {
         event_obj_check();
         scheduler_work();
         next_loop_time = lv_timer_handler() + loop_start_time;
+#if USE_DRM
+        if (dump_requested) {
+            dump_requested = 0;
+            drm_dump("/tmp/screen.raw.tmp");
+            rename("/tmp/screen.raw.tmp", "/tmp/screen.raw");
+        }
+#endif
         sleep_time = next_loop_time - get_time();
         if (sleep_time > 0) {
             usleep(sleep_time * 1000);
