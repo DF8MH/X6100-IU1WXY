@@ -494,7 +494,7 @@ static void topbar(void) {
     }
     band_plan_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 - BAND_PLAN_H);
     band_plan_update(f, 50000);
-    spot_marks_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
+    spot_marks_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
     spot_marks_update(f, 50000);
     band_plan_update(f, 50000);
     cluster_column_init(stack, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H);   /* over the spot calls, as main_screen.c */
@@ -579,7 +579,7 @@ static void topbar(void) {
     band_plan_set_y(FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H); /* top of the waterfall */
     lv_obj_add_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_y(stack, -96);
-    spot_marks_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H, 24, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36); /* lines: top of the waterfall */
+    spot_marks_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36 + SPOT_MARKS_H, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36); /* lines: top of the waterfall */
     freq_scale_update(f, 50000 / 8, theme_hex(TC_text));
     spot_marks_update(f, 50000 / 8);
     band_plan_update(f, 50000 / 8);
@@ -593,7 +593,7 @@ static void topbar(void) {
     freq_scale_update(f, 50000 / 8, theme_hex(TC_text));
     spot_marks_update(f, 50000 / 8);
     band_plan_update(f, 50000 / 8);
-    spot_marks_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
+    spot_marks_layout(FREQ_STRIP_Y + FREQ_STRIP_H + 96 - 36, FREQ_STRIP_Y + FREQ_STRIP_H + 96 + 36);
     lv_obj_clear_flag(spectrum, LV_OBJ_FLAG_HIDDEN);
     band_plan_set_y(FREQ_STRIP_Y + FREQ_STRIP_H + 96 - BAND_PLAN_H);
     lv_obj_set_y(stack, 0);
@@ -683,7 +683,7 @@ static void topbar(void) {
         lv_obj_set_y(wf, y);
         freq_scale_lines_set_y(y);
         band_plan_set_y(y);
-        spot_marks_layout(y, BAND_PLAN_H + 8, y + BAND_PLAN_H + 8);
+        spot_marks_layout(y, y + BAND_PLAN_H + 8);
         harness_cluster_column = 1;
         cluster_column_layout(y + BAND_PLAN_H);
         cluster_column_refresh();

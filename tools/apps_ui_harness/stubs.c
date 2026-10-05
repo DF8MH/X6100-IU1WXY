@@ -131,7 +131,7 @@ void lpf(float *x, float current, float beta, float initial) { *x = current; }
 bool harness_gps_fix = true;
 int gps_status(void) { return 1; /* GPS_STATUS_WORKING */ }
 bool gps_last_fix(double *lat, double *lon, int *age_s) {
-    *lat = 45.0; *lon = 7.6; *age_s = harness_gps_fix ? 1 : 300;
+    *lat = 45.46; *lon = 9.19; *age_s = harness_gps_fix ? 1 : 300;   /* Milan, not the author's QTH */
     return true;
 }
 void split_freq(int32_t freq, uint16_t *mhz, uint16_t *khz, uint16_t *hz) {
