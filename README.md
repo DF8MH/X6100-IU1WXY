@@ -183,6 +183,24 @@ app of its own (APP page 3 → **Bands**), in the same look as the other apps.
 - Times on screen in **local time** (time zone in Settings); logs and ADIF
   stay in UTC.
 - Settings rewritten as cards, all reachable with the MFK.
+- Tuning from **100 kHz** up (NAVTEX on 490 kHz included).
+
+### Smooth screen, smooth knob
+
+- **New display engine (DRM/KMS)**: the screen is updated in step with the
+  panel, so no tearing, and only the parts that change are redrawn. The GUI
+  sits on its own transparent layer; the **waterfall** (and the spectrum, when
+  it is on) is drawn straight onto the layer under it, one new line at a time.
+  The GUI went from about 88% to about 47% of a CPU core: more room for the
+  decoders, a cooler radio, a waterfall that scrolls evenly. Screenshots and
+  screen recordings show both layers. On a kernel without DRM the classic
+  framebuffer is used.
+- **Main knob**: every detent is timed by its own thread, so fast turns no
+  longer stutter. **Acceleration** grows with the speed (Settings → General →
+  CONTROLS: **Lite** or **Strong**), and **Accel. onset** (1-5) sets how fast
+  you must turn before the step grows. Slow turns stay precise for spot snap.
+- **CW tune indicator**: the bar lights where the signal is and fades out a
+  second after it stops.
 
 ### Wireless
 
@@ -271,10 +289,13 @@ or newer is recommended for the TX audio options.
   integration of JS8, SSTV, WeFax and NavTex into the radio;
 - **Bluetooth** CAT, headphones and keyboards, **wfview** server (Icom LAN
   protocol), IARU band plan strip, configurable long-press actions, CW trainer
-  stats, and the SD image itself.
+  stats, and the SD image itself;
+- the **two-layer DRM display** with the waterfall drawn directly, and the
+  **main knob** with timed detents and adjustable acceleration.
 
 Standing on the work of: the **R1CBU** GUI by Oleg Belousov R1CBU and Georgy
 Dyuldin R2RFE ([gdyuldin/x6100_gui](https://github.com/gdyuldin/x6100_gui)),
+whose CW receiver, DRM work and direct spectrum rendering are imported here,
 **1KO125** by Hany El Imam / TheMurusTeam (WeFax, NavTex, SSTV decoders),
 **JS8** by randal007 on the JS8Call engine (Jordan Sherer KN4CRD), **wsprd**
 from WSJT-X (K1JT, K9AN). Libraries: LVGL, cJSON, FFTW, liquid-dsp, libpng,
