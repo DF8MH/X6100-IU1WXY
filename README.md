@@ -4,7 +4,7 @@
 
 <p align="center">Heartfelt thanks to <b>Oleg Belousov R1CBU</b>, <b>Georgy Dyuldin R2RFE</b>,
 <b>1KO125</b> by <b>Hany El Imam / TheMurusTeam</b> and the whole <b>X6100 community</b>: this firmware stands on their work.<br>
-Thanks to <b>Fabio IN3FOB</b> for the support in development and precise beta testing,
+Thanks to <b>Fabio IN3FOB</b> for the support in development and the precise beta testing,
 and to <b>Leo CT7AUE</b>, <b>Angelo IU2VWK</b>, <b>Gianluca IW5DUA</b> and <b>Emilio IU8QTM</b>
 for their neverending patience, time and advices.</p>
 
