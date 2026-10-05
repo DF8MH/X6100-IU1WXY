@@ -7,7 +7,7 @@
 /* Screen + RX audio recorder: /mnt/screenrec/screen-YYYYMMDD-HHMMSS.avi
  * (MJPEG video, PCM s16 mono audio).
  *
- * LVGL thread: fbdev_flush is wrapped to keep a copy of the screen; a timer
+ * LVGL thread: the display flush (fbdev or DRM) is wrapped to keep a copy of the screen; a timer
  * puts a snapshot in a small queue SCREEN_REC_FPS times a second, or drops it
  * when the queue is full.
  * Audio thread: only copies samples into a ring.
@@ -269,6 +269,8 @@ void screen_rec_put_audio_samples(size_t nsamples, int16_t *samples) {
 
 /* LVGL thread */
 
+void (*screen_rec_out)(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) = fbdev_flush;
+
 void screen_rec_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_p) {
     if (active && shadow) {
         int32_t x1 = area->x1 < 0 ? 0 : area->x1;
@@ -279,7 +281,7 @@ void screen_rec_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *col
             memcpy(shadow + (y * W + x1) * 4, (uint8_t *) color_p + ((y - area->y1) * w + x1 - area->x1) * 4, (x2 - x1 + 1) * 4);
         }
     }
-    fbdev_flush(drv, area, color_p);
+    screen_rec_out(drv, area, color_p);
 }
 
 static void timer_cb(lv_timer_t *t) {

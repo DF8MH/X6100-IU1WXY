@@ -339,12 +339,7 @@
  *  DRM/KMS device (/dev/dri/cardX)
  *-----------------------------------------*/
 #ifndef USE_DRM
-#  define USE_DRM           0
-#endif
-
-#if USE_DRM
-#  define DRM_CARD          "/dev/dri/card1"
-#  define DRM_CONNECTOR_ID  -1	/* -1 for the first connected one */
+#  define USE_DRM           1   /* card0 or card1 ($DRM_CARD to force one), fbdev if it fails */
 #endif
 
 /*********************
