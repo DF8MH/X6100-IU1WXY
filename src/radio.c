@@ -825,8 +825,12 @@ static bool radio_tick() {
             battery_log(pack);
             /* Only on a change, with hysteresis: around 6.0 V the 30 s
              * power-off timer was started and stopped over and over */
-            bool enter_low = !pack->flag.vext && (pack->vbat <= LOW_BATTERY_VBAT_LOW);
-            bool leave_low = pack->flag.vext || (pack->vbat >= LOW_BATTERY_VBAT_HIGH);
+            /* External power: the flag alone is not enough, charging an
+             * empty battery it stayed clear with 11.7 V on the jack and the
+             * radio switched itself off on the charger */
+            bool ext = pack->flag.vext || pack->flag.charging || pack->vext >= 90;
+            bool enter_low = !ext && (pack->vbat <= LOW_BATTERY_VBAT_LOW);
+            bool leave_low = ext || (pack->vbat >= LOW_BATTERY_VBAT_HIGH);
 
             if ((!low_power && enter_low) || (low_power && leave_low)) {
                 low_power = !low_power;
