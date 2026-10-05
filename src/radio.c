@@ -546,6 +546,9 @@ static void on_vfo_freq_change(Subject *subj, void *user_data) {
     }
     int32_t shift = cfg_transverter_shift_for(new_val);
     shift += param_i_get(cfg_band_if_shift);
+    if (x6100_control_get(vfo == X6100_VFO_A ? x6100_vfoa_freq : x6100_vfob_freq) == (uint32_t)(new_val - shift)) {
+        return;
+    }
     WITH_RADIO_LOCK(x6100_control_vfo_freq_set(vfo, new_val - shift));
     LV_LOG_USER("Radio set vfo %i freq=%i (%i)", vfo, new_val, new_val - shift);
 }
@@ -553,6 +556,9 @@ static void on_vfo_freq_change(Subject *subj, void *user_data) {
 static void on_vfo_mode_change(Subject *subj, void *user_data) {
     x6100_vfo_t vfo = (x6100_vfo_t )user_data;
     int32_t new_val = subject_i_get((SubjectInt*)subj);
+    if (x6100_control_get(vfo == X6100_VFO_A ? x6100_vfoa_mode : x6100_vfob_mode) == (uint32_t)new_val) {
+        return;
+    }
     WITH_RADIO_LOCK(x6100_control_vfo_mode_set(vfo, new_val));
     LV_LOG_USER("Radio set vfo %i mode=%i", vfo, new_val);;
 }
@@ -603,6 +609,9 @@ static void update_agc_time(Subject *subj, void *user_data) {
             }
             break;
     }
+    if (x6100_control_get(x6100_agctime) == agc_time) {
+        return;
+    }
     WITH_RADIO_LOCK(x6100_control_agc_time_set(agc_time));
     LV_LOG_USER("Radio set agc time=%u for agc: %i\n", agc_time, agc);
 }
@@ -629,6 +638,15 @@ static void on_atu_network_change(Subject *subj, void *user_data) {
     LV_LOG_USER("Radio set atu network=%u", new_val);
 }
 
+/* Only what changes goes to the base: a band switch (e.g. across 7.040 MHz)
+ * used to send the filters twice, the AGC time and both frequencies again,
+ * on top of the mode change that already makes an audio gap */
+static void cmd_changed(x6100_cmd_enum_t cmd, uint32_t arg) {
+    if (x6100_control_get(cmd) != arg) {
+        x6100_control_cmd(cmd, arg);
+    }
+}
+
 static void on_low_filter_change(Subject *subj, void *user_data) {
     x6100_mode_t mode = cparam_i_get(cfg_cur_mode);
     if ((mode == x6100_mode_am) || (mode == x6100_mode_nfm)) {
@@ -639,8 +657,8 @@ static void on_low_filter_change(Subject *subj, void *user_data) {
     int32_t low2 = LV_MAX(0, low - FILTER_2_OFFSET_OUT);
     radio_lock();
     LV_LOG_USER("Radio set filters: low=%i, low2=%i", low, low2);
-    x6100_control_cmd(x6100_filter1_low, low);
-    x6100_control_cmd(x6100_filter2_low, low2);
+    cmd_changed(x6100_filter1_low, low);
+    cmd_changed(x6100_filter2_low, low2);
     radio_unlock();
 }
 
@@ -653,8 +671,8 @@ static void on_high_filter_change(Subject *subj, void *user_data) {
             // For AM BASE uses absolute low and high values to choose LPF filters for I and Q
             radio_lock();
             LV_LOG_USER("Radio set filters: low=%i, low2=%i", -high, -high2);
-            x6100_control_cmd(x6100_filter1_low, -high);
-            x6100_control_cmd(x6100_filter2_low, -high2);
+            cmd_changed(x6100_filter1_low, -high);
+            cmd_changed(x6100_filter2_low, -high2);
             radio_unlock();
             break;
         default:
@@ -662,8 +680,8 @@ static void on_high_filter_change(Subject *subj, void *user_data) {
     }
     radio_lock();
     LV_LOG_USER("Radio set filters: high=%i, high2=%i", high, high2);
-    x6100_control_cmd(x6100_filter1_high, high);
-    x6100_control_cmd(x6100_filter2_high, high2);
+    cmd_changed(x6100_filter1_high, high);
+    cmd_changed(x6100_filter2_high, high2);
     radio_unlock();
 }
 
