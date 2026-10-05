@@ -17,6 +17,7 @@
 CONF=/mnt/btaudio.conf
 STATE=/tmp/btaudio-hp
 PIDFILE=/tmp/btaudio-monitor.pid
+LST=/tmp/btaudio-lst
 SOURCE=alsa_input.platform-sound.stereo-fallback
 BTAUDIO_RX=yes
 BTAUDIO_MUTE=yes
@@ -100,10 +101,16 @@ apply_rx() {
 # Headphones put in their case often drop the link without saying so: the
 # link is then declared lost after the supervision timeout (20 s by default).
 # 2 s (3200 slots of 0.625 ms) brings the speaker back quickly.
+# Sent once per link (MAC/handle in $LST): sync_audio runs on every PulseAudio
+# event, and a burst of HCI commands to the chip on each one is pointless.
 short_lst() {
-	for m in $(hcitool con 2>/dev/null | awk '/ACL/ {print $3}'); do
-		hcitool lst "$m" 3200 >/dev/null 2>&1
+	set_lst=""
+	for c in $(hcitool con 2>/dev/null | awk '/ACL/ {print $3 "/" $5}'); do
+		if grep -qx "$c" $LST 2>/dev/null || hcitool lst "${c%/*}" 3200 >/dev/null 2>&1; then
+			set_lst="$set_lst $c"
+		fi
 	done
+	printf '%s\n' $set_lst > $LST
 }
 
 sync_audio() { force_a2dp; short_lst; apply_rx; }

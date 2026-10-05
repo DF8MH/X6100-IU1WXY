@@ -207,7 +207,7 @@ void wifi_add_connection(const char *ssid, const char *password) {
 				 NM_SETTING_CONNECTION_ID, ssid,
                  NM_SETTING_CONNECTION_TYPE, NM_SETTING_WIRELESS_SETTING_NAME,
 				 NM_SETTING_CONNECTION_AUTOCONNECT, TRUE,
-                 NM_SETTING_CONNECTION_AUTOCONNECT_RETRIES, 1,
+                 NM_SETTING_CONNECTION_AUTOCONNECT_RETRIES, 0,   // 0 = forever, see fix_autoconnect_retries()
 				 NM_SETTING_CONNECTION_INTERFACE_NAME, WLAN_IFACE,
 				 NULL);
     // clang-format on
@@ -355,6 +355,27 @@ static void update_scan_status_cb(lv_timer_t *t) {
     }
 }
 
+/*
+ * Networks saved by older versions have autoconnect-retries=1: one failed
+ * attempt (e.g. while a Bluetooth voice link starves the shared RTL8723BU
+ * radio) blocks the network, and NM no longer reconnects even after the
+ * chip comes back. Retry forever instead.
+ */
+static void fix_autoconnect_retries() {
+    const GPtrArray *cons = nm_client_get_connections(client);
+
+    for (guint i = 0; i < cons->len; i++) {
+        NMRemoteConnection  *rem_con = (NMRemoteConnection *)g_ptr_array_index(cons, i);
+        NMSettingConnection *s_con = nm_connection_get_setting_connection(NM_CONNECTION(rem_con));
+
+        if (!s_con || nm_setting_connection_get_autoconnect_retries(s_con) != 1 ||
+            strcmp(nm_setting_connection_get_connection_type(s_con), NM_SETTING_WIRELESS_SETTING_NAME) != 0)
+            continue;
+        g_object_set(G_OBJECT(s_con), NM_SETTING_CONNECTION_AUTOCONNECT_RETRIES, 0, NULL);
+        nm_remote_connection_commit_changes_async(rem_con, TRUE, NULL, connection_modify_cb, NULL);
+    }
+}
+
 static void setup_nm_client() {
     GError *error = NULL;
 
@@ -363,8 +384,10 @@ static void setup_nm_client() {
     if (!client) {
         LV_LOG_ERROR("Could not create NMClient: %s.", error->message);
         g_error_free(error);
+        return;
     }
     g_signal_connect(client, "device-added", G_CALLBACK(device_added_sig_cb), NULL);
+    fix_autoconnect_retries();
 }
 
 static void setup_wifi_device() {
