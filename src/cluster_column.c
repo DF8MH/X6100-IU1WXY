@@ -19,7 +19,7 @@
 #define TITLE_H 30
 #define ROW_H   28
 #define POOL    16
-#define FREQ_W  58
+#define FREQ_W  65      /* 5 digits of sony_22 (12.9 px each), e.g. 14074 */
 
 typedef struct {
     lv_obj_t *freq, *call, *mode, *age;
@@ -341,8 +341,8 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
     for (int i = 0; i < POOL; i++) {
         lv_coord_t ry = TITLE_H + i * ROW_H;
 
-        rows[i].freq = cell(box, 5, FREQ_W, ry, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text_value), &sony_22);
-        rows[i].call = cell(box, 67, 102, ry + 2, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), &sony_20);
+        rows[i].freq = cell(box, 4, FREQ_W, ry, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text_value), &sony_22);
+        rows[i].call = cell(box, 72, 99, ry + 2, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), &sony_20);
         rows[i].mode = cell(box, 173, 32, ry + 3, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), &sony_18);
         rows[i].age  = cell(box, 207, 32, ry + 3, LV_TEXT_ALIGN_RIGHT, theme_hex(TC_text), &sony_18);
     }
