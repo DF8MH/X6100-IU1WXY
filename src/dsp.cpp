@@ -415,7 +415,12 @@ static bool update_spectrum(ChunkedSpgram *sp_sg, uint64_t now, bool tx, uint32_
  * Returns true when fresh linear / dB PSD data is ready.
  */
 static bool update_waterfall_psd(ChunkedSpgram *wf_sg, uint64_t now) {
-    if ((now - waterfall_time > waterfall_fps_ms) && (!psd_delay) & wf_sg->ready()) {
+    /* Waterfall speed 4 and 5: 20 and 30 frames/s; 1-3 stay at 15 (the
+     * slower ones are averaged in waterfall_data()) */
+    static const uint8_t speed_ms[] = {waterfall_fps_ms, waterfall_fps_ms, waterfall_fps_ms, 1000 / 20, 1000 / 30};
+    uint8_t frame_ms = speed_ms[std::clamp(cfg_sm.p_waterfall_speed.get(), 1, 5) - 1];
+
+    if ((now - waterfall_time > frame_ms) && (!psd_delay) & wf_sg->ready()) {
         wf_sg->get_psd(waterfall_psd_lin, true);
         for (size_t i = 0; i < WATERFALL_NFFT; i++) {
             waterfall_psd[i] = 10.0f * log10f(waterfall_psd_lin[i]);
@@ -509,8 +514,13 @@ void dsp_samples(cfloat *buf_samples, uint16_t size, bool tx, uint32_t base_freq
             }
             waterfall_data(waterfall_psd, WATERFALL_NFFT, tx, base_freq, width_hz);
         }
-        cat_scope_data(waterfall_psd, WATERFALL_NFFT, base_freq, waterfall_fft_decim ? FULL_BW_HZ / spectrum_factor : FULL_BW_HZ, tx);
-        remote_scope_data(waterfall_psd, WATERFALL_NFFT, base_freq, waterfall_fft_decim ? FULL_BW_HZ / spectrum_factor : FULL_BW_HZ, tx);
+        /* wfview and the remote stay at 15 frames/s with a faster waterfall */
+        static uint64_t scope_time;
+        if (now - scope_time >= waterfall_fps_ms) {
+            scope_time = now;
+            cat_scope_data(waterfall_psd, WATERFALL_NFFT, base_freq, waterfall_fft_decim ? FULL_BW_HZ / spectrum_factor : FULL_BW_HZ, tx);
+            remote_scope_data(waterfall_psd, WATERFALL_NFFT, base_freq, waterfall_fft_decim ? FULL_BW_HZ / spectrum_factor : FULL_BW_HZ, tx);
+        }
 
         // TODO: skip on disabled auto min/max
         if (!tx) {

@@ -159,8 +159,9 @@ void waterfall_data(float *data_buf, uint16_t size, bool tx, uint32_t base_freq,
         return;
     }
 
-    /* Speed: lower settings average several frames into one line */
-    static const uint8_t speed_frames[] = {6, 4, 3, 2, 1};
+    /* Speed 1 and 2 average 3 and 2 frames into one line (5 and 7.5 lines/s);
+     * 4 and 5 get faster frames from the DSP */
+    static const uint8_t speed_frames[] = {3, 2, 1, 1, 1};
     static float    acc[WATERFALL_NFFT];
     static int      acc_n;
     static uint32_t acc_freq;
