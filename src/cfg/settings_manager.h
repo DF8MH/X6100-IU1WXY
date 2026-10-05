@@ -183,10 +183,6 @@ class SettingsManager {
     Parameter<int32_t> p_field_boot{"field_boot", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
 
-    // Web remote: the apps' transmitting commands (src/remote_server.cpp)
-    Parameter<int32_t> p_remote_tx{"remote_tx", false, 0, 1,
-        StorageType::GLOBAL, pending_writes_, &global_params_};
-
     // SWR scan
     Parameter<int32_t> p_swrscan_linear{"swrscan_linear", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};

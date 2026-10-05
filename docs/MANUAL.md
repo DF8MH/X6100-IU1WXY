@@ -513,9 +513,8 @@ Connect: turn on the phone's hotspot, connect the radio to it (Settings →
 Wireless), open the app: it tries the last radio, otherwise scans the
 phone's networks for `/api/info`. Tap the radio found, or type its IP.
 
-**Transmitting from the phone** needs Settings → Wireless → WEB REMOTE →
-**Remote TX** on the radio (off by default); until then the app shows a red
-"Remote TX off" banner and every TX command is refused. Stop always works.
+**Transmitting from the phone**: the app's TX commands (CQ, reply, send...)
+work as soon as the app is open on the radio. Stop always works.
 When an app opened from the phone changed the mode (CW, or USB for
 SSTV/WeFax/NavTex), the mode comes back when the app closes.
 
@@ -558,7 +557,7 @@ Audio, Wireless (page 1), Keys, Cluster and Info (page 2).
 | General | STATION (callsign, QTH locator), DATE / TIME, CONTROLS (frequency acceleration, charger), TX CALIBRATION (IQ offsets, band output gain), TRANSVERTERS (from, to, shift) |
 | Display | BACKLIGHT, WATERFALL (mode, auto level, manual min/max, line and zoom, smooth scroll, speed: 3 = 15 lines/s (default), 4 = 20, 5 = 30; 2 = 7.5 and 1 = 5 average the frames into a line, less noise and less CPU), MAIN SCREEN (band plan, cluster spots, cluster column), INTERFACE (popups, knob info, font, theme) |
 | Audio | RX AUDIO, TX AUDIO (codec gain, compressor, filter, CESSB, FM emphasis), MICROPHONE, VOX, AGC, BT HEADPHONES |
-| Wireless | WIFI (power, status, IP, networks), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones, also keyboards), WFVIEW SERVER (on/off, user, password, port and client), WEB REMOTE (Remote TX: lets the companion app transmit, default off) |
+| Wireless | WIFI (power, status, IP, networks), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones, also keyboards), WFVIEW SERVER (on/off, user, password, port and client) |
 | Keys | FRONT KEYS, LONG PRESS (GEN, APP, KEY, MSG, DFN, DFL), HAND MIC KEYS (F1, F2, F1 long, F2 long) |
 | Cluster | CLUSTER FILTERS (modes, bands, POTA/SOTA activity), CLUSTER VIEW (newest first, all bands, spot snap hold and speed) |
 | Info | app and base firmware versions |

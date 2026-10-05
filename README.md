@@ -25,9 +25,7 @@ radio by itself.
 - **Every digital mode, receive and transmit**: FT8/FT4, JS8, WSPR, SSTV
   (pictures from the gallery or the camera), WeFax, RTTY, CW with macros,
   NavTex (receive). The radio decodes and transmits, the phone is the screen.
-- Safe by default: the VFO is locked while an app runs (**BASE** brings it
-  back), and the phone transmits only after you switch on **Remote TX** on the
-  radio (Settings → Wireless → WEB REMOTE).
+- The VFO is locked while an app runs (**BASE** brings it back).
 - **SOTA/POTA page** that opens by itself when the radio enters Field Ops:
   choose the reference, start the activation, log QSOs with the phone's
   keyboard, spot; the phone's GPS gives the radio its position.

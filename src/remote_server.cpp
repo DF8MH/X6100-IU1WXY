@@ -14,8 +14,7 @@
  *    {"cmd":"app","text":"FT8"} and the app commands (app_cmds[]), with "val" and/or "text"
  *                                  -> {"t":"ok"} or {"t":"err","err":"..."}
  *  Commands are applied on the LVGL thread through the scheduler. There is no PTT: only the
- *  apps transmit, when Settings -> Remote TX allows it. While the radio transmits only the
- *  stop/close commands are taken.
+ *  apps transmit. While the radio transmits only the stop/close commands are taken.
  */
 
 #include "remote_server.h"
@@ -116,56 +115,56 @@ static const char *app_names[]  = {"off", "FT8", "FT4", "JS8", "WSPR", "SSTV", "
 static const char *sstv_modes[] = {"R8BW", "R36", "R72", "M1", "M2", "S1", "S2"};
 
 /* Commands of the app that is open: app is current_app() or its start ("FT": FT8 and FT4); a name
- * can have a row for each app. val in min..max (none when min > max). With val >= tx they transmit
- * (Remote TX); with val < stop they are taken also while the radio transmits. */
+ * can have a row for each app. val in min..max (none when min > max). With val < stop they are
+ * taken also while the radio transmits. */
 static const struct {
     const char *name;
     const char *app;
     void      (*fn)(const char *cmd, int32_t val, const char *text);
-    int32_t     min, max, tx, stop;
+    int32_t     min, max, stop;
 } app_cmds[] = {
-    {"ft8_cq",      "FT",     dialog_ft8_remote,    0, 1,         1,         1},
-    {"ft8_reply",   "FT",     dialog_ft8_remote,    1, INT32_MAX, INT32_MIN, INT32_MIN},
-    {"ft8_stop",    "FT",     dialog_ft8_remote,    1, 0,         INT32_MAX, INT32_MAX},
-    {"ft8_auto",    "FT",     dialog_ft8_remote,    0, 1,         1,         INT32_MIN},
-    {"ft8_hold",    "FT",     dialog_ft8_remote,    0, 1,         INT32_MAX, INT32_MIN},
-    {"ft8_txfreq",  "FT",     dialog_ft8_remote,    0, 5000,      INT32_MAX, INT32_MIN},
-    {"js8_send",    "JS8",    dialog_js8_remote,    1, 0,         INT32_MIN, INT32_MIN},
-    {"js8_cq",      "JS8",    dialog_js8_remote,    1, 0,         INT32_MIN, INT32_MIN},
-    {"js8_hb",      "JS8",    dialog_js8_remote,    1, 0,         INT32_MIN, INT32_MIN},
-    {"js8_stop",    "JS8",    dialog_js8_remote,    1, 0,         INT32_MAX, INT32_MAX},
-    {"wspr_txpct",  "WSPR",   dialog_wspr_remote,   0, 50,        1,         INT32_MIN},
-    {"wspr_txnext", "WSPR",   dialog_wspr_remote,   0, 1,         1,         1},
-    {"sstv_tx",     "SSTV",   dialog_sstv_remote,   1, 0,         INT32_MIN, INT32_MIN},   /* val: sstv_modes[] */
-    {"sstv_stop",   "SSTV",   dialog_sstv_remote,   1, 0,         INT32_MAX, INT32_MAX},
-    {"wefax_mode",  "WeFax",  dialog_wefax_remote,  0, 1,         INT32_MAX, INT32_MIN},
-    {"wefax_save",  "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MAX, INT32_MIN},
-    {"wefax_clear", "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MAX, INT32_MIN},
-    {"wefax_tx",    "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MIN, INT32_MIN},
-    {"wefax_stop",  "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MAX, INT32_MAX},
-    {"rtty_send",   "RTTY",   rtty_remote,          1, 0,         INT32_MIN, INT32_MIN},
-    {"rtty_stop",   "RTTY",   rtty_remote,          1, 0,         INT32_MAX, INT32_MAX},
-    {"rtty_rate",   "RTTY",   rtty_remote,          4500, 15000,  INT32_MAX, INT32_MIN},
-    {"rtty_shift",  "RTTY",   rtty_remote,          170, 850,     INT32_MAX, INT32_MIN},
-    {"rtty_center", "RTTY",   rtty_remote,          800, 1600,    INT32_MAX, INT32_MIN},
-    {"rtty_rev",    "RTTY",   rtty_remote,          0, 1,         INT32_MAX, INT32_MIN},
-    {"cw_send",     "CW",     dialog_cw_kbd_remote, 1, 0,         INT32_MIN, INT32_MAX},   /* also while keying */
-    {"cw_stop",     "CW",     dialog_cw_kbd_remote, 1, 0,         INT32_MAX, INT32_MAX},
-    {"cw_wpm",      "CW",     dialog_cw_kbd_remote, 5, 60,        INT32_MAX, INT32_MIN},
-    {"cw_dec",      "CW",     dialog_cw_kbd_remote, 0, 1,         INT32_MAX, INT32_MIN},
-    {"field_screen", "Field", dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
-    {"field_ref",   "Field",  dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
-    {"field_start", "Field",  dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
-    {"field_end",   "Field",  dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
-    {"field_log",   "Field",  dialog_field_remote,  1, 0,         INT32_MAX, INT32_MAX},   /* also while transmitting */
-    {"field_spot",  "Field",  dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
-    {"field_update", "Field", dialog_field_remote,  1, 0,         INT32_MAX, INT32_MIN},
-    {"app_base",    "FT",     dialog_ft8_remote,    1, 0,         INT32_MAX, INT32_MIN},
-    {"app_base",    "JS8",    dialog_js8_remote,    1, 0,         INT32_MAX, INT32_MIN},
-    {"app_base",    "WSPR",   dialog_wspr_remote,   1, 0,         INT32_MAX, INT32_MIN},
-    {"app_base",    "SSTV",   dialog_sstv_remote,   1, 0,         INT32_MAX, INT32_MIN},
-    {"app_base",    "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MAX, INT32_MIN},
-    {"app_base",    "NavTex", dialog_navtex_remote, 1, 0,         INT32_MAX, INT32_MIN},
+    {"ft8_cq",      "FT",     dialog_ft8_remote,    0, 1,         1},
+    {"ft8_reply",   "FT",     dialog_ft8_remote,    1, INT32_MAX, INT32_MIN},
+    {"ft8_stop",    "FT",     dialog_ft8_remote,    1, 0,         INT32_MAX},
+    {"ft8_auto",    "FT",     dialog_ft8_remote,    0, 1,         INT32_MIN},
+    {"ft8_hold",    "FT",     dialog_ft8_remote,    0, 1,         INT32_MIN},
+    {"ft8_txfreq",  "FT",     dialog_ft8_remote,    0, 5000,      INT32_MIN},
+    {"js8_send",    "JS8",    dialog_js8_remote,    1, 0,         INT32_MIN},
+    {"js8_cq",      "JS8",    dialog_js8_remote,    1, 0,         INT32_MIN},
+    {"js8_hb",      "JS8",    dialog_js8_remote,    1, 0,         INT32_MIN},
+    {"js8_stop",    "JS8",    dialog_js8_remote,    1, 0,         INT32_MAX},
+    {"wspr_txpct",  "WSPR",   dialog_wspr_remote,   0, 50,        INT32_MIN},
+    {"wspr_txnext", "WSPR",   dialog_wspr_remote,   0, 1,         1},
+    {"sstv_tx",     "SSTV",   dialog_sstv_remote,   1, 0,         INT32_MIN},   /* val: sstv_modes[] */
+    {"sstv_stop",   "SSTV",   dialog_sstv_remote,   1, 0,         INT32_MAX},
+    {"wefax_mode",  "WeFax",  dialog_wefax_remote,  0, 1,         INT32_MIN},
+    {"wefax_save",  "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MIN},
+    {"wefax_clear", "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MIN},
+    {"wefax_tx",    "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MIN},
+    {"wefax_stop",  "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MAX},
+    {"rtty_send",   "RTTY",   rtty_remote,          1, 0,         INT32_MIN},
+    {"rtty_stop",   "RTTY",   rtty_remote,          1, 0,         INT32_MAX},
+    {"rtty_rate",   "RTTY",   rtty_remote,          4500, 15000,  INT32_MIN},
+    {"rtty_shift",  "RTTY",   rtty_remote,          170, 850,     INT32_MIN},
+    {"rtty_center", "RTTY",   rtty_remote,          800, 1600,    INT32_MIN},
+    {"rtty_rev",    "RTTY",   rtty_remote,          0, 1,         INT32_MIN},
+    {"cw_send",     "CW",     dialog_cw_kbd_remote, 1, 0,         INT32_MAX},   /* also while keying */
+    {"cw_stop",     "CW",     dialog_cw_kbd_remote, 1, 0,         INT32_MAX},
+    {"cw_wpm",      "CW",     dialog_cw_kbd_remote, 5, 60,        INT32_MIN},
+    {"cw_dec",      "CW",     dialog_cw_kbd_remote, 0, 1,         INT32_MIN},
+    {"field_screen", "Field", dialog_field_remote,  1, 0,         INT32_MIN},
+    {"field_ref",   "Field",  dialog_field_remote,  1, 0,         INT32_MIN},
+    {"field_start", "Field",  dialog_field_remote,  1, 0,         INT32_MIN},
+    {"field_end",   "Field",  dialog_field_remote,  1, 0,         INT32_MIN},
+    {"field_log",   "Field",  dialog_field_remote,  1, 0,         INT32_MAX},   /* also while transmitting */
+    {"field_spot",  "Field",  dialog_field_remote,  1, 0,         INT32_MIN},
+    {"field_update", "Field", dialog_field_remote,  1, 0,         INT32_MIN},
+    {"app_base",    "FT",     dialog_ft8_remote,    1, 0,         INT32_MIN},
+    {"app_base",    "JS8",    dialog_js8_remote,    1, 0,         INT32_MIN},
+    {"app_base",    "WSPR",   dialog_wspr_remote,   1, 0,         INT32_MIN},
+    {"app_base",    "SSTV",   dialog_sstv_remote,   1, 0,         INT32_MIN},
+    {"app_base",    "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MIN},
+    {"app_base",    "NavTex", dialog_navtex_remote, 1, 0,         INT32_MIN},
 };
 
 /* The "ax" object of each app (any thread) */
@@ -470,7 +469,7 @@ static int state_line(char *buf, size_t size) {
     return snprintf(buf, size,
                     "{\"t\":\"state\",\"vfo\":\"%s\",\"freq\":%i,\"freq_bg\":%i,\"mode\":\"%s\",\"band\":\"%s\","
                     "\"filter\":%i,\"rfgain\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
-                    "\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"rtx\":%s,\"ax\":%s}\n",
+                    "\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s}\n",
                     cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? "A" : "B",
                     cfg_sm.cp_fg_freq.get(), cfg_sm.cp_bg_freq.get(),
                     (mode >= 0 && mode <= x6100_mode_nfm) ? mode_names[mode] : "?", band_name(),
@@ -478,8 +477,7 @@ static int state_line(char *buf, size_t size) {
                     cfg_sm.cp_cur_pre.get() != 0, cfg_sm.cp_cur_att.get() != 0,
                     (agc >= 0 && agc <= x6100_agc_auto) ? agc_names[agc] : "?",
                     cfg_sm.p_nb.get() != 0, cfg_sm.p_nr.get() != 0,
-                    meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app,
-                    cfg_sm.p_remote_tx.get() ? "true" : "false", ax);
+                    meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax);
 }
 
 static void send_state(client_t *c) {
@@ -674,8 +672,6 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
             return "Invalid value";
         if (!strcmp(name, "rtty_center") && cmd->val % 10)
             return "Invalid value";
-        if (cmd->val >= app_cmds[i].tx && !cfg_sm.p_remote_tx.get())
-            return "remote TX off";
         return NULL;
     }
     if (app_cmd)

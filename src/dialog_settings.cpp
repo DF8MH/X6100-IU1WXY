@@ -3061,11 +3061,6 @@ static uint8_t make_wfview_field(uint8_t row, const char *label, int which, lv_o
     return row + 1;
 }
 
-/* Web remote: lets the phone app transmit from FT8, JS8, WSPR and SSTV */
-static void remote_tx_cb(lv_event_t *e) {
-    cfg_sm.p_remote_tx.set(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
-}
-
 static uint8_t make_wfview(uint8_t row) {
     lv_obj_t *obj;
 
@@ -3714,11 +3709,6 @@ static void make_wireless_page() {
     row = card_begin(LV_SYMBOL_UPLOAD, "WFVIEW SERVER");
     row = make_wfview(row);
     card_end(row);
-
-    row = card_begin(LV_SYMBOL_UPLOAD, "WEB REMOTE");
-    wl_row_label(row, "Remote TX");
-    bt_switch_cell(row, 1, cfg_sm.p_remote_tx.get(), remote_tx_cb);
-    card_end(row + 1);
 
     lv_obj_add_event_cb(grid, wl_delete_cb, LV_EVENT_DELETE, NULL);
     wl_ticks = 0;

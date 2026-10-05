@@ -472,7 +472,7 @@ def field_log_file(name):
 
 # Web remote: control and spectrum through the GUI's local socket (src/remote_server.cpp,
 # one JSON object per line), RX audio from PulseAudio. No PTT: only the apps transmit
-# (docs/REMOTE_API.md), when the radio's Remote TX setting allows it.
+# (docs/REMOTE_API.md).
 
 REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", "rfgain", "filter",
                "app", "ft8_cq", "ft8_reply", "ft8_stop", "ft8_auto", "ft8_hold", "ft8_txfreq",
