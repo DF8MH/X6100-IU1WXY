@@ -22,4 +22,12 @@ typedef struct {
     lv_indev_t      *indev;
 } rotary_t;
 
+/* EVENT_ROTARY param of the main knob (freed by the receiver): detents and
+ * the time per detent in ms (0: unknown, e.g. from a keyboard) */
+typedef struct {
+    int16_t         diff;
+    uint16_t        dt;
+} rotary_data_t;
+
 rotary_t * rotary_init(char *dev_name);
+void rotary_main_init(char *dev_name);

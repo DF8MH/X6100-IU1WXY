@@ -74,6 +74,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <math.h>
 
 
 static uint16_t     spectrum_height = 96;
@@ -114,7 +115,7 @@ static lv_timer_t *low_power_timer;
 
 static void low_power_timer_cb(lv_timer_t * timer);
 
-static void freq_shift(int16_t diff);
+static void freq_shift(int16_t diff, uint16_t dt);
 static void next_freq_step(bool up);
 static void toggle_atu_enabled();
 void channel_overlay_show(const char *name);
@@ -1206,7 +1207,7 @@ static void main_screen_hkey_cb(lv_event_t * e) {
         case HKEY_UP:
             if (hkey->state == HKEY_RELEASE) {
                 if (!subject_i_get(freq_lock)) {
-                    freq_shift(+1);
+                    freq_shift(+1, 0);
                 }
             } else if (hkey->state == HKEY_LONG) {
                 if (!band_lock) {
@@ -1221,7 +1222,7 @@ static void main_screen_hkey_cb(lv_event_t * e) {
         case HKEY_DOWN:
             if (hkey->state == HKEY_RELEASE) {
                 if (!subject_i_get(freq_lock)) {
-                    freq_shift(-1);
+                    freq_shift(-1, 0);
                 }
             } else if (hkey->state == HKEY_LONG) {
                 if (!band_lock) {
@@ -1359,32 +1360,35 @@ static void main_screen_update_cb(lv_event_t * e) {
     spectrum_clear();
 }
 
-static uint16_t freq_accel(uint16_t diff) {
-    if (diff < 3) {
+/* Main knob acceleration from the time per detent (ms, 0: none): grows
+ * smoothly with the speed, 2^(k / dt), up to x10 (Lite) or x30 (Strong);
+ * the onset setting moves k (upstream ae2af22 uses 20 and 40) */
+static uint16_t freq_accel(uint16_t dt) {
+    float k = 5.0f + 5.0f * param_i_get(cfg_freq_accel_onset);
+
+    if (dt == 0) {
         return 1;
     }
-
     switch (params.freq_accel.x) {
-        case FREQ_ACCEL_NONE:
-            return 1;
-
         case FREQ_ACCEL_LITE:
-            return (diff < 6) ? 5 : 10;
+            return LV_MIN(exp2f(k / dt), 10.0f);
 
         case FREQ_ACCEL_STRONG:
-            return (diff < 6) ? 10 : 30;
+            return LV_MIN(exp2f(2.0f * k / dt), 30.0f);
+
+        default:
+            return 1;
     }
-    return 1;
 }
 
 /* Cluster spots on the waterfall: turning slowly (at most spot_snap_slow
- * detents per event), the VFO stops on a spot it passes and stays there for
+ * detents per 33 ms), the VFO stops on a spot it passes and stays there for
  * spot_snap_hold more detents, a light magnetic click (hold 0: off). Turning
  * fast goes straight past. Settings → Display → MAIN SCREEN. */
 static int32_t snap_hz;
 static int     snap_hold;
 
-static void freq_shift(int16_t diff) {
+static void freq_shift(int16_t diff, uint16_t dt) {
     if (subject_i_get(freq_lock)) {
         return;
     }
@@ -1393,7 +1397,7 @@ static void freq_shift(int16_t diff) {
     int32_t freq = old;
     int32_t spot;
     int     hold = param_i_get(cfg_spot_snap_hold);
-    bool    slow = hold > 0 && abs(diff) <= param_i_get(cfg_spot_snap_slow);
+    bool    slow = hold > 0 && (dt == 0 || dt * param_i_get(cfg_spot_snap_slow) >= 33);
 
     if (slow && snap_hold > 0 && old == snap_hz) {
         snap_hold--;
@@ -1401,7 +1405,7 @@ static void freq_shift(int16_t diff) {
     }
     snap_hold = 0;
 
-    int32_t df = diff * param_i_get(cfg_mode_freq_step) * freq_accel(abs(diff));
+    int32_t df = diff * param_i_get(cfg_mode_freq_step) * freq_accel(dt);
     freq = align_int(freq + df, abs(df));
     if (slow && spot_marks_crossed(old, freq, &spot)) {
         freq      = spot;
@@ -1412,11 +1416,11 @@ static void freq_shift(int16_t diff) {
 }
 
 static void main_screen_rotary_cb(lv_event_t * e) {
-    int32_t *diff = (int32_t *) lv_event_get_param(e);
+    rotary_data_t *data = (rotary_data_t *) lv_event_get_param(e);
 
-    freq_shift(*diff);
-    dialog_rotary(*diff);
-    free(diff);
+    freq_shift(data->diff, data->dt);
+    dialog_rotary(data->diff);
+    free(data);
 }
 
 static void spectrum_key_cb(lv_event_t * e) {
@@ -1425,13 +1429,13 @@ static void spectrum_key_cb(lv_event_t * e) {
     switch (key) {
         case '-':
             if (!subject_i_get(freq_lock)) {
-                freq_shift(-1);
+                freq_shift(-1, 0);
             }
             break;
 
         case '=':
             if (!subject_i_get(freq_lock)) {
-                freq_shift(+1);
+                freq_shift(+1, 0);
             }
             break;
 

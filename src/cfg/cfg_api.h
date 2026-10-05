@@ -86,6 +86,7 @@ extern ParamInt *cfg_ft8_hold_freq;  // p_ft8_hold_freq
 extern ParamInt *cfg_wspr_tx_pct;    // p_wspr_tx_pct
 extern ParamInt *cfg_spot_snap_hold; // p_spot_snap_hold
 extern ParamInt *cfg_spot_snap_slow; // p_spot_snap_slow
+extern ParamInt *cfg_freq_accel_onset; // p_freq_accel_onset
 extern ParamInt *cfg_wspr_tx_freq;   // p_wspr_tx_freq
 extern ParamInt *cfg_wspr_upload;    // p_wspr_upload
 extern ParamInt *cfg_field_boot;     // p_field_boot

@@ -122,6 +122,10 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_spot_snap_slow{"spot_snap_slow", 2, 1, 5,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Main knob acceleration onset: 1 starts only when turned fast, 5 already
+    // when turned slowly (3 = upstream's curve)
+    Parameter<int32_t> p_freq_accel_onset{"freq_accel_onset", 3, 1, 5,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_cluster_column{"cluster_column", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Cluster lists (column and app): 0 = by frequency around the VFO, 1 = newest first

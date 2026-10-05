@@ -3263,6 +3263,7 @@ static param_slider_t agc_knee_slider  = {&cfg_sm.p_agc_knee, -100, 0, 1, "%i dB
 static param_slider_t agc_slope_slider = {&cfg_sm.p_agc_slope, 0, 10, 1, "%i dB"};
 static param_slider_t snap_hold_slider = {&cfg_sm.p_spot_snap_hold, 0, 5, 1, "%i"};
 static param_slider_t snap_slow_slider = {&cfg_sm.p_spot_snap_slow, 1, 5, 1, "%i"};
+static param_slider_t accel_onset_slider = {&cfg_sm.p_freq_accel_onset, 1, 5, 1, "%i"};
 
 static void param_slider_cb(lv_event_t *e) {
     lv_obj_t       *obj = lv_event_get_target(e);
@@ -3419,6 +3420,7 @@ static void make_general_page() {
 
     row = card_begin(LV_SYMBOL_SETTINGS, "CONTROLS");
     row = make_freq_accel(row);
+    row = make_param_slider(row, "Accel. onset", &accel_onset_slider);
     row = make_charger(row);
     card_end(row);
 
