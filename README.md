@@ -6,7 +6,7 @@
 and the whole <b>X6100 community</b>: this firmware stands on their work.<br>
 Thanks to <b>Fabio IN3FOB</b> for the support in development and the dedicated, precise beta testing,
 and to <b>Leo CT7AUE</b>, <b>Angelo IU2VWK</b>, <b>Gianluca IW5DUA</b> and <b>Emilio IU8QTM</b>
-for their patience, time and advice.</p>
+for their neverending patience, time and advices.</p>
 
 <p align="center"><b>A complete SD-card firmware for the Xiegu X6100: every digital mode on the radio,
 DX cluster on the waterfall, themes, and full remote control from your phone or a browser.</b></p>
