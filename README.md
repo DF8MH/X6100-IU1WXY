@@ -66,8 +66,8 @@ transmits by itself.
   with text templates (Martin, Scottie, Robot).
 - **WeFax** and **NavTex**: station lists, faxes saved as pictures, big or
   full-screen view. WeFax and RTTY also transmit from the phone.
-- **CW decoder**: a new receiver that copies down to about 0 dB SNR, shows the
-  WPM and does not print noise.
+- **CW decoder**: the new upstream receiver, which copies down to about 0 dB
+  SNR and shows the WPM, here tuned not to print noise.
 - **CW Keyboard**: type on a USB or Bluetooth keyboard and the radio keys it,
   with a send queue.
 
@@ -196,12 +196,12 @@ app of its own (APP page 3 → **Bands**), in the same look as the other apps.
   decoders, a cooler radio, a waterfall that scrolls evenly. Screenshots and
   screen recordings show both layers. On a kernel without DRM the classic
   framebuffer is used.
-- **Main knob**: every detent is timed by its own thread, so fast turns no
-  longer stutter. **Acceleration** grows with the speed (Settings → General →
+- **Main knob** (upstream design): every detent is timed by its own thread, so
+  fast turns no longer stutter. **Acceleration** grows with the speed (Settings → General →
   CONTROLS: **Lite** or **Strong**), and **Accel. onset** (1-5) sets how fast
   you must turn before the step grows. Slow turns stay precise for spot snap.
-- **CW tune indicator**: the bar lights where the signal is and fades out a
-  second after it stops.
+- **CW tune indicator** (from upstream): the bar lights where the signal is and
+  fades out a second after it stops.
 
 ### Wireless
 
@@ -292,12 +292,13 @@ or newer is recommended for the TX audio options.
   protocol), IARU band plan strip, configurable long-press actions, CW trainer
   stats, and the SD image itself;
 - the **layer system** on top of the DRM output (GUI on a transparent layer,
-  waterfall and spectrum drawn directly underneath), and the **main knob**
-  with timed detents and adjustable acceleration.
+  waterfall and spectrum drawn directly underneath), and the **Accel. onset**
+  setting of the main knob.
 
 Standing on the work of: the **R1CBU** GUI by Oleg Belousov R1CBU and Georgy
 Dyuldin R2RFE ([gdyuldin/x6100_gui](https://github.com/gdyuldin/x6100_gui)),
-whose CW receiver, DRM/KMS display output and direct spectrum rendering are
+whose CW receiver, CW tune indicator, DRM/KMS display output, direct spectrum
+rendering and main knob handling (detents timed in their own thread) are
 imported here,
 **1KO125** by Hany El Imam / TheMurusTeam (WeFax, NavTex, SSTV decoders),
 **JS8** by randal007 on the JS8Call engine (Jordan Sherer KN4CRD), **wsprd**
