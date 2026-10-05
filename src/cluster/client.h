@@ -20,8 +20,8 @@ extern "C" {
 #ifndef CLUSTER_CONF /* overridden by the tests and the UI harness */
 #define CLUSTER_CONF         "/mnt/cluster.conf"
 #endif
-#define CLUSTER_DEFAULT_HOST "dxc.ve7cc.net"
-#define CLUSTER_DEFAULT_PORT 23
+#define CLUSTER_DEFAULT_HOST "dxfun.com"
+#define CLUSTER_DEFAULT_PORT 8000
 
 typedef enum {
     CLUSTER_STOPPED,

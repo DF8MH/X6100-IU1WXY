@@ -787,6 +787,8 @@ static action_items_t long_action_items[] = {
     { .label = " Screen rec on/off ", .action = ACTION_SCREEN_REC },
     { .label = " Mute ", .action = ACTION_MUTE },
     { .label = " WF mode ", .action = ACTION_WF_MODE },
+    { .label = " ATT on/off ", .action = ACTION_ATT_TOGGLE },
+    { .label = " PRE on/off ", .action = ACTION_PRE_TOGGLE },
     /* Digital modes, in the order of the Modes menu */
     { .label = " APP RTTY ", .action = ACTION_APP_RTTY },
     { .label = " APP FT8 ", .action = ACTION_APP_FT8 },
@@ -932,6 +934,8 @@ static action_items_t hmic_action_items[] = {
     { .label = " NR toggle ", .action = ACTION_NR_TOGGLE },
     { .label = " NB toggle ", .action = ACTION_NB_TOGGLE },
     { .label = " WF mode ", .action = ACTION_WF_MODE },
+    { .label = " ATT on/off ", .action = ACTION_ATT_TOGGLE },
+    { .label = " PRE on/off ", .action = ACTION_PRE_TOGGLE },
     { .label = NULL, .action = ACTION_NONE }
 };
 

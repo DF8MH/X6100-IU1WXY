@@ -10,6 +10,7 @@
  *                                     until the client closes
  *    {"cmd":"freq","val":14074000} {"cmd":"tune","val":-100} {"cmd":"mode","val":"USB"} {"cmd":"band","val":40}
  *    {"cmd":"pre|att|nb|nr","val":0|1} {"cmd":"agc"} (next) {"cmd":"rfgain","val":0..100} {"cmd":"filter","val":Hz}
+ *    {"cmd":"pwr","val":1..100} (TX power, tenths of a watt)
  *    {"cmd":"location","text":"45.0,7.7"} (the phone's position, for Field Ops)
  *    {"cmd":"app","text":"FT8"} and the app commands (app_cmds[]), with "val" and/or "text"
  *                                  -> {"t":"ok"} or {"t":"err","err":"..."}
@@ -94,7 +95,7 @@ typedef struct {
 } client_t;
 
 typedef enum {
-    CMD_FREQ, CMD_TUNE, CMD_MODE, CMD_BAND, CMD_PRE, CMD_ATT, CMD_AGC, CMD_NB, CMD_NR, CMD_RFGAIN, CMD_FILTER,
+    CMD_FREQ, CMD_TUNE, CMD_MODE, CMD_BAND, CMD_PRE, CMD_ATT, CMD_AGC, CMD_NB, CMD_NR, CMD_RFGAIN, CMD_FILTER, CMD_PWR,
     CMD_APP, CMD_APP_CMD, CMD_LOCATION
 } cmd_id_t;
 
@@ -223,7 +224,7 @@ static bool band_matches(const std::string &name, int32_t m) {
 
 /* Back to the sub-band last seen from the web (40m CW / 40m SSB), else the active band with the
  * lowest start, the first one band up/down reaches. Its own memory is loaded. */
-static void set_band(int32_t m) {
+void remote_set_band(int32_t m) {
     BandInfoLoadResult cur = BandsTable::get_by_id(cfg_sm.current_band_id());
 
     if (cur.rc == SUCCESS && band_matches(cur.value.name, m))
@@ -354,7 +355,7 @@ static void apply_cmd(void *arg) {
             break;
         case CMD_BAND:
             if (!main_screen_band_locked())
-                set_band(c->val);
+                remote_set_band(c->val);
             break;
         case CMD_PRE:
             cfg_sm.cp_cur_pre.set(c->val);
@@ -373,6 +374,9 @@ static void apply_cmd(void *arg) {
             break;
         case CMD_RFGAIN:
             cfg_sm.p_rfgain.set(c->val);
+            break;
+        case CMD_PWR:
+            cfg_sm.p_pwr.set(c->val / 10.0f);
             break;
         case CMD_FILTER:
             cfg_sm.cp_cur_filter_bw.set(c->val);
@@ -469,7 +473,7 @@ static int state_line(char *buf, size_t size) {
     return snprintf(buf, size,
                     "{\"t\":\"state\",\"vfo\":\"%s\",\"freq\":%i,\"freq_bg\":%i,\"mode\":\"%s\",\"band\":\"%s\","
                     "\"filter\":%i,\"rfgain\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
-                    "\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s}\n",
+                    "\"pwr\":%i,\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s}\n",
                     cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? "A" : "B",
                     cfg_sm.cp_fg_freq.get(), cfg_sm.cp_bg_freq.get(),
                     (mode >= 0 && mode <= x6100_mode_nfm) ? mode_names[mode] : "?", band_name(),
@@ -477,7 +481,7 @@ static int state_line(char *buf, size_t size) {
                     cfg_sm.cp_cur_pre.get() != 0, cfg_sm.cp_cur_att.get() != 0,
                     (agc >= 0 && agc <= x6100_agc_auto) ? agc_names[agc] : "?",
                     cfg_sm.p_nb.get() != 0, cfg_sm.p_nr.get() != 0,
-                    meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax);
+                    (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax);
 }
 
 static void send_state(client_t *c) {
@@ -602,6 +606,7 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
         {"nr", CMD_NR, 0, 1},
         {"rfgain", CMD_RFGAIN, 0, 100},
         {"filter", CMD_FILTER, 50, 6000},
+        {"pwr", CMD_PWR, 1, 100},
     };
 
     cJSON *text = cJSON_GetObjectItemCaseSensitive(req, "text");

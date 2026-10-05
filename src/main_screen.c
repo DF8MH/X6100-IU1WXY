@@ -68,6 +68,7 @@
 #include "cfg/memory.h"
 #include "knobs.h"
 #include "dialog_channels.h"
+#include "remote_server.h"
 #include "channels.h"
 #include "broadcast_db.h"
 
@@ -747,6 +748,18 @@ void main_screen_action(press_action_t action) {
             msg_update_text_fmt("#%06x NB: %s", theme_hex(TC_text), b ? "On" : "Off");
             break;
 
+        case ACTION_ATT_TOGGLE:
+            b = !cparam_i_get(cfg_cur_att);
+            cparam_i_set(cfg_cur_att, b);
+            msg_update_text_fmt("#%06x ATT: %s", theme_hex(TC_text), b ? "On" : "Off");
+            break;
+
+        case ACTION_PRE_TOGGLE:
+            b = !cparam_i_get(cfg_cur_pre);
+            cparam_i_set(cfg_cur_pre, b);
+            msg_update_text_fmt("#%06x PRE: %s", theme_hex(TC_text), b ? "On" : "Off");
+            break;
+
         case ACTION_WF_MODE:
             b = !param_i_get(cfg_wf_mode);
             param_i_set(cfg_wf_mode, b);
@@ -1168,6 +1181,8 @@ static void main_screen_keypad_cb(lv_event_t * e) {
 static void main_screen_hkey_cb(lv_event_t * e) {
     event_hkey_t *hkey = lv_event_get_param(e);
     switch (hkey->key) {
+        /* The band printed on the key; digits only in F-INP (dialog_freq.c). Long: memory 1-9 */
+        case HKEY_0:
         case HKEY_1:
         case HKEY_2:
         case HKEY_3:
@@ -1176,13 +1191,18 @@ static void main_screen_hkey_cb(lv_event_t * e) {
         case HKEY_6:
         case HKEY_7:
         case HKEY_8:
-        case HKEY_9:
+        case HKEY_9: {
+            static const int16_t key_band_m[10] = {6, 160, 80, 40, 30, 20, 17, 15, 12, 10};
+
             if (hkey->state == HKEY_RELEASE) {
+                if (!band_lock) {
+                    remote_set_band(key_band_m[hkey->key - HKEY_0]);
+                }
+            } else if (hkey->state == HKEY_LONG && hkey->key != HKEY_0) {
                 mem_load(hkey->key - HKEY_1 + 1);
-            } else if (hkey->state == HKEY_LONG) {
-                mem_save(hkey->key - HKEY_1 + 1);
             }
             break;
+        }
 
         case HKEY_SPCH:
             if (hkey->state == HKEY_RELEASE) {

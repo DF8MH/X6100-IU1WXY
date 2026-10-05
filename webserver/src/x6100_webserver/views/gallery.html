@@ -1,7 +1,7 @@
 % rebase('base.html', title='Gallery')
 <h2>Gallery</h2>
-<p class="sub">Screen recordings (AVI), RX audio recordings, screenshots, SSTV and WeFax pictures stored on the radio. Tap files to select them, then download them as a ZIP or delete them together. Screen recordings can be converted to MP4 in this browser or on the radio.</p>
-<div class="card" id="httpsnote" hidden><span class="meta">In-browser conversion needs a secure page. Open <a id="httpslink" href="#">the HTTPS version of this page</a>: the radio uses a self-signed certificate, so the browser shows a warning once. Accept it (Advanced, then Proceed) and the option appears. Converting on the radio works on both.</span></div>
+<p class="sub">Screen recordings (AVI), RX audio recordings, screenshots, SSTV and WeFax pictures stored on the radio. Tap files to select them, then download them as a ZIP or delete them together. Screen recordings can be converted to MP4 in this browser.</p>
+<div class="card" id="httpsnote" hidden><span class="meta">In-browser conversion needs a secure page. Open <a id="httpslink" href="#">the HTTPS version of this page</a>: the radio uses a self-signed certificate, so the browser shows a warning once. Accept it (Advanced, then Proceed) and the option appears.</span></div>
 
 <div class="folders" id="folders"></div>
 
@@ -180,35 +180,6 @@ const save = function(blob, name) {
   setTimeout(function() { URL.revokeObjectURL(a.href); }, 60000);
 }
 
-// On-radio conversion: one job at a time, the radio reports it and the cards follow by polling
-const cards = {};   // AVI name -> {bar, note, btn, cancel}
-let polling = null, wasActive = false;
-
-const renderJob = function(job) {
-  Object.keys(cards).forEach(function(name) {
-    const c = cards[name], mine = job.name == name, active = job.state == "queued" || job.state == "running";
-    c.bar.prop("hidden", !(mine && active)).val(job.progress);
-    c.cancel.prop("hidden", !(mine && active));
-    c.btn.prop("disabled", active);
-    if (mine && job.state == "error") c.note.text("Conversion on the radio failed: " + job.message).prop("hidden", false);
-    else if (mine && active) c.note.prop("hidden", true);
-  });
-}
-
-const pollJob = function() {
-  $.getJSON("/api/gallery/convert").done(function(job) {
-    renderJob(job);
-    if (job.state == "queued" || job.state == "running") { wasActive = true; polling = setTimeout(pollJob, 1000); return; }
-    polling = null;
-    if (!wasActive) return;
-    wasActive = false;
-    if (job.state == "done") { showStatus("Converted " + job.name + " on the radio"); loadList(); }
-    else if (job.state == "cancelled") showStatus("Conversion cancelled");
-  }).fail(function() { polling = setTimeout(pollJob, 3000); });
-}
-
-const startPolling = function() { if (!polling) polling = setTimeout(pollJob, 300); }
-
 const makeCard = function(x) {
   const isAvi = /\.avi$/i.test(x.name), isMp4 = /\.mp4$/i.test(x.name);
   const card = $("<div class='card item'>");
@@ -254,28 +225,13 @@ const makeCard = function(x) {
       });
       actions.append(conv);
     }
-    const radio = $("<button class='primary radio'>").text("Convert on radio");
-    const cancel = $("<button>").text("Cancel").prop("hidden", true).on("click", function() {
-      $.ajax({url: "/api/gallery/convert", method: "DELETE"}).always(startPolling);
-    });
-    radio.on("click", function() {
-      note.prop("hidden", true);
-      $.post("/api/gallery/convert/" + encodeURIComponent(x.name)).done(function() {
-        renderJob({name: x.name, state: "queued", progress: 0});
-        startPolling();
-      }).fail(function(r) {
-        note.text(r.status == 501 ? "This radio has no ffmpeg installed." : r.status == 409 ? "Another conversion is running, try again when it is done." : "Could not start the conversion.").prop("hidden", false);
-      });
-    });
-    cards[x.name] = {bar: bar, note: note, btn: radio, cancel: cancel};
-    actions.append(radio, cancel);
   }
 
   actions.append($("<button class='remove'>").text("Delete").on("click", function() {
     if (!confirm("Delete " + x.name + "?")) return;
     $.ajax({url: "/api/gallery/" + x.kind + "/" + encodeURIComponent(x.name), method: "DELETE"})
       .done(function() {
-        card.remove(); delete cards[x.name];
+        card.remove();
         all = all.filter(function(y) { return y !== x; }); shown = shown.filter(function(y) { return y !== x; });
         selected.delete(key(x)); updateSel(); showStatus("Deleted " + x.name);
       })
@@ -429,7 +385,6 @@ const render = function() {
   $("#folders").prop("hidden", !!folder);
   $("#folderview").prop("hidden", !folder);
   $("#items").empty();
-  Object.keys(cards).forEach(function(k) { delete cards[k]; });
   if (!folder) {
     $("#folders").empty();
     Object.keys(FOLDER_LABEL).forEach(function(k) {
@@ -444,7 +399,6 @@ const render = function() {
   $("#upload").prop("hidden", !UPLOAD_URL[folder]);
   shown.forEach(function(x) { $("#items").append(makeCard(x)); });
   updateSel();
-  startPolling();
 }
 
 window.addEventListener("hashchange", function() { selected.clear(); lastPick = -1; $("#uploads").empty(); render(); });

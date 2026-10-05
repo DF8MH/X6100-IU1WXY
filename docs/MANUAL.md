@@ -289,9 +289,9 @@ asks for the latest 50 spots (`sh/dx`).
 
 Both use the same client as the app.
 
-**Servers:** if `/mnt/cluster.conf` has no `server=` lines the app lists ten
-public clusters (VE7CC, W3LPL, K1TTT, NC7J, W1NR, WA9PIE, K4ZR, DB0SUE,
-GB7DJK, AE5E). The default is `dxc.ve7cc.net` port 23. Add and remove servers
+**Servers:** if `/mnt/cluster.conf` has no `server=` lines the app lists
+eleven public clusters (DXFUN, VE7CC, W3LPL, K1TTT, NC7J, W1NR, WA9PIE, K4ZR,
+DB0SUE, GB7DJK, AE5E). The default is DXFUN, `dxfun.com` port 8000. Add and remove servers
 from the [web configurator](#web-configurator) or in the file
 ([format](#files-on-mnt)).
 
@@ -466,7 +466,7 @@ same network. Pages:
 | Memories | MEM 1-9 slots and the named channel list |
 | Remote | tune the radio from the browser: frequency, mode, band, filter, RF gain, PRE/ATT/AGC/NB/NR, live spectrum and waterfall (click or drag to tune), RX audio (HTTPS page, one listener). The page itself is receive only (no PTT); transmitting remotely is done by the [companion app](#companion-app-android) |
 | Backup | download settings, memories, cluster, wfview, QSO log, voice messages (optionally CW trainer and WiFi) as one file, and restore the parts you choose |
-| Gallery | a folder per kind (screen recordings, voice recordings, screenshots, SSTV and WeFax received and to send) with count and size; multi-select (tap, checkbox, shift for a range, all/none), delete the selection with one confirmation or download it as a ZIP; upload several pictures into the SSTV and WeFax TX folders (other formats are converted to PNG in the browser); convert AVI to MP4 in the browser or on the radio (ffmpeg) |
+| Gallery | a folder per kind (screen recordings, voice recordings, screenshots, SSTV and WeFax received and to send) with count and size; multi-select (tap, checkbox, shift for a range, all/none), delete the selection with one confirmation or download it as a ZIP; upload several pictures into the SSTV and WeFax TX folders (other formats are converted to PNG in the browser); convert AVI to MP4 in the browser |
 | Field | QRZ Logbook API key, update the parks and summits list, download the activation logs |
 | Files | browse `/mnt` |
 | Time | local and server time, NTP sync, timezone |
@@ -681,9 +681,9 @@ The DATA partition, readable on a PC.
 `server=` line is a saved server, `name|host|port`):
 
 ```
-host=dxc.ve7cc.net
-port=23
-server=VE7CC|dxc.ve7cc.net|23
+host=dxfun.com
+port=8000
+server=DXFUN|dxfun.com|8000
 server=NC7J|dxc.nc7j.com|7373
 ```
 

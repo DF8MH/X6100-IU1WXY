@@ -150,9 +150,10 @@ def delete_digital_mode(mode_id, dbcon):
 # filter_activity=POTA,SOTA, max_age=MIN,
 # skip_spotters=A,B, alert=PATTERN|bands|mode, alert_popup=0|1, alert_beep=0|1.
 
-CLUSTER_DEFAULT_HOST = "dxc.ve7cc.net"
+CLUSTER_DEFAULT_HOST = "dxfun.com"
 # Used while cluster.conf has no server= lines (keep in sync with src/cluster/client.c)
 CLUSTER_DEFAULT_SERVERS = [
+    ("DXFUN", "dxfun.com", 8000),
     ("VE7CC", "dxc.ve7cc.net", 23),
     ("W3LPL", "dxc.w3lpl.net", 7373),
     ("K1TTT", "k1ttt.net", 7373),
@@ -164,7 +165,7 @@ CLUSTER_DEFAULT_SERVERS = [
     ("GB7DJK", "gb7djk.dxcluster.net", 7300),
     ("AE5E", "dxspots.com", 23),
 ]
-CLUSTER_DEFAULT_PORT = 23
+CLUSTER_DEFAULT_PORT = 8000
 CLUSTER_MAX_SERVERS = 16
 CLUSTER_MAX_ALERTS = 50
 CLUSTER_MODES = ["CW", "SSB", "DIG", "AMFM"]
@@ -474,7 +475,7 @@ def field_log_file(name):
 # one JSON object per line), RX audio from PulseAudio. No PTT: only the apps transmit
 # (docs/REMOTE_API.md).
 
-REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", "rfgain", "filter",
+REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", "rfgain", "filter", "pwr",
                "app", "ft8_cq", "ft8_reply", "ft8_stop", "ft8_auto", "ft8_hold", "ft8_txfreq",
                "js8_send", "js8_cq", "js8_hb", "js8_stop", "wspr_txpct", "wspr_txnext", "sstv_tx", "sstv_stop",
                "app_base", "wefax_mode", "wefax_save", "wefax_clear", "wefax_tx", "wefax_stop",
@@ -1213,104 +1214,6 @@ def upload_tx_pic(kind):
         f.write(data)
     os.replace(tmp, os.path.join(folder, name))
     return {"status": "OK", "name": name}
-
-
-# On-radio AVI -> MP4 conversion with ffmpeg: one background job at a time
-
-convert_lock = threading.Lock()
-convert_job = {"state": "idle", "name": "", "progress": 0.0, "message": ""}
-convert_proc = None
-
-
-def _hms(text):
-    h, m, s = text.split(":")
-    return int(h) * 3600 + int(m) * 60 + float(s)
-
-
-def run_convert(src, dst):
-    global convert_proc
-    part = dst + ".part"
-    cmd = ["nice", "-n", "19", "ffmpeg", "-y", "-nostdin", "-nostats", "-progress", "pipe:1",
-           "-i", src, "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-pix_fmt", "yuv420p",
-           "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", "-f", "mp4", part]
-    duration = 0.0
-    tail = []
-    try:
-        with convert_lock:
-            if convert_job["state"] == "cancelled":
-                return
-            convert_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
-            proc = convert_proc
-            convert_job["state"] = "running"
-        for line in proc.stdout:
-            line = line.strip()
-            m = re.search(r'Duration: (\d+:\d+:\d+\.\d+)', line)
-            if m:
-                duration = _hms(m.group(1))
-            elif line.startswith("out_time_us=") or line.startswith("out_time_ms="):
-                try:
-                    t = int(line.split("=")[1]) / 1e6
-                except ValueError:
-                    continue
-                if duration > 0:
-                    convert_job["progress"] = max(0.0, min(0.99, t / duration))
-            elif "=" not in line:
-                tail = (tail + [line])[-4:]
-        code = proc.wait()
-        with convert_lock:
-            if convert_job["state"] == "cancelled":
-                pass
-            elif code == 0 and os.path.isfile(part):
-                os.replace(part, dst)
-                os.sync()
-                convert_job.update(state="done", progress=1.0, message="")
-            else:
-                convert_job.update(state="error", message=" ".join(tail) or "ffmpeg failed")
-    except Exception as e:
-        with convert_lock:
-            if convert_job["state"] != "cancelled":
-                convert_job.update(state="error", message=str(e))
-    finally:
-        convert_proc = None
-        try:
-            os.remove(part)
-        except OSError:
-            pass
-
-
-@app.get('/api/gallery/convert')
-def get_convert():
-    bottle.response.content_type = 'application/json'
-    with convert_lock:
-        return json.dumps(dict(convert_job, ffmpeg=shutil.which("ffmpeg") is not None))
-
-
-@app.post('/api/gallery/convert/<name>')
-def start_convert(name):
-    if not name.lower().endswith(".avi"):
-        raise bottle.HTTPError(404, "Not found")
-    root, path = gallery_path("screenrec", name)
-    if not shutil.which("ffmpeg") or not shutil.which("nice"):
-        raise bottle.HTTPError(501, "ffmpeg is not installed on this radio")
-    dst = path[:-4] + ".mp4"
-    with convert_lock:
-        if convert_job["state"] in ("queued", "running"):
-            raise bottle.HTTPError(409, "A conversion is already running")
-        convert_job.update(state="queued", name=name, progress=0.0, message="")
-    threading.Thread(target=run_convert, args=(path, dst), daemon=True).start()
-    bottle.response.content_type = 'application/json'
-    return {"status": "OK"}
-
-
-@app.delete('/api/gallery/convert')
-def cancel_convert():
-    with convert_lock:
-        if convert_job["state"] not in ("queued", "running"):
-            raise bottle.HTTPError(409, "Nothing to cancel")
-        convert_job.update(state="cancelled", message="Cancelled")
-        if convert_proc:
-            convert_proc.kill()
-    return {"status": "OK"}
 
 
 # Backup / restore routes

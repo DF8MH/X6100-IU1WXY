@@ -114,6 +114,7 @@ int cluster_servers_load(cluster_server_t *out, int max) {
 
     /* No saved list: well-known public clusters */
     static const cluster_server_t defaults[] = {
+        {"DXFUN", "dxfun.com", 8000},
         {"VE7CC", "dxc.ve7cc.net", 23},
         {"W3LPL", "dxc.w3lpl.net", 7373},
         {"K1TTT", "k1ttt.net", 7373},

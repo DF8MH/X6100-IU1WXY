@@ -27,6 +27,10 @@ void remote_event(cJSON *o);
  * {"t":type,"text":...} at a newline, 300 ms or 200 characters. Any thread; nothing without subscribers. */
 void remote_text(const char *type, const char *s, size_t n);
 
+/* Band by metres (40, 20...): the last of its sub-bands used, else the lowest, at its last
+ * frequency and mode. LVGL thread. Also the mic number keys (main_screen.c). */
+void remote_set_band(int32_t m);
+
 /* Waterfall PSD (dB) from the DSP, sent to the subscribed web clients (~10 fps) */
 void remote_scope_data(const float *psd_db, size_t n, uint32_t center_hz, uint32_t width_hz, bool tx);
 
