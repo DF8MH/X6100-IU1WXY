@@ -138,7 +138,7 @@ static void do_step(float vswr) {
     radio_set_freq(freq);
 }
 
-static lv_coord_t calc_y(float vswr) {
+static lv_coord_t calc_y(float vswr, lv_coord_t h) {
     float x;
 
     if (linear) {
@@ -185,21 +185,22 @@ static void draw_cb(lv_event_t * e) {
     line_dsc.color = TC(line);
     line_dsc.width = 2;
 
-    a.x = x1;
     b.x = x1 + w;
 
     for (float y = 1.5f; y <= 4.5f; y+= 0.5f) {
-        a.y = y1 + calc_y(y);
+        snprintf(str, sizeof(str), "%.1f", y);
+        lv_txt_get_size(&label_size, str, dsc_label.font, 0, 0, LV_COORD_MAX, 0);
+
+        /* The line starts right after its number, not under it */
+        a.x = x1 + label_size.x + 6;
+        a.y = y1 + calc_y(y, h);
         b.y = a.y;
 
         lv_draw_line(draw_ctx, &line_dsc, &a, &b);
 
-        snprintf(str, sizeof(str), "%.1f", y);
-        lv_txt_get_size(&label_size, str, dsc_label.font, 0, 0, LV_COORD_MAX, 0);
-
-        area.x1 = a.x;
+        area.x1 = x1;
         area.y1 = a.y - label_size.y / 2;
-        area.x2 = a.x + label_size.x;
+        area.x2 = x1 + label_size.x;
         area.y2 = a.y + label_size.y / 2;
 
         lv_draw_label(draw_ctx, &dsc_label, &area, str, NULL);
@@ -236,10 +237,10 @@ static void draw_cb(lv_event_t * e) {
 
     for (uint16_t i = 1; i < STEPS; i++) {
         a.x = x1 + (i - 1) * w / STEPS;
-        a.y = y1 + calc_y(data_filtered[i-1]);
+        a.y = y1 + calc_y(data_filtered[i-1], h);
 
         b.x = x1 + (i) * w / STEPS;
-        b.y = y1 + calc_y(data_filtered[i]);
+        b.y = y1 + calc_y(data_filtered[i], h);
 
         lv_draw_line(draw_ctx, &line_dsc, &a, &b);
     }
