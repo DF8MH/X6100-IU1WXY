@@ -182,6 +182,9 @@ class SettingsManager {
     // Field Ops: start in Field Ops at power on
     Parameter<int32_t> p_field_boot{"field_boot", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Voice messages (the Field Ops voice CQ too): playback level, dB
+    Parameter<int32_t> p_voice_msg_gain{"voice_msg_gain", 0, -20, 10,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
 
     // SWR scan
     Parameter<int32_t> p_swrscan_linear{"swrscan_linear", true, 0, 1,

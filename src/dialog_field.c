@@ -103,7 +103,7 @@ static dialog_t dialog = {
 
 dialog_t *dialog_field = &dialog;
 
-static lv_obj_t   *title, *head_icon, *head_right, *head_dot, *body, *list, *status;
+static lv_obj_t   *title, *head_icon, *head_right, *head_clock, *head_dot, *body, *list, *status;
 static lv_coord_t  body_h;
 static lv_timer_t *timer;
 static int         sel, rows_n;
@@ -577,6 +577,8 @@ static void bands_cb(button_data_t *b);
 static void logbook_cb(button_data_t *b);
 static void rec_cq_cb(button_data_t *b);
 static const char *rec_cq_label(void);
+static void cq_level_cb(button_data_t *b);
+static const char *cq_level_label(void);
 static const char *boot_label(void);
 static const char *activate_label(void);
 
@@ -595,7 +597,8 @@ static button_data_t b_spot   = {.type = BTN_TEXT, .label = "Spot", .press = spo
 static button_data_t b_log    = {.type = BTN_TEXT, .label = "Log\nQSO", .press = log_cb};
 static button_data_t b_ref    = {.type = BTN_TEXT, .label = "Ref...", .press = ref_cb};
 static button_data_t b_update = {.type = BTN_TEXT, .label = "Update\nlist", .press = update_cb};
-static button_data_t b_cq     = {.type = BTN_TEXT, .label = "CQ", .press = cq_cb};
+static button_data_t b_cq     = {.type = BTN_TEXT, .label = "CQ", .press = cq_cb, .hold = cq_level_cb};
+static button_data_t b_cqlvl  = {.type = BTN_TEXT_FN, .label_fn = cq_level_label, .press = cq_level_cb};
 static button_data_t b_band   = {.type = BTN_TEXT, .label = "Bands", .press = bands_cb};
 static button_data_t b_book __attribute__((unused)) = {.type = BTN_TEXT, .label = "Log\nbook", .press = logbook_cb};
 static button_data_t b_bands  = {.type = BTN_TEXT, .label = "BANDS"};
@@ -606,7 +609,7 @@ static button_data_t b_qrz    = {.type = BTN_TEXT, .label = "Upload\nQRZ", .pres
 
 static buttons_page_t page_home  = {.items = {&b_home, &b_open, &b_boot, NULL, &b_exit}};
 static buttons_page_t page_ref1  = {.items = {&b_ref1, &b_act, &b_spot, &b_ref, &b_back}};
-static buttons_page_t page_ref2  = {.items = {&b_ref2, &b_update, &b_reccq, NULL, &b_back}};
+static buttons_page_t page_ref2  = {.items = {&b_ref2, &b_update, &b_reccq, &b_cqlvl, &b_back}};
 static buttons_page_t page_act1  = {.items = {&b_act1, &b_cq, &b_log, &b_spot, &b_back}};
 static buttons_page_t page_act2  = {.items = {&b_act2, &b_act, &b_band, &b_reccq, &b_back}};   /* b_book: LOG hidden */
 static buttons_page_t page_bands = {.items = {&b_bands, &b_beacon, &b_tune, NULL, &b_back}};
@@ -618,6 +621,34 @@ static const char *boot_label(void) {
 
 static const char *rec_cq_label(void) {
     return dialog_msg_voice_get_state() == MSG_VOICE_RECORD ? "Stop\nrec" : "Rec\nCQ";
+}
+
+/* The voice CQ's level: CQ held or CQ level, then MFK or VOL; a press ends it */
+static bool cq_level_adj;
+
+static const char *cq_level_label(void) {
+    static char s[24];
+    snprintf(s, sizeof(s), "CQ level\n%+d dB", (int)param_i_get(cfg_voice_msg_gain));
+    return s;
+}
+
+static void cq_level_show(void) {
+    msg_update_text_fmt("CQ level %+d dB: MFK or VOL to change, press to finish", (int)param_i_get(cfg_voice_msg_gain));
+    buttons_refresh(&b_cqlvl);
+}
+
+static void cq_level_cb(button_data_t *b) {
+    cq_level_adj = !cq_level_adj;
+    if (cq_level_adj)
+        cq_level_show();
+    else
+        msg_update_text_fmt("CQ level %+d dB", (int)param_i_get(cfg_voice_msg_gain));
+}
+
+static void cq_level_change(int d) {
+    int v = param_i_get(cfg_voice_msg_gain) + d;
+    param_i_set(cfg_voice_msg_gain, v < -20 ? -20 : v > 10 ? 10 : v);
+    cq_level_show();
 }
 
 static const char *activate_label(void) {
@@ -1148,7 +1179,7 @@ static void cq_cb(button_data_t *b) {
         /* The voice CQ recorded with Rec CQ ("CQ SOTA" / "CQ POTA" in /mnt/msg, also in MSG > Voice) */
         snprintf(text, sizeof(text), "CQ %s", prog_name());
         if (msg_voice_send_toggle(text))
-            msg_update_text_fmt("CQ: sending \"%s\" (CQ again: stop)", text);
+            msg_update_text_fmt("CQ: sending \"%s\" (CQ again: stop, hold CQ: level)", text);
         else if (!msg_voice_exists(text))
             msg_update_text_fmt("No voice CQ yet: Rec CQ on page 2, speak, Stop rec");
         return;
@@ -1451,6 +1482,26 @@ static void key_cb(lv_event_t *e) {
 
     if (kbd_open)
         return;
+    if (cq_level_adj) {
+        switch (key) {
+            case LV_KEY_UP:
+            case LV_KEY_LEFT:
+            case KEY_VOL_LEFT_EDIT:
+            case KEY_VOL_LEFT_SELECT:
+                cq_level_change(-1);
+                return;
+            case LV_KEY_DOWN:
+            case LV_KEY_RIGHT:
+            case KEY_VOL_RIGHT_EDIT:
+            case KEY_VOL_RIGHT_SELECT:
+                cq_level_change(1);
+                return;
+            case LV_KEY_ENTER:
+            case LV_KEY_ESC:
+                cq_level_cb(NULL);
+                return;
+        }
+    }
     switch (key) {
         case LV_KEY_ESC:
             if (st.screen == SCR_HOME)
@@ -1486,6 +1537,31 @@ static void key_cb(lv_event_t *e) {
     }
 }
 
+/* A QSO edited or deleted from the phone rewrites the log: read it again, so the count, the last call
+ * and the logbook follow. */
+static void log_watch(void) {
+    static char        seen_log[sizeof(st.log)];
+    static struct stat seen;
+    struct stat        sb;
+
+    if (!st.log[0])
+        return;
+    if (stat(st.log, &sb) != 0)
+        memset(&sb, 0, sizeof(sb));   /* deleted: no QSOs */
+    if (!strcmp(seen_log, st.log) && sb.st_size == seen.st_size && sb.st_mtim.tv_sec == seen.st_mtim.tv_sec &&
+        sb.st_mtim.tv_nsec == seen.st_mtim.tv_nsec)
+        return;
+    bool first = strcmp(seen_log, st.log) != 0;
+    snprintf(seen_log, sizeof(seen_log), "%s", st.log);
+    seen = sb;
+    if (first)
+        return;   /* read where the log is opened or written */
+    qsos_n = sb.st_size ? field_log_read(st.log, qsos, MAX_QSO) : 0;
+    remote_update();
+    if (dialog.run && (st.screen == SCR_LOG || act_freq))
+        refresh();
+}
+
 static void timer_cb(lv_timer_t *t) {
     static int  ticks;
     double      lat, lon;
@@ -1496,7 +1572,8 @@ static void timer_cb(lv_timer_t *t) {
 
     localtime_r(&now, &tm);
     position(&lat, &lon, &src, &age);
-    lv_label_set_text_fmt(head_right, "%s   %02d:%02d", src[0] ? src : "NO POS", tm.tm_hour, tm.tm_min);
+    lv_label_set_text(head_right, src[0] ? src : "NO POS");
+    lv_label_set_text_fmt(head_clock, "%02d:%02d", tm.tm_hour, tm.tm_min);
     /* Green: a real position (GPS, phone); yellow: the locator square */
     lv_obj_set_style_bg_color(head_dot, !src[0] ? TC(err) : !strcmp(src, "QTH") ? TC(warn) : TC(ok), 0);
     if (end_armed && now - end_armed_at > 4) {
@@ -1504,6 +1581,7 @@ static void timer_cb(lv_timer_t *t) {
         buttons_refresh(&b_act);
     }
     msg_voice_poll(false);
+    log_watch();
     buttons_refresh(&b_reccq);   /* a recording stops by itself at 60 s */
     ticks++;
     if (act_freq) {
@@ -1556,9 +1634,10 @@ static void construct_cb(lv_obj_t *parent) {
     lv_label_set_text(x, "X6100");
     head_icon  = NULL;
     title      = label(head, &sony_24, TC(text), 104, 10, 440);
-    head_dot   = dot(head, 596, 17, 12, TC(err));
-    head_right = label(head, &sony_22, TC(text), 610, 11, 180);
-    lv_obj_set_style_text_align(head_right, LV_TEXT_ALIGN_RIGHT, 0);
+    head_dot   = dot(head, 556, 17, 12, TC(err));
+    head_right = label(head, &sony_22, TC(text), 572, 11, 100);
+    head_clock = label(head, &sony_38, TC(text), 670, 4, 118);   /* big: read at a glance outdoors */
+    lv_obj_set_style_text_align(head_clock, LV_TEXT_ALIGN_RIGHT, 0);
 
     body = lv_obj_create(dialog.obj);
     lv_obj_remove_style_all(body);
@@ -1583,6 +1662,7 @@ static void construct_cb(lv_obj_t *parent) {
 }
 
 static void destruct_cb(void) {
+    cq_level_adj = false;
     msg_voice_poll(true);   /* never leaves a recording open or the radio keyed */
     if (kbd_open) {
         textarea_window_close();

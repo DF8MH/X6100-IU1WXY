@@ -25,6 +25,7 @@
 #include <aether_radio/x6100_control/control.h>
 
 #include "audio.h"
+#include "cfg/cfg_api.h"
 #include "dialog.h"
 #include "dialog_msg_voice.h"
 #include "styles.h"
@@ -233,6 +234,8 @@ static bool play_file(void) {
     while (!stop_req) {
         int n = (int)sf_read_short(f, samples_buf, BUF_SIZE);
         if (n <= 0) break;
+        int gain = param_i_get(cfg_voice_msg_gain);   /* read each block: Field Ops changes it while the CQ plays */
+        if (gain) audio_gain_db(samples_buf, n, gain, samples_buf);
         audio_play(samples_buf, n);
         play_pos += n;
     }
