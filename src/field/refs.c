@@ -20,6 +20,26 @@ static double km_between(double lat1, double lon1, double lat2, double lon2) {
     return 6371.0 * 2 * atan2(sqrt(a), sqrt(1 - a));
 }
 
+/* The fonts have ASCII only: accented Latin letters (U+00C0..U+017F) lose the accent, others become '?' */
+static void ascii_fold(char *dst, size_t size, const char *s) {
+    static const char tab[] = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYTsaaaaaaaceeeeiiiidnooooo/ouuuuytyAaAaAaCcCcCcCcDdDdEeEeEeEeEeGgGgGgGgHhHhIiIiIiIiIiIiJjKkkLlLlLlLlLlNnNnNnnNnOoOoOoOoRrRrRrSsSsSsSsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzs";
+    size_t            n     = 0;
+
+    while (*s && n + 1 < size) {
+        unsigned char c = *s;
+        if (c < 0x80) {
+            dst[n++] = *s++;
+            continue;
+        }
+        int len = c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1;
+        int cp  = len == 2 && (s[1] & 0xC0) == 0x80 ? ((c & 0x1F) << 6) | (s[1] & 0x3F) : 0;
+        dst[n++] = cp >= 0xC0 && cp < 0x180 ? tab[cp - 0xC0] : '?';
+        for (int i = 0; i < len && *s; i++)
+            s++;
+    }
+    dst[n] = 0;
+}
+
 bool field_ref_parse(char *line, field_ref_t *r) {
     char *f[7];
     int   n = 0;
@@ -36,7 +56,7 @@ bool field_ref_parse(char *line, field_ref_t *r) {
     f[n - 1][strcspn(f[n - 1], "\r\n")] = 0;
     r->type = f[0][0];
     snprintf(r->ref, sizeof(r->ref), "%s", f[1]);
-    snprintf(r->name, sizeof(r->name), "%s", f[2]);
+    ascii_fold(r->name, sizeof(r->name), f[2]);
     r->lat    = atof(f[3]);
     r->lon    = atof(f[4]);
     r->alt_m  = n > 5 ? atoi(f[5]) : 0;

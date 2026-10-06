@@ -112,7 +112,7 @@ static bool        kbd_open;
 /* Reference screen */
 static lv_obj_t *info_ref, *info_name, *info_lines, *info_dot, *info_state;
 /* Activation screen */
-static lv_obj_t *act_band, *act_freq, *act_mode, *act_smeter[13], *act_sval, *act_text, *act_qsos, *act_time,
+static lv_obj_t *act_band, *act_freq, *act_mode, *act_smeter[13], *act_sval, *act_text, *act_recent, *act_qsos, *act_time,
                 *act_last;
 
 static field_ref_t near[MAX_NEAR];
@@ -878,6 +878,17 @@ static void act_update(void) {
     lv_label_set_text_fmt(act_qsos, "%d", qsos_n);
     lv_label_set_text_fmt(act_time, "%d:%02d", s / 3600, s / 60 % 60);
     lv_label_set_text(act_last, qsos_n ? qsos[qsos_n - 1].call : "-");
+
+    /* The last three QSOs, the newest at the bottom */
+    char      recent[200] = "", line[64];
+    struct tm tm;
+    for (int k = qsos_n > 3 ? qsos_n - 3 : 0; k < qsos_n; k++) {
+        localtime_r(&qsos[k].t, &tm);
+        snprintf(line, sizeof(line), "%s%02d:%02d  %-10s  %s / %s  %s", recent[0] ? "\n" : "", tm.tm_hour, tm.tm_min,
+                 qsos[k].call, qsos[k].rst_s, qsos[k].rst_r, qsos[k].mode);
+        strncat(recent, line, sizeof(recent) - strlen(recent) - 1);
+    }
+    lv_label_set_text(act_recent, recent);
 }
 
 static void build_act(void) {
@@ -901,14 +912,14 @@ static void build_act(void) {
     for (int i = 0; i < 13; i++) {
         act_smeter[i] = lv_obj_create(p);
         lv_obj_remove_style_all(act_smeter[i]);
-        lv_obj_set_pos(act_smeter[i], 124 + i * 24, 84);
-        lv_obj_set_size(act_smeter[i], 20, 14);
+        lv_obj_set_pos(act_smeter[i], 124 + i * 28, 78);
+        lv_obj_set_size(act_smeter[i], 24, 24);
         lv_obj_set_style_radius(act_smeter[i], 2, 0);
         lv_obj_set_style_bg_opa(act_smeter[i], LV_OPA_COVER, 0);
     }
-    lv_obj_t *s = label(p, &sony_22, TC(text_dim), 14, 80, 0);
+    lv_obj_t *s = label(p, &sony_28, TC(text_dim), 14, 75, 0);
     lv_label_set_text(s, "S");
-    act_sval = label(p, &sony_22, TC(text), 448, 80, 0);
+    act_sval = label(p, &sony_28, TC(text), 494, 75, 0);
 
     lv_obj_t *box = panel(p, 12, 116, 558, h - 132);
     lv_obj_set_style_border_color(box, TC(text_dim), 0);
@@ -916,6 +927,8 @@ static void build_act(void) {
     lv_label_set_long_mode(act_text, LV_LABEL_LONG_WRAP);
     lv_label_set_text_fmt(act_text, "CQ CQ CQ DE %s\n%s %s\n#%06x %s#", my_call(), prog_name(), st.ref.ref,
                           theme_hex(TC_text_dim), st.ref.name);
+    lv_label_set_recolor(act_text, true);
+    act_recent = label(box, &sony_22, TC(text_dim), 14, h - 132 - 3 * 24 - 12, 530);
 
     lv_obj_t *r = panel(body, 600, 6, W - 608, h);
     static const char *names[] = {"QSOs", "TIME", "LAST"};
