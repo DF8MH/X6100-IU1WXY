@@ -471,6 +471,29 @@ def field_log_file(name):
     return bottle.static_file(name, root=field_path("logs"), download=True, mimetype="text/plain")
 
 
+def field_active_log():
+    """The log of the activation running on the radio ("" when none), from the GUI's state file."""
+    try:
+        with open(field_path("state"), errors="replace") as f:
+            kv = dict(line.rstrip("\n").split("=", 1) for line in f if "=" in line)
+    except OSError:
+        return ""
+    return os.path.basename(kv.get("log", "")) if kv.get("active") == "1" else ""
+
+
+@app.delete('/api/field/logs/<name>')
+def delete_field_log(name):
+    if not name.endswith(".adi") or os.path.basename(name) != name:
+        return api_error(400, "Not a log")
+    if name == field_active_log():
+        return api_error(409, "This activation is still running: end it on the radio first")
+    try:
+        os.remove(field_path("logs", name))
+    except FileNotFoundError:
+        return api_error(404, "Not found")
+    return get_field()
+
+
 # Web remote: control and spectrum through the GUI's local socket (src/remote_server.cpp,
 # one JSON object per line), RX audio from PulseAudio. No PTT: only the apps transmit
 # (docs/REMOTE_API.md).

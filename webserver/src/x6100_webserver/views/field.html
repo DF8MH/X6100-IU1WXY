@@ -27,11 +27,12 @@
   <div class="table-wrap">
   <table id="logs">
     <thead>
-      <tr><th>File</th><th>Size</th><th>Date</th></tr>
+      <tr><th>File</th><th>Size</th><th>Date</th><th></th></tr>
     </thead>
     <tbody></tbody>
   </table>
   </div>
+  <div class="actions"><span class="status" id="lstatus"></span></div>
 </div>
 
 <script>
@@ -57,9 +58,10 @@ var render = function(data) {
   const body = $("#logs tbody").empty();
   data.logs.forEach(function(log) {
     const a = $("<a>").attr("href", "/field/logs/" + encodeURIComponent(log.name)).text(log.name);
-    body.append($("<tr>").append($("<td>").append(a), $("<td>").text(log.size), $("<td>").text(log.date)));
+    const del = $("<button type='button'>").text("Delete").on("click", function() { deleteLog(log.name); });
+    body.append($("<tr>").append($("<td>").append(a), $("<td>").text(log.size), $("<td>").text(log.date), $("<td>").append(del)));
   });
-  if (!data.logs.length) body.append($("<tr>").append($("<td colspan=3>").text("No logs yet")));
+  if (!data.logs.length) body.append($("<tr>").append($("<td colspan=4>").text("No logs yet")));
 }
 
 var load = function() { $.get('/api/field', {}, render); }
@@ -84,4 +86,15 @@ $("#qrz").on("submit", function(e) {
 });
 
 $("#update").on("click", function() { post("/api/field/update", {}, null, "#ustatus"); });
+
+var deleteLog = function(name) {
+  if (!confirm(`Delete the log "${name}"? Download it first if you still need it: this cannot be undone.`)) return;
+  $.ajax({
+    url: "/api/field/logs/" + encodeURIComponent(name),
+    type: "DELETE",
+    dataType: "json",
+    success: function(r) { render(r); showStatus("#lstatus", "Deleted " + name); },
+    error: function(xhr) { showStatus("#lstatus", xhr.responseJSON ? xhr.responseJSON.msg : "Failed", true); }
+  });
+}
 </script>
