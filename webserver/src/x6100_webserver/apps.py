@@ -504,7 +504,8 @@ REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", 
                "app_base", "wefax_mode", "wefax_save", "wefax_clear", "wefax_tx", "wefax_stop",
                "rtty_send", "rtty_stop", "rtty_rate", "rtty_shift", "rtty_center", "rtty_rev",
                "cw_send", "cw_stop", "cw_wpm", "cw_dec", "location",
-               "field_screen", "field_ref", "field_start", "field_end", "field_log", "field_spot", "field_update"}
+               "field_screen", "field_ref", "field_start", "field_end", "field_log", "field_spot", "field_update",
+               "qso_log"}
 # The radio RX audio as the GUI's decoders get it (src/audio.c), 16 bit mono
 REMOTE_AUDIO_CMD = ["parec", "--device=alsa_input.platform-sound.stereo-fallback", "--format=s16le",
                     "--rate=12000", "--channels=1", "--latency-msec=100",
