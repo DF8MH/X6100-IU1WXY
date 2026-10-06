@@ -499,7 +499,7 @@ for discovery, `/api/remote` commands, `/api/remote/stream` events,
 
 ### Companion app (Android)
 
-**X6100 Companion** ([android/](../android/)) is a phone remote: dark panels,
+**X6100 Link** ([android/](../android/)) is a phone remote: dark panels,
 black LCD, glossy buttons with LEDs, Arial. The radio decodes and transmits;
 the phone shows and commands it over WiFi.
 
