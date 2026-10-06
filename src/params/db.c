@@ -38,6 +38,26 @@ static bool query_ok(const char *sql, bool need_row) {
     return ok;
 }
 
+/* A damaged params.db (e.g. the radio switched off while writing): indexes that miss rows
+ * make every query through them fail. They are made again from the tables (duplicates of
+ * a UNIQUE ... ON CONFLICT REPLACE index dropped), then the file is compacted. */
+static void db_repair(void) {
+    sqlite3_stmt *st;
+    bool          ok = false;
+
+    if (sqlite3_prepare_v2(db, "PRAGMA integrity_check(1)", -1, &st, 0) == SQLITE_OK) {
+        ok = sqlite3_step(st) == SQLITE_ROW && !strcmp((const char *)sqlite3_column_text(st, 0), "ok");
+        sqlite3_finalize(st);
+    }
+    if (ok) {
+        return;
+    }
+    LV_LOG_WARN("params.db damaged: rebuilding its indexes");
+    if (sqlite3_exec(db, "REINDEX; VACUUM;", NULL, NULL, NULL) != SQLITE_OK) {
+        LV_LOG_ERROR("Can't repair params.db: %s", sqlite3_errmsg(db));
+    }
+}
+
 static void bands_check(void) {
     if (query_ok("SELECT id, name, start_freq, stop_freq, type FROM main.bands", true) &&
         query_ok("SELECT bands_id, name, val FROM main.band_params", false)) {
@@ -77,6 +97,7 @@ bool database_init() {
         return false;
     }
 
+    db_repair();
     rc = migrations_apply();
     if (rc != 0) {
         return false;
