@@ -12,10 +12,12 @@
 #include "vol.h"
 #include "cfg/cfg_api.h"
 #include "styles.h"
+#include "theme.h"
 
 #define BUTTONS 5
 #define BTN_HEIGHT BUTTONS_H
 #define BTN_WIDTH 160
+#define BTN_INSET (1 + theme_shape.btn_gap)   /* space on every side of a drawn button */
 
 
 #ifdef __cplusplus

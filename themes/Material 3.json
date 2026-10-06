@@ -43,5 +43,6 @@
     "focus_solid": true,
     "pill_border": 0,
     "mode_box": true,
+    "btn_gap": 3,
     "font": "roboto"
 }

@@ -407,7 +407,9 @@ void styles_apply(void) {
     lv_style_set_bg_grad_color(&btn_active_style, TC(btn_active_grad));
     lv_style_set_bg_grad_dir(&btn_active_style, theme_shape.btn_gradient ? LV_GRAD_DIR_VER : LV_GRAD_DIR_NONE);
     lv_style_set_border_color(&btn_active_style, TC(btn_active_border));
-    lv_style_set_border_width(&btn_active_style, theme_shape.border < 2 ? 2 : theme_shape.border);
+    lv_style_set_border_width(&btn_active_style, theme_shape.rule ? 3 : theme_shape.border < 2 ? 2 : theme_shape.border);
+    /* Holo: the active button is marked by a line on top */
+    lv_style_set_border_side(&btn_active_style, theme_shape.rule ? LV_BORDER_SIDE_TOP : LV_BORDER_SIDE_FULL);
     lv_style_set_text_color(&btn_active_style, TC(btn_active_text));
 
     /* Disabled: same opaque button, dimmed text and border (not see-through) */
@@ -477,9 +479,10 @@ void styles_apply(void) {
     lv_style_remove_prop(&btn_disabled_style, LV_STYLE_BORDER_WIDTH);
     surface_img(&background_style, TI_bg, 800, 480);
     lv_style_set_bg_opa(&background_style, LV_OPA_COVER);  /* the colour stays under the image */
-    surface_img(&btn_style, TI_btn, 160 - 2, BUTTONS_H - 2);
-    surface_img(&btn_active_style, TI_btn_active, 160 - 2, BUTTONS_H - 2);
-    surface_img(&btn_disabled_style, TI_btn_off, 160 - 2, BUTTONS_H - 2);
+    int inset = 1 + theme_shape.btn_gap;
+    surface_img(&btn_style, TI_btn, 160 - 2 * inset, BUTTONS_H - 2 * inset);
+    surface_img(&btn_active_style, TI_btn_active, 160 - 2 * inset, BUTTONS_H - 2 * inset);
+    surface_img(&btn_disabled_style, TI_btn_off, 160 - 2 * inset, BUTTONS_H - 2 * inset);
     surface_img(&info_style, TI_bar, 360, TOP_BAR_BOX_H);
     surface_img(&meter_style, TI_bar, TOP_BAR_METER_W, TOP_BAR_BOX_H);
     surface_img(&tx_info_style, TI_bar, TOP_BAR_METER_W, TOP_BAR_BOX_H);

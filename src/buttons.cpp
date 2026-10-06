@@ -563,9 +563,9 @@ void buttons_init(lv_obj_t *parent) {
         lv_obj_add_style(f, &btn_disabled_style, LV_STATE_DISABLED);
         // lv_obj_add_style(f, &btn_mark_assigned_style, STATE_ASSIGNED);
 
-        /* Drawn buttons: 1 px apart on every side */
-        lv_obj_set_pos(f, x + 1, y + 1);
-        lv_obj_set_size(f, BTN_WIDTH - 2, BTN_HEIGHT - 2);
+        /* Drawn buttons: 1 px apart on every side, more when the theme says (btn_gap) */
+        lv_obj_set_pos(f, x + BTN_INSET, y + BTN_INSET);
+        lv_obj_set_size(f, BTN_WIDTH - 2 * BTN_INSET, BTN_HEIGHT - 2 * BTN_INSET);
         x += BTN_WIDTH;
 
         /* Encoder marks */
@@ -1098,10 +1098,15 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
     if (nl && nl > text && nl[-1] == ':') {
         char name[32];
         snprintf(name, sizeof(name), "%.*s", (int)(nl - text - 1), text);
+        /* Name over value; one size smaller when the two lines don't fit (taller fonts, btn_gap) */
+        bool fit = lv_font_get_line_height(&sony_22) + lv_font_get_line_height(&sony_32) + 9
+                   <= BTN_HEIGHT - 2 * BTN_INSET;
         lv_label_set_text(b->label, name);
-        lv_obj_set_style_text_font(b->label, &sony_22, 0);
+        lv_obj_set_style_text_font(b->label, fit ? &sony_22 : &sony_20, 0);
         lv_obj_set_style_text_color(b->label, TC(text_head), 0);
-        lv_obj_align(b->label, LV_ALIGN_TOP_MID, 0, 4);
+        lv_obj_align(b->label, LV_ALIGN_TOP_MID, 0, fit ? 4 : 2);
+        lv_obj_set_style_text_font(b->value, fit ? &sony_32 : &sony_28, 0);
+        lv_obj_align(b->value, LV_ALIGN_BOTTOM_MID, 0, fit ? -5 : -2);
         lv_label_set_text(b->value, nl + 1);
         lv_obj_clear_flag(b->value, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(b->parent, TC(btn), 0);
@@ -1126,8 +1131,8 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
     lv_obj_add_flag(b->value, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_style_bg_color(b->parent, page ? TC(btn_page) : TC(btn), 0);
     /* Themes with images: the page button's own, else the button's */
-    const lv_img_dsc_t *img = page ? theme_image(TI_btn_page, BTN_WIDTH - 2, BTN_HEIGHT - 2) : NULL;
-    if (!img) img = theme_image(TI_btn, BTN_WIDTH - 2, BTN_HEIGHT - 2);
+    const lv_img_dsc_t *img = page ? theme_image(TI_btn_page, BTN_WIDTH - 2 * BTN_INSET, BTN_HEIGHT - 2 * BTN_INSET) : NULL;
+    if (!img) img = theme_image(TI_btn, BTN_WIDTH - 2 * BTN_INSET, BTN_HEIGHT - 2 * BTN_INSET);
     if (img) lv_obj_set_style_bg_img_src(b->parent, img, 0);
 }
 

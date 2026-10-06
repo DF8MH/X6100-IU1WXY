@@ -52,6 +52,8 @@ Every key is optional: what a file does not set comes from its `base`.
 | `mark` | encoder LED on the buttons: `[x, width, height]`, centred in height; without it the bar on the left edge |
 | `pill_border` | border width of the info box items (VFO, mode, AGC, PRE, ATT, ATU), 0 = none |
 | `mode_box` | the mode next to the frequency in a box (`mode_bg`, `mode_border`) instead of plain text |
+| `btn_gap` | 0 to 4: more space around the bottom buttons, so rounded (pill) buttons show all their corners |
+| `rule` | an `accent` line under the top bar and on top of the active button instead of its frame (Holo) |
 
 The encoder LED shows which encoder a button's control is on (`btn_mark`,
 `btn_mark_assigned`); the control the encoder adjusts now is `btn_mark_active`

@@ -1786,6 +1786,16 @@ lv_obj_t * main_screen() {
     tx_info = tx_info_init(obj);
     freq_strip_init(obj);
 
+    /* Holo: an accent line between the top bar and the frequency strip */
+    if (theme_shape.rule) {
+        lv_obj_t *rule = lv_obj_create(obj);
+        lv_obj_remove_style_all(rule);
+        lv_obj_set_pos(rule, 0, TOP_BAR_HEIGHT - TOP_BAR_MARGIN);
+        lv_obj_set_size(rule, 800, TOP_BAR_MARGIN);
+        lv_obj_set_style_bg_opa(rule, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(rule, TC(accent), 0);
+    }
+
     cw_tune_init(obj);
 
     subject_subscribe_delayed((Subject*)freq_lock, on_fg_freq_change, NULL);

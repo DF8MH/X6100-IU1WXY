@@ -41,5 +41,6 @@
     "focus_solid": true,
     "pill_border": 0,
     "mode_box": false,
+    "rule": true,
     "font": "roboto"
 }

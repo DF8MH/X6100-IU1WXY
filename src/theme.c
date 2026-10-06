@@ -208,6 +208,9 @@ static bool load_file(const char *name) {
     get_bool(root, "focus_solid", &theme_shape.focus_solid);
     get_int(root, "pill_border", &theme_shape.pill_border);
     get_bool(root, "mode_box", &theme_shape.mode_box);
+    get_int(root, "btn_gap", &theme_shape.btn_gap);
+    theme_shape.btn_gap = theme_shape.btn_gap < 0 ? 0 : theme_shape.btn_gap > 4 ? 4 : theme_shape.btn_gap;
+    get_bool(root, "rule", &theme_shape.rule);
     v = theme_shape.waterfall_steps;
     get_int(root, "waterfall_steps", &v);
     theme_shape.waterfall_steps = v;
