@@ -43,9 +43,10 @@ add_executable(js8_ui_harness
     ${X}/src/widgets/lv_finder.c
     ${CMAKE_BINARY_DIR}/styles_host.c
     ${X}/src/theme.c
+    ${X}/src/cJSON.c
     ${FONTS}
 )
 set_source_files_properties(main.cpp PROPERTIES COMPILE_OPTIONS "-std=c++20")
 # Upstream relies on GCC 12 pulling <cstdlib> in transitively; newer host GCC does not.
 set_source_files_properties(${X}/src/scheduler.cpp PROPERTIES COMPILE_OPTIONS "-include;cstdlib")
-target_link_libraries(js8_ui_harness PRIVATE lvgl JS8 JS8TestSignal js8core ${D}/lib/libliquid.a m)
+target_link_libraries(js8_ui_harness PRIVATE lvgl JS8 JS8TestSignal js8core ${D}/lib/libliquid.a png m)

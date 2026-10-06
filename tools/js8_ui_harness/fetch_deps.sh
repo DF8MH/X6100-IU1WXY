@@ -9,6 +9,9 @@ cd deps
 # LVGL: stock v8.3.11, the version the firmware's NEON fork is based on. The
 # fork's non-NEON fallback does not compile, and only ARM builds use NEON.
 [ -d src/lvgl ] || git clone -q --depth 1 --branch v8.3.11 https://github.com/lvgl/lvgl src/lvgl
+# Its gradient cache moves items down with memcpy over overlapping memory (ASan stops on it): memmove
+sed -i 's/lv_memcpy(c, ((uint8_t \*)c) + size, next_items_size);/memmove(c, ((uint8_t *)c) + size, next_items_size);/' \
+    src/lvgl/src/draw/sw/lv_draw_sw_gradient.c
 
 # ft8_lib headers: params.h includes ft8lib/constants.h.
 if [ ! -d include/ft8lib ]; then

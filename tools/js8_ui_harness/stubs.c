@@ -270,3 +270,14 @@ void stub_mode_setup(void) {
     params.js8_custom_hz.x    = 27245000;
 }
 int stub_usb_dig(void) { return x6100_mode_usb_dig; }
+
+/* Firmware symbols dialog_js8.c gained since (station QTH, the companion app's events, the TX
+ * readings, the frequency strip, the day's log) */
+#include "cJSON.h"
+const char *station_qth(void) { return params.qth.x; }
+void remote_event(cJSON *o) { cJSON_Delete(o); }
+bool tx_info_refresh(uint8_t *prev_msg_id, float *alc_p, float *pwr_p, float *vswr_p) { return false; }
+void freq_strip_set_app(const char *name) {}
+int32_t cfg_digital_freq_get(void) { return dial_hz; }
+struct qso_log_record_t;
+void dialog_field_day_log(const struct qso_log_record_t *r) {}
