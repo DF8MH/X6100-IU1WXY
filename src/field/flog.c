@@ -58,6 +58,10 @@ size_t field_adif_record(char *buf, size_t size, const field_qso_t *q, const fie
     n = field(buf, size, n, "MODE", q->mode);
     n = field(buf, size, n, "RST_SENT", q->rst_s);
     n = field(buf, size, n, "RST_RCVD", q->rst_r);
+    n = field(buf, size, n, "NAME", q->name);
+    n = field(buf, size, n, "QTH", q->qth);
+    n = field(buf, size, n, "GRIDSQUARE", q->grid);
+    n = field(buf, size, n, "COUNTRY", q->country);
     n = field(buf, size, n, "STATION_CALLSIGN", st->call);
     n = field(buf, size, n, "OPERATOR", st->call);
     n = field(buf, size, n, "MY_GRIDSQUARE", st->grid);
@@ -74,7 +78,7 @@ size_t field_adif_record(char *buf, size_t size, const field_qso_t *q, const fie
 }
 
 bool field_log_add(const char *path, const field_qso_t *q, const field_station_t *st) {
-    char  rec[512];
+    char  rec[768];
     bool  is_new = access(path, F_OK) != 0;
     FILE *f      = fopen(path, "a");
 

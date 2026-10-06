@@ -50,6 +50,15 @@ TEST_CASE("Field ADIF log", "[field]") {
     REQUIRE(std::string(rec).find("<QSO_DATE:8>20260929 <TIME_ON:6>124100 <BAND:3>20m <FREQ:9>14.062000 <MODE:2>CW") != std::string::npos);
     REQUIRE(std::string(rec).find("<MY_SOTA_REF:8>I/LO-001") != std::string::npos);
     REQUIRE(std::string(rec).find("<eor>") != std::string::npos);
+    REQUIRE(std::string(rec).find("<NAME:") == std::string::npos);   /* unknown: not written */
+
+    field_qso_t looked = q;   /* the phone's QRZ lookup */
+    strcpy(looked.name, "Hans Muster");
+    strcpy(looked.qth, "Berlin");
+    strcpy(looked.grid, "JO62qm");
+    strcpy(looked.country, "Germany");
+    field_adif_record(rec, sizeof(rec), &looked, &st);
+    REQUIRE(std::string(rec).find("<NAME:11>Hans Muster <QTH:6>Berlin <GRIDSQUARE:6>JO62qm <COUNTRY:7>Germany ") != std::string::npos);
 
     remove(path);
     REQUIRE(field_log_add(path, &q, &st));

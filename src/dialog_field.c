@@ -21,6 +21,7 @@
 #include "cluster/spots.h"
 #include "cw_encoder.h"
 #include "dialog.h"
+#include "dialog_msg_voice.h"
 #include "events.h"
 #include "field/bands.h"
 #include "field/flog.h"
@@ -574,10 +575,13 @@ static void qrz_cb(button_data_t *b);
 static void cq_cb(button_data_t *b);
 static void bands_cb(button_data_t *b);
 static void logbook_cb(button_data_t *b);
+static void rec_cq_cb(button_data_t *b);
+static const char *rec_cq_label(void);
 static const char *boot_label(void);
 static const char *activate_label(void);
 
 static button_data_t b_home   = {.type = BTN_TEXT, .label = "FIELD OPS"};
+static button_data_t b_reccq  = {.type = BTN_TEXT_FN, .label_fn = rec_cq_label, .press = rec_cq_cb};
 static button_data_t b_open   = {.type = BTN_TEXT, .label = "Select", .press = open_cb};
 static button_data_t b_boot   = {.type = BTN_TEXT_FN, .label_fn = boot_label, .press = boot_cb};
 static button_data_t b_exit   = {.type = BTN_TEXT, .label = "Radio", .press = exit_cb};
@@ -602,14 +606,18 @@ static button_data_t b_qrz    = {.type = BTN_TEXT, .label = "Upload\nQRZ", .pres
 
 static buttons_page_t page_home  = {.items = {&b_home, &b_open, &b_boot, NULL, &b_exit}};
 static buttons_page_t page_ref1  = {.items = {&b_ref1, &b_act, &b_spot, &b_ref, &b_back}};
-static buttons_page_t page_ref2  = {.items = {&b_ref2, &b_update, NULL, NULL, &b_back}};
+static buttons_page_t page_ref2  = {.items = {&b_ref2, &b_update, &b_reccq, NULL, &b_back}};
 static buttons_page_t page_act1  = {.items = {&b_act1, &b_cq, &b_log, &b_spot, &b_back}};
-static buttons_page_t page_act2  = {.items = {&b_act2, &b_act, &b_band, NULL, &b_back}};   /* b_book: LOG hidden */
+static buttons_page_t page_act2  = {.items = {&b_act2, &b_act, &b_band, &b_reccq, &b_back}};   /* b_book: LOG hidden */
 static buttons_page_t page_bands = {.items = {&b_bands, &b_beacon, &b_tune, NULL, &b_back}};
 static buttons_page_t page_log   = {.items = {&b_logpg, &b_log, &b_qrz, NULL, &b_back}};
 
 static const char *boot_label(void) {
     return param_i_get(cfg_field_boot) ? "Start here\nOn" : "Start here\nOff";
+}
+
+static const char *rec_cq_label(void) {
+    return dialog_msg_voice_get_state() == MSG_VOICE_RECORD ? "Stop\nrec" : "Rec\nCQ";
 }
 
 static const char *activate_label(void) {
@@ -892,7 +900,7 @@ static void build_act(void) {
     }
     act_update();
     lv_label_set_text(status, is_cw() ? "CQ calls in CW.  Log QSO: call [rst rcvd [rst sent]]"
-                                      : "Call CQ on the mic.  Log QSO: call [rst rcvd [rst sent]]");
+                                      : "CQ sends your voice CQ (Rec CQ: page 2).  Log QSO: call [rst...]");
     buttons_load_page(&page_act1);
 }
 
@@ -1122,11 +1130,27 @@ static void spot_cb(button_data_t *b) {
     spot();
 }
 
+static void rec_cq_cb(button_data_t *b) {
+    char name[16];
+
+    snprintf(name, sizeof(name), "CQ %s", prog_name());
+    if (msg_voice_rec_toggle(name))
+        msg_update_text_fmt("Recording \"%s\": speak, then Stop rec", name);
+    else if (dialog_msg_voice_get_state() == MSG_VOICE_OFF && msg_voice_exists(name))
+        msg_update_text_fmt("Saved \"%s\": CQ sends it in SSB", name);
+    buttons_refresh(b);
+}
+
 static void cq_cb(button_data_t *b) {
     char text[80];
 
     if (!is_cw()) {
-        msg_update_text_fmt("CQ: call on the mic (the CQ key sends in CW)");
+        /* The voice CQ recorded with Rec CQ ("CQ SOTA" / "CQ POTA" in /mnt/msg, also in MSG > Voice) */
+        snprintf(text, sizeof(text), "CQ %s", prog_name());
+        if (msg_voice_send_toggle(text))
+            msg_update_text_fmt("CQ: sending \"%s\" (CQ again: stop)", text);
+        else if (!msg_voice_exists(text))
+            msg_update_text_fmt("No voice CQ yet: Rec CQ on page 2, speak, Stop rec");
         return;
     }
     snprintf(text, sizeof(text), "CQ CQ %s DE %s %s K", prog_name(), my_call(), my_call());
@@ -1134,7 +1158,8 @@ static void cq_cb(button_data_t *b) {
 }
 
 /* A QSO in the log: false when the call is not a callsign */
-static bool log_add(const char *call_in, const char *rst_s, const char *rst_r) {
+/* more: name, QTH, grid and country of the other station (the phone's QRZ lookup), or NULL */
+static bool log_add(const char *call_in, const char *rst_s, const char *rst_r, const field_qso_t *more) {
     field_qso_t     q   = {.t = time(NULL), .freq_hz = cparam_i_get(cfg_fg_freq)};
     field_station_t sta;
     const char     *rst = is_cw() ? "599" : "59";
@@ -1149,6 +1174,12 @@ static bool log_add(const char *call_in, const char *rst_s, const char *rst_r) {
     snprintf(q.mode, sizeof(q.mode), "%s", adif_mode());
     snprintf(q.rst_s, sizeof(q.rst_s), "%s", rst_s && rst_s[0] ? rst_s : rst);
     snprintf(q.rst_r, sizeof(q.rst_r), "%s", rst_r && rst_r[0] ? rst_r : rst);
+    if (more) {
+        memcpy(q.name, more->name, sizeof(q.name));
+        memcpy(q.qth, more->qth, sizeof(q.qth));
+        memcpy(q.grid, more->grid, sizeof(q.grid));
+        memcpy(q.country, more->country, sizeof(q.country));
+    }
     snprintf(sta.call, sizeof(sta.call), "%s", my_call());
     snprintf(sta.grid, sizeof(sta.grid), "%s", station_qth() ? station_qth() : "");
     sta.prog = st.ref.type;
@@ -1179,7 +1210,7 @@ static bool log_ok(void) {
     const char *v = textarea_window_get();
     char        call[32] = "", r1[8] = "", r2[8] = "";
 
-    if (v && sscanf(v, "%31s %7s %7s", call, r1, r2) >= 1 && !log_add(call, r2, r1))
+    if (v && sscanf(v, "%31s %7s %7s", call, r1, r2) >= 1 && !log_add(call, r2, r1, NULL))
         msg_update_text_fmt("Log: \"%s\" is not a callsign", call);
     kbd_end();
     return true;
@@ -1404,6 +1435,8 @@ static void timer_cb(lv_timer_t *t) {
         end_armed = false;
         buttons_refresh(&b_act);
     }
+    msg_voice_poll(false);
+    buttons_refresh(&b_reccq);   /* a recording stops by itself at 60 s */
     ticks++;
     if (act_freq) {
         act_update();
@@ -1482,6 +1515,7 @@ static void construct_cb(lv_obj_t *parent) {
 }
 
 static void destruct_cb(void) {
+    msg_voice_poll(true);   /* never leaves a recording open or the radio keyed */
     if (kbd_open) {
         textarea_window_close();
         kbd_open = false;
@@ -1558,10 +1592,19 @@ void dialog_field_remote(const char *cmd, int32_t val, const char *text) {
     } else if (!strcmp(cmd, "field_end")) {
         activation_end();
     } else if (!strcmp(cmd, "field_log")) {
-        /* "CALL|rst sent|rst received" */
-        char call[32] = "", rs[8] = "", rr[8] = "";
-        sscanf(text, "%31[^|]|%7[^|]|%7s", call, rs, rr);
-        if (!log_add(call, rs, rr))
+        /* "CALL|rst sent|rst received[|name|qth|grid|country]", any field may be empty */
+        char        call[32] = "", rs[8] = "", rr[8] = "", buf[256];
+        field_qso_t more     = {0};
+        struct { char *dst; size_t size; } out[] = {
+            {call, sizeof(call)}, {rs, sizeof(rs)}, {rr, sizeof(rr)}, {more.name, sizeof(more.name)},
+            {more.qth, sizeof(more.qth)}, {more.grid, sizeof(more.grid)}, {more.country, sizeof(more.country)},
+        };
+        char *p = buf, *f;
+
+        snprintf(buf, sizeof(buf), "%s", text);
+        for (size_t i = 0; i < sizeof(out) / sizeof(out[0]) && (f = strsep(&p, "|")); i++)
+            snprintf(out[i].dst, out[i].size, "%s", f);
+        if (!log_add(call, rs, rr, &more))
             msg_update_text_fmt("Log from the phone: \"%s\" not logged", call);
     } else if (!strcmp(cmd, "field_spot")) {
         spot();

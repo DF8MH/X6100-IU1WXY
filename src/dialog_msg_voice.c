@@ -276,9 +276,9 @@ static void *worker_cb(void *arg) {
     return NULL;
 }
 
-static void start_play(bool tx, bool loop) {
-    if (state != MSG_VOICE_OFF || !sel_name()) return;
-    file_path(play_path, sizeof(play_path), sel_name());
+static void start_play_name(bool tx, bool loop, const char *name) {
+    if (state != MSG_VOICE_OFF || !name) return;
+    file_path(play_path, sizeof(play_path), name);
     job_tx         = tx;
     job_loop       = loop;
     adjusting      = false;
@@ -289,6 +289,10 @@ static void start_play(bool tx, bool loop) {
     state          = MSG_VOICE_PLAY;
     worker_started = pthread_create(&worker, NULL, worker_cb, NULL) == 0;
     if (!worker_started) state = MSG_VOICE_OFF;
+}
+
+static void start_play(bool tx, bool loop) {
+    start_play_name(tx, loop, sel_name());
 }
 
 static void stop_play(void) {
@@ -316,11 +320,13 @@ static void next_rec_name(char *dst) {
     }
 }
 
-static void start_rec(void) {
+/* name: NULL for the next "Message N" */
+static void start_rec(const char *name) {
     char    p[128];
     SF_INFO info;
 
-    next_rec_name(rec_name);
+    if (name) snprintf(rec_name, sizeof(rec_name), "%s", name);
+    else next_rec_name(rec_name);
     file_path(p, sizeof(p), rec_name);
     memset(&info, 0, sizeof(info));
     info.samplerate = AUDIO_CAPTURE_RATE;
@@ -348,7 +354,7 @@ static void stop_rec(void) {
     rec_file = NULL;
     pthread_mutex_unlock(&rec_mutex);
     audio_set_play_mode(AUDIO_PLAY_OFF);
-    load_items(rec_name);
+    if (dialog.run) load_items(rec_name);   /* the list exists only with the window open */
 }
 
 /* Called from the audio thread while recording */
@@ -369,6 +375,42 @@ void dialog_msg_voice_put_audio_samples(size_t nsamples, int16_t *samples) {
 
 msg_voice_state_t dialog_msg_voice_get_state() {
     return state;
+}
+
+/* A named message without the window (Field Ops' voice CQ) */
+
+bool msg_voice_rec_toggle(const char *name) {
+    if (state == MSG_VOICE_RECORD) {
+        stop_rec();
+        return false;
+    }
+    if (state == MSG_VOICE_OFF) start_rec(name);
+    return state == MSG_VOICE_RECORD;
+}
+
+bool msg_voice_send_toggle(const char *name) {
+    char p[128];
+
+    if (state == MSG_VOICE_PLAY) {
+        stop_play();
+        return false;
+    }
+    file_path(p, sizeof(p), name);
+    if (access(p, R_OK) != 0) return false;
+    start_play_name(true, false, name);
+    return state == MSG_VOICE_PLAY;
+}
+
+bool msg_voice_exists(const char *name) {
+    char p[128];
+
+    file_path(p, sizeof(p), name);
+    return access(p, R_OK) == 0;
+}
+
+void msg_voice_poll(bool closing) {
+    if (state == MSG_VOICE_RECORD && (closing || rec_frames >= (long)REC_MAX_S * AUDIO_CAPTURE_RATE)) stop_rec();
+    reap_worker(closing);
 }
 
 /* Buttons */
@@ -641,7 +683,7 @@ void dialog_msg_voice_ptt_pressed(void) {
 static void rec_cb(button_data_t *btn) {
     (void)btn;
     if (state == MSG_VOICE_RECORD) stop_rec();
-    else if (state == MSG_VOICE_OFF) start_rec();
+    else if (state == MSG_VOICE_OFF) start_rec(NULL);
     timer_cb(NULL);
 }
 

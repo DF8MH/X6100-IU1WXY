@@ -328,7 +328,10 @@ Field Ops at power on. The main knob still tunes; MFK and touch choose.
 **SOTA / POTA, during the activation**: the band, the frequency and the mode,
 the S-meter, the CQ text with the reference, the QSO count, the time since the
 start and the last call.
-- **CQ** sends `CQ CQ SOTA DE <call>` in CW (on the mic in the other modes).
+- **CQ** sends `CQ CQ SOTA DE <call> <call> K` in CW (POTA in a park). In SSB it sends
+  your **voice CQ**: record it once with **Rec CQ** (page 2, before or during the
+  activation): press, speak, **Stop rec** (60 s at most). It is `CQ SOTA` / `CQ POTA`
+  in `/mnt/msg`, so MSG → Voice lists it too. CQ again while it is on air stops it.
 - **Log QSO**: type `CALL`, or `CALL rst_rcvd rst_sent` (default 599 in CW, 59
   otherwise). Each QSO goes to the SD card at once, in
   `/mnt/field/logs/<date>-<time>_<ref>.adi` with `MY_SOTA_REF` or `MY_SIG POTA` /
@@ -344,6 +347,9 @@ start and the last call.
 page by itself: the reference, the nearby ones to choose, Start and End, and the
 QSO entry with the phone's keyboard (call, RST sent and received), the QSO list,
 Spot. The phone's position goes to the radio when **Send phone position** is on.
+With a QRZ.com login (SET → QRZ.com) the app looks up the call as you type it and
+shows name, QTH, grid and country under the entry; LOG puts them in the ADIF
+(NAME, QTH, GRIDSQUARE, COUNTRY). The full record needs a QRZ XML subscription.
 
 **Bands**: for each band the cluster spots of the last 30 minutes, the Reverse
 Beacon Network skimmer spots of the last 15 and the skimmers that heard you in the

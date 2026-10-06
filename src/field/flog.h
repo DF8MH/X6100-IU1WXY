@@ -22,6 +22,7 @@ typedef struct {
     int32_t freq_hz;
     char    mode[8];    /* ADIF: CW, SSB, AM, FM, FT8 */
     char    rst_s[4], rst_r[4];
+    char    name[48], qth[48], grid[8], country[32];   /* the other station, from the phone's QRZ lookup; "" unknown */
 } field_qso_t;
 
 typedef struct {

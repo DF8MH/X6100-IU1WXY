@@ -28,6 +28,14 @@ msg_voice_state_t dialog_msg_voice_get_state();
 void dialog_msg_voice_put_audio_samples(size_t nsamples, int16_t *samples);
 void dialog_msg_voice_ptt_pressed(void);
 
+/* A message by name in /mnt/msg, without the MSG window (Field Ops' voice CQ):
+ * rec / send start or stop and return true while recording / sending;
+ * the caller polls (closing: stop and wait) while it is open */
+bool msg_voice_rec_toggle(const char *name);
+bool msg_voice_send_toggle(const char *name);
+bool msg_voice_exists(const char *name);
+void msg_voice_poll(bool closing);
+
 #ifdef __cplusplus
 }
 #endif
