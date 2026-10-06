@@ -591,7 +591,7 @@ def delete_field_log(name):
 # one JSON object per line), RX audio from PulseAudio. No PTT: only the apps transmit
 # (X6100 Link).
 
-REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", "rfgain", "filter", "pwr",
+REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", "rfgain", "sql", "filter", "pwr",
                "app", "ft8_cq", "ft8_reply", "ft8_stop", "ft8_auto", "ft8_hold", "ft8_txfreq",
                "js8_send", "js8_cq", "js8_hb", "js8_stop", "wspr_txpct", "wspr_txnext", "sstv_tx", "sstv_stop",
                "app_base", "wefax_mode", "wefax_save", "wefax_clear", "wefax_tx", "wefax_stop",

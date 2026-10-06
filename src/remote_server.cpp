@@ -97,7 +97,7 @@ typedef struct {
 
 typedef enum {
     CMD_FREQ, CMD_TUNE, CMD_MODE, CMD_BAND, CMD_PRE, CMD_ATT, CMD_AGC, CMD_NB, CMD_NR, CMD_RFGAIN, CMD_FILTER, CMD_PWR,
-    CMD_NB_LEVEL, CMD_NB_WIDTH, CMD_NR_LEVEL, CMD_AGC_MODE,
+    CMD_NB_LEVEL, CMD_NB_WIDTH, CMD_NR_LEVEL, CMD_AGC_MODE, CMD_SQL,
     CMD_APP, CMD_APP_CMD, CMD_LOCATION, CMD_QSO_LOG
 } cmd_id_t;
 
@@ -380,6 +380,9 @@ static void apply_cmd(void *arg) {
         case CMD_RFGAIN:
             cfg_sm.p_rfgain.set(c->val);
             break;
+        case CMD_SQL:
+            cfg_sm.p_squelch.set(c->val);
+            break;
         case CMD_PWR:
             cfg_sm.p_pwr.set(c->val / 10.0f);
             break;
@@ -492,12 +495,13 @@ static int state_line(char *buf, size_t size) {
 
     return snprintf(buf, size,
                     "{\"t\":\"state\",\"vfo\":\"%s\",\"freq\":%i,\"freq_bg\":%i,\"mode\":\"%s\",\"band\":\"%s\","
-                    "\"filter\":%i,\"rfgain\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
+                    "\"filter\":%i,\"flo\":%i,\"fhi\":%i,\"rfgain\":%i,\"sql\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
                     "\"nb_level\":%i,\"nb_width\":%i,\"nr_level\":%i,\"pwr\":%i,\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s}\n",
                     cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? "A" : "B",
                     cfg_sm.cp_fg_freq.get(), cfg_sm.cp_bg_freq.get(),
                     (mode >= 0 && mode <= x6100_mode_nfm) ? mode_names[mode] : "?", band_name(),
-                    cfg_sm.cp_cur_filter_bw.get(), cfg_sm.p_rfgain.get(), cfg_sm.p_volume.get(),
+                    cfg_sm.cp_cur_filter_bw.get(), cfg_sm.cp_cur_filter_low.get(), cfg_sm.cp_cur_filter_high.get(),
+                    cfg_sm.p_rfgain.get(), cfg_sm.p_squelch.get(), cfg_sm.p_volume.get(),
                     cfg_sm.cp_cur_pre.get() != 0, cfg_sm.cp_cur_att.get() != 0,
                     (agc >= 0 && agc <= x6100_agc_auto) ? agc_names[agc] : "?",
                     cfg_sm.p_nb.get() != 0, cfg_sm.p_nr.get() != 0,
@@ -626,6 +630,7 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
         {"nb", CMD_NB, 0, 1},
         {"nr", CMD_NR, 0, 1},
         {"rfgain", CMD_RFGAIN, 0, 100},
+        {"sql", CMD_SQL, 0, 100},
         {"filter", CMD_FILTER, 50, 6000},
         {"pwr", CMD_PWR, 1, 100},
         {"nb_level", CMD_NB_LEVEL, 0, 100},
