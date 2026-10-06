@@ -33,6 +33,9 @@ const char *cluster_column_move(int dir);
 /* Tunes the radio to the highlighted spot */
 void cluster_column_tune(void);
 
+/* The box on its parent, if shown (the spot calls on the waterfall keep out of it) */
+bool cluster_column_area(lv_area_t *a);
+
 #ifdef __cplusplus
 }
 #endif

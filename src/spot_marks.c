@@ -5,6 +5,7 @@
 #include "spot_marks.h"
 
 #include "cluster/client.h"
+#include "cluster_column.h"
 #include "cfg/cfg_api.h"
 #include "styles.h"
 #include "theme.h"
@@ -56,6 +57,9 @@ static void redraw(void) {
     int32_t  left = span_center - span_half;
     uint16_t now  = utc_now_min();
     const cluster_filter_t *flt = cluster_filter();
+    lv_area_t col;
+    /* The cluster column covers the calls' rows on the right: calls keep out of it */
+    bool      has_col = cluster_column_area(&col) && tag_y0 + ROWS * ROW_H > col.y1;
 
     last_fgen = flt->gen;
 
@@ -72,6 +76,25 @@ static void redraw(void) {
             }
             w  = lv_txt_get_width(s->dx, strlen(s->dx), &SPOT_FONT, 0, LV_TEXT_FLAG_NONE) + 4;
             lx = (x + w > WIDTH) ? x - w + 1 : x;  /* right-aligned at the right edge */
+
+            uint32_t color = cluster_alert_match(flt, s) >= 0 ? theme_hex(TC_alert) : SPOT_COLOR;
+
+            if (has_col && lx + w > col.x1) {
+                if (x < col.x1) {
+                    lx = x - w + 1;     /* ends at its frequency, left of the column */
+                } else {
+                    /* Under the column (which lists it): only the tick down to the column top */
+                    mark_t *m = &marks[n++];
+
+                    lv_obj_add_flag(m->label, LV_OBJ_FLAG_HIDDEN);
+                    shown_hz[n - 1] = s->freq_hz;
+                    lv_obj_set_pos(m->line, x - LINE_W / 2, line_y0);
+                    lv_obj_set_height(m->line, LV_MAX(col.y1 - line_y0, 1));
+                    lv_obj_set_style_bg_color(m->line, lv_color_hex(color), 0);
+                    lv_obj_clear_flag(m->line, LV_OBJ_FLAG_HIDDEN);
+                    continue;
+                }
+            }
 
             for (row = 0; row < ROWS; row++) {
                 int k;
@@ -91,7 +114,6 @@ static void redraw(void) {
             end[row][cnt[row]++] = lx + w;
 
             /* Cyan on the waterfall; an alert call stays pink */
-            uint32_t color = cluster_alert_match(flt, s) >= 0 ? theme_hex(TC_alert) : SPOT_COLOR;
             mark_t  *m     = &marks[n++];
 
             lv_label_set_text(m->label, s->dx);

@@ -298,6 +298,17 @@ void cluster_column_refresh(void) {
     redraw();
 }
 
+bool cluster_column_area(lv_area_t *a) {
+    if (!box || lv_obj_has_flag(box, LV_OBJ_FLAG_HIDDEN)) {
+        return false;
+    }
+    a->x1 = lv_obj_get_x(box);
+    a->y1 = lv_obj_get_y(box);
+    a->x2 = a->x1 + lv_obj_get_width(box) - 1;
+    a->y2 = a->y1 + lv_obj_get_height(box) - 1;
+    return true;
+}
+
 static lv_obj_t *cell(lv_obj_t *p, lv_coord_t x, lv_coord_t w, lv_coord_t y, lv_text_align_t al, uint32_t c,
                       const lv_font_t *font) {
     lv_obj_t *l = lv_label_create(p);
@@ -320,7 +331,7 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
     lv_obj_set_size(box, COL_W, 480 - BUTTONS_H - y);
     lv_obj_set_style_radius(box, theme_shape.radius_popup, 0);
     lv_obj_set_style_bg_color(box, TC(side), 0);
-    lv_obj_set_style_bg_opa(box, LV_OPA_80, 0);
+    lv_obj_set_style_bg_opa(box, LV_OPA_60, 0);
     lv_obj_set_style_border_color(box, TC(panel_border), 0);
     lv_obj_set_style_border_width(box, theme_shape.border, 0);
     lv_obj_clear_flag(box, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
@@ -348,6 +359,7 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
 
         rows[i].freq = cell(box, 4, FREQ_W, ry, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text_value), &sony_22);
         rows[i].call = cell(box, 72, 99, ry + 2, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), &sony_20);
+        lv_label_set_long_mode(rows[i].call, LV_LABEL_LONG_DOT);   /* a long call ends in dots, clear of the mode */
         rows[i].mode = cell(box, 173, 32, ry + 3, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), &sony_18);
         rows[i].age  = cell(box, 207, 32, ry + 3, LV_TEXT_ALIGN_RIGHT, theme_hex(TC_text), &sony_18);
     }
