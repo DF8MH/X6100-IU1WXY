@@ -52,17 +52,19 @@ static void show_time() {
     pthread_mutex_lock(&power_mux);
     const char * bat_sym;
     const char * ext_sym;
-    switch ((uint8_t)(v_bat * 10)) {
-        case 0 ... 63:
+    /* From the base's %, not the voltage: the pack sits at 7.0-7.2 V from 25% down to 5%
+     * (battery_log.csv), so the old 7.0 V step showed half a battery at 10% */
+    switch (cap_bat) {
+        case 0 ... 9:
             bat_sym = LV_SYMBOL_BATTERY_EMPTY;
             break;
-        case 64 ... 69:
+        case 10 ... 34:
             bat_sym = LV_SYMBOL_BATTERY_1;
             break;
-        case 70 ... 75:
+        case 35 ... 59:
             bat_sym = LV_SYMBOL_BATTERY_2;
             break;
-        case 76 ... 81:
+        case 60 ... 84:
             bat_sym = LV_SYMBOL_BATTERY_3;
             break;
         default:
