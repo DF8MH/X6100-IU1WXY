@@ -74,7 +74,7 @@ const showStatus = function(text, error=false) {
 
 const send = function(cmd, val) {
   return $.ajax({
-    url: "/api/remote",
+    url: "/link/v2/cmd",
     type: "POST",
     data: JSON.stringify({cmd: cmd, val: val}),
     contentType: "application/json; charset=utf-8",
@@ -326,7 +326,7 @@ let drag = null;
 /* Radio events */
 
 const connect = function() {
-  const es = new EventSource("/api/remote/stream");
+  const es = new EventSource("/link/v2/events");
   es.onmessage = function(e) {
     const m = JSON.parse(e.data);
     if (m.t == "state") {
@@ -426,7 +426,7 @@ const startAudio = async function() {
     node.connect(a.gain);
     push = function(f) { j.push(f); };
   }
-  const r = await fetch("/api/remote/audio", {signal: a.abort.signal, cache: "no-store"});
+  const r = await fetch("/link/v2/audio", {signal: a.abort.signal, cache: "no-store"});
   if (!r.ok) throw new Error(r.status == 409 ? "Another listener is connected (1 listener at a time)" : "No audio from the radio");
   showStatus("Listening");
   const reader = r.body.getReader();

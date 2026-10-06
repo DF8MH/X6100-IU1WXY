@@ -595,25 +595,21 @@ def remote():
     return bottle.template('remote')
 
 
-# X6100 Link sends X-Link-Api: an app without it (or older) gets OLD_APP. The phone's HttpURLConnection
-# says "Dalvik/..." as User-Agent; the browser's remote page is not touched.
-LINK_API = 2
+# The remote protocol (X6100 Link and the Remote page) lives under LINK; it changes path when it changes,
+# so an app of another protocol finds nothing here. The old paths only say so.
+LINK = '/link/v2'
 OLD_APP = "Update X6100 Link: this radio firmware needs a newer app"
 
 
-def old_app():
-    if not bottle.request.get_header("User-Agent", "").startswith("Dalvik"):
-        return False
-    try:
-        return int(bottle.request.get_header("X-Link-Api", "0")) < LINK_API
-    except ValueError:
-        return True
+@app.route('/api/remote', method=['GET', 'POST'])
+@app.route('/api/remote/<rest:path>')
+@app.route('/api/info')
+def remote_gone(rest=None):
+    return api_error(410, OLD_APP)
 
 
-@app.post('/api/remote')
+@app.post(LINK + '/cmd')
 def remote_command():
-    if old_app():
-        return api_error(426, OLD_APP)
     try:
         data = bottle.request.json
     except ValueError:
@@ -641,22 +637,19 @@ def remote_command():
     return {"status": "OK"}
 
 
-@app.get('/api/info')
+@app.get(LINK + '/info')
 def remote_info():
     """Discovery for the phone app"""
-    return {"radio": "x6100", "api": LINK_API, "callsign": read_callsign(), "remote": os.path.exists(settings.REMOTE_SOCK)}
+    return {"radio": "x6100", "api": 2, "callsign": read_callsign(), "remote": os.path.exists(settings.REMOTE_SOCK)}
 
 
-@app.get('/api/remote/stream')
+@app.get(LINK + '/events')
 def remote_stream():
     """Server-sent events: the GUI's state and spectrum lines, until the page is closed."""
     bottle.response.content_type = 'text/event-stream'
     bottle.response.set_header('Cache-Control', 'no-cache')
 
     def events():
-        if old_app():
-            yield ("retry: 3000\nevent: fail\ndata: " + OLD_APP + "\n\n").encode()
-            return
         try:
             sock = remote_connect(5)
         except OSError:
@@ -676,14 +669,11 @@ def remote_stream():
     return events()
 
 
-@app.get('/api/remote/audio')
+@app.get(LINK + '/audio')
 def remote_audio():
     """Raw s16le mono 12 kHz. One listener; parec is killed when the page stops listening."""
     bottle.response.content_type = 'application/octet-stream'
     bottle.response.set_header('Cache-Control', 'no-store')
-
-    if old_app():
-        raise bottle.HTTPError(426, OLD_APP)
 
     def pcm():
         global remote_audio_busy
