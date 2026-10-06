@@ -20,34 +20,41 @@ sqlite3                 *db = NULL;
 static sqlite3_stmt     *insert_stmt;
 
 
-/* A params.db without bands (an old or broken one kept on the DATA partition when the
- * SD card was written again): the bands of the default database, the other settings kept */
+/* A params.db with no usable bands (an old, foreign or broken one kept on the DATA partition
+ * when the SD card was written again: the tables missing, empty or with other columns): both
+ * band tables made again from the default database, the other settings kept */
 #define DEFAULT_DB "/usr/share/x6100/params.default.db"
 
-static void bands_check(void) {
+/* The query works and, with need_row, returns a row */
+static bool query_ok(const char *sql, bool need_row) {
     sqlite3_stmt *st;
-    int           n = 0;
+    bool          ok;
 
-    if (sqlite3_prepare_v2(db, "SELECT count(*) FROM bands", -1, &st, 0) == SQLITE_OK) {
-        if (sqlite3_step(st) == SQLITE_ROW) {
-            n = sqlite3_column_int(st, 0);
-        }
-        sqlite3_finalize(st);
+    if (sqlite3_prepare_v2(db, sql, -1, &st, 0) != SQLITE_OK) {
+        return false;
     }
-    if (n > 0) {
+    ok = !need_row || sqlite3_step(st) == SQLITE_ROW;
+    sqlite3_finalize(st);
+    return ok;
+}
+
+static void bands_check(void) {
+    if (query_ok("SELECT id, name, start_freq, stop_freq, type FROM main.bands", true) &&
+        query_ok("SELECT bands_id, name, val FROM main.band_params", false)) {
         return;
     }
-    LV_LOG_WARN("params.db has no bands: loading the default ones");
+    LV_LOG_WARN("params.db has no usable bands: loading the default ones");
     if (sqlite3_exec(db,
             "ATTACH '" DEFAULT_DB "' AS def;"
-            "CREATE TABLE IF NOT EXISTS bands(id INTEGER PRIMARY KEY, name TEXT, start_freq INTEGER, "
-                "stop_freq INTEGER, type INTEGER);"
-            "CREATE TABLE IF NOT EXISTS band_params(bands_id INTEGER, name TEXT, val INTEGER, "
-                "UNIQUE (bands_id, name) ON CONFLICT REPLACE);"
             "BEGIN;"
-            "DELETE FROM band_params;"
-            "INSERT INTO bands SELECT * FROM def.bands;"
-            "INSERT INTO band_params SELECT * FROM def.band_params;"
+            "DROP TABLE IF EXISTS main.bands;"
+            "DROP TABLE IF EXISTS main.band_params;"
+            "CREATE TABLE main.bands(id INTEGER PRIMARY KEY, name TEXT, start_freq INTEGER, "
+                "stop_freq INTEGER, type INTEGER);"
+            "CREATE TABLE main.band_params(bands_id INTEGER, name TEXT, val INTEGER, "
+                "UNIQUE (bands_id, name) ON CONFLICT REPLACE);"
+            "INSERT INTO main.bands SELECT id, name, start_freq, stop_freq, type FROM def.bands;"
+            "INSERT INTO main.band_params SELECT bands_id, name, val FROM def.band_params;"
             "COMMIT;", NULL, NULL, NULL) != SQLITE_OK) {
         LV_LOG_ERROR("Can't load the default bands: %s", sqlite3_errmsg(db));
         sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
