@@ -901,7 +901,7 @@ static void build_act(void) {
     head_set(st.prog == 'S' ? "sota" : "pota", t);
 
     lv_obj_t *p = panel(body, 8, 6, 584, h);
-    act_band    = label(p, &sony_28, lv_color_black(), 14, 16, 0);
+    act_band    = label(p, &sony_28, lv_color_black(), 14, 8, 0);
     lv_obj_set_style_bg_color(act_band, prog_accent(), 0);
     lv_obj_set_style_bg_opa(act_band, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_hor(act_band, 10, 0);
@@ -914,34 +914,34 @@ static void build_act(void) {
     for (int i = 0; i < 13; i++) {
         act_smeter[i] = lv_obj_create(p);
         lv_obj_remove_style_all(act_smeter[i]);
-        lv_obj_set_pos(act_smeter[i], 124 + i * 28, 78);
+        lv_obj_set_pos(act_smeter[i], 124 + i * 28, 70);
         lv_obj_set_size(act_smeter[i], 24, 24);
         lv_obj_set_style_radius(act_smeter[i], 2, 0);
         lv_obj_set_style_bg_opa(act_smeter[i], LV_OPA_COVER, 0);
     }
-    lv_obj_t *s = label(p, &sony_28, TC(text_dim), 14, 75, 0);
+    lv_obj_t *s = label(p, &sony_28, TC(text_dim), 102, 67, 0);   /* right before the first segment */
     lv_label_set_text(s, "S");
-    act_sval = label(p, &sony_28, TC(text), 494, 75, 0);
+    act_sval = label(p, &sony_28, TC(text), 494, 67, 0);
 
-    lv_obj_t *box = panel(p, 12, 116, 558, h - 132);
+    lv_obj_t *box = panel(p, 12, 104, 558, h - 120);
     lv_obj_set_style_border_color(box, TC(text_dim), 0);
     act_text = label(box, &sony_28, TC(text), 14, 10, 530);
     lv_label_set_long_mode(act_text, LV_LABEL_LONG_WRAP);
-    lv_label_set_text_fmt(act_text, "CQ CQ CQ DE %s\n%s %s\n#%06x %s#", my_call(), prog_name(), st.ref.ref,
-                          theme_hex(TC_text_dim), st.ref.name);
-    lv_label_set_recolor(act_text, true);
-    act_recent = label(box, &sony_22, TC(text_dim), 14, h - 132 - 3 * 24 - 12, 530);
+    lv_label_set_text_fmt(act_text, "CQ CQ CQ DE %s\n%s %s", my_call(), prog_name(), st.ref.ref);
+    lv_obj_t *name = label(box, &sony_34, TC(text_dim), 14, 72, 530);   /* the summit or park, big */
+    lv_label_set_text(name, st.ref.name);
+    act_recent = label(box, &sony_22, TC(text_dim), 14, h - 120 - 3 * 24 - 12, 530);
 
     lv_obj_t *r = panel(body, 600, 6, W - 608, h);
     static const char *names[] = {"QSOs", "TIME", "LAST"};
     lv_obj_t         **vals[]  = {&act_qsos, &act_time, &act_last};
-    const lv_font_t   *fonts[] = {&sony_60, &sony_36, &sony_26};
-    lv_coord_t         ys[]    = {8, 120, 200};
+    const lv_font_t   *fonts[] = {&sony_60, &sony_44, &sony_32};
+    lv_coord_t         ys[]    = {8, 124, 222};
     for (int k = 0; k < 3; k++) {
-        lv_obj_t *n = label(r, &sony_18, TC(text_dim), 0, ys[k], W - 610);
+        lv_obj_t *n = label(r, &sony_22, TC(text_dim), 0, ys[k], W - 610);
         lv_label_set_text(n, names[k]);
         lv_obj_set_style_text_align(n, LV_TEXT_ALIGN_CENTER, 0);
-        *vals[k] = label(r, fonts[k], k == 0 ? prog_accent() : TC(text), 0, ys[k] + 24, W - 610);
+        *vals[k] = label(r, fonts[k], k == 0 ? prog_accent() : TC(text), 0, ys[k] + 28, W - 610);
         lv_obj_set_style_text_align(*vals[k], LV_TEXT_ALIGN_CENTER, 0);
     }
     act_update();
@@ -1064,13 +1064,13 @@ static void chip_create(knob_chip_t *c, const char *tag, lv_coord_t y) {
     lv_obj_set_style_border_width(c->box, 1, 0);
     lv_obj_set_style_radius(c->box, 6, 0);
     lv_obj_clear_flag(c->box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    c->tag = label(c->box, &sony_16, lv_color_black(), 5, 5, 0);
+    c->tag = label(c->box, &sony_20, lv_color_black(), 4, 4, 0);
     lv_label_set_text(c->tag, tag);
     lv_obj_set_style_bg_opa(c->tag, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_hor(c->tag, 5, 0);
     lv_obj_set_style_pad_ver(c->tag, 2, 0);
     lv_obj_set_style_radius(c->tag, 4, 0);
-    c->name = label(c->box, &sony_20, TC(text_dim), 54, 6, 0);
+    c->name = label(c->box, &sony_24, TC(text_dim), 64, 4, 0);
     c->bar  = lv_obj_create(c->box);
     lv_obj_remove_style_all(c->bar);
     lv_obj_set_style_bg_color(c->bar, TC(chip), 0);
@@ -1081,7 +1081,7 @@ static void chip_create(knob_chip_t *c, const char *tag, lv_coord_t y) {
     lv_obj_set_style_bg_color(c->fill, TC(btn_mark), 0);
     lv_obj_set_style_bg_opa(c->fill, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(c->fill, 3, 0);
-    c->val = label(c->box, &sony_20, TC(text), 0, 6, 90);
+    c->val = label(c->box, &sony_24, TC(text), 0, 4, 90);
     lv_obj_set_style_text_align(c->val, LV_TEXT_ALIGN_RIGHT, 0);
 }
 
@@ -1089,8 +1089,8 @@ static void chip_place(knob_chip_t *c, lv_coord_t x, lv_coord_t w) {
     c->w = w;
     lv_obj_set_x(c->box, x);
     lv_obj_set_width(c->box, w);
-    lv_obj_set_pos(c->bar, w > 340 ? 160 : 150, 12);
-    lv_obj_set_size(c->bar, w - (w > 340 ? 160 : 150) - 64, 6);
+    lv_obj_set_pos(c->bar, 190, 12);
+    lv_obj_set_size(c->bar, w - 190 - 70, 6);
     lv_obj_set_x(c->val, w - 100);
     lv_obj_clear_flag(c->box, LV_OBJ_FLAG_HIDDEN);
 }
@@ -1583,7 +1583,17 @@ static void press(void) {
 }
 
 static void click_cb(lv_event_t *e) {
-    press();
+    lv_indev_t *indev = lv_indev_get_act();
+    bool        mfk   = indev && lv_indev_get_type(indev) == LV_INDEV_TYPE_ENCODER;   /* the MFK press, not a tap */
+
+    if (mfk && cq_level_adj) {
+        cq_level_cb(NULL);
+    } else if (mfk && act_freq) {
+        main_screen_mfk(0);
+        chips_update();
+    } else {
+        press();
+    }
 }
 
 static void row_click_cb(lv_event_t *e) {
