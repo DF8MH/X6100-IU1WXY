@@ -72,6 +72,7 @@ static void show_sel(void) {
         lv_obj_set_style_bg_opa(rows[i], on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(rows[i], on ? 2 : 0, 0);
         lv_obj_set_style_text_color(lv_obj_get_child(rows[i], 0), on ? TC(sel_text) : TC(text), 0);
+        lv_obj_set_style_text_color(lv_obj_get_child(rows[i], 1), on ? TC(sel_text) : TC(text_dim), 0);
     }
 }
 

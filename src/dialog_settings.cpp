@@ -3329,7 +3329,7 @@ static void smeter_warn_close(lv_timer_t *t) {
     smeter_warn_timer = NULL;
 }
 
-static void smeter_warn_show(void) {
+extern "C" void smeter_warn_show(void) {   /* not static: the UI harness shows it in every theme */
     lv_obj_t *l;
 
     if (smeter_warn) {
@@ -3359,8 +3359,8 @@ static void smeter_warn_show(void) {
     lv_obj_set_style_text_font(l, &sony_24, 0);
     lv_obj_set_style_text_color(l, TC(text), 0);
     lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(l, "Change it only reading the same signal on a calibrated reference "
-                         "(radio or generator). -22 dB matches an IC-7300.");
+    lv_label_set_text(l, "-22 dB matches an IC-7300. Change it only reading the same signal "
+                         "on a calibrated reference (radio or generator).");
 
     smeter_warn_timer = lv_timer_create(smeter_warn_close, 5000, NULL);
     lv_timer_set_repeat_count(smeter_warn_timer, 1);

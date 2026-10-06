@@ -105,6 +105,9 @@ static void use_builtin(int b) {
     theme_shape = builtin_shapes[src];
     if (b == B_OUTDOOR_NEG) {
         for (int i = 0; i < TC_COUNT; i++) colors[i] = negative(colors[i]);
+        /* the yellow of the selection stays yellow: its text stays black */
+        colors[TC_sel_text]        = builtin_colors[B_OUTDOOR][TC_sel_text];
+        colors[TC_btn_active_text] = builtin_colors[B_OUTDOOR][TC_btn_active_text];
         for (int i = 0; i < theme_shape.waterfall_n; i++) theme_shape.waterfall[i] = negative(theme_shape.waterfall[i]);
     }
     snprintf(theme_shape.name, sizeof(theme_shape.name), "%s", builtin_names[b]);

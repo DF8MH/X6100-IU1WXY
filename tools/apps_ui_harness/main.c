@@ -38,6 +38,7 @@
 #include "meter.h"
 #include "clock.h"
 #include "tx_info.h"
+#include "msg.h"
 #include "pubsub_ids.h"
 #include "fonts/font_select.h"
 #include <stdio.h>
@@ -1254,6 +1255,30 @@ int main(int argc, char **argv) {
         styles_apply();
         lv_obj_report_style_change(NULL);
         settings_demo();
+        return 0;
+    }
+    if (only && !strcmp(only, "popups")) {  /* the popups side by side, in every theme */
+        static const char *const th[] = {"IU1WXY", "Outdoor", "Classic", "Outdoor-Negative", "Holo", "Material 3", "RS"};
+        extern void smeter_warn_show(void);
+        for (unsigned i = 0; i < sizeof th / sizeof th[0]; i++) {
+            char n[64];
+            theme_init(th[i]);
+            if (theme_shape.font >= 0) fonts_apply(theme_shape.font);
+            styles_apply();
+            lv_obj_report_style_change(NULL);
+            smeter_warn_show();
+            msg_update_text_fmt("Message box");
+            pump(300);
+            snprintf(n, sizeof n, "popups_%d_warn.ppm", i);
+            shot(n);
+            pump(5200);   /* the warning closes itself */
+            dialog_construct(dialog_modes, scr);
+            pump(200);
+            snprintf(n, sizeof n, "popups_%d_modes.ppm", i);
+            shot(n);
+            dialog_destruct();
+            pump(200);
+        }
         return 0;
     }
     if (only && !strcmp(only, "topbar")) {
