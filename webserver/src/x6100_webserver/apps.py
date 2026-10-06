@@ -481,6 +481,71 @@ def field_active_log():
     return os.path.basename(kv.get("log", "")) if kv.get("active") == "1" else ""
 
 
+def adif_split(text):
+    """Header (up to <eoh>) and the parts between <eor>s; the last part is what follows the last record."""
+    m = re.search(r'<eoh>', text, re.I)
+    head, body = (text[:m.end()], text[m.end():]) if m else ("", text)
+    return head, re.split(r'(?i)<eor>', body)
+
+
+def adif_set(rec, name, value):
+    """rec with the field `name` set to value (added before the end when missing)."""
+    m = re.search(r'<%s:(\d+)(?::\w)?>' % name, rec, re.I)
+    new = "<%s:%d>%s" % (name, len(value), value)
+    if not m:
+        return rec.rstrip() + " " + new + " "
+    return rec[:m.start()] + new + rec[m.end() + int(m.group(1)):]
+
+
+def edit_qso(name, n, fn):
+    """Applies fn to record n (0 = the first QSO of the file; records without CALL do not count):
+    fn returns the new record, or None to delete it. Returns an error response or None."""
+    if not name.endswith(".adi") or os.path.basename(name) != name:
+        return api_error(400, "Not a log")
+    path = field_path("logs", name)
+    try:
+        with open(path, errors="replace") as f:
+            text = f.read()
+    except FileNotFoundError:
+        return api_error(404, "Not found")
+    head, parts = adif_split(text)
+    recs = [i for i, p in enumerate(parts[:-1]) if re.search(r'<call:\d+', p, re.I)]
+    if not 0 <= n < len(recs):
+        return api_error(404, "No such QSO")
+    new = fn(parts[recs[n]])
+    if new is None:
+        del parts[recs[n]]
+    else:
+        parts[recs[n]] = new
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(head + "<eor>".join(parts))
+    os.replace(tmp, path)
+    return None
+
+
+@app.delete('/api/field/logs/<name>/<n:int>')
+def delete_qso(name, n):
+    return edit_qso(name, n, lambda rec: None) or {"status": "OK"}
+
+
+@app.put('/api/field/logs/<name>/<n:int>')
+def put_qso(name, n):
+    """JSON {"call", "rst_sent", "rst_rcvd"}: the QSO's call and reports."""
+    try:
+        data = bottle.request.json
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        return api_error(400, "Invalid QSO")
+    call = str(data.get("call", "")).strip().upper()
+    rs, rr = str(data.get("rst_sent", "")).strip(), str(data.get("rst_rcvd", "")).strip()
+    if not re.fullmatch(r'[A-Z0-9/]{3,15}', call) or not re.fullmatch(r'\d{1,3}', rs) or not re.fullmatch(r'\d{1,3}', rr):
+        return api_error(400, "Invalid QSO")
+    return edit_qso(name, n, lambda rec: adif_set(adif_set(adif_set(rec, "CALL", call), "RST_SENT", rs), "RST_RCVD", rr)) \
+        or {"status": "OK"}
+
+
 @app.delete('/api/field/logs/<name>')
 def delete_field_log(name):
     if not name.endswith(".adi") or os.path.basename(name) != name:
