@@ -1796,7 +1796,6 @@ lv_obj_t * main_screen() {
     subject_subscribe_delayed_and_notify((Subject*)cfg_cluster_spots_wf, on_cluster_spots_wf_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_band_plan, on_band_plan_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_cluster_column, on_cluster_column_change, NULL);
-    subject_subscribe_delayed((Subject*)cfg_fg_freq, on_cluster_column_change, NULL);
 
     knobs_init(obj);
 

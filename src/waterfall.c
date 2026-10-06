@@ -362,10 +362,12 @@ void waterfall_refresh_period_set(uint8_t k) {
 
 #define LERP_INTERP_M 3
 #define LERP_INTERP_FRAC (1 << LERP_INTERP_M)
-static inline void lerp_row(wf_data_row_t *row_data, uint32_t dst_center_freq, uint32_t dst_width_hz, uint8_t *dst) {
+/* Pixels i0..i1-1 of a row (dst is indexed by pixel) */
+static inline void lerp_range(wf_data_row_t *row_data, uint32_t dst_center_freq, uint32_t dst_width_hz,
+                              size_t i0, size_t i1, uint8_t *dst) {
     // Skip empty rows at start
     if (!row_data->width) {
-        memset(dst, 0, WIDTH);
+        memset(dst + i0, 0, i1 - i0);
         return;
     }
     uint32_t src_start = row_data->center_freq - row_data->width / 2;
@@ -376,12 +378,12 @@ static inline void lerp_row(wf_data_row_t *row_data, uint32_t dst_center_freq, u
 
     if ((src_start > dst_end) || (src_end < dst_start)) {
         // No overlap
-        memset(dst, 0, WIDTH);
+        memset(dst + i0, 0, i1 - i0);
         return;
     }
 
     uint32_t dst_half_width_hz = dst_width_hz / 2;
-    for (size_t i = 0; i < WIDTH; i++) {
+    for (size_t i = i0; i < i1; i++) {
         int32_t freq = dst_center_freq + (dst_width_hz * i + dst_half_width_hz) / WIDTH - dst_half_width_hz;
         // src pos is multiplied by 8
         int32_t src_pos = (freq - src_start) * (WATERFALL_NFFT << LERP_INTERP_M) / row_data->width;
@@ -401,12 +403,17 @@ static inline void lerp_row(wf_data_row_t *row_data, uint32_t dst_center_freq, u
     }
 }
 
-/* A landscape row (newest first) into portrait column col of wfp */
-static void direct_column(const wf_data_row_t *row, uint32_t bandwidth, int32_t col) {
+static inline void lerp_row(wf_data_row_t *row_data, uint32_t dst_center_freq, uint32_t dst_width_hz, uint8_t *dst) {
+    lerp_range(row_data, dst_center_freq, dst_width_hz, 0, WIDTH, dst);
+}
+
+/* Pixels i0..i1-1 of a landscape row (newest first) into portrait column col of
+ * wfp, at the image's centre */
+static void direct_column(const wf_data_row_t *row, uint32_t bandwidth, int32_t col, size_t i0, size_t i1) {
     uint8_t dst[WIDTH];
 
-    lerp_row((wf_data_row_t *) row, wf_center_freq, bandwidth, dst);
-    for (size_t i = 0; i < WIDTH; i++) {
+    lerp_range((wf_data_row_t *) row, wfp_center, bandwidth, i0, i1, dst);
+    for (size_t i = i0; i < i1; i++) {
         wfp[(WIDTH - 1 - i) * height + col] = wf_palette[dst[i]] | 0xff000000;
     }
 }
@@ -446,20 +453,55 @@ static void direct_redraw(int new_row) {
         wfp_full = true;            /* not up to date when shown again */
         return;
     }
-    if (wfp_full || new_row > 1 || wfp_center != wf_center_freq || wfp_bw != bandwidth) {
-        for (int32_t col = 0; col < height; col++) {
-            direct_column(&wf_rows[(last_row_id - col + height) % height], bandwidth, col);
-        }
-        wfp_full = false;
+    /* Tuning moves the centre: the image slides by whole pixels and only the
+     * columns coming in are computed (it was all of it at each VFO step, which
+     * kept the GUI thread busy while tuning). Moves under a pixel wait. Rows
+     * that piled up while the thread was busy scroll in the same way: a full
+     * redraw for them made it slower still, and more rows piled up. */
+    bool    full = wfp_full || new_row >= height || wfp_bw != bandwidth;
+    int32_t px   = 0;
+
+    if (!full && wfp_center != wf_center_freq) {
+        px   = ((int64_t) wf_center_freq - wfp_center) * WIDTH / (int64_t) bandwidth;
+        full = LV_ABS(px) >= WIDTH / 2;
+    }
+    if (full) {
         wfp_center = wf_center_freq;
         wfp_bw = bandwidth;
-    } else if (new_row) {
-        for (size_t y = 0; y < WIDTH; y++) {
-            uint32_t *r = wfp + y * height;
-
-            memmove(r + 1, r, (height - 1) * sizeof(uint32_t));
+        for (int32_t col = 0; col < height; col++) {
+            direct_column(&wf_rows[(last_row_id - col + height) % height], bandwidth, col, 0, WIDTH);
         }
-        direct_column(&wf_rows[last_row_id], bandwidth, 0);
+        wfp_full = false;
+    } else if (px || new_row) {
+        /* The new rows first, at the old centre; then the slide moves them with the rest */
+        if (new_row) {
+            for (size_t y = 0; y < WIDTH; y++) {
+                uint32_t *r = wfp + y * height;
+
+                memmove(r + new_row, r, (height - new_row) * sizeof(uint32_t));
+            }
+            for (int32_t col = 0; col < new_row; col++) {
+                direct_column(&wf_rows[(last_row_id - col + height) % height], bandwidth, col, 0, WIDTH);
+            }
+        }
+        if (px) {
+            size_t i0, i1;
+
+            /* Landscape pixel i now shows the old i + px: portrait row R the old R - px */
+            wfp_center += (int64_t) px * bandwidth / WIDTH;
+            if (px > 0) {
+                memmove(wfp + px * height, wfp, (WIDTH - px) * height * sizeof(uint32_t));
+                i0 = WIDTH - px;
+                i1 = WIDTH;
+            } else {
+                memmove(wfp, wfp - px * height, (WIDTH + px) * height * sizeof(uint32_t));
+                i0 = 0;
+                i1 = -px;
+            }
+            for (int32_t col = 0; col < height; col++) {
+                direct_column(&wf_rows[(last_row_id - col + height) % height], bandwidth, col, i0, i1);
+            }
+        }
     } else {
         return;
     }

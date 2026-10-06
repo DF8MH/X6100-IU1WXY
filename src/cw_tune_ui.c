@@ -145,8 +145,16 @@ static void update_cb(lv_event_t * e) {
     lv_area_t coords, offset;
 
     lv_obj_get_coords(obj, &offset);
+    /* See-through themes (the box at 50%): the blocks at half too, as when the whole object was at 50% */
+    bool     half = lv_obj_get_style_bg_opa(obj, 0) != LV_OPA_COVER;
+    lv_opa_t base = rect_dsc.bg_opa;
+
     rect_active_dsc.bg_color = lv_color_mix(active_color, rect_dsc.bg_color, fade_mix);
     rect_active_dsc.bg_opa = rect_dsc.bg_opa + fade_mix * (LV_OPA_70 - rect_dsc.bg_opa) / 255;
+    if (half) {
+        rect_dsc.bg_opa        /= 2;
+        rect_active_dsc.bg_opa /= 2;
+    }
 
     for (int16_t i = 0; i < N_BLOCKS; i++) {
         x = SPACING + i * (BLOCK_W + SPACING);
@@ -163,6 +171,7 @@ static void update_cb(lv_event_t * e) {
         lv_area_move(&coords, offset.x1, offset.y1);
         lv_draw_rect(ctx, dsc, &coords);
     }
+    rect_dsc.bg_opa = base;
 }
 
 static void update_visibility(Subject *subj, void *user_data) {

@@ -239,7 +239,8 @@ static void redraw(void) {
     }
 }
 
-/* 1 Hz, redraws only when the spots, the minute, the VFO or the view changed */
+/* 4 Hz, redraws only when the spots, the minute, the VFO or the view changed. Not at each
+ * VFO step: its 64 labels laid out again at every step slowed tuning down */
 static void timer_cb(lv_timer_t *t) {
     int      n   = cluster_client_snapshot(spots, CLUSTER_MAX_SPOTS, &spots_gen);
     uint16_t min = (time(NULL) / 60) % 1440;
@@ -248,7 +249,10 @@ static void timer_cb(lv_timer_t *t) {
     if (n >= 0) {
         spots_n = n;
     }
-    if (n >= 0 || min != last_min || vfo != last_vfo || cluster_filter()->gen != last_fgen ||
+    /* Newest first: the VFO only matters when it changes band */
+    bool moved = vfo != last_vfo && (!param_i_get(cfg_cluster_order) || cluster_band_of(vfo) != cluster_band_of(last_vfo));
+
+    if (n >= 0 || min != last_min || moved || cluster_filter()->gen != last_fgen ||
         param_i_get(cfg_cluster_order) != last_order || param_i_get(cfg_cluster_all_bands) != last_all) {
         last_min = min;
         last_vfo = vfo;
@@ -363,6 +367,6 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
         rows[i].mode = cell(box, 173, 32, ry + 3, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), &sony_18);
         rows[i].age  = cell(box, 207, 32, ry + 3, LV_TEXT_ALIGN_RIGHT, theme_hex(TC_text), &sony_18);
     }
-    lv_timer_create(timer_cb, 1000, NULL);
+    lv_timer_create(timer_cb, 250, NULL);
     timer_cb(NULL);
 }

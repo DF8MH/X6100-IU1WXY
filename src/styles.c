@@ -462,7 +462,9 @@ void styles_apply(void) {
     lv_style_set_border_width(&knobs_style, strong ? 2 : 0);
     lv_style_set_border_color(&knobs_style, TC(panel_border));
     lv_style_set_bg_color(&cw_tune_style, TC(panel));
-    lv_style_set_opa(&cw_tune_style, strong ? LV_OPA_COVER : LV_OPA_50);
+    /* bg_opa, not opa: an object opa makes LVGL draw it in a layer at each frame of its fade
+     * (cw_tune_ui.c halves its blocks to match) */
+    lv_style_set_bg_opa(&cw_tune_style, strong ? LV_OPA_COVER : LV_OPA_50);
     lv_style_set_border_width(&cw_tune_style, strong ? 2 : 0);
     lv_style_set_border_color(&cw_tune_style, TC(panel_border));
 

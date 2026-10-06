@@ -15,6 +15,7 @@
 extern "C" {
     #include "rtty.h"
     #include "styles.h"
+    #include "theme.h"
     #include "scheduler.h"
     #include "radio.h"
     #include "params/params.h"
@@ -186,8 +187,18 @@ static void update_visibility_cb(Subject *subj, void *user_data) {
     panel_update_visibility(clear);
 }
 
+/* The parts' opacities, not the object's: an object opa below COVER makes LVGL
+ * draw the whole box in a layer and blend it, every frame of this fade, which
+ * runs at each VFO step (tuning stuttered in CW with the decoder on) */
 static void set_opa(void * panel_obj, int32_t opa) {
-    lv_obj_set_style_opa((lv_obj_t *)panel_obj, opa, 0);
+    lv_obj_t *o = (lv_obj_t *)panel_obj;
+
+    lv_obj_set_style_text_opa(o, opa, 0);
+    lv_obj_set_style_bg_img_opa(o, opa, 0);
+    lv_obj_set_style_border_opa(o, opa, 0);
+    if (!theme_shape.images) {
+        lv_obj_set_style_bg_opa(o, opa, 0);   /* a drawn box; with images there is no bg colour */
+    }
 }
 
 static void revert_opa(struct _lv_anim_t * acct) {
@@ -203,7 +214,7 @@ static void on_freq_change(Subject *subj, void *user_data) {
     }
     lv_anim_del(obj, set_opa);
 
-    lv_opa_t cur_opa = lv_obj_get_style_opa(obj, 0);
+    lv_opa_t cur_opa = lv_obj_get_style_text_opa(obj, 0);
     lv_anim_set_ready_cb(&dim_anim, revert_opa);
     lv_anim_set_values(&dim_anim, cur_opa, LV_OPA_40);
     lv_anim_set_delay(&dim_anim, 0);

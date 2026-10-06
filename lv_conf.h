@@ -300,6 +300,11 @@
 /*1: Draw random colored rectangles over the redrawn areas*/
 #define LV_USE_REFR_DEBUG 0
 
+/*Areas to redraw kept per frame (LVGL: 32). Past it the whole screen is redrawn: each VFO step moves
+ *the VFO line, the filter band, the grid and band plan marks and the scale labels, old and new place
+ *each, and went over 32, so tuning redrew all 800x480 at every step*/
+#define LV_INV_BUF_SIZE 128
+
 /*Change the built in (v)snprintf functions*/
 #define LV_SPRINTF_CUSTOM 0
 #if LV_SPRINTF_CUSTOM
