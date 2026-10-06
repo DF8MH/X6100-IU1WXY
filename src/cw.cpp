@@ -139,11 +139,15 @@ static void on_keyed(bool on) {
     keyed = on;
 }
 
-/* Every 8 ms: follow the tone while keyed (median of 3, then smoothed). The
- * tone the detector is locked on: the FFT peak of a frame jumps to any other
- * station or noise peak in the passband. */
+/* Every 8 ms: follow the tone while keyed and locked (median of 3, then
+ * smoothed). The tone the detector is locked on: the FFT peak of a frame jumps
+ * to any other station or noise peak in the passband; and only a tone held
+ * coherently: noise that keys the detector (the Es of an empty band) does not
+ * light the indicator. */
 static void on_frame() {
-    if (keyed) {
+    bool tuned = keyed && receiver->is_locked();
+
+    if (tuned) {
         float freq = receiver->get_lock_freq();
         if ((freq >= filter_low) && (freq <= filter_high)) {
             freq_hist[freq_hist_w] = freq;
@@ -163,7 +167,7 @@ static void on_frame() {
 
     if (++frame_counter >= TUNE_UPDATE_FRAMES) {
         frame_counter = 0;
-        if (keyed) {
+        if (tuned) {
             cw_tune_set_freq(key_tone - tone_freq);
         }
     }

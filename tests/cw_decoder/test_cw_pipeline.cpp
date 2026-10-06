@@ -109,14 +109,17 @@ TEST_CASE("cw pipeline: tuning indicator follows the decoded station") {
         a[i] += i < b.size() ? b[i] : 0.0f;
 
     bool               keyed = false;
-    int                n = 0, lock_ok = 0, peak_ok = 0;
+    int                n = 0, shown = 0, lock_ok = 0, peak_ok = 0;
     cw::CwReceiver    *rxp = nullptr;
     cw::CwReceiver     rx{[](const char *) {}, [&keyed](bool on) { keyed = on; }, [&]() {
                           if (!keyed)
                               return;
                           n++;
-                          lock_ok += std::fabs(rxp->get_lock_freq() - 700.0f) <= 15.0f;
                           peak_ok += std::fabs(rxp->get_tone_freq() - 700.0f) <= 15.0f;
+                          if (rxp->is_locked()) {   // what src/cw.cpp shows
+                              shown++;
+                              lock_ok += std::fabs(rxp->get_lock_freq() - 700.0f) <= 15.0f;
+                          }
                       }};
     rxp = &rx;
     cw::AudioResampler rs{RATE};
@@ -124,9 +127,37 @@ TEST_CASE("cw pipeline: tuning indicator follows the decoded station") {
     for (size_t i = 0; i < a.size(); i += 256)
         rs.process(std::min<size_t>(256, a.size() - i), a.data() + i, rx);
 
-    INFO("keyed frames " << n << ", locked within 15 Hz " << lock_ok << ", FFT peak within 15 Hz " << peak_ok);
+    INFO("keyed frames " << n << ", shown " << shown << ", within 15 Hz " << lock_ok << ", FFT peak within 15 Hz " << peak_ok);
     REQUIRE(n > 500);
-    CHECK(lock_ok >= 0.95 * n);
+    CHECK(shown >= 0.8 * n);
+    CHECK(lock_ok >= 0.98 * shown);
+}
+
+// Noise only (an empty band), 60 s: the detector may key now and then, the
+// tuning indicator must stay dark.
+TEST_CASE("cw pipeline: tuning indicator stays dark on noise") {
+    const size_t                    len = static_cast<size_t>(RATE) * 60;
+    std::mt19937                    rng(11);
+    std::normal_distribution<float> n01(0.0f, 0.05f);
+    std::vector<float>              a(len);
+    for (float &v : a)
+        v = n01(rng);
+
+    bool               keyed = false;
+    int                n = 0, shown = 0;
+    cw::CwReceiver    *rxp = nullptr;
+    cw::CwReceiver     rx{[](const char *) {}, [&keyed](bool on) { keyed = on; }, [&]() {
+                          n++;
+                          shown += keyed && rxp->is_locked();
+                      }};
+    rxp = &rx;
+    cw::AudioResampler rs{RATE};
+    rx.change_threshold(8.0f);
+    for (size_t i = 0; i < a.size(); i += 256)
+        rs.process(std::min<size_t>(256, a.size() - i), a.data() + i, rx);
+
+    INFO("frames " << n << ", indicator lit " << shown);
+    CHECK(shown <= n / 1000);
 }
 
 // No signal, 60 s each: nothing may be decoded. The radio with no antenna

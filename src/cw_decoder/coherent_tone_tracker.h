@@ -152,6 +152,12 @@ class CoherentToneTracker {
         }
     }
 
+    // A tone is held at the NCO: alive now and for at least VETO_MIN_AGE
+    // windows (256 ms). Noise that keys the detector seldom stays coherent.
+    bool is_locked() const {
+        return was_alive_ && alive_age_ >= VETO_MIN_AGE;
+    }
+
     // Current NCO frequency in Hz (positive); 0 if the NCO is not allocated.
     float get_freq_hz() const {
         if (!nco)

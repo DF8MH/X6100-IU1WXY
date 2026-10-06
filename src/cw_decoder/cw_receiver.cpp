@@ -250,4 +250,8 @@ float CwReceiver::get_lock_freq() const {
     return tone_tracker_.get_freq_hz();
 }
 
+bool CwReceiver::is_locked() const {
+    return tone_tracker_.is_locked();
+}
+
 } // namespace cw

@@ -54,6 +54,8 @@ class CwReceiver {
     // The tone the detector is locked on (the PLL-tracked NCO): steady on the
     // station being decoded, unlike the FFT peak of the last frame
     float get_lock_freq() const;
+    // A coherent tone is held there (see CoherentToneTracker::is_locked)
+    bool  is_locked() const;
     void  change_threshold(float db_val);
     void  change_hpf_hz(float hz);
     void  change_lpf_hz(float hz);
