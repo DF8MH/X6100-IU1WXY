@@ -302,6 +302,9 @@ static void open_app(int32_t app) {
     if (actions[app] == ACTION_APP_FT8)
         cfg_sm.p_ft8_protocol.set(app == 2 ? FTX_PROTOCOL_FT4 : FTX_PROTOCOL_FT8);
     main_screen_start_app(actions[app]);
+    /* CW: frequency and mode back at the close, as the radio's own apps (restore_radio) */
+    if (actions[app] == ACTION_APP_CW_KBD)
+        dialog_restore_radio_on_close();
 
     /* After the start: the app before may have locked the mode. In CW the DSP feeds the CW decoder,
      * not the picture and NavTex decoders. */

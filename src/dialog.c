@@ -23,9 +23,18 @@ static dialog_t     *current_dialog = NULL;
 static int32_t      restore_mode = -1;     /* the mode before an app changed it, back at its close */
 static int32_t      forced_mode;
 
+static bool         restore_mem;            /* dialog_restore_radio_on_close() */
+
 void dialog_restore_mode_on_close(int32_t mode, int32_t forced) {
     restore_mode = mode;
     forced_mode  = forced;
+}
+
+void dialog_restore_radio_on_close(void) {
+    if (current_dialog && current_dialog->run && !current_dialog->restore_radio) {
+        mem_save(MEM_BACKUP_ID);
+        restore_mem = true;
+    }
 }
 
 void dialog_construct(dialog_t *dialog, lv_obj_t *parent) {
@@ -63,8 +72,11 @@ void dialog_destruct() {
         if (current_dialog->obj) {
             lv_obj_del(current_dialog->obj);
         }
-        if (current_dialog->restore_radio) {
+        if (current_dialog->restore_radio || restore_mem) {
             mem_load(MEM_BACKUP_ID);
+            if (restore_mem)
+                restore_mode = -1;  /* the mode is back already */
+            restore_mem = false;
         }
         buttons_unload_page();
         if (current_dialog->prev_page) {

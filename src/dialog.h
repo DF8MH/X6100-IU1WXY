@@ -43,6 +43,8 @@ void dialog_destruct();
 
 /* The open app changed the mode from mode to forced: back to mode when it closes */
 void dialog_restore_mode_on_close(int32_t mode, int32_t forced);
+/* The app just opened (one without restore_radio) gives back frequency and mode when it closes */
+void dialog_restore_radio_on_close(void);
 
 void dialog_send(lv_event_code_t event_code, void *param);
 bool dialog_is_run();
