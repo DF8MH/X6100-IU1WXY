@@ -125,6 +125,7 @@ static int         qsos_n;
 static atomic_bool busy;            /* an x6100-field job runs */
 static bool        updating;        /* the reference list downloads */
 static bool        end_armed;
+static bool        spotted;      /* this activation is on pota.app: End posts a QRT spot */
 static time_t      end_armed_at;
 
 /* The remote state, written on the LVGL thread, read by the remote server */
@@ -1024,6 +1025,8 @@ static void refresh(void) {
 
 /* Actions (also from the companion app) */
 
+static void spot_done(const char *line);
+
 static bool activation_start(void) {
     char      name[40], *p;
     struct tm tm;
@@ -1040,6 +1043,7 @@ static bool activation_start(void) {
     }
     st.active = true;
     st.start  = time(NULL);
+    spotted   = false;
     gmtime_r(&st.start, &tm);
     snprintf(name, sizeof(name), "%s", st.ref.ref);
     for (p = name; *p; p++)
@@ -1065,6 +1069,11 @@ static void activation_end(void) {
     st.active = false;
     state_save();
     msg_update_text_fmt("Activation complete: %s, %d QSO%s, %d min", st.ref.ref, qsos_n, qsos_n == 1 ? "" : "s", s / 60);
+    /* ponytail: spotted is not saved, a restart mid-activation sends no QRT */
+    if (spotted && st.ref.type != 'S' &&
+        job_start(spot_done, HELPER " pota-spot --call %s --freq-khz %.1f --ref %s --mode %s --comments QRT", my_call(),
+                  cparam_i_get(cfg_fg_freq) / 1000.0, st.ref.ref, adif_mode()))
+        spotted = false;
     if (dialog.run)
         show(SCR_PROG);
 }
@@ -1085,6 +1094,8 @@ static void activate_cb(button_data_t *b) {
 }
 
 static void spot_done(const char *line) {
+    if (st.active && !strcmp(line, "ok"))
+        spotted = true;
     msg_update_text_fmt("POTA spot: %s", line);
 }
 

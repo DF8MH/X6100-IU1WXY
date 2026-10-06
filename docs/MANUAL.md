@@ -338,7 +338,7 @@ start and the last call.
   (WiFi needed). SOTAwatch spots are not available yet (they need an API client
   approved by SOTA): post an alert on SOTAwatch and call CQ in CW, RBNHole spots
   you from the Reverse Beacon Network.
-- **End** (page 2), pressed twice, ends the activation.
+- **End** (page 2), pressed twice, ends the activation. In POTA, if the activation was spotted from the radio, End also posts a **QRT** spot on pota.app (WiFi needed).
 
 **Companion app**: while the radio is in Field Ops the phone shows its SOTA/POTA
 page by itself: the reference, the nearby ones to choose, Start and End, and the
