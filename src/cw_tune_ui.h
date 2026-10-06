@@ -15,3 +15,7 @@ void cw_tune_init(lv_obj_t * parent);
 // bool cw_tune_toggle(int16_t diff);
 
 void cw_tune_set_freq(float hz);
+
+/* Any thread: the last offset (Hz, key tone minus the received tone) when it came in the
+ * last second, for the remote clients */
+bool cw_tune_recent(int *hz);

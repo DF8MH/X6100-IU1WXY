@@ -20,6 +20,9 @@ extern "C" {
 
 void remote_server_init();
 
+/* A web client or X6100 Link follows the state (any thread) */
+bool remote_subscribed();
+
 /* An event ({"t":...}) for the subscribed web clients. Any thread; takes o and frees it. */
 void remote_event(cJSON *o);
 

@@ -16,6 +16,7 @@
 #include "scheduler.h"
 
 #include <math.h>
+#include <time.h>
 
 #define BLOCK_W 5
 #define SPACING 4
@@ -39,6 +40,15 @@ static volatile uint8_t fade_mix = 0;
 static lv_obj_t     *obj;
 
 static volatile int8_t cur_freq=-100;
+static volatile int    last_hz;
+static volatile int64_t last_ms = -10000;
+
+static int64_t mono_ms(void) {
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
 
 static void update_cb(lv_event_t * e);
 static void update_visibility(Subject *subj, void *user_data);
@@ -102,8 +112,15 @@ void cw_tune_set_freq(float hz) {
         active_color = color_bad;
     }
     cur_freq = new_id;
+    last_hz  = lroundf(hz);
+    last_ms  = mono_ms();
     fade_mix = 255;
     scheduler_put_noargs(fade_restart);
+}
+
+bool cw_tune_recent(int *hz) {
+    *hz = last_hz;
+    return mono_ms() - last_ms < 1000;
 }
 
 /* LVGL thread: shown for a second, then faded out in half a second */

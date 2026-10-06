@@ -27,6 +27,7 @@ extern "C" {
     #include "lvgl/lvgl.h"
     #include "cw_decoder.h"
     #include "cw_tune_ui.h"
+    #include "remote_server.h"
 }
 
 /* Frames (8 ms) between updates of the tune indicator */
@@ -112,7 +113,8 @@ void cw_put_audio_samples(unsigned int n, float *samples) {
     if (!ready) {
         return;
     }
-    if ((!cw_decoder) && (!cw_tune) && (!trainer)) {
+    /* X6100 Link shows the tuning indicator on its own */
+    if ((!cw_decoder) && (!cw_tune) && (!trainer) && !remote_subscribed()) {
         return;
     }
     apply_rx_params();
