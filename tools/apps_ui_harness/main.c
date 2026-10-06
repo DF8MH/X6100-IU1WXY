@@ -1257,6 +1257,21 @@ int main(int argc, char **argv) {
         settings_demo();
         return 0;
     }
+    if (only && !strcmp(only, "js8saved")) {  /* JS8 Query > Saved messages >, then holding one to edit it */
+        dialog_construct(dialog_js8, scr);
+        pump(400);
+        buttons_page_t *pg = buttons_get_cur_page();
+        pg->items[3]->press(pg->items[3]);     /* Query > (no station: Saved messages > first) */
+        pump(200);
+        shot("js8_query.ppm");
+        lv_event_send(lv_group_get_focused(keyboard_group), LV_EVENT_CLICKED, NULL);
+        pump(200);
+        shot("js8_saved.ppm");
+        lv_event_send(lv_group_get_focused(keyboard_group), LV_EVENT_LONG_PRESSED, NULL);
+        pump(200);
+        shot("js8_saved_edit.ppm");
+        return 0;
+    }
     if (only && !strcmp(only, "popups")) {  /* the popups side by side, in every theme */
         static const char *const th[] = {"IU1WXY", "Outdoor", "Classic", "Outdoor-Negative", "Holo", "Material 3", "RS"};
         extern void smeter_warn_show(void);

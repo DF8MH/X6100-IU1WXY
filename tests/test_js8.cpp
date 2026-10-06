@@ -12,6 +12,7 @@
 #include "receiver.hpp"
 #include "js8_ops.h"
 #include "qsolog.hpp"
+#include "macros.hpp"
 #include "inbox.hpp"
 #include "alerts.hpp"
 #include "speeds.hpp"
@@ -2697,4 +2698,59 @@ TEST_CASE("our frames are desktop JS8Call's, bit for bit", "[js8][desktop]") {
             got += (got.empty() ? "" : " ") + frame + " " + std::to_string(bits);
         CHECK(got == c.frames);
     }
+}
+
+// From randal007 x6100-js8 beta 4.5
+TEST_CASE("macros: desktop JS8Call's, filled in as desktop does", "[js8][macros]") {
+    MacroInput in;
+    in.my_call   = "VE7NHW";
+    in.my_grid   = "cn89kg";
+    in.my_info   = "X6100 5W <MYGRID4>";
+    in.my_status = "IDLE <MYIDLE> VERSION <MYVERSION>"; // desktop's default STATUS
+    in.version   = "X6100 JS8 beta 5";
+    in.idle_ms   = 5 * 60000 + 59000;
+    auto v       = macro_values(in);
+    CHECK(replace_macros("<MYCALL> <MYGRID4> <MYGRID12>", v, false) == "VE7NHW CN89 CN89KG");
+    CHECK(replace_macros("RIG <MYINFO>", v, false) == "RIG X6100 5W CN89");
+    CHECK(replace_macros("<MYSTATUS>", v, false) == "IDLE 5M VERSION X6100 JS8 BETA 5");
+    CHECK(replace_macros("<MYCQ> / <MYHB> / <MYREPLY>", v, false) == "CQ CQ CQ CN89 / HB CN89 / HW CPY?");
+    // Nothing selected: <CALL> and <SNR> stay as typed, or go (prune).
+    CHECK(replace_macros("<CALL> UR <SNR> TNX", v, false) == "<CALL> UR <SNR> TNX");
+    CHECK(replace_macros("<CALL> UR <SNR> TNX", v, true) == " UR  TNX");
+    CHECK(replace_macros("<FOO> <> A<B", v, true) == " <> A<B"); // desktop's regex: <, one or more not >, >
+    CHECK(macros_need_station("<CALL> TNX"));
+    CHECK(macros_need_station("UR <SNR>"));
+    CHECK(macros_need_station("DT <TDELTA>"));
+    CHECK_FALSE(macros_need_station("TNX 73 GL <MYCALL>"));
+
+    in.call      = "w1abc";
+    in.snr       = -5;
+    in.tdelta_ms = 150;
+    v            = macro_values(in);
+    CHECK(replace_macros("<CALL> UR <SNR> DT <TDELTA>", v, true) == "W1ABC UR -05 DT 150 MS");
+    in.snr = 7;
+    CHECK(replace_macros("<SNR>", macro_values(in), true) == "+07");
+    in.snr = -31; // desktop leaves <SNR> out from -31 down
+    CHECK(replace_macros("UR <SNR>", macro_values(in), true) == "UR ");
+
+    CHECK(idle_text(0) == "0M");
+    CHECK(idle_text(59999) == "0M");
+    CHECK(idle_text(60000) == "1M");
+    CHECK(idle_text(2 * 3600000 + 1) == "2H");
+    CHECK(idle_text(3LL * 86400000) == "3D");
+
+    // The C API, as the dialog uses it.
+    js8_macro_values_t c{};
+    c.my_call = "VE7NHW";
+    c.my_grid = "CN89";
+    c.call    = "K2XYZ";
+    c.has_snr = true;
+    c.snr     = -3;
+    char out[64];
+    js8_macros_expand("<CALL> UR <SNR> QTH <MYGRID4>", &c, true, out, sizeof(out));
+    CHECK(std::string(out) == "K2XYZ UR -03 QTH CN89");
+    js8_macros_expand("<MYCALL> <MYCALL> <MYCALL> <MYCALL>", &c, true, out, 12);
+    CHECK(std::string(out) == "VE7NHW VE7N"); // cut to fit
+    CHECK(js8_macros_need_station("<CALL> 73"));
+    CHECK_FALSE(js8_macros_need_station(nullptr));
 }

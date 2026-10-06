@@ -321,6 +321,28 @@ bool js8_alert_hit(const char *text, const char *from, const char *words, char *
 #define JS8_HB_MAX_INTERVAL     30
 #define JS8_HB_DEFAULT_INTERVAL 30
 
+/* Desktop JS8Call's message macros (macros.hpp): <MYCALL> <MYGRID4>
+ * <MYGRID12> <MYINFO> <MYSTATUS> <MYCQ> <MYHB> <MYREPLY> <MYVERSION>
+ * <MYIDLE>, and for the selected station <CALL> <SNR> <TDELTA>. */
+typedef struct {
+    const char *my_call, *my_grid, *my_info, *my_status, *version;
+    int64_t     idle_ms;   /* since the operator last touched the radio */
+    const char *call;      /* the selected station; NULL or "" if none */
+    bool        has_snr;   /* how we hear it */
+    int         snr;
+    bool        has_tdelta; /* its time offset (DT), ms */
+    int         tdelta_ms;
+} js8_macro_values_t;
+
+/* `text` with the macros filled in (in capitals). prune: what's left in
+ * <...> (a macro that doesn't apply, e.g. <CALL> with nothing selected) is
+ * dropped, as desktop does when a saved message is used; else it stays as
+ * typed (desktop's menu labels and the messages it sends). */
+void            js8_macros_expand(const char *text, const js8_macro_values_t *v, bool prune, char *out,
+                                  unsigned out_len);
+/* The text uses <CALL>, <SNR> or <TDELTA>: it needs a selected station. */
+bool            js8_macros_need_station(const char *text);
+
 #ifdef __cplusplus
 }
 #endif

@@ -14,6 +14,7 @@
 #include "directed.hpp"
 #include "inbox.hpp"
 #include "qsolog.hpp"
+#include "macros.hpp"
 #include "stations.hpp"
 
 #include <algorithm>
@@ -633,4 +634,28 @@ extern "C" void js8_groups_normalise(const char *typed, char *out, unsigned out_
     std::string joined;
     for (auto &g : groups) joined += (joined.empty() ? "" : " ") + g;
     copy_str(out, out_len, joined);
+}
+
+extern "C" void js8_macros_expand(const char *text, const js8_macro_values_t *v, bool prune, char *out,
+                                  unsigned out_len) {
+    if (!out || out_len == 0) return;
+    out[0] = '\0';
+    if (!text) return;
+    MacroInput in;
+    if (v) {
+        in.my_call   = v->my_call ? v->my_call : "";
+        in.my_grid   = v->my_grid ? v->my_grid : "";
+        in.my_info   = v->my_info ? v->my_info : "";
+        in.my_status = v->my_status ? v->my_status : "";
+        in.version   = v->version ? v->version : "";
+        in.idle_ms   = v->idle_ms;
+        in.call      = v->call ? v->call : "";
+        if (v->has_snr) in.snr = v->snr;
+        if (v->has_tdelta) in.tdelta_ms = v->tdelta_ms;
+    }
+    copy_str(out, out_len, replace_macros(text, macro_values(in), prune));
+}
+
+extern "C" bool js8_macros_need_station(const char *text) {
+    return text && macros_need_station(text);
 }

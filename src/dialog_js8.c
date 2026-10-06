@@ -73,6 +73,9 @@
 #ifndef JS8_INBOX_PATH
 #define JS8_INBOX_PATH   "/mnt/js8_inbox.txt"   /* one message per line */
 #endif
+#define JS8_SAVED_PATH   "/mnt/js8_saved.txt"   /* saved messages, one a line (empty: none) */
+#define SAVED_N          10     /* saved messages (Query > Saved messages >) */
+#define JS8_APP_VERSION  "X6100 IU1WXY"         /* <MYVERSION> */
 #ifndef JS8_HELD_PATH
 #define JS8_HELD_PATH    "/mnt/js8_held.txt"    /* MSG TO: messages held for others */
 #endif
@@ -156,6 +159,11 @@ static void        hold_cb(button_data_t *btn);
 static const char *stations_label_getter(void);
 static void        stations_cb(button_data_t *btn);
 static void        query_close(void);
+static void        query_open(void);
+static void        load_saved(void);
+static void        save_saved(void);
+static void        macros_fill(const char *text, bool prune, char *out, size_t out_len);
+static void        saved_open(int focus);
 static const char *auto_label_getter(void);
 static void        auto_cb(button_data_t *btn);
 static const char *hb_label_getter(void);
@@ -331,6 +339,10 @@ static int64_t     hb_adjust_ms;     /* last knob turn while adjusting */
 static bool        cq_adjusting;     /* main knob sets the auto CQ interval */
 static int64_t     cq_adjust_ms;
 static char        info_text[TEXT_MAX + 1], status_text[TEXT_MAX + 1];
+/* Saved messages as typed, macros and all (desktop JS8Call's Saved Messages), JS8_SAVED_PATH */
+static char        saved_msgs[SAVED_N][TX_TEXT_MAX + 1];
+static int         saved_edit;            /* the one in the keyboard (EDIT_SAVED) */
+static int64_t     touch_ms;              /* the operator's last touch, for <MYIDLE> */
 static char        last_pota[16], last_sota[24]; /* last park / summit spotted via APRS */
 /* The spot form (APRS > POTA/SOTA spot), remembered in JS8_TEXTS_PATH. */
 static char        spot_mode[8] = "DATA";
@@ -368,6 +380,7 @@ typedef enum {
     EDIT_INFO = 1,
     EDIT_STATUS,
     EDIT_GROUPS,   /* Settings: the groups we're in */
+    EDIT_SAVED,    /* a saved message (saved_edit), then back to their list */
     EDIT_LOG_GRID, /* the Log popup's fields, then back to it */
     EDIT_LOG_NAME,
     EDIT_LOG_NOTE,
@@ -1597,7 +1610,9 @@ static void rotary_cb(int32_t diff) {
 static void compose_changed_cb(lv_event_t *e) {
     (void)e;
     js8_tx_preview_t pv;
-    js8_tx_preview(params.callsign.x, station_qth(), textarea_window_get(), cur_speed(), &pv);
+    char             typed[TX_TEXT_MAX * 2];
+    macros_fill(textarea_window_get(), false, typed, sizeof(typed)); /* counted as it goes out */
+    js8_tx_preview(params.callsign.x, station_qth(), typed, cur_speed(), &pv);
     if (pv.ok) {
         msg_update_text_fmt("%d frame%s, %.0f s", pv.frames, pv.frames == 1 ? "" : "s", pv.seconds);
     }
@@ -1662,6 +1677,21 @@ static bool compose_ok_cb(void) {
         log_edit_done(textarea_window_get());
         return true;
     }
+    if (edit_target == EDIT_SAVED) {
+        const char *typed = textarea_window_get();
+        typed += strspn(typed, " ");
+        snprintf(saved_msgs[saved_edit], sizeof(saved_msgs[saved_edit]), "%s", typed);
+        for (char *end = saved_msgs[saved_edit] + strlen(saved_msgs[saved_edit]);
+             end > saved_msgs[saved_edit] && end[-1] == ' ';)
+            *--end = '\0';
+        save_saved();
+        edit_target = 0;
+        compose_close();
+        saved_open(saved_edit); /* back to the list, on that one */
+        msg_update_text_fmt(saved_msgs[saved_edit][0] ? "Saved message %d saved" : "Saved message %d cleared",
+                            saved_edit + 1);
+        return true;
+    }
     if (edit_target == EDIT_GROUPS) {
         js8_groups_normalise(textarea_window_get(), groups_text, sizeof(groups_text));
         save_texts();
@@ -1680,8 +1710,11 @@ static bool compose_ok_cb(void) {
         compose_close();
         return true;
     }
-    char text[TX_TEXT_MAX + 8];
-    if (!aprs_prepare(textarea_window_get(), text, sizeof(text))) return false;
+    /* Macros typed in a message are filled in as it goes, as desktop does; one that doesn't
+     * apply (<CALL> with nothing selected) stays */
+    char typed[TX_TEXT_MAX * 2], text[TX_TEXT_MAX + 8];
+    macros_fill(textarea_window_get(), false, typed, sizeof(typed));
+    if (!aprs_prepare(typed, text, sizeof(text))) return false;
     if (!tx_queue(text)) return false; /* keep the window open */
     /* The held message offered on Reply went as offered: it's on its way. */
     if (deliver_pending.id && strcasecmp(text, deliver_pending.text) == 0)
@@ -1695,6 +1728,12 @@ static bool compose_cancel_cb(void) {
     deliver_pending.id = 0;
     if (edit_target >= EDIT_LOG_GRID) {
         log_edit_done(NULL);
+        return true;
+    }
+    if (edit_target == EDIT_SAVED) { /* unchanged, back to the list */
+        edit_target = 0;
+        compose_close();
+        saved_open(saved_edit);
         return true;
     }
     edit_target = 0;
@@ -1714,7 +1753,7 @@ static void compose_open(const char *prefill) {
     compose_layout(true);
 
     lv_obj_t *text = textarea_window_text();
-    lv_textarea_set_accepted_chars(text, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .-+?!\"/@:>{}_#&'(),=;*");
+    lv_textarea_set_accepted_chars(text, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .-+?!\"/@:<>{}_#&'(),=;*");
     lv_obj_add_event_cb(text, compose_insert_cb, LV_EVENT_INSERT, NULL);
     lv_textarea_set_max_length(text, TX_TEXT_MAX);
     lv_obj_add_event_cb(text, compose_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
@@ -1724,6 +1763,7 @@ static void compose_open(const char *prefill) {
                                          : edit_target == EDIT_SOTA_REF ? sizeof(last_sota) - 1
                                          : edit_target == EDIT_ALERT_WORDS ? sizeof(alert_words) - 1
                                          : edit_target == EDIT_GROUPS ? sizeof(groups_text) - 1
+                                         : edit_target == EDIT_SAVED ? TX_TEXT_MAX
                                          : edit_target == EDIT_FREQ ? 9
                                          : edit_target == EDIT_SPOT_REF ? (spot_sota ? sizeof(last_sota) : sizeof(last_pota)) - 1
                                          : edit_target == EDIT_SPOT_FREQ ? 10
@@ -1743,6 +1783,7 @@ static void compose_open(const char *prefill) {
             [EDIT_INFO]     = " INFO, e.g. X6100 5W EFHW",
             [EDIT_STATUS]   = " STATUS, e.g. PORTABLE QRV",
             [EDIT_GROUPS]   = " Your groups, e.g. @NET @CANADA",
+            [EDIT_SAVED]    = " Message, e.g. <CALL> TNX FER QSO 73 GL",
             [EDIT_LOG_GRID] = " Their grid, e.g. DN17",
             [EDIT_LOG_NAME] = " Their name",
             [EDIT_LOG_NOTE] = " Comment for the log",
@@ -2061,6 +2102,7 @@ static void construct_cb(lv_obj_t *parent) {
     inbox_refresh_button();
     user_touch();
     load_texts();
+    load_saved();
     hb_next_ms         = 0;
     push_next_ms       = 0;
     hb_adjusting       = false;
@@ -2666,6 +2708,43 @@ static void query_close_cb(lv_event_t *e) {
     query_close();
 }
 
+/* The Query list's and the saved messages' frame, top right over the list */
+static lv_obj_t *query_list_create(lv_coord_t width, const char *title) {
+    lv_group_remove_obj(table);
+    lv_obj_t *list = lv_list_create(dialog.obj);
+    lv_obj_set_size(list, width, WF_HEIGHT - 10);
+    lv_obj_align(list, LV_ALIGN_TOP_RIGHT, -20, 18);
+    lv_obj_set_style_text_font(list, &sony_24, 0);
+    lv_obj_set_style_bg_color(list, TC(list), 0);
+    lv_obj_set_style_border_color(list, TC(text), 0);
+    lv_obj_t *t = lv_list_add_text(list, title);
+    lv_obj_set_style_text_font(t, &sony_22, 0);
+    return list;
+}
+
+/* An item at the end: Close, or < Back */
+static lv_obj_t *query_list_end_item(const char *label, lv_event_cb_t cb) {
+    lv_obj_t *b = list_add_item(query_list, label);
+    lv_obj_set_style_text_color(b, TC(action), 0);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(b, query_key_cb, LV_EVENT_KEY, NULL);
+    lv_group_add_obj(keyboard_group, b);
+    return b;
+}
+
+/* Out of a list popup, deleted later (one of its buttons is running), the focus left alone */
+static void query_leave(void) {
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(query_list); i++) lv_group_remove_obj(lv_obj_get_child(query_list, i));
+    lv_obj_del_async(query_list);
+    query_list = NULL;
+}
+
+static void query_saved_cb(lv_event_t *e) {
+    (void)e;
+    query_leave();
+    saved_open(0);
+}
+
 static void query_cb(button_data_t *btn) {
     user_touch();
     (void)btn;
@@ -2675,51 +2754,225 @@ static void query_cb(button_data_t *btn) {
     }
     if (popup_guard()) return;
     if (composing || aprs_list || texts_list) return;
+    query_open();
+}
+
+/* With a station selected its queries and messages; the saved messages always */
+static void query_open(void) {
     char  call[JS8_RX_CALL_LEN];
     float freq;
     int   snr;
-    if (!selected_station(call, sizeof(call), &freq, &snr)) {
-        msg_update_text_fmt("Select a station first (MFK)");
-        return;
-    }
-
-    lv_group_remove_obj(table);
-    query_list = lv_list_create(dialog.obj);
-    lv_obj_set_size(query_list, 300, WF_HEIGHT - 10);
-    lv_obj_align(query_list, LV_ALIGN_TOP_RIGHT, -20, 18);
-    lv_obj_set_style_text_font(query_list, &sony_24, 0);
-    lv_obj_set_style_bg_color(query_list, TC(list), 0);
-    lv_obj_set_style_border_color(query_list, TC(text), 0);
+    bool  have = selected_station(call, sizeof(call), &freq, &snr);
 
     char title[40];
-    snprintf(title, sizeof(title), "To %s (%+d dB)", call, snr);
-    lv_obj_t *t = lv_list_add_text(query_list, title);
-    lv_obj_set_style_text_font(t, &sony_22, 0);
+    if (have) snprintf(title, sizeof(title), "To %s (%+d dB)", call, snr);
+    else snprintf(title, sizeof(title), "No station selected");
+    query_list = query_list_create(300, title);
 
     lv_obj_t *first = NULL;
-    for (int q = 0; q < JS8_Q_COUNT; q++) {
+    for (int q = 0; have && q < JS8_Q_COUNT; q++) {
         lv_obj_t *b = list_add_item(query_list, js8_query_label((js8_query_t)q));
         lv_obj_add_event_cb(b, query_item_cb, LV_EVENT_CLICKED, (void *)(intptr_t)q);
         lv_obj_add_event_cb(b, query_key_cb, LV_EVENT_KEY, NULL);
         lv_group_add_obj(keyboard_group, b);
         if (!first) first = b;
     }
-    for (int i = 0; i < QUERY_MSG_ITEMS; i++) {
+    for (int i = 0; have && i < QUERY_MSG_ITEMS; i++) {
         lv_obj_t *b = list_add_item(query_list, query_msg_items[i].label);
         lv_obj_set_style_text_color(b, TC(ok), 0);
         lv_obj_add_event_cb(b, query_msg_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
         lv_obj_add_event_cb(b, query_key_cb, LV_EVENT_KEY, NULL);
         lv_group_add_obj(keyboard_group, b);
     }
+    /* Just before Close, with or without a station selected */
+    lv_obj_t *saved = list_add_item(query_list, "Saved messages >");
+    lv_obj_add_event_cb(saved, query_saved_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(saved, query_key_cb, LV_EVENT_KEY, NULL);
+    lv_group_add_obj(keyboard_group, saved);
+    if (!first) first = saved;
     /* Last, so one step back from the first item (the group wraps). */
-    lv_obj_t *close = list_add_item(query_list, "Close");
-    lv_obj_set_style_text_color(close, TC(action), 0);
-    lv_obj_add_event_cb(close, query_close_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_add_event_cb(close, query_key_cb, LV_EVENT_KEY, NULL);
-    lv_group_add_obj(keyboard_group, close);
+    query_list_end_item("Close", query_close_cb);
     lv_group_set_editing(keyboard_group, false);
     lv_group_focus_obj(first);
     speed_warn();
+}
+
+/* ---- Saved messages (randal007, x6100-js8 beta 4.5) ------------------ */
+
+/* Desktop JS8Call's Saved Messages: texts you send often, with macros (<CALL>, <SNR>, <MYGRID4>
+ * ...) filled in as they go. Query > Saved messages >: press one to send it at once (desktop's
+ * default), hold the MFK on it to edit it. Desktop starts with "TNX 73 GL". */
+
+/* The time offset (DT) of the latest message decoded from `call` */
+static bool station_dt(const char *call, float *dt) {
+    for (int age = 0; age < hist_count; age++) {
+        int slot = (hist_head - 1 - age + HISTORY) % HISTORY;
+        if (!history[slot].tx && strcasecmp(history[slot].from, call) == 0) {
+            *dt = history[slot].dt;
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Desktop's macros filled in: our station, and the selected one. prune: drop the ones that
+ * don't apply (a saved message as it's sent), else leave them as typed */
+static void macros_fill(const char *text, bool prune, char *out, size_t out_len) {
+    js8_macro_values_t v = {
+        .my_call   = params.callsign.x,
+        .my_grid   = station_qth(),
+        .my_info   = info_text,
+        .my_status = status_text,
+        .version   = JS8_APP_VERSION,
+        .idle_ms   = touch_ms ? now_wall_ms() - touch_ms : 0,
+    };
+    if (sel_call[0]) {
+        float dt;
+        v.call    = sel_call;
+        v.has_snr = true;
+        v.snr     = sel_snr;
+        if (station_dt(sel_call, &dt)) {
+            v.has_tdelta = true;
+            v.tdelta_ms  = (int)(dt * 1000);
+        }
+    }
+    js8_macros_expand(text, &v, prune, out, (unsigned)out_len);
+}
+
+static void load_saved(void) {
+    memset(saved_msgs, 0, sizeof(saved_msgs));
+    FILE *f = fopen(JS8_SAVED_PATH, "r");
+    if (!f) { /* none saved yet */
+        snprintf(saved_msgs[0], sizeof(saved_msgs[0]), "TNX 73 GL");
+        return;
+    }
+    /* One a line, empty lines for empty slots; capitals, as typed here */
+    char line[TX_TEXT_MAX + 8];
+    for (int i = 0; i < SAVED_N && fgets(line, sizeof(line), f); i++) {
+        line[strcspn(line, "\r\n")] = '\0';
+        for (char *c = line; *c; c++)
+            if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
+        snprintf(saved_msgs[i], sizeof(saved_msgs[i]), "%s", line);
+    }
+    fclose(f);
+}
+
+static void save_saved(void) {
+    FILE *f = fopen(JS8_SAVED_PATH ".tmp", "w");
+    if (!f) {
+        msg_update_text_fmt("Can't write %s", JS8_SAVED_PATH);
+        return;
+    }
+    for (int i = 0; i < SAVED_N; i++) fprintf(f, "%s\n", saved_msgs[i]);
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+    if (rename(JS8_SAVED_PATH ".tmp", JS8_SAVED_PATH) != 0) msg_update_text_fmt("Can't write %s", JS8_SAVED_PATH);
+}
+
+/* Into the keyboard with saved message i; Enter saves it, ESC leaves it */
+static void saved_edit_open(int i) {
+    saved_edit  = i;
+    query_leave();
+    edit_target = EDIT_SAVED;
+    compose_open(saved_msgs[i]);
+    if (!composing) { /* no callsign yet */
+        edit_target = 0;
+        return;
+    }
+    lv_group_set_editing(keyboard_group, true);
+    msg_update_text_fmt("Message %d: Enter saves, empty clears. Macros: <CALL> <SNR> <TDELTA> <MYCALL> "
+                        "<MYGRID4> <MYGRID12> <MYINFO> <MYSTATUS> <MYIDLE> <MYVERSION>",
+                        i + 1);
+}
+
+/* Press: send it now, macros filled in. An empty one: write it */
+static void saved_item_cb(lv_event_t *e) {
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    user_touch();
+    if (!saved_msgs[i][0]) {
+        saved_edit_open(i);
+        return;
+    }
+    char  call[JS8_RX_CALL_LEN];
+    float freq;
+    int   snr;
+    bool  have = selected_station(call, sizeof(call), &freq, &snr);
+    /* Desktop would send it with <CALL> left out: not to nobody here */
+    if (!have && js8_macros_need_station(saved_msgs[i])) {
+        msg_update_text_fmt("Select a station first: message %d has <CALL>, <SNR> or <TDELTA>", i + 1);
+        return;
+    }
+    char text[TX_TEXT_MAX * 2];
+    macros_fill(saved_msgs[i], true, text, sizeof(text));
+    char *t = text + strspn(text, " ");
+    for (char *end = t + strlen(t); end > t && end[-1] == ' ';) *--end = '\0';
+    if (!*t) {
+        msg_update_text_fmt("Nothing to send: message %d has only macros that are empty now", i + 1);
+        return;
+    }
+    query_close();
+    if (have) apply_hold(freq);
+    tx_queue(t);
+}
+
+/* Hold the MFK: edit it */
+static void saved_hold_cb(lv_event_t *e) {
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    user_touch();
+    /* The MFK's release would otherwise land in the keyboard as Enter */
+    lv_indev_t *indev = lv_indev_get_act();
+    if (indev) lv_indev_wait_release(indev);
+    saved_edit_open(i);
+}
+
+/* The message line says what a press would send */
+static void saved_focus_cb(lv_event_t *e) {
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (!saved_msgs[i][0]) {
+        msg_update_text_fmt("Message %d is empty: press or hold to write one", i + 1);
+        return;
+    }
+    if (!sel_call[0] && js8_macros_need_station(saved_msgs[i])) {
+        msg_update_text_fmt("%d: %s (select a station first)", i + 1, saved_msgs[i]);
+        return;
+    }
+    char text[TX_TEXT_MAX * 2];
+    macros_fill(saved_msgs[i], true, text, sizeof(text));
+    msg_update_text_fmt("%d: %s", i + 1, text);
+}
+
+static void saved_back_cb(lv_event_t *e) {
+    (void)e;
+    query_leave();
+    query_open();
+}
+
+/* The ten in the Query list's place (wider: messages are long), focus on `focus` */
+static void saved_open(int focus) {
+    query_list = query_list_create(560, "Saved: press sends, hold edits");
+    lv_obj_t *items[SAVED_N];
+    for (int i = 0; i < SAVED_N; i++) {
+        char label[TX_TEXT_MAX * 2 + 8], text[TX_TEXT_MAX * 2];
+        if (saved_msgs[i][0]) {
+            macros_fill(saved_msgs[i], false, text, sizeof(text)); /* as desktop's menu shows them */
+            snprintf(label, sizeof(label), "%d  %s", i + 1, text);
+        } else {
+            snprintf(label, sizeof(label), "%d  (empty)", i + 1);
+        }
+        lv_obj_t *b = items[i] = list_add_item(query_list, label);
+        lv_label_set_long_mode(lv_obj_get_child(b, -1), LV_LABEL_LONG_DOT); /* one line, never scrolling */
+        if (!saved_msgs[i][0]) lv_obj_set_style_text_color(b, TC(text_dim), 0);
+        lv_obj_add_event_cb(b, saved_item_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        lv_obj_add_event_cb(b, saved_hold_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)i);
+        lv_obj_add_event_cb(b, saved_focus_cb, LV_EVENT_FOCUSED, (void *)(intptr_t)i);
+        lv_obj_add_event_cb(b, query_key_cb, LV_EVENT_KEY, NULL);
+        lv_group_add_obj(keyboard_group, b);
+    }
+    query_list_end_item("< Back", saved_back_cb);
+    query_list_end_item("Close", query_close_cb);
+    lv_group_set_editing(keyboard_group, false);
+    lv_group_focus_obj(items[focus >= 0 && focus < SAVED_N ? focus : 0]);
 }
 
 /* For tools/js8_ui_harness: the station the selection points at. */
@@ -2733,7 +2986,8 @@ bool dialog_js8_selected_call(char *call, unsigned len) {
 
 /* Any key, button or knob: resets the idle watchdog. */
 static void user_touch(void) {
-    js8_auto_user_activity(autop, now_wall_ms());
+    touch_ms = now_wall_ms();
+    js8_auto_user_activity(autop, touch_ms);
 }
 
 /* Recently heard stations, most recent first: HEARING?, QUERY CALL and
@@ -2814,6 +3068,10 @@ static void handle_incoming(const js8_rx_msg_t *m) {
     js8_heard_t heard[32];
     unsigned    n = heard_stations(heard, 32);
 
+    /* INFO and STATUS with their macros filled in, as desktop answers INFO? and STATUS? */
+    char info_now[TX_TEXT_MAX + 1], status_now[TX_TEXT_MAX + 1];
+    macros_fill(info_text, true, info_now, sizeof(info_now));
+    macros_fill(status_text, true, status_now, sizeof(status_now));
     js8_auto_settings_t st = {
         .autoreply = params.js8_auto.x,
         .heartbeat = params.js8_hb.x,
@@ -2821,8 +3079,8 @@ static void handle_incoming(const js8_rx_msg_t *m) {
         .relay     = params.js8_relay.x,
         .my_call   = params.callsign.x,
         .my_grid   = station_qth(),
-        .info      = info_text,
-        .status    = status_text,
+        .info      = info_now,
+        .status    = status_now,
         .groups    = groups_text,
         .held      = held,
     };

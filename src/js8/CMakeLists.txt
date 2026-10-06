@@ -17,6 +17,7 @@ add_library(JS8 STATIC
     qsolog.cpp
     inbox.cpp
     alerts.cpp
+    macros.cpp
     js8_ops.cpp
     js8_rx.cpp
 )
