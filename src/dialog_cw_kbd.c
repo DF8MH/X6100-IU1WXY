@@ -403,7 +403,7 @@ static void destruct_cb(void) {
     sending[0] = queue[0] = 0;
 }
 
-/* Web remote, docs/REMOTE_API.md */
+/* Web remote (X6100 Link) */
 void dialog_cw_kbd_remote(const char *cmd, int32_t val, const char *text) {
     if (!strcmp(cmd, "cw_send")) {
         enqueue(text);

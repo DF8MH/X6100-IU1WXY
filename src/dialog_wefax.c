@@ -4221,7 +4221,7 @@ static void freq_cb(button_data_t *data)
 }
 
 
-/* Web remote, docs/REMOTE_API.md */
+/* Web remote (X6100 Link) */
 void dialog_wefax_remote(const char *cmd, int32_t val, const char *text)
 {
     if (!strcmp(cmd, "wefax_mode")) {

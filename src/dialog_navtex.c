@@ -643,7 +643,7 @@ static void freq_cb(button_data_t *data)
                        sizeof(navtex_freqs) / sizeof(navtex_freqs[0]), 1000, NULL);
 }
 
-/* Web remote, docs/REMOTE_API.md */
+/* Web remote (X6100 Link) */
 void dialog_navtex_remote(const char *cmd, int32_t val, const char *text)
 {
     (void)val;

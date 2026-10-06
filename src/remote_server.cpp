@@ -4,7 +4,7 @@
  *  Xiegu X6100 LVGL GUI
  *
  *  Web remote: control socket for the webserver's /remote page and the phone app
- *  (docs/REMOTE_API.md). UNIX socket, one JSON object per line. Requests:
+ *  (X6100 Link). UNIX socket, one JSON object per line. Requests:
  *    {"cmd":"get"}                 -> one state line
  *    {"cmd":"sub"}                 -> state lines (5/s), spectrum lines (10/s), events (remote_event) and decoded text (remote_text)
  *                                     until the client closes

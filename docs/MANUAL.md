@@ -6,7 +6,7 @@ overview is the [README](../README.md).
 ## Contents
 
 - [Usage](#usage): digital modes, JS8, WSPR, SSTV/WeFax/NavTex, RTTY and WeFax TX, CW decoder, CW Keyboard, DX Cluster, Field Ops (SOTA/POTA), Bands, Bluetooth, themes
-- [Web configurator](#web-configurator) and [companion app](#companion-app-android)
+- [Web configurator](#web-configurator) and [companion app](#x6100-link-android)
 - [wfview server](#wfview-server), [Settings](#settings)
 - [Reference](#reference): Bluetooth CAT, CI-V commands, btcat-ctl, btaudio-ctl, files on /mnt
 - [Build](#build)
@@ -168,8 +168,8 @@ uploaded from the web configurator's Gallery or sent from the phone.
 
 ### RTTY and WeFax TX
 
-RTTY and WeFax transmit only from the [companion app](#companion-app-android)
-(or the [remote API](REMOTE_API.md)); the radio has no local TX button
+RTTY and WeFax transmit only from the [X6100 Link app](#x6100-link-android);
+the radio has no local TX button
 for them.
 
 - **RTTY TX**: ITA2 AFSK with the RTTY app's rate, shift, centre and
@@ -472,7 +472,7 @@ same network. Pages:
 | Cluster | DX cluster servers, filters and alerts (writes `/mnt/cluster.conf`) |
 | wfview | enable the wfview server, set user and password |
 | Memories | MEM 1-9 slots and the named channel list |
-| Remote | tune the radio from the browser: frequency, mode, band, filter, RF gain, PRE/ATT/AGC/NB/NR, live spectrum and waterfall (click or drag to tune), RX audio (HTTPS page, one listener). The page itself is receive only (no PTT); transmitting remotely is done by the [companion app](#companion-app-android) |
+| Remote | tune the radio from the browser: frequency, mode, band, filter, RF gain, PRE/ATT/AGC/NB/NR, live spectrum and waterfall (click or drag to tune), RX audio (HTTPS page, one listener). The page itself is receive only (no PTT); transmitting remotely is done by the [companion app](#x6100-link-android) |
 | Backup | download settings, memories, cluster, wfview, QSO log, voice messages (optionally CW trainer and WiFi) as one file, and restore the parts you choose |
 | Gallery | a folder per kind (screen recordings, voice recordings, screenshots, SSTV and WeFax received and to send) with count and size; multi-select (tap, checkbox, shift for a range, all/none), delete the selection with one confirmation or download it as a ZIP; upload several pictures into the SSTV and WeFax TX folders (other formats are converted to PNG in the browser); convert AVI to MP4 in the browser |
 | Field | QRZ Logbook API key, update the parks and summits list, download the activation logs |
@@ -493,18 +493,23 @@ The radio picks up changes within a few seconds. Server options: `--host`,
 |---|---|
 | ![Cluster page](screenshots/web/cluster_desktop.png) | ![Digital modes page](screenshots/web/digital_modes_desktop.png) |
 
-The same server carries the remote API of the companion app (`/api/info`
-for discovery, `/api/remote` commands, `/api/remote/stream` events,
-`/api/remote/audio` RX audio): [docs/REMOTE_API.md](REMOTE_API.md).
+The same server carries the remote control used by the X6100 Link app.
 
-### Companion app (Android)
+### X6100 Link (Android)
 
-**X6100 Link** ([android/](../android/)) is a phone remote: dark panels,
-black LCD, glossy buttons with LEDs, Arial. The radio decodes and transmits;
-the phone shows and commands it over WiFi.
+**X6100 Link** is a separate Android app (not part of this repository) for this
+firmware: the radio decodes and transmits, the phone or tablet shows and
+commands it over WiFi. An app older than the firmware is refused (and the app
+asks for a newer firmware when the radio's is older).
 
-- **Radio**: frequency, band, mode, tune steps, P.AMP/ATT/NB/NR/AGC, S-meter,
-  spectrum and waterfall (tap to tune), RX audio.
+- **Radio**: frequency, band, mode, tune steps, VFO knob, P.AMP/ATT/NB/NR/AGC, S-meter,
+  spectrum and waterfall (tap or drag to tune), RX audio.
+- **Log** (the default): call, RST and LOG into the radio's log of the day
+  (`YYYYMMDD.adi` with the Field Ops logs, downloadable from the web
+  configurator); with a QRZ.com login the call's record shows under it (name, QTH,
+  grid, country and flag, zones, distance, photo) and goes into the log.
+  SOTA/POTA opens Field Ops.
+- **Themes**: Classic, Pro, Outdoor and Outdoor-Negative.
 - **Apps**, all eight, with TX in all but NavTex: FT8/FT4 (CQ, reply, auto, hold, TX
   frequency), JS8, WSPR, SSTV (pictures from the phone's gallery or a camera
   photo, call and text), WeFax (received faxes full screen, zoom, save,
@@ -526,8 +531,7 @@ work as soon as the app is open on the radio. Stop always works.
 When an app opened from the phone changed the mode (CW, or USB for
 SSTV/WeFax/NavTex), the mode comes back when the app closes.
 
-Building the APK (JDK 17, Android SDK 35, `./gradlew assembleDebug`):
-[android/README.md](../android/README.md). Labels in English or Italian (the app's settings).
+Labels in English or Italian (the app's settings).
 
 <table>
   <tr>
@@ -741,8 +745,5 @@ Keyboard, Modes, Settings tabs, main screen) headless on a PC, with the real
 button bar; `THEME=<name>` renders any theme. The screenshots in this README
 come from it. [tools/js8_ui_harness](../tools/js8_ui_harness) runs the JS8 app
 the same way under ASan/UBSan.
-
-**Android app:** see [android/README.md](../android/README.md) (JDK 17, Android
-SDK platform 35, `./gradlew assembleDebug testDebugUnitTest`).
 
 Design notes and UI mockups are in `docs/` (`docs/mockups/releases/`).

@@ -22,7 +22,7 @@ DX cluster on the waterfall, themes, and full remote control from your phone or 
 
 ## Remote control
 
-**From your phone: X6100 Link** (Android, [android/](android/)).
+**From your phone: X6100 Link** (Android, a separate app).
 Turn on the phone's hotspot, let the radio join it, open the app: it finds the
 radio by itself.
 
@@ -267,9 +267,9 @@ keep their hue (the VFO line stays red).
 
 ## Install
 
-1. Download the microSD image (`X6100-IU1WXY-v<version>-sdcard.img`) and the
-   companion app (`X6100-IU1WXY-v<version>-Link.apk`) from the
-   **[latest release](https://github.com/IU1WXY/X6100-IU1WXY/releases/latest)**.
+1. Download the microSD image (`X6100-IU1WXY-v<version>-sdcard.img`) from the
+   **[latest release](https://github.com/IU1WXY/X6100-IU1WXY/releases/latest)**
+   (the X6100 Link app is distributed separately).
 2. Write it to a microSD card with [balenaEtcher](https://etcher.balena.io/) or Rufus.
 3. Put the card in the radio and switch on. Settings and logs live on the card's
    DATA partition (`/mnt`).
@@ -283,7 +283,6 @@ output gain), and a battery percentage from a measured X6100 discharge curve.
 ## Documentation
 
 - **[Manual](docs/MANUAL.md)**: every app and setting, the web pages, CAT commands, files, building
-- [Remote API](docs/REMOTE_API.md): what the companion app talks to
 - [Themes](docs/THEMES.md): make your own
 
 ## Credits
