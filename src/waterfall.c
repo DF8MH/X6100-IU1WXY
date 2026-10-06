@@ -247,7 +247,26 @@ static void do_scroll_timer(lv_timer_t *t) {
         return;
     }
     if (params.waterfall_smooth_scroll.x) {
-        wf_center_freq += (target - wf_center_freq) / 10 + 1;
+        /* A critically damped spring, a step every 20 ms: it starts and stops
+         * gently, never overshoots and is there in ~0.26 s (k and c from a
+         * simulation; a tenth of the way per step took 2 s to settle) */
+        static double pos, vel;
+        const double  k = 0.2, c = 0.694;
+
+        if (llround(pos) != wf_center_freq || LV_ABS(target - wf_center_freq) > width_hz) {
+            pos = wf_center_freq;   /* moved elsewhere, or a band change: from here */
+            vel = 0;
+        }
+        if (LV_ABS(target - wf_center_freq) > width_hz) {
+            pos = target;           /* a band change: no slide across it */
+        }
+        vel += k * (target - pos) - c * vel;
+        pos += vel;
+        if (fabs(target - pos) < 1.0 && fabs(vel) < 1.0) {
+            pos = target;
+            vel = 0;
+        }
+        wf_center_freq = llround(pos);
     } else {
         wf_center_freq = target;
     }
