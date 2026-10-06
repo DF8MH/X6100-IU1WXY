@@ -27,6 +27,8 @@ void main_screen_notify_low_power(bool is_low);
 void main_screen_keys_enable(bool value);
 void main_screen_start_app(press_action_t page_app);
 void main_screen_close_app(void);
+void main_screen_vol_press(void);
+void main_screen_mfk(int dir);
 void main_screen_action(press_action_t action);
 void main_screen_agc_next();
 

@@ -25,6 +25,7 @@ void knobs_set_vol_state(bool edit);
 void knobs_set_mfk_state(bool edit);
 void knobs_display(bool on);
 bool knobs_visible();
+void knobs_on_top(void);   /* over a full-screen app */
 
 #ifdef __cplusplus
 }

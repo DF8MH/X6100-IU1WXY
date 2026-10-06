@@ -278,6 +278,12 @@ void knobs_display(bool on) {
     }
 }
 
+void knobs_on_top(void) {
+    knobs_display(true);   /* dialog_construct hid them */
+    lv_obj_move_foreground(vol_info);
+    lv_obj_move_foreground(mfk_info);
+}
+
 bool knobs_visible() {
     return vol_info && !lv_obj_has_flag(vol_info, LV_OBJ_FLAG_HIDDEN);
 }

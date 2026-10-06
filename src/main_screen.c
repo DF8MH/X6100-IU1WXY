@@ -1458,6 +1458,22 @@ static void main_screen_rotary_cb(lv_event_t * e) {
     free(data);
 }
 
+/* VOL press: turning changes the value, or chooses what VOL controls */
+void main_screen_vol_press(void) {
+    switch (vol->state) {
+        case VOL_STATE_EDIT:
+            vol->state = VOL_STATE_SELECT;
+            knobs_set_vol_state(false);
+            break;
+
+        case VOL_STATE_SELECT:
+            vol->state = VOL_STATE_EDIT;
+            knobs_set_vol_state(true);
+            break;
+    }
+    vol_update(0);
+}
+
 static void spectrum_key_cb(lv_event_t * e) {
     uint32_t key = *((uint32_t *)lv_event_get_param(e));
 
@@ -1533,18 +1549,7 @@ static void spectrum_key_cb(lv_event_t * e) {
         case LV_KEY_ESC:
             // VOL press also
             if (!dialog_is_run()) {
-                switch (vol->state) {
-                    case VOL_STATE_EDIT:
-                        vol->state = VOL_STATE_SELECT;
-                        knobs_set_vol_state(false);
-                        break;
-
-                    case VOL_STATE_SELECT:
-                        vol->state = VOL_STATE_EDIT;
-                        knobs_set_vol_state(true);
-                        break;
-                }
-                vol_update(0);
+                main_screen_vol_press();
             }
             break;
 
@@ -1581,6 +1586,29 @@ static void spectrum_key_cb(lv_event_t * e) {
         default:
             break;
     }
+}
+
+/* MFK as on the main screen: dir -1 / +1 turns it, 0 is the press */
+void main_screen_mfk(int dir) {
+    if (dir) {
+        if (mfk_state == MFK_STATE_EDIT)
+            mfk_update(dir);
+        else
+            mfk_change_ctrl(dir);
+        return;
+    }
+    switch (mfk_state) {
+        case MFK_STATE_EDIT:
+            mfk_state = MFK_STATE_SELECT;
+            knobs_set_mfk_state(false);
+            break;
+
+        case MFK_STATE_SELECT:
+            mfk_state = MFK_STATE_EDIT;
+            knobs_set_mfk_state(true);
+            break;
+    }
+    mfk_update(0);
 }
 
 static void spectrum_pressed_cb(lv_event_t * e) {

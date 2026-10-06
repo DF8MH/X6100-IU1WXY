@@ -29,6 +29,7 @@
 #include "field/refs.h"
 #include "gps.h"
 #include "keyboard.h"
+#include "knobs.h"
 #include "main_screen.h"
 #include "meter.h"
 #include "msg.h"
@@ -40,6 +41,7 @@
 #include "styles.h"
 #include "textarea_window.h"
 #include "theme.h"
+#include "vol.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -1516,36 +1518,45 @@ static void key_cb(lv_event_t *e) {
         }
     }
     switch (key) {
-        case LV_KEY_ESC:
-            if (st.screen == SCR_HOME)
-                main_screen_close_app();
-            else
-                show(SCR_HOME);
+        case LV_KEY_ESC:   /* the VOL press: as on the main screen (Back and Radio leave) */
+            main_screen_vol_press();
             break;
         case LV_KEY_UP:
         case LV_KEY_LEFT:
-            if (st.screen == SCR_HOME)
+            if (act_freq)   /* the activation has no list: MFK as on the main screen */
+                main_screen_mfk(-1);
+            else if (st.screen == SCR_HOME)
                 home_select(sel - 1);
             else
                 list_select(sel - 1);
             break;
         case LV_KEY_DOWN:
         case LV_KEY_RIGHT:
-            if (st.screen == SCR_HOME)
+            if (act_freq)
+                main_screen_mfk(1);
+            else if (st.screen == SCR_HOME)
                 home_select(sel + 1);
             else
                 list_select(sel + 1);
             break;
         case LV_KEY_ENTER:
-            press();
+            if (act_freq)
+                main_screen_mfk(0);
+            else
+                press();
             break;
+        /* VOL as on the main screen: volume, squelch, RF gain... with its label over the screen */
         case KEY_VOL_LEFT_EDIT:
-        case KEY_VOL_LEFT_SELECT:
-            radio_change_vol(-1);
+            vol_update(-1);
             break;
         case KEY_VOL_RIGHT_EDIT:
+            vol_update(1);
+            break;
+        case KEY_VOL_LEFT_SELECT:
+            vol_change_ctrl(-1);
+            break;
         case KEY_VOL_RIGHT_SELECT:
-            radio_change_vol(1);
+            vol_change_ctrl(1);
             break;
     }
 }
@@ -1622,6 +1633,7 @@ static void construct_cb(lv_obj_t *parent) {
             qsos_n = field_log_read(st.log, qsos, MAX_QSO);
     }
     dialog.obj = dialog_init(parent);
+    knobs_on_top();
     /* The whole screen above the buttons */
     lv_obj_set_pos(dialog.obj, 0, 0);
     lv_obj_set_size(dialog.obj, W, h);
