@@ -10,6 +10,7 @@
  *                                     until the client closes
  *    {"cmd":"freq","val":14074000} {"cmd":"tune","val":-100} {"cmd":"mode","val":"USB"} {"cmd":"band","val":40}
  *    {"cmd":"pre|att|nb|nr","val":0|1} {"cmd":"agc"} (next) {"cmd":"rfgain","val":0..100} {"cmd":"filter","val":Hz}
+ *    {"cmd":"nb_level|nb_width","val":0..100} {"cmd":"nr_level","val":0..60} {"cmd":"agc_mode","val":0..3} (OFF SLOW FAST AUTO)
  *    {"cmd":"pwr","val":1..100} (TX power, tenths of a watt)
  *    {"cmd":"location","text":"45.0,7.7"} (the phone's position, for Field Ops)
  *    {"cmd":"app","text":"FT8"} and the app commands (app_cmds[]), with "val" and/or "text"
@@ -96,6 +97,7 @@ typedef struct {
 
 typedef enum {
     CMD_FREQ, CMD_TUNE, CMD_MODE, CMD_BAND, CMD_PRE, CMD_ATT, CMD_AGC, CMD_NB, CMD_NR, CMD_RFGAIN, CMD_FILTER, CMD_PWR,
+    CMD_NB_LEVEL, CMD_NB_WIDTH, CMD_NR_LEVEL, CMD_AGC_MODE,
     CMD_APP, CMD_APP_CMD, CMD_LOCATION, CMD_QSO_LOG
 } cmd_id_t;
 
@@ -381,6 +383,18 @@ static void apply_cmd(void *arg) {
         case CMD_FILTER:
             cfg_sm.cp_cur_filter_bw.set(c->val);
             break;
+        case CMD_NB_LEVEL:
+            cfg_sm.p_nb_level.set(c->val);
+            break;
+        case CMD_NB_WIDTH:
+            cfg_sm.p_nb_width.set(c->val);
+            break;
+        case CMD_NR_LEVEL:
+            cfg_sm.p_nr_level.set(c->val);
+            break;
+        case CMD_AGC_MODE:
+            cfg_sm.cp_cur_agc.set(c->val);
+            break;
         case CMD_LOCATION:
             gps_phone_set(c->lat, c->lon);
             break;
@@ -476,7 +490,7 @@ static int state_line(char *buf, size_t size) {
     return snprintf(buf, size,
                     "{\"t\":\"state\",\"vfo\":\"%s\",\"freq\":%i,\"freq_bg\":%i,\"mode\":\"%s\",\"band\":\"%s\","
                     "\"filter\":%i,\"rfgain\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
-                    "\"pwr\":%i,\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s}\n",
+                    "\"nb_level\":%i,\"nb_width\":%i,\"nr_level\":%i,\"pwr\":%i,\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s}\n",
                     cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? "A" : "B",
                     cfg_sm.cp_fg_freq.get(), cfg_sm.cp_bg_freq.get(),
                     (mode >= 0 && mode <= x6100_mode_nfm) ? mode_names[mode] : "?", band_name(),
@@ -484,6 +498,7 @@ static int state_line(char *buf, size_t size) {
                     cfg_sm.cp_cur_pre.get() != 0, cfg_sm.cp_cur_att.get() != 0,
                     (agc >= 0 && agc <= x6100_agc_auto) ? agc_names[agc] : "?",
                     cfg_sm.p_nb.get() != 0, cfg_sm.p_nr.get() != 0,
+                    cfg_sm.p_nb_level.get(), cfg_sm.p_nb_width.get(), cfg_sm.p_nr_level.get(),
                     (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax);
 }
 
@@ -610,6 +625,10 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
         {"rfgain", CMD_RFGAIN, 0, 100},
         {"filter", CMD_FILTER, 50, 6000},
         {"pwr", CMD_PWR, 1, 100},
+        {"nb_level", CMD_NB_LEVEL, 0, 100},
+        {"nb_width", CMD_NB_WIDTH, 0, 100},
+        {"nr_level", CMD_NR_LEVEL, 0, 60},
+        {"agc_mode", CMD_AGC_MODE, 0, x6100_agc_auto},   /* agc_names[] */
     };
 
     cJSON *text = cJSON_GetObjectItemCaseSensitive(req, "text");
