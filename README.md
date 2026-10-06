@@ -26,8 +26,9 @@ DX cluster on the waterfall, themes, and full remote control from your phone or 
 Turn on the phone's hotspot, let the radio join it, open the app: it finds the
 radio by itself.
 
-- The whole radio: frequency, band, mode, filters, S-meter, spectrum and
-  waterfall, RX audio on the phone.
+- The whole radio: frequency, band, mode, filters, squelch, RF gain, NB, NR,
+  AGC, S-meter, spectrum and waterfall (VFO line, filter passband, pinch to
+  zoom), RX audio on the phone with its own volume.
 - **Every digital mode, receive and transmit**: FT8/FT4, JS8, WSPR, SSTV
   (pictures from the gallery or the camera), WeFax, RTTY, CW with macros,
   NavTex (receive). The radio decodes and transmits, the phone is the screen.
@@ -35,7 +36,11 @@ radio by itself.
 - **SOTA/POTA page** that opens by itself when the radio enters Field Ops:
   choose the reference, start the activation, log QSOs with the phone's
   keyboard, spot; the phone's GPS gives the radio its position.
-- Portrait and landscape, English or Italian.
+- **Log** of the day, every mode, coloured by type (voice, CW, digital) with
+  filters; edit the call, the reports and the other station's SOTA/POTA
+  reference.
+- Portrait and landscape, English or Italian, app themes; spectrum and
+  waterfall can be hidden one by one.
 
 **From any browser: the built-in web server** (`http://<radio IP>/`, nothing
 to install). The **Remote** page tunes the radio with live spectrum and
@@ -184,6 +189,8 @@ app of its own (APP page 3 → **Bands**), in the same look as the other apps.
 - RX recorder, screen recording, screenshots, voice messages.
 - CW trainer, GPS, QTH grid, **SWR scan** across the band with the
   frequency labels on top.
+- **One log of the day** for every mode: FT8, FT4, JS8, Field Ops and the
+  QSOs logged from the phone all go into `field/logs/YYYYMMDD.adi`.
 - Times on screen in **local time** (time zone in Settings); logs and ADIF
   stay in UTC.
 - Settings rewritten as cards, all reachable with the MFK.
@@ -234,7 +241,7 @@ app of its own (APP page 3 → **Bands**), in the same look as the other apps.
 
 The GUI has a new **theme system**: colours, buttons, corners, gradients,
 fonts and the waterfall palette all come from the theme, and a theme can draw
-every surface with PNG images. Five come with the firmware: choose one in
+every surface with PNG images. Seven come with the firmware: choose one in
 Settings → Display → **Theme** and the radio app restarts with it at once.
 Your own go on the SD card ([how to make one](docs/THEMES.md)). The control
 the encoder is adjusting lights its red LED.
@@ -246,6 +253,11 @@ the S-meter in one even grey gradient and the cluster in black, so
 everything reads even in full daylight. **Outdoor-Negative** is the same
 theme with the lightness inverted: dark background, white text, the colours
 keep their hue (the VFO line stays red).
+
+**Holo** and **Material 3** bring the look of Android to the radio, both in
+Roboto: Holo black with blue accents, square corners and a thin accent line
+under the top bar and over the active button; Material 3 with soft dark
+surfaces and rounded pill buttons spaced apart.
 
 <table>
   <tr>
@@ -259,6 +271,10 @@ keep their hue (the VFO line stays red).
   <tr>
     <td align="center"><img src="docs/screenshots/theme_rs.png" alt="RS theme"><br><sub><b>RS</b>: glossy buttons with LEDs, black LCD</sub></td>
     <td align="center"><img src="docs/screenshots/theme_rs_settings.png" alt="RS settings"><br><sub><b>RS</b>: settings</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/theme_holo.png" alt="Holo theme"><br><sub><b>Holo</b>: black, blue accents</sub></td>
+    <td align="center"><img src="docs/screenshots/theme_material3.png" alt="Material 3 theme"><br><sub><b>Material 3</b>: rounded, soft surfaces</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/theme_rs_sstv.png" alt="RS SSTV"><br><sub><b>RS</b>: SSTV TX</sub></td>
@@ -290,7 +306,7 @@ output gain), and a battery percentage from a measured X6100 discharge curve.
 **Giovanni Ricciardi IU1WXY** designed and wrote this firmware:
 
 - the deep **rewrite of the GUI** and the **theme system**, with the IU1WXY,
-  Outdoor, Classic and RS themes and the new settings;
+  Outdoor, Classic, RS, Holo and Material 3 themes and the new settings;
 - the **X6100 Link** app and the **remote control** of the radio (remote
   API, web Remote page, gallery, backup);
 - **Field Ops** (SOTA/POTA activations, offline references, ADIF, POTA
