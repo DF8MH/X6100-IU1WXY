@@ -1170,14 +1170,30 @@ static void parse_log_text(const char *text, char *call, size_t call_size, char 
         snprintf(out[i].dst, out[i].size, "%s", f);
 }
 
-/* The phone's logger outside Field Ops (QSOs in voice and so on): the day's log, LOGS_DIR/YYYYMMDD.adi (UTC),
- * on the radio's frequency and mode */
+/* The day's log, LOGS_DIR/YYYYMMDD.adi (UTC date of the QSO): every QSO outside Field Ops */
+static bool day_log_add(const field_qso_t *q, const char *me) {
+    field_station_t sta = {0};
+    char            path[64];
+    struct tm       tm;
+
+    snprintf(sta.call, sizeof(sta.call), "%s", me);
+    snprintf(sta.grid, sizeof(sta.grid), "%s", station_qth() ? station_qth() : "");
+    gmtime_r(&q->t, &tm);
+    mkdir(FIELD_DIR, 0755);
+    mkdir(LOGS_DIR, 0755);
+    snprintf(path, sizeof(path), "%s/%04d%02d%02d.adi", LOGS_DIR, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+    if (!field_log_add(path, q, &sta)) {
+        msg_update_text_fmt("Log: can't write %s", path);
+        return false;
+    }
+    return true;
+}
+
+/* The phone's logger outside Field Ops (QSOs in voice and so on): the day's log, on the radio's frequency and mode */
 bool dialog_field_qso_log(const char *text) {
     field_qso_t     q   = {.t = time(NULL), .freq_hz = cparam_i_get(cfg_fg_freq)};
-    field_station_t sta = {0};
     const char     *rst = is_cw() ? "599" : "59";
-    char            call[32] = "", rs[8] = "", rr[8] = "", path[64];
-    struct tm       tm;
+    char            call[32] = "", rs[8] = "", rr[8] = "";
 
     parse_log_text(text, call, sizeof(call), rs, rr, &q);
     if (!ref_ok(call)) {
@@ -1190,18 +1206,23 @@ bool dialog_field_qso_log(const char *text) {
     snprintf(q.mode, sizeof(q.mode), "%s", adif_mode());
     snprintf(q.rst_s, sizeof(q.rst_s), "%s", rs[0] ? rs : rst);
     snprintf(q.rst_r, sizeof(q.rst_r), "%s", rr[0] ? rr : rst);
-    snprintf(sta.call, sizeof(sta.call), "%s", my_call());
-    snprintf(sta.grid, sizeof(sta.grid), "%s", station_qth() ? station_qth() : "");
-    gmtime_r(&q.t, &tm);
-    mkdir(FIELD_DIR, 0755);
-    mkdir(LOGS_DIR, 0755);
-    snprintf(path, sizeof(path), "%s/%04d%02d%02d.adi", LOGS_DIR, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
-    if (!field_log_add(path, &q, &sta)) {
-        msg_update_text_fmt("Log: can't write %s", path);
+    if (!day_log_add(&q, my_call()))
         return false;
-    }
     msg_update_text_fmt("QSO logged: %s %s %s", q.call, q.rst_s, q.rst_r);
     return true;
+}
+
+/* FT8, FT4 and JS8 QSOs into the day's log too, next to the phone's */
+void dialog_field_day_log(const qso_log_record_t *r) {
+    field_qso_t q = {.t = r->time, .freq_hz = (int32_t)(r->freq_mhz * 1e6f + 0.5f)};
+
+    snprintf(q.call, sizeof(q.call), "%s", r->remote_call);
+    snprintf(q.mode, sizeof(q.mode), "%s", r->mode == MODE_FT4 ? "FT4" : r->mode == MODE_JS8 ? "JS8" : "FT8");
+    snprintf(q.rst_s, sizeof(q.rst_s), "%d", r->rsts);
+    snprintf(q.rst_r, sizeof(q.rst_r), "%d", r->rstr);
+    snprintf(q.name, sizeof(q.name), "%s", r->name);
+    snprintf(q.grid, sizeof(q.grid), "%s", r->remote_grid);
+    day_log_add(&q, r->local_call);
 }
 
 /* A QSO in the log: false when the call is not a callsign */

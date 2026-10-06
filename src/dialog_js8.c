@@ -24,6 +24,7 @@
 #include "cfg/cfg_api.h"
 #include "cfg/digital_modes.h"
 #include "dialog.h"
+#include "dialog_field.h"
 #include "dsp.h"
 #include "events.h"
 #include "keyboard.h"
@@ -3783,6 +3784,7 @@ static void log_save(void) {
         NULL, log_entry.my_grid, log_entry.grid);
     free(canon);
     qso_log_record_save(rec);
+    dialog_field_day_log(&rec);
 
     js8_qsos_logged(qsos, log_entry.call);
     if (strcmp(log_pending, log_entry.call) == 0) log_pending[0] = '\0';

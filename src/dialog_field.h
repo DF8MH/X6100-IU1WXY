@@ -15,6 +15,8 @@
 extern "C" {
 #endif
 
+#include "qso_log.h"
+
 extern dialog_t *dialog_field;
 
 /* Companion app: field_screen (text SOTA, POTA, BANDS, LOG, HOME), field_ref (text), field_start,
@@ -23,6 +25,8 @@ void dialog_field_remote(const char *cmd, int32_t val, const char *text);
 int  dialog_field_remote_state(char *buf, size_t size);
 /* Companion app, qso_log (any app or none): text as field_log, into the day's log; false: not logged */
 bool dialog_field_qso_log(const char *text);
+/* A QSO of FT8, FT4 or JS8 into the day's log */
+void dialog_field_day_log(const qso_log_record_t *r);
 
 /* Shared with the Bands app: TEST DE <call> in CW; a typical frequency of the band (cluster_band_of()) */
 void dialog_field_test_beacon(void);

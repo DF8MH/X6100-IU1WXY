@@ -13,6 +13,7 @@
 #include "ft8/utils.h"
 #include "lvgl/lvgl.h"
 #include "dialog.h"
+#include "dialog_field.h"
 #include "styles.h"
 #include "params/params.h"
 #include "cfg/cfg_api.h"
@@ -237,6 +238,7 @@ static void save_qso(const char *remote_callsign, const char *remote_grid, const
 
     // Save QSO to sqlite log
     qso_log_record_save(qso);
+    dialog_field_day_log(&qso);
 
     if (strlen(remote_grid) >= 4) {
         double lat, lon, dist;
