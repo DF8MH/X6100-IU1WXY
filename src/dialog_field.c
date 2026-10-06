@@ -1044,6 +1044,104 @@ static void build_log(void) {
     buttons_load_page(&page_log);
 }
 
+/* VOL and MFK in a bar over the buttons: what each controls, its level and value. A press (choosing
+ * what it controls) turns it amber with < >. The activation shows both; the other screens keep their
+ * hint line and show VOL beside it (MFK chooses in their lists). */
+typedef struct {
+    lv_obj_t *box, *tag, *name, *bar, *fill, *val;
+    lv_coord_t w;
+} knob_chip_t;
+
+static knob_chip_t chips[2];   /* VOL, MFK */
+
+static void chip_create(knob_chip_t *c, const char *tag, lv_coord_t y) {
+    c->box = lv_obj_create(dialog.obj);
+    lv_obj_remove_style_all(c->box);
+    lv_obj_set_y(c->box, y);
+    lv_obj_set_height(c->box, 30);
+    lv_obj_set_style_bg_color(c->box, TC(bg), 0);
+    lv_obj_set_style_bg_opa(c->box, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(c->box, 1, 0);
+    lv_obj_set_style_radius(c->box, 6, 0);
+    lv_obj_clear_flag(c->box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    c->tag = label(c->box, &sony_16, lv_color_black(), 5, 5, 0);
+    lv_label_set_text(c->tag, tag);
+    lv_obj_set_style_bg_opa(c->tag, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_hor(c->tag, 5, 0);
+    lv_obj_set_style_pad_ver(c->tag, 2, 0);
+    lv_obj_set_style_radius(c->tag, 4, 0);
+    c->name = label(c->box, &sony_20, TC(text_dim), 54, 6, 0);
+    c->bar  = lv_obj_create(c->box);
+    lv_obj_remove_style_all(c->bar);
+    lv_obj_set_style_bg_color(c->bar, TC(chip), 0);
+    lv_obj_set_style_bg_opa(c->bar, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(c->bar, 3, 0);
+    c->fill = lv_obj_create(c->bar);
+    lv_obj_remove_style_all(c->fill);
+    lv_obj_set_style_bg_color(c->fill, TC(btn_mark), 0);
+    lv_obj_set_style_bg_opa(c->fill, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(c->fill, 3, 0);
+    c->val = label(c->box, &sony_20, TC(text), 0, 6, 90);
+    lv_obj_set_style_text_align(c->val, LV_TEXT_ALIGN_RIGHT, 0);
+}
+
+static void chip_place(knob_chip_t *c, lv_coord_t x, lv_coord_t w) {
+    c->w = w;
+    lv_obj_set_x(c->box, x);
+    lv_obj_set_width(c->box, w);
+    lv_obj_set_pos(c->bar, w > 340 ? 160 : 150, 12);
+    lv_obj_set_size(c->bar, w - (w > 340 ? 160 : 150) - 64, 6);
+    lv_obj_set_x(c->val, w - 100);
+    lv_obj_clear_flag(c->box, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void chip_update(knob_chip_t *c, bool vol) {
+    const char *name;
+    char        val[32];
+    float       level;
+    bool        edit;
+
+    if (!c->box || lv_obj_has_flag(c->box, LV_OBJ_FLAG_HIDDEN) || !knobs_info(vol, &name, val, sizeof(val), &level, &edit))
+        return;
+    lv_obj_set_style_bg_color(c->tag, edit ? TC(btn_mark) : TC(warn), 0);
+    lv_obj_set_style_border_color(c->box, edit ? TC(panel_border) : TC(warn), 0);
+    lv_obj_set_style_text_color(c->name, edit ? TC(text_dim) : TC(text), 0);
+    if (edit) {
+        lv_label_set_text(c->name, name);
+        lv_label_set_text(c->val, val);
+    } else {
+        lv_label_set_text_fmt(c->name, "<  %s  >", name);
+        lv_label_set_text(c->val, "");
+    }
+    if (edit && level >= 0) {
+        lv_coord_t bw = lv_obj_get_width(c->bar);
+        lv_obj_set_size(c->fill, LV_MAX(6, (lv_coord_t)(bw * LV_MIN(level, 1.0f))), 6);
+        lv_obj_clear_flag(c->bar, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(c->bar, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static void chips_update(void) {
+    chip_update(&chips[0], true);
+    chip_update(&chips[1], false);
+}
+
+/* After a screen is built: both knobs on the activation, VOL beside the hint line elsewhere */
+static void chips_layout(void) {
+    if (act_freq) {
+        lv_obj_add_flag(status, LV_OBJ_FLAG_HIDDEN);
+        chip_place(&chips[0], 8, 388);
+        chip_place(&chips[1], 404, 388);
+    } else {
+        lv_obj_clear_flag(status, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_width(status, W - 28 - 310);
+        chip_place(&chips[0], W - 308, 300);
+        lv_obj_add_flag(chips[1].box, LV_OBJ_FLAG_HIDDEN);
+    }
+    chips_update();
+}
+
 static void show(screen_t s) {
     if (st.screen != s)
         sel = 0;
@@ -1070,6 +1168,7 @@ static void show(screen_t s) {
             build_log();
             break;
     }
+    chips_layout();
 }
 
 static void refresh(void) {
@@ -1559,6 +1658,7 @@ static void key_cb(lv_event_t *e) {
             vol_change_ctrl(1);
             break;
     }
+    chips_update();
 }
 
 /* A QSO edited or deleted from the phone rewrites the log: read it again, so the count, the last call
@@ -1606,6 +1706,7 @@ static void timer_cb(lv_timer_t *t) {
     }
     msg_voice_poll(false);
     log_watch();
+    chips_update();   /* the app or the radio's own keys may change them too */
     buttons_refresh(&b_reccq);   /* a recording stops by itself at 60 s */
     ticks++;
     if (act_freq) {
@@ -1633,7 +1734,6 @@ static void construct_cb(lv_obj_t *parent) {
             qsos_n = field_log_read(st.log, qsos, MAX_QSO);
     }
     dialog.obj = dialog_init(parent);
-    knobs_on_top();
     /* The whole screen above the buttons */
     lv_obj_set_pos(dialog.obj, 0, 0);
     lv_obj_set_size(dialog.obj, W, h);
@@ -1671,6 +1771,8 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_size(body, W, body_h);
     lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
     status = label(dialog.obj, &sony_20, TC(text_dim), 14, h - STATUS_H + 4, W - 28);
+    chip_create(&chips[0], "VOL", h - STATUS_H + 1);
+    chip_create(&chips[1], "MFK", h - STATUS_H + 1);
 
     lv_group_add_obj(keyboard_group, dialog.obj);
     lv_obj_add_event_cb(dialog.obj, key_cb, LV_EVENT_KEY, NULL);

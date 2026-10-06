@@ -25,7 +25,9 @@ void knobs_set_vol_state(bool edit);
 void knobs_set_mfk_state(bool edit);
 void knobs_display(bool on);
 bool knobs_visible();
-void knobs_on_top(void);   /* over a full-screen app */
+/* For an app that draws the knobs itself (Field Ops): what VOL (vol true) or MFK controls, its value,
+ * its level 0..1 (-1: no scale) and whether turning changes the value (else it chooses the control) */
+bool knobs_info(bool vol, const char **name, char *val, size_t size, float *level, bool *edit);
 
 #ifdef __cplusplus
 }

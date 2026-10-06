@@ -9,6 +9,8 @@
 
 
 #include "knobs.h"
+#include "mfk.h"
+#include "vol.h"
 #include "cluster_column.h"
 #include "buttons.h"
 
@@ -153,6 +155,18 @@ class KnobInfo {
   public:
     KnobInfo(lv_obj_t **label, const std::string arrow_symbol) : label(label), arrow_symbol(arrow_symbol) {};
 
+    bool info(cfg_ctrl_t ctrl, const char **name, char *val, size_t size, float *level, bool *edit) {
+        if (!item)
+            return false;
+        *name = item->name;
+        snprintf(val, size, "%s", item->to_str().c_str());
+        *edit = mode == MODE_EDIT;
+        float max = ctrl == CTRL_VOL ? 55 : ctrl == CTRL_SQL || ctrl == CTRL_RFG || ctrl == CTRL_MONI ? 100
+                  : ctrl == CTRL_PWR ? 10 : 0;   /* the parameters' ranges (settings_manager.h) */
+        *level = max > 0 ? atof(val) / max : -1;
+        return true;
+    }
+
     void set_edit_mode(bool edit) {
         if (edit) {
             mode = MODE_EDIT;
@@ -278,10 +292,9 @@ void knobs_display(bool on) {
     }
 }
 
-void knobs_on_top(void) {
-    knobs_display(true);   /* dialog_construct hid them */
-    lv_obj_move_foreground(vol_info);
-    lv_obj_move_foreground(mfk_info);
+bool knobs_info(bool vol, const char **name, char *val, size_t size, float *level, bool *edit) {
+    return vol ? vol_knob_info->info(vol_get_ctrl(), name, val, size, level, edit)
+               : mfk_knob_info->info(mfk_ctrl, name, val, size, level, edit);
 }
 
 bool knobs_visible() {
