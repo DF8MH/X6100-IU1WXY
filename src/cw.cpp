@@ -139,10 +139,12 @@ static void on_keyed(bool on) {
     keyed = on;
 }
 
-/* Every 8 ms: follow the tone while keyed (median of 3, then smoothed) */
+/* Every 8 ms: follow the tone while keyed (median of 3, then smoothed). The
+ * tone the detector is locked on: the FFT peak of a frame jumps to any other
+ * station or noise peak in the passband. */
 static void on_frame() {
     if (keyed) {
-        float freq = receiver->get_tone_freq();
+        float freq = receiver->get_lock_freq();
         if ((freq >= filter_low) && (freq <= filter_high)) {
             freq_hist[freq_hist_w] = freq;
             freq_hist_w = (freq_hist_w + 1) % freq_hist.size();

@@ -92,6 +92,43 @@ TEST_CASE("cw pipeline: noise, jitter and drift") {
     }
 }
 
+// The tuning indicator (src/cw.cpp) while keyed: the station being decoded at
+// 700 Hz with a weaker one 180 Hz above it in the passband. The locked tone stays
+// on the station; the FFT peak of single frames did not.
+TEST_CASE("cw pipeline: tuning indicator follows the decoded station") {
+    cw_synth::Params p;
+    p.tone_hz = 700.0f;
+    p.snr_db  = 10.0f;
+    std::vector<float> a = cw_synth::make(TEXT, p);
+    p.tone_hz = 880.0f;
+    p.snr_db  = 4.0f;
+    p.wpm     = 27.0f;
+    p.seed    = 2;
+    std::vector<float> b = cw_synth::make("TEST DE K1ABC K1ABC PSE K TEST DE K1ABC", p);
+    for (size_t i = 0; i < a.size(); ++i)
+        a[i] += i < b.size() ? b[i] : 0.0f;
+
+    bool               keyed = false;
+    int                n = 0, lock_ok = 0, peak_ok = 0;
+    cw::CwReceiver    *rxp = nullptr;
+    cw::CwReceiver     rx{[](const char *) {}, [&keyed](bool on) { keyed = on; }, [&]() {
+                          if (!keyed)
+                              return;
+                          n++;
+                          lock_ok += std::fabs(rxp->get_lock_freq() - 700.0f) <= 15.0f;
+                          peak_ok += std::fabs(rxp->get_tone_freq() - 700.0f) <= 15.0f;
+                      }};
+    rxp = &rx;
+    cw::AudioResampler rs{RATE};
+    rx.change_threshold(8.0f);
+    for (size_t i = 0; i < a.size(); i += 256)
+        rs.process(std::min<size_t>(256, a.size() - i), a.data() + i, rx);
+
+    INFO("keyed frames " << n << ", locked within 15 Hz " << lock_ok << ", FFT peak within 15 Hz " << peak_ok);
+    REQUIRE(n > 500);
+    CHECK(lock_ok >= 0.95 * n);
+}
+
 // No signal, 60 s each: nothing may be decoded. The radio with no antenna
 // printed an E every few seconds (noise peaks and clicks taken as dots).
 TEST_CASE("cw pipeline: no signal decodes nothing") {

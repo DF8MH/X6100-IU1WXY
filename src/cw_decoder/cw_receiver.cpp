@@ -246,4 +246,8 @@ float CwReceiver::get_tone_freq() const {
     return current_freq_hz_;
 }
 
+float CwReceiver::get_lock_freq() const {
+    return tone_tracker_.get_freq_hz();
+}
+
 } // namespace cw
