@@ -920,7 +920,10 @@ static void settings_demo(void) {
     /* Audio scrolled to the end (the MFK stops on the last row) */
     pg->items[3]->press(pg->items[3]);
     pump(300);
-    for (int i = 0; i < 60; i++) lv_group_focus_next(keyboard_group);
+    for (int i = 0; i < 10; i++) lv_group_focus_next(keyboard_group);
+    pump(500);
+    shot("settings_audio_tx.ppm");      /* TX AUDIO: filter, FM emphasis */
+    for (int i = 0; i < 50; i++) lv_group_focus_next(keyboard_group);
     pump(500);
     shot("settings_audio_end.ppm");
     for (int i = 0; i < 6; i++) lv_group_focus_prev(keyboard_group);
