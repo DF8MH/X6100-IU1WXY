@@ -760,6 +760,15 @@ void main_screen_action(press_action_t action) {
             msg_update_text_fmt("#%06x PRE: %s", theme_hex(TC_text), b ? "On" : "Off");
             break;
 
+        case ACTION_ATU_TOGGLE:   /* as the ATU key */
+            toggle_atu_enabled();
+            msg_update_text_fmt("#%06x ATU: %s", theme_hex(TC_text), param_i_get(cfg_atu_enabled) ? "On" : "Off");
+            break;
+
+        case ACTION_ATU_TUNE:     /* as a long press of the ATU key */
+            radio_start_atu();
+            break;
+
         case ACTION_WF_MODE:
             b = !param_i_get(cfg_wf_mode);
             param_i_set(cfg_wf_mode, b);

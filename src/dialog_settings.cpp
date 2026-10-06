@@ -72,6 +72,7 @@ static void make_wireless_page();
 static void make_info_page();
 static void make_keys_page();
 static void make_cluster_page();
+static void make_txcal_page();
 
 static void load_general_page(button_data_t *btn_data);
 static void load_display_page(button_data_t *btn_data);
@@ -80,6 +81,7 @@ static void load_wireless_page(button_data_t *btn_data);
 static void load_info_page(button_data_t *btn_data);
 static void load_keys_page(button_data_t *btn_data);
 static void load_cluster_page(button_data_t *btn_data);
+static void load_txcal_page(button_data_t *btn_data);
 
 static void construct_cb(lv_obj_t *parent);
 static void destruct_cb();
@@ -157,6 +159,12 @@ static button_data_t btn_cluster = {
     .press = load_cluster_page,
 };
 
+static button_data_t btn_txcal = {
+    .type  = BTN_TEXT,
+    .label = "TX Cal",
+    .press = load_txcal_page,
+};
+
 static button_data_t btn_info = {
     .type  = BTN_TEXT,
     .label = "Info",
@@ -178,6 +186,7 @@ static buttons_page_t btn_page_2 = {
      &btn_p2,
      &btn_keys,
      &btn_cluster,
+     &btn_txcal,
      &btn_info,
      }
 };
@@ -234,6 +243,11 @@ static void load_keys_page(button_data_t *btn_data) {
 
 static void load_cluster_page(button_data_t *btn_data) {
     make_cluster_page();
+    mark_tab(btn_data);
+}
+
+static void load_txcal_page(button_data_t *btn_data) {
+    make_txcal_page();
     mark_tab(btn_data);
 }
 
@@ -789,6 +803,8 @@ static action_items_t long_action_items[] = {
     { .label = " WF mode ", .action = ACTION_WF_MODE },
     { .label = " ATT on/off ", .action = ACTION_ATT_TOGGLE },
     { .label = " PRE on/off ", .action = ACTION_PRE_TOGGLE },
+    { .label = " Tuner on/off ", .action = ACTION_ATU_TOGGLE },
+    { .label = " Tuner: tune ", .action = ACTION_ATU_TUNE },
     /* Digital modes, in the order of the Modes menu */
     { .label = " APP RTTY ", .action = ACTION_APP_RTTY },
     { .label = " APP FT8 ", .action = ACTION_APP_FT8 },
@@ -936,6 +952,8 @@ static action_items_t hmic_action_items[] = {
     { .label = " WF mode ", .action = ACTION_WF_MODE },
     { .label = " ATT on/off ", .action = ACTION_ATT_TOGGLE },
     { .label = " PRE on/off ", .action = ACTION_PRE_TOGGLE },
+    { .label = " Tuner on/off ", .action = ACTION_ATU_TOGGLE },
+    { .label = " Tuner: tune ", .action = ACTION_ATU_TUNE },
     { .label = NULL, .action = ACTION_NONE }
 };
 
@@ -3032,6 +3050,14 @@ static void wv_power_cb(lv_event_t *e) {
     wv_update();
 }
 
+/* The wfview card is on General: the keyboard gives the page back there */
+static bool wv_kbd_close() {
+    wl_kbd = false;
+    textarea_window_close();
+    make_general_page();
+    return true;
+}
+
 static bool wv_kbd_ok() {
     const char *val = textarea_window_get();
 
@@ -3040,14 +3066,14 @@ static bool wv_kbd_ok() {
     } else {
         wfview_server_set_credentials(wfview_server_user(), val);
     }
-    return wl_kbd_close();
+    return wv_kbd_close();
 }
 
 static void wv_open_cb(lv_event_t *e) {
     wv_which = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_current_target(e));
     wl_kbd = true;
     lv_group_remove_all_objs(keyboard_group);
-    textarea_window_open(wv_kbd_ok, wl_kbd_close);
+    textarea_window_open(wv_kbd_ok, wv_kbd_close);
     lv_textarea_set_max_length(textarea_window_text(), 15);
     lv_textarea_set_placeholder_text(textarea_window_text(), wv_which == WV_USER ? "User" : "Password");
     textarea_window_set(wv_which == WV_USER ? wfview_server_user() : wfview_server_pass());
@@ -3093,7 +3119,6 @@ static uint8_t make_wfview(uint8_t row) {
 
 static void wl_timer_cb(lv_timer_t *t) {
     wifi_update();
-    wv_update();
     if (++wl_ticks % 5 == 0) {
         bt_refresh();
     }
@@ -3219,10 +3244,21 @@ static void st_kbd_open_cb(lv_event_t *e) {
     }
 }
 
+static lv_timer_t *wv_timer;   /* the wfview client status on General */
+
+static void wv_timer_cb(lv_timer_t *t) {
+    wv_update();
+}
+
 static void st_delete_cb(lv_event_t *e) {
-    if (st_kbd) {
+    if (st_kbd || wl_kbd) {
         st_kbd = 0;
+        wl_kbd = false;
         textarea_window_close();
+    }
+    if (wv_timer) {
+        lv_timer_del(wv_timer);
+        wv_timer = NULL;
     }
 }
 
@@ -3399,8 +3435,6 @@ static void make_general_page() {
 
     uint8_t row;
 
-    x6100_base_ver_t base_ver = x6100_control_get_base_ver();
-
     now = time(NULL);
     struct tm *t = localtime(&now);
 
@@ -3424,18 +3458,16 @@ static void make_general_page() {
     row = make_charger(row);
     card_end(row);
 
-    /* TX calibration */
-    row = card_begin(LV_SYMBOL_SETTINGS, "TX CALIBRATION");
-    row = make_tx_offset(row);
-    if (base_ver.rev >= 8) {
-        row = band_out_gain_correction(row);
-    }
-    card_end(row);
-
     row = card_begin(LV_SYMBOL_SHUFFLE, "TRANSVERTERS");
     row = make_transverter(row, cfg_sm.p_transverter_0_from, cfg_sm.p_transverter_0_to, cfg_sm.p_transverter_0_shift);
     row = make_transverter(row, cfg_sm.p_transverter_1_from, cfg_sm.p_transverter_1_to, cfg_sm.p_transverter_1_shift);
     card_end(row);
+
+    row = card_begin(LV_SYMBOL_UPLOAD, "WFVIEW SERVER");
+    row = make_wfview(row);
+    card_end(row);
+    wv_update();
+    wv_timer = lv_timer_create(wv_timer_cb, 1000, NULL);   /* deleted by st_delete_cb */
 }
 
 /* What the front keys (long press) and the hand mic keys do */
@@ -3594,6 +3626,31 @@ static void make_cluster_page() {
     card_end(row);
 }
 
+/* TX CAL: the transmitter's calibration and CESSB, per band where the base keeps them per band */
+static void make_txcal_page() {
+    grid_delete();
+    grid_create();
+    uint8_t row;
+
+    x6100_base_ver_t base_ver = x6100_control_get_base_ver();
+
+    row = card_begin(LV_SYMBOL_SETTINGS, "TX CALIBRATION");
+    row = make_tx_offset(row);
+    if (base_ver.rev >= 8) {
+        row = band_out_gain_correction(row);
+    }
+    if (base_ver.rev >= 3) {
+        row = make_codec_gain(row);
+    }
+    card_end(row);
+
+    if (base_ver.rev >= 12) {
+        row = card_begin(LV_SYMBOL_UPLOAD, "CESSB");
+        row = make_cessb(row);
+        card_end(row);
+    }
+}
+
 static void make_display_page() {
     grid_delete();
     grid_create();
@@ -3646,13 +3703,9 @@ static void make_audio_page() {
     /* TX audio */
     if (base_ver.rev >= 3) {
         row = card_begin(LV_SYMBOL_UPLOAD, "TX AUDIO");
-        row = make_codec_gain(row);
         row = make_comp_th_makeup(row);
         if (base_ver.rev >= 9) {
             row = make_tx_filter(row);
-        }
-        if (base_ver.rev >= 12) {
-            row = make_cessb(row);
         }
         if (base_ver.rev >= 8) {
             row = make_fm_emphasis(row);
@@ -3710,36 +3763,36 @@ static void make_wireless_page() {
     row = make_bt_devices(row);
     card_end(row);
 
-    row = card_begin(LV_SYMBOL_UPLOAD, "WFVIEW SERVER");
-    row = make_wfview(row);
-    card_end(row);
-
     lv_obj_add_event_cb(grid, wl_delete_cb, LV_EVENT_DELETE, NULL);
     wl_ticks = 0;
     wl_timer = lv_timer_create(wl_timer_cb, 1000, NULL);
     wifi_update();
-    wv_update();
     bt_update_view();
     bt_refresh();
 }
 
+static uint8_t info_row(uint8_t row, const char *label, const char *val) {
+    wl_row_label(row, label);
+    lv_obj_t *obj = lv_label_create(grid);
+    lv_label_set_text(obj, val);
+    lv_obj_set_style_text_color(obj, TC(text_value), 0);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_END, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
+    return row + 1;
+}
+
+/* Info: cards and rows as the other tabs, in the same font */
 static void make_info_page() {
     grid_delete();
+    grid_create();
+    uint8_t row;
 
-    lv_obj_t    *label;
-
-    page = lv_obj_create(dialog.obj);
-    lv_obj_set_size(page, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_border_width(page, 0, LV_PART_MAIN);
-    lv_obj_set_style_text_color(page, TC(text), 0);
-    lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_pad_hor(page, 30, 0);
-    lv_obj_set_style_pad_ver(page, 40, 0);
-
-    label = lv_label_create(page);
-    lv_obj_set_style_text_line_space(label, 12, LV_PART_MAIN);
-    lv_label_set_text_fmt(label, "%s\nCustom firmware by IU1WXY\ninfo@x6100-link.it\nBased on R1CBU + gdyuldin builds\nBaseband version: %s",
-                          VERSION, x6100_control_get_fw_version_str());
+    row = card_begin(LV_SYMBOL_HOME, "FIRMWARE");
+    row = info_row(row, "Version", strrchr(VERSION, ' ') + 1);
+    row = info_row(row, "Author", "Giovanni Ricciardi IU1WXY");
+    row = info_row(row, "Contact", "info@x6100-link.it");
+    row = info_row(row, "Based on", "R1CBU + gdyuldin builds");
+    row = info_row(row, "Baseband", x6100_control_get_fw_version_str());   /* one card: nothing to focus, so no MFK scrolling */
+    card_end(row);
 }
 
 static void construct_cb(lv_obj_t *parent) {

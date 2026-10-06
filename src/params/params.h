@@ -44,6 +44,8 @@ typedef enum {
     ACTION_SCREEN_REC,  /* appended after WF_MODE: screen + audio recording on/off */
     ACTION_ATT_TOGGLE,  /* appended after SCREEN_REC */
     ACTION_PRE_TOGGLE,
+    ACTION_ATU_TOGGLE,  /* appended after PRE_TOGGLE */
+    ACTION_ATU_TUNE,    /* start a tuning cycle: transmits a carrier */
 
     ACTION_APP_RTTY = 100,
     ACTION_APP_FT8,

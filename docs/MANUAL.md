@@ -33,7 +33,7 @@ Callsign is needed by JS8, FT8, WSPR (TX and upload) and the DX Cluster.
 **Long press:** each button group (GEN, APP, KEY, MSG, DFN, DFL) has a
 long-press action, chosen in Settings → **Keys** → FRONT KEYS, LONG PRESS:
 none, screenshot, RX recorder or screen recording on/off, mute, waterfall
-mode, a digital mode app (RTTY, FT8, WSPR, JS8, SSTV, WeFax, NavTex), a tool
+mode, ATT, PRE or tuner on/off, tuner tune (transmits a carrier), a digital mode app (RTTY, FT8, WSPR, JS8, SSTV, WeFax, NavTex), a tool
 (Cluster, CW Trainer, CW Keyboard, RX recorder, SWR Scan, GPS, QTH grid,
 Settings). The
 hand mic F1 and F2 keys (short and long press) are set in the same tab,
@@ -541,7 +541,7 @@ The radio can act as an Icom IC-705 on the network, so
 [wfview](https://wfview.org) on a PC controls it with CI-V, RX audio and the
 waterfall.
 
-- **Off by default.** Enable it in Settings → Wireless (wfview card) or on
+- **Off by default.** Enable it in Settings → General (wfview card) or on
   the web configurator's **wfview** page. Default login `x6100` / `x6100`:
   change it in the same places (stored in `/mnt/wfview.conf`).
 - Ports: UDP **50001** (control), **50002** (CI-V), **50003** (audio).
@@ -552,16 +552,17 @@ waterfall.
 ### Settings
 
 APP (page 2) → **Settings**. Tabs on two button pages: General, Display,
-Audio, Wireless (page 1), Keys, Cluster and Info (page 2).
+Audio, Wireless (page 1), Keys, Cluster, TX Cal and Info (page 2).
 
 | Tab | Cards |
 |---|---|
-| General | STATION (callsign, QTH locator), DATE / TIME, CONTROLS (frequency acceleration, charger), TX CALIBRATION (IQ offsets, band output gain), TRANSVERTERS (from, to, shift) |
+| General | STATION (callsign, QTH locator), DATE / TIME, CONTROLS (frequency acceleration, charger), TRANSVERTERS (from, to, shift), WFVIEW SERVER (on/off, user, password, port and client) |
 | Display | BACKLIGHT, WATERFALL (mode, auto level, manual min/max, line and zoom, smooth scroll, speed: 3 = 15 lines/s (default), 4 = 20, 5 = 30; 2 = 7.5 and 1 = 5 average the frames into a line, less noise and less CPU), MAIN SCREEN (band plan, cluster spots, cluster column), INTERFACE (popups, knob info, font, theme) |
-| Audio | RX AUDIO, TX AUDIO (codec gain, compressor, filter, CESSB, FM emphasis), MICROPHONE, VOX, AGC, BT HEADPHONES |
-| Wireless | WIFI (power, status, IP, networks), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones, also keyboards), WFVIEW SERVER (on/off, user, password, port and client) |
+| Audio | RX AUDIO, TX AUDIO (compressor, filter, FM emphasis), MICROPHONE, VOX, AGC, BT HEADPHONES |
+| Wireless | WIFI (power, status, IP, networks), BLUETOOTH (power, Discoverable (CAT), device list, Scan headphones, also keyboards) |
 | Keys | FRONT KEYS, LONG PRESS (GEN, APP, KEY, MSG, DFN, DFL), HAND MIC KEYS (F1, F2, F1 long, F2 long) |
 | Cluster | CLUSTER FILTERS (modes, bands, POTA/SOTA activity), CLUSTER VIEW (newest first, all bands, spot snap hold and speed) |
+| TX Cal | TX CALIBRATION (IQ offsets, band output gain, codec gain), CESSB (on, level) |
 | Info | app and base firmware versions |
 
 **Main knob acceleration** (General → CONTROLS): the radio times every detent
