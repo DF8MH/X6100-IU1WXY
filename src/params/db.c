@@ -20,6 +20,41 @@ sqlite3                 *db = NULL;
 static sqlite3_stmt     *insert_stmt;
 
 
+/* A params.db without bands (an old or broken one kept on the DATA partition when the
+ * SD card was written again): the bands of the default database, the other settings kept */
+#define DEFAULT_DB "/usr/share/x6100/params.default.db"
+
+static void bands_check(void) {
+    sqlite3_stmt *st;
+    int           n = 0;
+
+    if (sqlite3_prepare_v2(db, "SELECT count(*) FROM bands", -1, &st, 0) == SQLITE_OK) {
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            n = sqlite3_column_int(st, 0);
+        }
+        sqlite3_finalize(st);
+    }
+    if (n > 0) {
+        return;
+    }
+    LV_LOG_WARN("params.db has no bands: loading the default ones");
+    if (sqlite3_exec(db,
+            "ATTACH '" DEFAULT_DB "' AS def;"
+            "CREATE TABLE IF NOT EXISTS bands(id INTEGER PRIMARY KEY, name TEXT, start_freq INTEGER, "
+                "stop_freq INTEGER, type INTEGER);"
+            "CREATE TABLE IF NOT EXISTS band_params(bands_id INTEGER, name TEXT, val INTEGER, "
+                "UNIQUE (bands_id, name) ON CONFLICT REPLACE);"
+            "BEGIN;"
+            "DELETE FROM band_params;"
+            "INSERT INTO bands SELECT * FROM def.bands;"
+            "INSERT INTO band_params SELECT * FROM def.band_params;"
+            "COMMIT;", NULL, NULL, NULL) != SQLITE_OK) {
+        LV_LOG_ERROR("Can't load the default bands: %s", sqlite3_errmsg(db));
+        sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+    }
+    sqlite3_exec(db, "DETACH def;", NULL, NULL, NULL);
+}
+
 static void errorLogCallback(void *pArg, int iErrCode, const char *zMsg){
     LV_LOG_ERROR("(%d) %s\n", iErrCode, zMsg);
 }
@@ -39,6 +74,7 @@ bool database_init() {
     if (rc != 0) {
         return false;
     }
+    bands_check();
 
     // Some optimizations
     //

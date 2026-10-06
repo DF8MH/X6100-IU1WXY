@@ -46,9 +46,10 @@ def read_bands(con: sqlite3.Connection) -> list[BandParams]:
     keys = ["id", "name", "start_freq", "stop_freq", "type"]
 
     for row in con.execute(f"SELECT {','.join(keys)} FROM bands ORDER BY start_freq"):
-        band_data = dict(zip(keys, row))
-        band_data = BandParams(**band_data)
-        bands_data.append(band_data)
+        try:
+            bands_data.append(BandParams(**dict(zip(keys, row))))
+        except (ValueError, TypeError):   # a broken row must not empty the whole page
+            continue
     for item in bands_data:
         for row in con.execute(
             f"SELECT name, val FROM band_params WHERE bands_id = ?", (item.id,)
