@@ -497,6 +497,24 @@ def adif_set(rec, name, value):
     return rec[:m.start()] + new + rec[m.end() + int(m.group(1)):]
 
 
+def adif_del(rec, name):
+    """rec without the field `name`."""
+    m = re.search(r'<%s:(\d+)(?::\w)?>' % name, rec, re.I)
+    return rec if not m else rec[:m.start()] + rec[m.end() + int(m.group(1)):]
+
+
+SOTA_REF = r'[A-Z0-9]{1,4}/[A-Z]{2}-\d{3}'     # I/LO-123
+POTA_REF = r'[A-Z0-9]{1,4}-\d{4,5}'            # IT-1234
+
+
+def set_ref(rec, ref):
+    """The other station's SOTA or POTA reference (by its form); "" removes it."""
+    rec = adif_del(adif_del(rec, "SOTA_REF"), "POTA_REF")
+    if not ref:
+        return rec
+    return adif_set(rec, "SOTA_REF" if re.fullmatch(SOTA_REF, ref) else "POTA_REF", ref)
+
+
 def edit_qso(name, n, fn):
     """Applies fn to record n (0 = the first QSO of the file; records without CALL do not count):
     fn returns the new record, or None to delete it. Returns an error response or None."""
@@ -531,7 +549,8 @@ def delete_qso(name, n):
 
 @app.put('/api/field/logs/<name>/<n:int>')
 def put_qso(name, n):
-    """JSON {"call", "rst_sent", "rst_rcvd"}: the QSO's call and reports."""
+    """JSON {"call", "rst_sent", "rst_rcvd", "ref"?}: the QSO's call, reports and the other station's
+    SOTA or POTA reference ("" none; left as it is when missing)."""
     try:
         data = bottle.request.json
     except ValueError:
@@ -543,8 +562,16 @@ def put_qso(name, n):
     rst = r'[+-]?\d{1,3}'     # 59, 599, FT8 dB (-10)
     if not re.fullmatch(r'[A-Z0-9/]{3,15}', call) or not re.fullmatch(rst, rs) or not re.fullmatch(rst, rr):
         return api_error(400, "Invalid QSO")
-    return edit_qso(name, n, lambda rec: adif_set(adif_set(adif_set(rec, "CALL", call), "RST_SENT", rs), "RST_RCVD", rr)) \
-        or {"status": "OK"}
+    ref = data.get("ref")
+    if ref is not None:
+        ref = str(ref).strip().upper()
+        if ref and not (re.fullmatch(SOTA_REF, ref) or re.fullmatch(POTA_REF, ref)):
+            return api_error(400, "Invalid SOTA/POTA reference")
+
+    def change(rec):
+        rec = adif_set(adif_set(adif_set(rec, "CALL", call), "RST_SENT", rs), "RST_RCVD", rr)
+        return rec if ref is None else set_ref(rec, ref)
+    return edit_qso(name, n, change) or {"status": "OK"}
 
 
 @app.delete('/api/field/logs/<name>')
