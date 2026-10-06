@@ -17,6 +17,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     dialog_navtex.c
     dialog_js8.c
     tx_player.c
+    tx_level.c
     dialog_sstv.c
     sstv_resources.c
     dialog_cluster.c

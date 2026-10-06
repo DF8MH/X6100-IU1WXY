@@ -2658,3 +2658,43 @@ TEST_CASE("js8_process keeps messages and answers them", "[js8][held]") {
     unlink(ipath);
     unlink(hpath);
 }
+
+// From randal007 x6100-js8 (js8core local patch 11)
+TEST_CASE("our frames are desktop JS8Call's, bit for bit", "[js8][desktop]") {
+    struct Case {
+        int         submode;
+        const char *text, *frames;
+    };
+    for (auto c : std::vector<Case>{
+             {0, "N0XYZ RR 73", "UeWdy-ytVbK0 1 xiJ+++++++++ 2"},
+             {0, "N0XYZ MSG 73 GOOD DAY", "UeWdy-ytVaa0 1 xiUw5wWE4W07 2"},
+             {0, "N0XYZ>2E0ABC HELLO", "UeWdy-ytVaK0 1 XCAdvnHpFFxh 0 xOf+++++++++ 2"},
+             {0, "N0XYZ>W1ABC HELLO THERE", "UeWdy-ytVaK0 1 Yo9-SKSpp-wD 0 mE8C4T5cV+++ 2"},
+             {0, "N0XYZ MSG TO:W1ABC SEE YOU AT 1800Z", "UeWdy-ytVae0 1 Yo9-SMaY7-rD 0 jIFYLAY7s6GV 2"},
+             {0, "N0XYZ QUERY CALL W1ABC?", "UeWdy-ytVaq0 1 Yo9-SRB+7s++ 2"},
+             {0, "N0XYZ YES MSG ID 3 +2", "UeWdy-ytVbi0 1 vTA7BRPHPd++ 2"},
+             {0, "N0XYZ HEARTBEAT SNR -08 MSG ID 3", "UeWdy-ytVbqN 1 vTA7BR7+++++ 2"},
+             {0, "N0XYZ SNR -12", "UeWdy-ytVbaJ 3"},
+             {0, "N0XYZ MSG MEET AT THE PARK 1800Z", "UeWdy-ytVaa0 1 -X91YS0SZps1 0 xarAjU0ZaF++ 2"},
+             {0, "@ALLCALL CQ CQ CQ CN89", "3u7hI9zNPrMu 3"},
+             {0, "@APRSIS CMD :SMS      :@6045551234 TEST{01}", "UeWdy+GGPpW0 1 xGnsDz7ez7eV 0 +HQDLSWmLqn+ 0 y1OBDRC7Eav3 0 wLOENOdHY7++ 2"},
+             {1, "N0XYZ RR 73", "UeWdy-ytVbK0 1 knF+++++++++ 6"},
+             {1, "N0XYZ MSG 73 GOOD DAY", "UeWdy-ytVaa0 1 knxeNg0uI00V 6"},
+             {1, "N0XYZ>2E0ABC HELLO", "UeWdy-ytVaK0 1 imAKySwtYuM9 4 jYd+++++++++ 6"},
+             {1, "N0XYZ>W1ABC HELLO THERE", "UeWdy-ytVaK0 1 W5WUETRnSBV+ 4 -ZmHqMP+++++ 6"},
+             {1, "N0XYZ MSG TO:W1ABC SEE YOU AT 1800Z", "UeWdy-ytVae0 1 W5WUETR01+nl 4 8EmN9gLQt+++ 4 UlwIF+++++++ 6"},
+             {1, "N0XYZ QUERY CALL W1ABC?", "UeWdy-ytVaq0 1 W5WUETKjc4GX 6"},
+             {1, "N0XYZ YES MSG ID 3 +2", "UeWdy-ytVbi0 1 bqeSjjb5cV++ 6"},
+             {1, "N0XYZ HEARTBEAT SNR -08 MSG ID 3", "UeWdy-ytVbqN 1 bqeSjiV+++++ 6"},
+             {1, "N0XYZ SNR -12", "UeWdy-ytVbaJ 3"},
+             {1, "N0XYZ MSG MEET AT THE PARK 1800Z", "UeWdy-ytVaa0 1 w4a69m1oFFO7 4 kJKgru2EG+++ 6"},
+             {1, "@ALLCALL CQ CQ CQ CN89", "3u7hI9zNPrMu 3"},
+             {1, "@APRSIS CMD :SMS      :@6045551234 TEST{01}", "UeWdy+GGPpW0 1 j37OtqUZqUX+ 4 z5erLo31NJC0 4 i5cjc3dISYbF 4 i7BiJen3++++ 6"},
+         }) {
+        INFO(c.text << " at submode " << c.submode);
+        std::string got;
+        for (auto &[frame, bits] : vc::build_message_frames("VE7NHW", "CN89", "", c.text, false, false, c.submode))
+            got += (got.empty() ? "" : " ") + frame + " " + std::to_string(bits);
+        CHECK(got == c.frames);
+    }
+}

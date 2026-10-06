@@ -38,6 +38,7 @@
 #include "styles.h"
 #include "textarea_window.h"
 #include "tx_player.h"
+#include "tx_info.h"
 #include "theme.h"
 #include "util.h"
 #include "widgets/lv_finder.h"
@@ -217,6 +218,9 @@ static void        beacon_changed_cb(lv_event_t *e);
 static const char *where_label(void);
 static void        alert_check(js8_rx_msg_t *m, bool new_station);
 static void        alert_beep(int count);
+static bool        beep_start(int count);
+static void        swr_guard_tick(void);
+static void        swr_guard_reset(void);
 static void        beep_log_level(void);
 static const char *speed_label_getter(void);
 static void        speed_cb(button_data_t *btn);
@@ -1414,6 +1418,7 @@ static void tx_stop_all(void) {
 static void tx_timer_cb(lv_timer_t *t) {
     (void)t;
     static unsigned ticks;
+    swr_guard_tick();
     update_tx_bar();
     /* Keep the status clock moving; decode cycles, which also refresh it,
      * pause while we transmit. */
@@ -1889,6 +1894,7 @@ static void construct_cb(lv_obj_t *parent) {
     params_bool_set(&params.js8_hb, false);
     params_bool_set(&params.js8_hb_ack, false);
     auto_cq = false;
+    swr_guard_reset();
 
     /* Full-screen app with its own waterfall: skip main-screen DSP. */
     dsp_set_waterfall_enabled(false);
@@ -4564,11 +4570,15 @@ static void beep_log_level(void) {
 
 static void alert_beep(int count) {
     if (!(params.js8_alerts.x & JS8_ALERT_BEEP)) return;
-    if (atomic_load(&keyed) || js8_tx_busy(tx)) return;
-    int64_t now = now_wall_ms();
-    if (now - beep_last_ms < BEEP_EVERY_MS) return;
-    if (atomic_exchange(&beeping, true)) return;
-    beep_last_ms = now;
+    if (now_wall_ms() - beep_last_ms < BEEP_EVERY_MS) return;
+    beep_start(count);
+}
+
+/* `count` beeps now, unless we're sending or a beep is playing (false). */
+static bool beep_start(int count) {
+    if (atomic_load(&keyed) || js8_tx_busy(tx)) return false;
+    if (atomic_exchange(&beeping, true)) return false;
+    beep_last_ms = now_wall_ms();
 
     static bool made;
     if (!made) {
@@ -4585,6 +4595,71 @@ static void alert_beep(int count) {
     pthread_t th;
     if (pthread_create(&th, NULL, beep_thread, NULL) == 0) pthread_detach(th);
     else atomic_store(&beeping, false);
+    return true;
+}
+
+/* ---- High-SWR guard (randal007, x6100-js8 beta 4.5) -------------------- */
+
+/* For unattended stations: the SWR above 3:1 for half a second while we transmit turns every
+ * automatic sender off (AUTO, HB, HB ACK, auto CQ). The message on the air carries on. Three
+ * beeps once the transmitter is done (the speaker is the TX audio path while keyed), whatever
+ * the Alerts list says. */
+#define SWR_TRIP    3.0f
+#define SWR_TRIP_MS 500
+
+static uint8_t swr_msg_id;
+static int64_t swr_high_since; /* 0: the last reading was at or under the limit */
+static float   swr_high_max;
+static bool    swr_beep_due;
+
+static void swr_guard_trip(float swr) {
+    if (!params.js8_auto.x && !params.js8_hb.x && !params.js8_hb_ack.x && !auto_cq) return;
+    LV_LOG_USER("JS8 high SWR: %.1f:1 for %d ms while sending, AUTO / HB / HB ACK / auto CQ off", swr, SWR_TRIP_MS);
+    params_bool_set(&params.js8_auto, false);
+    params_bool_set(&params.js8_hb, false);
+    params_bool_set(&params.js8_hb_ack, false);
+    hb_next_ms   = 0;
+    hb_adjusting = false;
+    auto_cq_stop("high SWR");
+    if (btn_auto.disp_btn) buttons_refresh(&btn_auto);
+    if (btn_hbauto.disp_btn) buttons_refresh(&btn_hbauto);
+    if (btn_hbackk.disp_btn) buttons_refresh(&btn_hbackk);
+    add_info_row("High SWR %.1f:1: AUTO, HB, HB ACK and auto CQ off", swr);
+    msg_update_text_fmt("High SWR %.1f:1: AUTO, HB, HB ACK and auto CQ off. Check the antenna", swr);
+    update_status();
+    swr_beep_due = true;
+}
+
+static void swr_guard_reset(void) {
+    swr_high_since = 0;
+    swr_beep_due   = false;
+}
+
+/* Every 250 ms (tx_timer). Readings over the limit for 500 ms trip it: a spike as the radio
+ * keys doesn't. */
+static void swr_guard_tick(void) {
+    if (!atomic_load(&keyed)) {
+        swr_high_since = 0;
+        tx_info_refresh(&swr_msg_id, NULL, NULL, NULL); /* the next TX starts fresh */
+        if (swr_beep_due && beep_start(3)) swr_beep_due = false;
+        return;
+    }
+    float swr;
+    if (!tx_info_refresh(&swr_msg_id, NULL, NULL, &swr)) return;
+    if (swr <= SWR_TRIP) {
+        swr_high_since = 0;
+        return;
+    }
+    int64_t now = now_mono_ms();
+    if (!swr_high_since) {
+        swr_high_since = now;
+        swr_high_max   = swr;
+        return;
+    }
+    swr_high_max = LV_MAX(swr_high_max, swr);
+    if (now - swr_high_since < SWR_TRIP_MS) return;
+    swr_high_since = 0;
+    swr_guard_trip(swr_high_max);
 }
 
 /* Every decode but our own: alert words, then what beeps. */

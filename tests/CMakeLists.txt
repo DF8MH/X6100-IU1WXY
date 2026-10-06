@@ -24,6 +24,11 @@ add_executable(test_js8 test_js8.cpp)
 target_link_libraries(test_js8 PRIVATE JS8 JS8TestSignal js8core Catch2::Catch2WithMain)
 add_test(NAME test_js8 COMMAND $<TARGET_FILE:test_js8> --colour-mode=ansi )
 
+add_executable(test_tx_level test_tx_level.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/tx_level.c)
+target_include_directories(test_tx_level PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test_tx_level PRIVATE Catch2::Catch2WithMain)
+add_test(NAME test_tx_level COMMAND $<TARGET_FILE:test_tx_level> --colour-mode=ansi )
+
 add_subdirectory(cfg)
 
 add_subdirectory(../src/cluster ${CMAKE_BINARY_DIR}/src/cluster)

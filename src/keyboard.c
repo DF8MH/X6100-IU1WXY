@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 
 #include <glob.h>
 
@@ -29,6 +30,15 @@ lv_group_t *keyboard_group;
 static lv_indev_drv_t       indev_drv_2;
 static bool                 ready = false;
 static kbd_rollover_t       rollover;
+static dev_t                kbd_rdev;  /* the keyboard opened: a new one (unplugged and back) opens again */
+static ino_t                kbd_ino;
+static lv_timer_t          *rescan_timer;
+static int                  rescans_left;
+
+/* After a USB device comes or goes, look for the keyboard this often, this many times: udev's
+ * "add" comes before the keyboard's /dev/input node exists (randal007, x6100-js8 beta 4.5) */
+#define KBD_RESCAN_MS    500
+#define KBD_RESCAN_TIMES 10
 
 extern int evdev_fd; /* lv_drivers/indev/evdev.c, set by evdev_set_file() */
 
@@ -93,9 +103,13 @@ static char* search_kbd_device() {
 }
 
 static void setup_kbd(char *path) {
-    if (!evdev_set_file(path)) {
+    struct stat st;
+
+    if (stat(path, &st) != 0 || !evdev_set_file(path)) {
         return;
     }
+    kbd_rdev = st.st_rdev;
+    kbd_ino  = st.st_ino;
     rollover = (kbd_rollover_t){0};
 
     if (indev_drv_2.type == LV_INDEV_TYPE_NONE) {
@@ -111,14 +125,31 @@ static void setup_kbd(char *path) {
     ready = true;
 }
 
-static void on_usb_device_change(void * s, lv_msg_t * msg) {
-    enum usb_devices_event_t event = (enum usb_devices_event_t)msg->payload;
-    char *dev_path = search_kbd_device();
-    if (dev_path && !ready) {
-        setup_kbd(dev_path);
-    } else if (!dev_path && ready) {
-        ready = false;
+/* A keyboard there and not open (or a different one: unplugged and back): open it; none: not ready */
+static void check_kbd(void) {
+    char       *dev_path = search_kbd_device();
+    struct stat st;
+
+    if (dev_path && stat(dev_path, &st) == 0) {
+        if (!ready || st.st_rdev != kbd_rdev || st.st_ino != kbd_ino) setup_kbd(dev_path);
+        return;
     }
+    ready = false;
+}
+
+/* All the checks, also once one finds it: an unplugged keyboard's link can outlive the "remove" */
+static void rescan_cb(lv_timer_t *t) {
+    check_kbd();
+    if (--rescans_left <= 0) {
+        lv_timer_del(t);
+        rescan_timer = NULL;
+    }
+}
+
+static void on_usb_device_change(void * s, lv_msg_t * msg) {
+    check_kbd();
+    rescans_left = KBD_RESCAN_TIMES;
+    if (!rescan_timer) rescan_timer = lv_timer_create(rescan_cb, KBD_RESCAN_MS, NULL);
 }
 
 void keyboard_init() {
