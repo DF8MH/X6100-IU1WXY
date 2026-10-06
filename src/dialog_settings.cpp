@@ -3301,6 +3301,7 @@ static param_slider_t vox_ag_slider    = {&cfg_sm.p_vox_ag, 0, 100, 1, "%i"};
 static param_slider_t vox_delay_slider = {&cfg_sm.p_vox_delay, 100, 2000, 50, "%i ms"};
 static param_slider_t agc_knee_slider  = {&cfg_sm.p_agc_knee, -100, 0, 1, "%i dB"};
 static param_slider_t agc_slope_slider = {&cfg_sm.p_agc_slope, 0, 10, 1, "%i dB"};
+static param_slider_t smeter_cal_slider = {&cfg_sm.p_smeter_cal, -40, 20, 1, "%+i dB"};
 static param_slider_t snap_hold_slider = {&cfg_sm.p_spot_snap_hold, 0, 5, 1, "%i"};
 static param_slider_t snap_slow_slider = {&cfg_sm.p_spot_snap_slow, 1, 5, 1, "%i"};
 static param_slider_t accel_onset_slider = {&cfg_sm.p_freq_accel_onset, 1, 5, 1, "%i"};
@@ -3315,6 +3316,70 @@ static void param_slider_cb(lv_event_t *e) {
     p->param->set(val);
 }
 
+/* S-meter cal, when its editing starts: what it is for, before the reading drifts from the truth.
+ * Built as the cluster alert (theme roles, popup radius, sony_18 title), framed in the error colour */
+static lv_obj_t   *smeter_warn;
+static lv_timer_t *smeter_warn_timer;
+
+static void smeter_warn_close(lv_timer_t *t) {
+    if (smeter_warn) {
+        lv_obj_del(smeter_warn);
+        smeter_warn = NULL;
+    }
+    smeter_warn_timer = NULL;
+}
+
+static void smeter_warn_show(void) {
+    lv_obj_t *l;
+
+    if (smeter_warn) {
+        return;
+    }
+    smeter_warn = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(smeter_warn);
+    lv_obj_set_size(smeter_warn, 560, LV_SIZE_CONTENT);
+    lv_obj_align(smeter_warn, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(smeter_warn, TC(popup), 0);
+    lv_obj_set_style_bg_opa(smeter_warn, 240, 0);
+    lv_obj_set_style_border_color(smeter_warn, TC(err), 0);
+    lv_obj_set_style_border_width(smeter_warn, 3, 0);
+    lv_obj_set_style_radius(smeter_warn, theme_shape.radius_popup, 0);
+    lv_obj_set_style_pad_all(smeter_warn, 14, 0);
+    lv_obj_set_style_pad_row(smeter_warn, 8, 0);
+    lv_obj_set_flex_flow(smeter_warn, LV_FLEX_FLOW_COLUMN);
+    lv_obj_clear_flag(smeter_warn, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+
+    l = lv_label_create(smeter_warn);
+    lv_obj_set_style_text_font(l, &sony_18, 0);
+    lv_obj_set_style_text_color(l, TC(err), 0);
+    lv_label_set_text(l, "S-METER CALIBRATION");
+
+    l = lv_label_create(smeter_warn);
+    lv_obj_set_width(l, lv_pct(100));
+    lv_obj_set_style_text_font(l, &sony_24, 0);
+    lv_obj_set_style_text_color(l, TC(text), 0);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(l, "Change it only reading the same signal on a calibrated reference "
+                         "(radio or generator). -22 dB matches an IC-7300.");
+
+    smeter_warn_timer = lv_timer_create(smeter_warn_close, 5000, NULL);
+    lv_timer_set_repeat_count(smeter_warn_timer, 1);
+}
+
+static void smeter_cal_warn_cb(lv_event_t *e) {
+    lv_obj_t   *obj = lv_event_get_target(e);
+    lv_indev_t *in  = lv_indev_get_act();
+    bool        pointer = in && lv_indev_get_type(in) == LV_INDEV_TYPE_POINTER;
+    lv_group_t *g   = (lv_group_t *)lv_obj_get_group(obj);
+
+    /* Touch: pressing it changes it. Knob: the press that starts editing focuses it in edit
+     * mode (it sends no PRESSED; the press that ends editing does) */
+    if ((lv_event_get_code(e) == LV_EVENT_PRESSED && pointer) ||
+        (lv_event_get_code(e) == LV_EVENT_FOCUSED && g && lv_group_get_editing(g))) {
+        smeter_warn_show();
+    }
+}
+
 static uint8_t make_param_slider(uint8_t row, const char *label, param_slider_t *p) {
     lv_obj_t *obj;
 
@@ -3327,7 +3392,11 @@ static uint8_t make_param_slider(uint8_t row, const char *label, param_slider_t 
     lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_center(obj);
-    slider_with_text(obj, p->param->get(), p->min, p->max, p->step, SMALL_3 - 120, p->fmt, param_slider_cb, p);
+    obj = slider_with_text(obj, p->param->get(), p->min, p->max, p->step, SMALL_3 - 120, p->fmt, param_slider_cb, p);
+    if (p == &smeter_cal_slider) {
+        lv_obj_add_event_cb(obj, smeter_cal_warn_cb, LV_EVENT_PRESSED, NULL);
+        lv_obj_add_event_cb(obj, smeter_cal_warn_cb, LV_EVENT_FOCUSED, NULL);
+    }
 
     return row + 1;
 }
@@ -3461,6 +3530,7 @@ static void make_general_page() {
     row = make_freq_accel(row);
     row = make_param_slider(row, "Accel. onset", &accel_onset_slider);
     row = make_charger(row);
+    row = make_param_slider(row, "S-meter cal", &smeter_cal_slider);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_SHUFFLE, "TRANSVERTERS");

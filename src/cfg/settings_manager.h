@@ -136,6 +136,10 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_waterfall_ref{"waterfall_ref", 0, -40, 20,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // S-meter calibration, dB added to the reading (Settings only). -22: this radio against an
+    // IC-7300 on the same antenna. RF gain is compensated on its own (meter.c)
+    Parameter<int32_t> p_smeter_cal{"smeter_cal", -22, -40, 20,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     // Waterfall lines/s: 1 = 5, 2 = 7.5 (frames averaged, less noisy),
     // 3 = 15 (default), 4 = 20, 5 = 30
     Parameter<int32_t> p_waterfall_speed{"waterfall_speed", 3, 1, 5,

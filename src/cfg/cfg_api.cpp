@@ -39,6 +39,7 @@ ParamInt         *cfg_cluster_column      = nullptr;
 ParamInt         *cfg_cluster_order       = nullptr;
 ParamInt         *cfg_cluster_all_bands   = nullptr;
 ParamInt         *cfg_waterfall_ref       = nullptr;
+ParamInt         *cfg_smeter_cal          = nullptr;
 ParamInt         *cfg_waterfall_speed     = nullptr;
 ParamInt         *cfg_wf_mode             = nullptr;
 ParamText        *cfg_encoder_bind        = nullptr;
@@ -175,6 +176,7 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_cluster_order    = &cfg_sm.p_cluster_order;
     cfg_cluster_all_bands = &cfg_sm.p_cluster_all_bands;
     cfg_waterfall_ref    = &cfg_sm.p_waterfall_ref;
+    cfg_smeter_cal       = &cfg_sm.p_smeter_cal;
     cfg_waterfall_speed  = &cfg_sm.p_waterfall_speed;
     cfg_wf_mode          = &cfg_sm.p_wf_mode;
     cfg_encoder_bind     = &cfg_sm.p_encoder_bind;

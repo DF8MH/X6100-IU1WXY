@@ -216,6 +216,10 @@ void meter_update(float db, float beta) {
     if (pre){
         db -= 19.0f;
     }
+    /* Calibration (Settings, S-meter cal: this radio read ~22 dB above an IC-7300 on the same
+     * antenna) and RF gain, which lowers the reading 0.60 dB a step (3 broadcast carriers,
+     * 100 to 0): the reading is the same at any RF gain, as PRE and ATT above */
+    db += param_i_get(cfg_smeter_cal) + 0.60f * (100 - param_i_get(cfg_rfgain));
     if (db < min_db) {
         db = min_db;
     } else if (db > max_db) {
