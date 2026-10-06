@@ -59,7 +59,7 @@
 
 #define SAMPLE_RATE      (AUDIO_CAPTURE_RATE / AUDIO_DECIM)
 #define WIDTH            771
-#define WF_HEIGHT        325
+#define WF_HEIGHT        (DIALOG_H - 26)   /* 13 px margins above and below */
 #define WF_VISIBLE       55     /* waterfall rows left uncovered by the list */
 #define TX_BAR_H         30     /* TX status line between waterfall and list */
 #define TX_TEXT_MAX      160    /* longest message the compose window takes */

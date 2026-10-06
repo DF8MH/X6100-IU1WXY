@@ -187,6 +187,7 @@ void spot_marks_init(lv_obj_t *parent, lv_coord_t line_y, lv_coord_t tag_y) {
     line_y0 = line_y;
     tag_y0  = tag_y;
 
+    /* All the lines first: every call is drawn over the lines that cross its row */
     for (int i = 0; i < POOL; i++) {
         lv_obj_t *l = lv_obj_create(parent);
         lv_obj_remove_style_all(l);
@@ -195,8 +196,9 @@ void spot_marks_init(lv_obj_t *parent, lv_coord_t line_y, lv_coord_t tag_y) {
         lv_obj_clear_flag(l, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
         marks[i].line = l;
-
-        l = lv_label_create(parent);
+    }
+    for (int i = 0; i < POOL; i++) {
+        lv_obj_t *l = lv_label_create(parent);
         lv_obj_set_style_text_font(l, &SPOT_FONT, 0);
         lv_obj_set_style_pad_hor(l, 2, 0);
         /* Readable on the waterfall in every theme: an outline */

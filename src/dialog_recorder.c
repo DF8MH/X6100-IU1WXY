@@ -272,7 +272,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_obj_remove_style(table, NULL, LV_STATE_ANY | LV_PART_MAIN);
 
-    lv_obj_set_size(table, 775, 320 - LEVEL_HEIGHT);
+    lv_obj_set_size(table, 775, DIALOG_H - 26 - LEVEL_HEIGHT);   /* the level bar under it, 13 px margins */
 
     lv_table_set_col_cnt(table, 1);
     lv_table_set_col_width(table, 0, 770);

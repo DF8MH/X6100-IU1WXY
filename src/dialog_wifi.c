@@ -15,6 +15,7 @@
 #include "params/params.h"
 #include "pubsub_ids.h"
 #include "radio.h"
+#include "styles.h"
 #include "textarea_window.h"
 #include "theme.h"
 #include "wifi.h"
@@ -24,7 +25,7 @@
 #include <stdlib.h>
 
 #define DIALOG_WIDTH 775
-#define DIALOG_HEIGHT 320
+#define DIALOG_HEIGHT (DIALOG_H - 26)   /* 13 px margins above and below */
 #define PARAMS_WIDTH 300
 
 #define SIZE_OF_ARRAY(arr) (sizeof(arr) / sizeof(*arr))

@@ -62,6 +62,7 @@
 #define SAMPLE_RATE     (AUDIO_CAPTURE_RATE / AUDIO_DECIM)
 
 #define WIDTH           771
+#define WF_HEIGHT       (DIALOG_H - 26)   /* 13 px margins above and below */
 
 #define UNKNOWN_SNR     99
 
@@ -486,7 +487,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_clear_flag(waterfall, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_waterfall_set_palette(waterfall, (lv_color_t*)wf_palette, 256);
-    lv_waterfall_set_size(waterfall, WIDTH, 325);
+    lv_waterfall_set_size(waterfall, WIDTH, WF_HEIGHT);
     lv_waterfall_set_min(waterfall, -27);
 
     lv_obj_set_pos(waterfall, 13, 13);
@@ -499,7 +500,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_finder_set_value(finder, params.ft8_tx_freq.x);
     freq_strip_set_offset(params.ft8_tx_freq.x);
 
-    lv_obj_set_size(finder, WIDTH, 325);
+    lv_obj_set_size(finder, WIDTH, WF_HEIGHT);
     lv_obj_set_pos(finder, 0, 0);
 
     lv_obj_set_style_radius(finder, 0, LV_PART_MAIN);
@@ -515,7 +516,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     /* Table */
 
-    table_view_build(dialog.obj, 13, 13 + 55, WIDTH, 325 - 55);
+    table_view_build(dialog.obj, 13, 13 + 55, WIDTH, WF_HEIGHT - 55);
     table_view_set_press_cb(on_table_press);
     table_view_actions_t tv_actions = {
         .on_close      = on_table_close,
