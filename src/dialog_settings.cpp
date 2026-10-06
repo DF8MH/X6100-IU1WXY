@@ -372,6 +372,11 @@ static void change_bg_opa_cb(lv_event_t *e) {
     lv_obj_t       *obj  = lv_event_get_target(e);
     lv_event_code_t code = lv_event_get_code(e);
 
+    /* A theme's window image (RS) is the whole background: faded, the window turns see-through */
+    if (lv_obj_get_style_bg_img_src(dialog.obj, 0)) {
+        return;
+    }
+
     lv_anim_t bg_fade_anim;
     lv_anim_init(&bg_fade_anim);
     lv_anim_set_exec_cb(&bg_fade_anim,
