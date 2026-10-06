@@ -28,7 +28,11 @@ radio by itself.
 
 - The whole radio: frequency, band, mode, filters, squelch, RF gain, NB, NR,
   AGC, S-meter, spectrum and waterfall (VFO line, filter passband, pinch to
-  zoom), RX audio on the phone with its own volume.
+  zoom), RX audio on the phone with its own volume. The tuning knob has its
+  own step: tap it for the next one, hold it for the list.
+- **DX cluster** as on the radio: the calls over the waterfall and a column
+  of the spots around the VFO (or newest first, this band or all); tap a spot
+  to tune it. Each part can be turned off in the settings.
 - **Every digital mode, receive and transmit**: FT8/FT4, JS8, WSPR, SSTV
   (pictures from the gallery or the camera), WeFax, RTTY, CW with macros,
   NavTex (receive). The radio decodes and transmits, the phone is the screen.

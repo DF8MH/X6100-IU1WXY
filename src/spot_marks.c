@@ -7,6 +7,7 @@
 #include "cluster/client.h"
 #include "cluster_column.h"
 #include "cfg/cfg_api.h"
+#include "remote_server.h"
 #include "styles.h"
 #include "theme.h"
 
@@ -23,6 +24,8 @@
 #define LINE_W   4      /* the line from a call to its frequency */
 #define SPOT_COLOR theme_hex(TC_spot)
 #define SPOT_FONT  sony_22   /* line height 17: fits ROW_H */
+#define REMOTE_SPOTS 100        /* newest first, for X6100 Link */
+#define REMOTE_S     10         /* resent this often: a phone that connects gets them soon */
 
 typedef struct {
     lv_obj_t *label;
@@ -136,17 +139,53 @@ static void redraw(void) {
     }
 }
 
+/* The spots that pass the radio's filters, newest first, to the remote clients:
+ * {"t":"cluster","spots":[[Hz,"call","mode",age min,alert 0/1],...]} */
+static void send_remote(uint16_t now) {
+    static const char *mode[] = {"CW", "LSB", "USB", "DIG", "AM", "FM"};   /* cluster_mode_t */
+    const cluster_filter_t *flt = cluster_filter();
+    cJSON *o = cJSON_CreateObject();
+    cJSON *a;
+    int    n = 0;
+
+    cJSON_AddStringToObject(o, "t", "cluster");
+    a = cJSON_AddArrayToObject(o, "spots");
+    for (int i = spots_n - 1; i >= 0 && n < REMOTE_SPOTS; i--) {
+        const cluster_spot_t *s = &spots[i];
+        cJSON                *r;
+
+        if (!cluster_filter_pass(flt, s, now)) {
+            continue;
+        }
+        r = cJSON_CreateArray();
+        cJSON_AddItemToArray(r, cJSON_CreateNumber(s->freq_hz));
+        cJSON_AddItemToArray(r, cJSON_CreateString(s->dx));
+        cJSON_AddItemToArray(r, cJSON_CreateString(mode[cluster_guess_mode(s)]));
+        cJSON_AddItemToArray(r, cJSON_CreateNumber(cluster_age_min(s->utc_min, now)));
+        cJSON_AddItemToArray(r, cJSON_CreateNumber(cluster_alert_match(flt, s) >= 0));
+        cJSON_AddItemToArray(a, r);
+        n++;
+    }
+    remote_event(o);
+}
+
 /* 1 Hz: new spots or a new minute (the colours age) */
 static void timer_cb(lv_timer_t *t) {
+    static time_t sent;
     int      n   = cluster_client_snapshot(spots, CLUSTER_MAX_SPOTS, &spots_gen);
     uint16_t min = utc_now_min();
+    bool     changed = n >= 0 || min != last_min || cluster_filter()->gen != last_fgen;
 
     if (n >= 0) {
         spots_n = n;
     }
-    if (n >= 0 || min != last_min || cluster_filter()->gen != last_fgen) {
+    if (changed) {
         last_min = min;
         redraw();
+    }
+    if (changed || time(NULL) - sent >= REMOTE_S) {
+        sent = time(NULL);
+        send_remote(min);
     }
 }
 
