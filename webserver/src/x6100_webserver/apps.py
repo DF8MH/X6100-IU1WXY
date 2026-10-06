@@ -540,7 +540,8 @@ def put_qso(name, n):
         return api_error(400, "Invalid QSO")
     call = str(data.get("call", "")).strip().upper()
     rs, rr = str(data.get("rst_sent", "")).strip(), str(data.get("rst_rcvd", "")).strip()
-    if not re.fullmatch(r'[A-Z0-9/]{3,15}', call) or not re.fullmatch(r'\d{1,3}', rs) or not re.fullmatch(r'\d{1,3}', rr):
+    rst = r'[+-]?\d{1,3}'     # 59, 599, FT8 dB (-10)
+    if not re.fullmatch(r'[A-Z0-9/]{3,15}', call) or not re.fullmatch(rst, rs) or not re.fullmatch(rst, rr):
         return api_error(400, "Invalid QSO")
     return edit_qso(name, n, lambda rec: adif_set(adif_set(adif_set(rec, "CALL", call), "RST_SENT", rs), "RST_RCVD", rr)) \
         or {"status": "OK"}
