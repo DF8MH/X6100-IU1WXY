@@ -529,8 +529,25 @@ def remote():
     return bottle.template('remote')
 
 
+# X6100 Link sends X-Link-Api: an app without it (or older) gets OLD_APP. The phone's HttpURLConnection
+# says "Dalvik/..." as User-Agent; the browser's remote page is not touched.
+LINK_API = 2
+OLD_APP = "Update X6100 Link: this radio firmware needs a newer app"
+
+
+def old_app():
+    if not bottle.request.get_header("User-Agent", "").startswith("Dalvik"):
+        return False
+    try:
+        return int(bottle.request.get_header("X-Link-Api", "0")) < LINK_API
+    except ValueError:
+        return True
+
+
 @app.post('/api/remote')
 def remote_command():
+    if old_app():
+        return api_error(426, OLD_APP)
     try:
         data = bottle.request.json
     except ValueError:
@@ -561,7 +578,7 @@ def remote_command():
 @app.get('/api/info')
 def remote_info():
     """Discovery for the phone app"""
-    return {"radio": "x6100", "api": 1, "callsign": read_callsign(), "remote": os.path.exists(settings.REMOTE_SOCK)}
+    return {"radio": "x6100", "api": LINK_API, "callsign": read_callsign(), "remote": os.path.exists(settings.REMOTE_SOCK)}
 
 
 @app.get('/api/remote/stream')
@@ -571,6 +588,9 @@ def remote_stream():
     bottle.response.set_header('Cache-Control', 'no-cache')
 
     def events():
+        if old_app():
+            yield ("retry: 3000\nevent: fail\ndata: " + OLD_APP + "\n\n").encode()
+            return
         try:
             sock = remote_connect(5)
         except OSError:
@@ -595,6 +615,9 @@ def remote_audio():
     """Raw s16le mono 12 kHz. One listener; parec is killed when the page stops listening."""
     bottle.response.content_type = 'application/octet-stream'
     bottle.response.set_header('Cache-Control', 'no-store')
+
+    if old_app():
+        raise bottle.HTTPError(426, OLD_APP)
 
     def pcm():
         global remote_audio_busy

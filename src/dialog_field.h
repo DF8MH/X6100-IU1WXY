@@ -21,6 +21,8 @@ extern dialog_t *dialog_field;
  * field_end, field_log (text "CALL|rst sent|rst received"), field_spot, field_update */
 void dialog_field_remote(const char *cmd, int32_t val, const char *text);
 int  dialog_field_remote_state(char *buf, size_t size);
+/* Companion app, qso_log (any app or none): text as field_log, into the day's log; false: not logged */
+bool dialog_field_qso_log(const char *text);
 
 /* Shared with the Bands app: TEST DE <call> in CW; a typical frequency of the band (cluster_band_of()) */
 void dialog_field_test_beacon(void);

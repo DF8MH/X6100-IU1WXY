@@ -1157,6 +1157,53 @@ static void cq_cb(button_data_t *b) {
     cw_encoder_send(text, false);
 }
 
+/* The phone's "CALL|rst sent|rst received[|name|qth|grid|country]", any field may be empty */
+static void parse_log_text(const char *text, char *call, size_t call_size, char *rs, char *rr, field_qso_t *more) {
+    char buf[256], *p = buf, *f;
+    struct { char *dst; size_t size; } out[] = {
+        {call, call_size}, {rs, 8}, {rr, 8}, {more->name, sizeof(more->name)},
+        {more->qth, sizeof(more->qth)}, {more->grid, sizeof(more->grid)}, {more->country, sizeof(more->country)},
+    };
+
+    snprintf(buf, sizeof(buf), "%s", text);
+    for (size_t i = 0; i < sizeof(out) / sizeof(out[0]) && (f = strsep(&p, "|")); i++)
+        snprintf(out[i].dst, out[i].size, "%s", f);
+}
+
+/* The phone's logger outside Field Ops (QSOs in voice and so on): the day's log, LOGS_DIR/YYYYMMDD.adi (UTC),
+ * on the radio's frequency and mode */
+bool dialog_field_qso_log(const char *text) {
+    field_qso_t     q   = {.t = time(NULL), .freq_hz = cparam_i_get(cfg_fg_freq)};
+    field_station_t sta = {0};
+    const char     *rst = is_cw() ? "599" : "59";
+    char            call[32] = "", rs[8] = "", rr[8] = "", path[64];
+    struct tm       tm;
+
+    parse_log_text(text, call, sizeof(call), rs, rr, &q);
+    if (!ref_ok(call)) {
+        msg_update_text_fmt("Log from the phone: \"%s\" not logged", call);
+        return false;
+    }
+    for (char *p = call; *p; p++)
+        *p = toupper((unsigned char)*p);
+    snprintf(q.call, sizeof(q.call), "%s", call);
+    snprintf(q.mode, sizeof(q.mode), "%s", adif_mode());
+    snprintf(q.rst_s, sizeof(q.rst_s), "%s", rs[0] ? rs : rst);
+    snprintf(q.rst_r, sizeof(q.rst_r), "%s", rr[0] ? rr : rst);
+    snprintf(sta.call, sizeof(sta.call), "%s", my_call());
+    snprintf(sta.grid, sizeof(sta.grid), "%s", station_qth() ? station_qth() : "");
+    gmtime_r(&q.t, &tm);
+    mkdir(FIELD_DIR, 0755);
+    mkdir(LOGS_DIR, 0755);
+    snprintf(path, sizeof(path), "%s/%04d%02d%02d.adi", LOGS_DIR, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+    if (!field_log_add(path, &q, &sta)) {
+        msg_update_text_fmt("Log: can't write %s", path);
+        return false;
+    }
+    msg_update_text_fmt("QSO logged: %s %s %s", q.call, q.rst_s, q.rst_r);
+    return true;
+}
+
 /* A QSO in the log: false when the call is not a callsign */
 /* more: name, QTH, grid and country of the other station (the phone's QRZ lookup), or NULL */
 static bool log_add(const char *call_in, const char *rst_s, const char *rst_r, const field_qso_t *more) {
@@ -1592,18 +1639,10 @@ void dialog_field_remote(const char *cmd, int32_t val, const char *text) {
     } else if (!strcmp(cmd, "field_end")) {
         activation_end();
     } else if (!strcmp(cmd, "field_log")) {
-        /* "CALL|rst sent|rst received[|name|qth|grid|country]", any field may be empty */
-        char        call[32] = "", rs[8] = "", rr[8] = "", buf[256];
+        char        call[32] = "", rs[8] = "", rr[8] = "";
         field_qso_t more     = {0};
-        struct { char *dst; size_t size; } out[] = {
-            {call, sizeof(call)}, {rs, sizeof(rs)}, {rr, sizeof(rr)}, {more.name, sizeof(more.name)},
-            {more.qth, sizeof(more.qth)}, {more.grid, sizeof(more.grid)}, {more.country, sizeof(more.country)},
-        };
-        char *p = buf, *f;
 
-        snprintf(buf, sizeof(buf), "%s", text);
-        for (size_t i = 0; i < sizeof(out) / sizeof(out[0]) && (f = strsep(&p, "|")); i++)
-            snprintf(out[i].dst, out[i].size, "%s", f);
+        parse_log_text(text, call, sizeof(call), rs, rr, &more);
         if (!log_add(call, rs, rr, &more))
             msg_update_text_fmt("Log from the phone: \"%s\" not logged", call);
     } else if (!strcmp(cmd, "field_spot")) {

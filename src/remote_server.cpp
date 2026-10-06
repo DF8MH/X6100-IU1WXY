@@ -96,7 +96,7 @@ typedef struct {
 
 typedef enum {
     CMD_FREQ, CMD_TUNE, CMD_MODE, CMD_BAND, CMD_PRE, CMD_ATT, CMD_AGC, CMD_NB, CMD_NR, CMD_RFGAIN, CMD_FILTER, CMD_PWR,
-    CMD_APP, CMD_APP_CMD, CMD_LOCATION
+    CMD_APP, CMD_APP_CMD, CMD_LOCATION, CMD_QSO_LOG
 } cmd_id_t;
 
 typedef struct {
@@ -384,6 +384,9 @@ static void apply_cmd(void *arg) {
         case CMD_LOCATION:
             gps_phone_set(c->lat, c->lon);
             break;
+        case CMD_QSO_LOG:
+            dialog_field_qso_log(c->text);
+            break;
     }
 }
 
@@ -623,6 +626,12 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
             !(fabs(cmd->lon) <= 180))   /* NaN fails too */
             return "Invalid position";
         cmd->id = CMD_LOCATION;
+        return NULL;
+    }
+    if (!strcmp(name, "qso_log")) {
+        if (!cmd->text[0])
+            return "Invalid text";
+        cmd->id = CMD_QSO_LOG;
         return NULL;
     }
     if (!strcmp(name, "app")) {
