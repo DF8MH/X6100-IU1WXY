@@ -276,8 +276,9 @@ keep their hue (the VFO line stays red).
 
 Writing a new image erases DATA too: copy it to your PC first and back after
 the first start (the [manual](docs/MANUAL.md) lists the files). A patched
-baseband ([x6100_base_patch](https://github.com/gdyuldin/x6100_base_patch)) r12
-or newer is recommended for the TX audio options.
+baseband ([x6100_base_patch](https://github.com/gdyuldin/x6100_base_patch)) r13
+or newer is recommended: the TX audio and calibration options (CESSB, band
+output gain), and a battery percentage from a measured X6100 discharge curve.
 
 ## Documentation
 
