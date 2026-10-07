@@ -583,9 +583,9 @@ int sstv_encode_robot8_png_pcm(const char *png_path,unsigned sample_rate,int16_t
     pcm_writer_t w={.rate=sample_rate};if(pcm_vis(&w,2)<0){free(rgb);free(w.data);return -21;}
     uint8_t Y[W];
     for(int y=0;y<H;++y){
-        if(pcm_tone_ms(&w,1200,5.0)<0){rc=-21;goto r8out;}
+        if(pcm_tone_ms(&w,1200,10.0)<0){rc=-21;goto r8out;}   /* Robot 8 BW: 10 ms sync, as the decoder (was 5) */
         for(int x=0;x<W;++x){int sx=x*2;const uint8_t*q=rgb+((size_t)y*OUT_W+sx)*3u;Y[x]=clamp_byte(.299*q[0]+.587*q[1]+.114*q[2]);}
-        if(pcm_values(&w,Y,W,1000.0/15.0-5.0)<0){rc=-21;goto r8out;}
+        if(pcm_values(&w,Y,W,1000.0/15.0-10.0)<0){rc=-21;goto r8out;}
     }rc=0;
 r8out: free(rgb);if(rc<0){free(w.data);return rc;}*samples=w.data;*sample_count=w.count;return 0;
 }
