@@ -106,11 +106,13 @@ lv_obj_t * clock_init(lv_obj_t * parent) {
     lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 0);
 
     time_label = lv_label_create(row);
-    lv_obj_set_style_text_font(time_label, &sony_44, 0);
+    lv_obj_set_style_text_font(time_label, theme_shape.vision ? &sony_40 : &sony_44, 0);
 
     sec_label = lv_label_create(row);
     lv_obj_set_style_text_font(sec_label, &sony_26, 0);
     lv_obj_set_style_pad_bottom(sec_label, 2, 0);
+    if (theme_shape.vision)
+        lv_obj_add_flag(sec_label, LV_OBJ_FLAG_HIDDEN);
 
     /* Voltages: symbols in Montserrat, numbers in Sony */
     row = lv_obj_create(obj);
@@ -127,6 +129,8 @@ lv_obj_t * clock_init(lv_obj_t * parent) {
         lv_obj_set_style_text_color(power_labels[i], TC(text_soft), 0);
     }
     lv_obj_set_style_pad_left(power_labels[2], 4, 0);
+    if (theme_shape.vision)
+        lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);   /* VISION: the time only */
 
     show_time();
     lv_timer_create(show_time, 500, NULL);

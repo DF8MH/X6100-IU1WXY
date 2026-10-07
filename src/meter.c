@@ -59,8 +59,16 @@ static void on_bool_value_change(Subject *subj, void *user_data) {
 }
 
 static void update_db_label() {
-    lv_label_set_text_fmt(db_val_label, "%.1f", meter_db_raw);
+    if (!theme_shape.vision) {
+        lv_label_set_text_fmt(db_val_label, "%.1f", meter_db_raw);
+    } else if (meter_db_raw < S9 + 1) {   /* 6 dB a unit */
+        lv_label_set_text_fmt(db_val_label, "S%d", (int)LV_CLAMP(1, 1 + (meter_db_raw - S1 + 3) / 6, 9));
+    } else {
+        lv_label_set_text_fmt(db_val_label, "S9+%d", (int)(meter_db_raw - S9 + 0.5f));
+    }
 }
+
+#define VISION_VALUE_W 150   /* VISION: room for "S9+40" right of the bars */
 
 /* Bar i of n at db */
 static lv_color_t bar_color(int16_t db, uint8_t i, uint8_t n) {
@@ -92,7 +100,8 @@ static void meter_draw_cb(lv_event_t * e) {
     const uint8_t slices_total = sizeof(bar_db) / sizeof(bar_db[0]);
 
     /* First bar centred 16 px in, last one 22 px before the edge (room for "+40") */
-    uint8_t     slice_w = (lv_obj_get_width(obj) - 16 - 22) / (slices_total - 1);
+    lv_coord_t  bars_w = lv_obj_get_width(obj) - (theme_shape.vision ? VISION_VALUE_W : 0);
+    uint8_t     slice_w = (bars_w - 16 - 22) / (slices_total - 1);
     uint8_t     slice_spacing = slice_w * 45 / 100;   /* thin bars, wide gaps */
     lv_coord_t  x1 = obj->coords.x1 + 16 - 30;
 
@@ -102,8 +111,9 @@ static void meter_draw_cb(lv_event_t * e) {
 
     rect_dsc.bg_opa = LV_OPA_80;
 
-    area.y1 = y1 - 5;
-    area.y2 = y1 + 32;
+    /* VISION: the bars on top, the scale under them (white on white could not be read) */
+    area.y1 = theme_shape.vision ? obj->coords.y1 + 4 : y1 - 5;
+    area.y2 = theme_shape.vision ? obj->coords.y1 + 20 : y1 + 32;
 
     uint8_t peak_i = 0;
 
@@ -140,7 +150,7 @@ static void meter_draw_cb(lv_event_t * e) {
 
     area.x1 = x1;
     area.x2 = x1 + 20;
-    area.y1 = y1 + 5;
+    area.y1 = theme_shape.vision ? obj->coords.y1 + 21 : y1 + 5;
     area.y2 = area.y1 + 18;
 
     lv_point_t label_size;
@@ -185,8 +195,11 @@ lv_obj_t * meter_init(lv_obj_t * parent) {
     subject_subscribe_delayed_and_notify((Subject*)cfg_cur_att, on_bool_value_change, &att);
 
     db_val_label = lv_label_create(obj);
-    lv_obj_set_style_text_font(db_val_label, &sony_20, 0);
-    lv_obj_align(db_val_label, LV_ALIGN_BOTTOM_MID, 0, -2);
+    lv_obj_set_style_text_font(db_val_label, theme_shape.vision ? &sony_40 : &sony_20, 0);
+    if (theme_shape.vision)
+        lv_obj_align(db_val_label, LV_ALIGN_RIGHT_MID, -12, 0);
+    else
+        lv_obj_align(db_val_label, LV_ALIGN_BOTTOM_MID, 0, -2);
     lv_obj_set_style_text_color(db_val_label, TC(text), 0);
     lv_label_set_text(db_val_label, "");
     return obj;

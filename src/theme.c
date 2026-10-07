@@ -21,11 +21,28 @@
 #define THEMES_DIR "/mnt/themes"
 #endif
 
-enum { B_IU1WXY, B_LEGACY, B_OUTDOOR, B_CLASSIC, B_OUTDOOR_NEG, B_COUNT };
+enum { B_IU1WXY, B_LEGACY, B_OUTDOOR, B_CLASSIC, B_OUTDOOR_NEG, B_VISION, B_COUNT };
 
-static const char *const builtin_names[B_COUNT] = {"IU1WXY", "Legacy", "Outdoor", "Classic", "Outdoor-Negative"};
+static const char *const builtin_names[B_COUNT] = {"IU1WXY", "Legacy", "Outdoor", "Classic", "Outdoor-Negative",
+                                                   "VISION"};
 
-static const uint32_t builtin_colors[B_OUTDOOR_NEG][TC_COUNT] = {
+/* VISION: IU1WXY's colours with white on black and yellow for what is on, the big layout (styles.c) */
+static const struct {
+    theme_color_t c;
+    uint32_t      v;
+} vision_colors[] = {
+    {TC_bg, 0x000000},          {TC_bar, 0x000000},          {TC_bar_grad, 0x000000},       {TC_bar_border, 0xffffff},
+    {TC_strip, 0x000000},       {TC_strip_grad, 0x000000},   {TC_strip_border, 0xffffff},   {TC_dialog, 0x000000},
+    {TC_dialog_grad, 0x000000}, {TC_dialog_border, 0xffffff}, {TC_btn, 0x000000},           {TC_btn_grad, 0x000000},
+    {TC_btn_border, 0xffffff},  {TC_btn_text, 0xffffff},     {TC_btn_active, 0xffd400},     {TC_btn_active_grad, 0xffd400},
+    {TC_btn_active_border, 0xffd400}, {TC_btn_active_text, 0x000000}, {TC_btn_page, 0x000000}, {TC_btn_page_text, 0xffffff},
+    {TC_text, 0xffffff},        {TC_text_value, 0xffffff},   {TC_text_soft, 0xffffff},      {TC_text_head, 0x5dcaa5},
+    {TC_mode_text, 0x000000},   {TC_mode_bg, 0xffd400},      {TC_mode_border, 0xffd400},    {TC_pill_border, 0xffffff},
+    {TC_meter_bar, 0xffffff},   {TC_meter_weak, 0xffffff},   {TC_meter_low, 0x5dcaa5},      {TC_meter_high, 0xffd400},
+    {TC_meter_over, 0xffd400},  {TC_popup, 0x000000},        {TC_popup_border, 0xffffff},
+};
+
+static const uint32_t builtin_colors[B_OUTDOOR_NEG][TC_COUNT] = {   /* VISION and Outdoor-Negative are made from these */
 #define COL(name, a, b, c, d) a,
     {THEME_COLORS(COL)},
 #undef COL
@@ -99,7 +116,7 @@ static uint32_t negative(uint32_t c) {
 
 /* Outdoor-Negative: Outdoor with every colour and the waterfall through negative() */
 static void use_builtin(int b) {
-    int src = b == B_OUTDOOR_NEG ? B_OUTDOOR : b;
+    int src = b == B_OUTDOOR_NEG ? B_OUTDOOR : b == B_VISION ? B_IU1WXY : b;
 
     memcpy(colors, builtin_colors[src], sizeof(colors));
     theme_shape = builtin_shapes[src];
@@ -109,6 +126,13 @@ static void use_builtin(int b) {
         colors[TC_sel_text]        = builtin_colors[B_OUTDOOR][TC_sel_text];
         colors[TC_btn_active_text] = builtin_colors[B_OUTDOOR][TC_btn_active_text];
         for (int i = 0; i < theme_shape.waterfall_n; i++) theme_shape.waterfall[i] = negative(theme_shape.waterfall[i]);
+    }
+    if (b == B_VISION) {
+        for (size_t i = 0; i < sizeof(vision_colors) / sizeof(vision_colors[0]); i++)
+            colors[vision_colors[i].c] = vision_colors[i].v;
+        theme_shape = (theme_shape_t){.radius = 8, .radius_btn = 10, .radius_popup = 10, .border = 2,
+                                      .focus_solid = true, .mode_box = true, .pill_border = 2, .font = -1,
+                                      .vision = true};
     }
     snprintf(theme_shape.name, sizeof(theme_shape.name), "%s", builtin_names[b]);
 }

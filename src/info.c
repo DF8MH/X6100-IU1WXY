@@ -94,7 +94,8 @@ lv_obj_t * info_init(lv_obj_t * parent) {
     /* Two rows on the same 6 column grid: radio state, then status icons */
     lv_coord_t col_w = lv_obj_get_style_width(obj, 0) - 2 * lv_obj_get_style_border_width(obj, 0)
         - lv_obj_get_style_pad_left(obj, 0) - lv_obj_get_style_pad_right(obj, 0);
-    col_w /= 6;
+    uint8_t cols = theme_shape.vision ? 5 : 6;   /* VISION: the mode is not in the row */
+    col_w /= cols;
 
     lv_obj_t *row;
 
@@ -102,7 +103,9 @@ lv_obj_t * info_init(lv_obj_t * parent) {
         if (i % 6 == 0) {
             row = lv_obj_create(obj);
             lv_obj_add_style(row, &info_row_style, 0);
-            lv_obj_set_size(row, col_w * 6 - 1, i ? 28 : 38);
+            lv_obj_set_size(row, col_w * cols - 1, theme_shape.vision ? 40 : i ? 28 : 38);
+            if (theme_shape.vision && i)
+                lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);   /* VISION: no status icons */
             lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
             lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -120,6 +123,8 @@ lv_obj_t * info_init(lv_obj_t * parent) {
         items[i] = item;
     }
 
+    if (theme_shape.vision)
+        lv_obj_add_flag(items[INFO_MODE], LV_OBJ_FLAG_HIDDEN);   /* big in the frequency strip */
     lv_label_set_text(items[INFO_PRE], "PRE");
     lv_label_set_text(items[INFO_ATT], "ATT");
     lv_label_set_text(items[INFO_WIFI], LV_SYMBOL_WIFI);

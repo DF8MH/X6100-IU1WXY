@@ -137,9 +137,21 @@ static void box(lv_style_t *s, theme_color_t top, theme_color_t bottom, theme_co
     lv_style_set_radius(s, radius);
 }
 
+int top_bar_h = TOP_BAR_STD_H, freq_strip_h = FREQ_STRIP_STD_H, clock_w = 168, meter_row_h = 0;
+
 void styles_init(void) {
     /* * */
     lv_style_t *style;
+
+    /* VISION: 48 + 80 = the 76 + 50 of the others, so the apps start at the same y; the buttons
+     * as tall as with DejaVu (the apps already fit them) */
+    if (theme_shape.vision) {
+        top_bar_h    = 48;
+        freq_strip_h = 80;
+        clock_w      = 132;
+        meter_row_h  = 50;
+        buttons_h    = BUTTONS_H_MAX;
+    }
 
     lv_style_init(&background_style);
 
@@ -292,7 +304,7 @@ void styles_init(void) {
     lv_style_set_align(&info_style, LV_ALIGN_TOP_LEFT);
     lv_style_set_x(&info_style, TOP_BAR_MARGIN);
     lv_style_set_y(&info_style, TOP_BAR_MARGIN);
-    lv_style_set_width(&info_style, 360);
+    lv_style_set_width(&info_style, theme_shape.vision ? 800 - CLOCK_W - 3 * TOP_BAR_MARGIN - 3 : 360);
     lv_style_set_height(&info_style, TOP_BAR_BOX_H);
     lv_style_set_pad_hor(&info_style, 5);
     lv_style_set_pad_ver(&info_style, 0);
@@ -307,26 +319,40 @@ void styles_init(void) {
     lv_style_set_pad_column(&info_row_style, 1);
 
     lv_style_init(&info_item_style);
-    lv_style_set_text_font(&info_item_style, &sony_20);
+    lv_style_set_text_font(&info_item_style, theme_shape.vision ? &sony_28 : &sony_20);
     lv_style_set_pad_ver(&info_item_style, 1);
     lv_style_set_radius(&info_item_style, 3);
 
     /* Meter */
     lv_style_init(&meter_style);
     lv_style_set_align(&meter_style, LV_ALIGN_TOP_LEFT);
-    lv_style_set_x(&meter_style, TOP_BAR_METER_X);
-    lv_style_set_y(&meter_style, TOP_BAR_MARGIN);
-    lv_style_set_width(&meter_style, TOP_BAR_METER_W);
-    lv_style_set_height(&meter_style, TOP_BAR_BOX_H);
+    if (theme_shape.vision) {   /* the whole row under the frequency strip */
+        lv_style_set_x(&meter_style, TOP_BAR_MARGIN);
+        lv_style_set_y(&meter_style, FREQ_STRIP_Y + FREQ_STRIP_H + TOP_BAR_MARGIN);
+        lv_style_set_width(&meter_style, 800 - 2 * TOP_BAR_MARGIN);
+        lv_style_set_height(&meter_style, METER_ROW_H - 2 * TOP_BAR_MARGIN);
+    } else {
+        lv_style_set_x(&meter_style, TOP_BAR_METER_X);
+        lv_style_set_y(&meter_style, TOP_BAR_MARGIN);
+        lv_style_set_width(&meter_style, TOP_BAR_METER_W);
+        lv_style_set_height(&meter_style, TOP_BAR_BOX_H);
+    }
     lv_style_set_pad_all(&meter_style, 0);
 
     /* TX info: over the meter, twice as high (PWR and SWR rows) */
     lv_style_init(&tx_info_style);
     lv_style_set_align(&tx_info_style, LV_ALIGN_TOP_LEFT);
-    lv_style_set_x(&tx_info_style, TOP_BAR_METER_X);
-    lv_style_set_y(&tx_info_style, TOP_BAR_MARGIN);
-    lv_style_set_width(&tx_info_style, TOP_BAR_METER_W);
-    lv_style_set_height(&tx_info_style, TOP_BAR_BOX_H);
+    if (theme_shape.vision) {
+        lv_style_set_x(&tx_info_style, TOP_BAR_MARGIN);
+        lv_style_set_y(&tx_info_style, FREQ_STRIP_Y + FREQ_STRIP_H + TOP_BAR_MARGIN);
+        lv_style_set_width(&tx_info_style, 800 - 2 * TOP_BAR_MARGIN);
+        lv_style_set_height(&tx_info_style, METER_ROW_H - 2 * TOP_BAR_MARGIN);
+    } else {
+        lv_style_set_x(&tx_info_style, TOP_BAR_METER_X);
+        lv_style_set_y(&tx_info_style, TOP_BAR_MARGIN);
+        lv_style_set_width(&tx_info_style, TOP_BAR_METER_W);
+        lv_style_set_height(&tx_info_style, TOP_BAR_BOX_H);
+    }
     lv_style_set_pad_all(&tx_info_style, 0);
 
     lv_style_init(&card_style);

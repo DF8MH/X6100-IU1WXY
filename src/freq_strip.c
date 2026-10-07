@@ -80,18 +80,22 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_add_style(strip, &freq_strip_style, 0);
     lv_obj_clear_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
 
-    band_label = make_label(strip, LV_ALIGN_LEFT_MID, 14, &sony_24, theme_hex(TC_text_head));
+    bool v = theme_shape.vision;
+
+    band_label = make_label(strip, LV_ALIGN_LEFT_MID, 14, v ? &sony_36 : &sony_24, theme_hex(TC_text_head));
     lv_label_set_recolor(band_label, true);
     /* Centre: frequency, then the mode */
     lv_obj_t *mid = lv_obj_create(strip);
     lv_obj_remove_style_all(mid);
     lv_obj_set_size(mid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(mid, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(mid, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
+    /* VISION: the mode box centred on the big digits (on their baseline it stood too low) */
+    lv_obj_set_flex_align(mid, LV_FLEX_ALIGN_START, v ? LV_FLEX_ALIGN_CENTER : LV_FLEX_ALIGN_END,
+                          v ? LV_FLEX_ALIGN_CENTER : LV_FLEX_ALIGN_END);
     lv_obj_set_style_pad_column(mid, 14, 0);
     lv_obj_align(mid, LV_ALIGN_CENTER, 0, 0);
-    freq_label = make_label(mid, LV_ALIGN_DEFAULT, 0, &sony_36, theme_hex(TC_text));
-    mode_label = make_label(mid, LV_ALIGN_DEFAULT, 0, &sony_24, theme_hex(TC_mode_text));
+    freq_label = make_label(mid, LV_ALIGN_DEFAULT, 0, v ? &sony_60 : &sony_36, theme_hex(TC_text));
+    mode_label = make_label(mid, LV_ALIGN_DEFAULT, 0, v ? &sony_36 : &sony_24, theme_hex(TC_mode_text));
     lv_obj_set_style_pad_bottom(mode_label, 3, 0);
     if (theme_shape.mode_box) {     /* in a box, as an indicator */
         lv_obj_set_style_bg_color(mode_label, TC(mode_bg), 0);
@@ -102,6 +106,11 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
         lv_obj_set_style_pad_hor(mode_label, 10, 0);
         lv_obj_set_style_pad_top(mode_label, 2, 0);
         lv_obj_set_style_pad_bottom(mode_label, 6, 0);   /* the box sits on the baseline, as the text did */
+        if (v) {
+            lv_obj_set_style_radius(mode_label, 8, 0);
+            lv_obj_set_style_pad_bottom(mode_label, 4, 0);
+            lv_obj_set_style_pad_top(mode_label, 4, 0);
+        }
     }
 
     /* Right: [dot] locator */
@@ -119,7 +128,7 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_set_style_radius(qth_dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(qth_dot, TC(ok), 0);
     lv_obj_set_style_bg_opa(qth_dot, LV_OPA_COVER, 0);
-    qth_label = make_label(right, LV_ALIGN_DEFAULT, 0, &sony_28, theme_hex(TC_text));
+    qth_label = make_label(right, LV_ALIGN_DEFAULT, 0, v ? &sony_32 : &sony_28, theme_hex(TC_text));
 
     subject_subscribe_delayed((Subject *)cfg_fg_freq, update_cb, NULL);
     subject_subscribe_delayed((Subject *)cfg_bg_freq, update_cb, NULL);

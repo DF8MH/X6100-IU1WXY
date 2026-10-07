@@ -32,16 +32,23 @@ extern "C" {
 
 // Top bar: info, S-meter and clock panels
 
-#define TOP_BAR_HEIGHT  76
+/* Set by styles_init() from the theme: VISION (theme_shape.vision) has a low top bar, a tall frequency
+ * strip and the S-meter on a row of its own under it; the apps start at the same y in both */
+extern int top_bar_h, freq_strip_h, clock_w, meter_row_h;
+
+#define TOP_BAR_STD_H   76
+#define FREQ_STRIP_STD_H 50
+#define TOP_BAR_HEIGHT  top_bar_h
 #define TOP_BAR_MARGIN  2
-#define CLOCK_W         168
+#define CLOCK_W         clock_w
 #define TOP_BAR_BOX_H   (TOP_BAR_HEIGHT - TOP_BAR_MARGIN * 2)
 #define TOP_BAR_METER_X (TOP_BAR_MARGIN + 360 + 3)
 #define TOP_BAR_METER_W (800 - TOP_BAR_METER_X - 3 - CLOCK_W - TOP_BAR_MARGIN)
 
 /* Frequency strip under the top bar, always shown */
 #define FREQ_STRIP_Y    TOP_BAR_HEIGHT
-#define FREQ_STRIP_H    50
+#define FREQ_STRIP_H    freq_strip_h
+#define METER_ROW_H     meter_row_h     /* VISION: the S-meter's row under the strip, 0 otherwise */
 
 /* Bottom buttons (buttons.h BTN_HEIGHT) */
 /* Set at boot by fonts_apply(): taller with DejaVu (two-line labels) */
@@ -51,7 +58,7 @@ extern int buttons_h;
 #define BUTTONS_H       buttons_h
 
 /* App dialogs: from under the frequency strip down to the buttons */
-#define DIALOG_Y        (FREQ_STRIP_Y + FREQ_STRIP_H + TOP_BAR_MARGIN)
+#define DIALOG_Y        (TOP_BAR_STD_H + FREQ_STRIP_STD_H + TOP_BAR_MARGIN)   /* VISION's add up the same */
 #define DIALOG_H        (480 - BUTTONS_H - TOP_BAR_MARGIN - DIALOG_Y)
 #define DIALOG_H_MAX    (480 - BUTTONS_H_MIN - TOP_BAR_MARGIN - DIALOG_Y)   /* for static buffers */
 

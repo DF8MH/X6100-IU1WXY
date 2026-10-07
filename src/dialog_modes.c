@@ -25,7 +25,7 @@
 #define ROW_H  33
 #define HEAD_H 38
 #define HINT_H 28
-#define BOX_Y  (TOP_BAR_HEIGHT + 4)
+#define BOX_Y  (TOP_BAR_STD_H + 4)
 #define BOX_H  (HEAD_H + MODES_N * ROW_H + HINT_H + 8)
 
 static void construct_cb(lv_obj_t *parent);

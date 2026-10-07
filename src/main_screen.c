@@ -1764,7 +1764,7 @@ lv_obj_t * main_screen() {
     if (param_i_get(cfg_spectrum_show)) {
         y = FREQ_STRIP_Y + FREQ_STRIP_H;
     } else {
-        spectrum_height = FREQ_STRIP_Y + FREQ_STRIP_H;
+        spectrum_height = FREQ_STRIP_Y + FREQ_STRIP_H + METER_ROW_H;
         lv_obj_set_style_opa(spectrum, LV_OPA_TRANSP, 0);
     }
 

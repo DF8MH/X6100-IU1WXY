@@ -190,6 +190,7 @@ typedef struct {
     bool    mode_box;       /* the mode next to the frequency in a box (sel_bg, sel_border), else plain text */
     int16_t btn_gap;        /* more space around the bottom buttons, 0..4 px (pill shapes show their corners) */
     bool    rule;           /* accent line under the top bar and over the active button (Holo) */
+    bool    vision;         /* VISION: big type for weak eyes, a low top bar, a tall frequency strip, the S-meter on a row of its own */
     uint32_t waterfall[16];     /* palette stops from weak to strong signal */
     uint8_t  waterfall_n;       /* 0 = a built-in table (waterfall_table) */
     uint8_t  waterfall_table;   /* 0 gauss, 1 legacy */
