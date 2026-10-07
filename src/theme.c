@@ -26,20 +26,22 @@ enum { B_IU1WXY, B_LEGACY, B_OUTDOOR, B_CLASSIC, B_OUTDOOR_NEG, B_VISION, B_COUN
 static const char *const builtin_names[B_COUNT] = {"IU1WXY", "Legacy", "Outdoor", "Classic", "Outdoor-Negative",
                                                    "VISION"};
 
-/* VISION: IU1WXY's colours with white on black and yellow for what is on, the big layout (styles.c) */
+/* VISION: IU1WXY's colours made "night blue": white digits on dark blue, amber for what is on, light blue
+ * frames, the layout big (styles.c) */
 static const struct {
     theme_color_t c;
     uint32_t      v;
 } vision_colors[] = {
-    {TC_bg, 0x000000},          {TC_bar, 0x000000},          {TC_bar_grad, 0x000000},       {TC_bar_border, 0xffffff},
-    {TC_strip, 0x000000},       {TC_strip_grad, 0x000000},   {TC_strip_border, 0xffffff},   {TC_dialog, 0x000000},
-    {TC_dialog_grad, 0x000000}, {TC_dialog_border, 0xffffff}, {TC_btn, 0x000000},           {TC_btn_grad, 0x000000},
-    {TC_btn_border, 0xffffff},  {TC_btn_text, 0xffffff},     {TC_btn_active, 0xffd400},     {TC_btn_active_grad, 0xffd400},
-    {TC_btn_active_border, 0xffd400}, {TC_btn_active_text, 0x000000}, {TC_btn_page, 0x000000}, {TC_btn_page_text, 0xffffff},
-    {TC_text, 0xffffff},        {TC_text_value, 0xffffff},   {TC_text_soft, 0xffffff},      {TC_text_head, 0x5dcaa5},
-    {TC_mode_text, 0x000000},   {TC_mode_bg, 0xffd400},      {TC_mode_border, 0xffd400},    {TC_pill_border, 0xffffff},
-    {TC_meter_bar, 0xffffff},   {TC_meter_weak, 0xffffff},   {TC_meter_low, 0x5dcaa5},      {TC_meter_high, 0xffd400},
-    {TC_meter_over, 0xffd400},  {TC_popup, 0x000000},        {TC_popup_border, 0xffffff},
+    {TC_bg, 0x0b1a33},          {TC_bar, 0x0b1a33},          {TC_bar_grad, 0x0b1a33},       {TC_bar_border, 0x7cc4ff},
+    {TC_strip, 0x102648},       {TC_strip_grad, 0x102648},   {TC_strip_border, 0x7cc4ff},   {TC_dialog, 0x102648},
+    {TC_dialog_grad, 0x102648}, {TC_dialog_border, 0x7cc4ff}, {TC_btn, 0x13305c},           {TC_btn_grad, 0x13305c},
+    {TC_btn_border, 0x7cc4ff},  {TC_btn_text, 0xffffff},     {TC_btn_active, 0xffb020},     {TC_btn_active_grad, 0xffb020},
+    {TC_btn_active_border, 0xffb020}, {TC_btn_active_text, 0x2a1a00}, {TC_btn_page, 0x13305c}, {TC_btn_page_text, 0xcfe8ff},
+    {TC_text, 0xffffff},        {TC_text_value, 0xffffff},   {TC_text_soft, 0xcfe8ff},      {TC_text_head, 0x7ce0c0},
+    {TC_mode_text, 0x2a1a00},   {TC_mode_bg, 0xffb020},      {TC_mode_border, 0xffb020},    {TC_pill_border, 0x7cc4ff},
+    {TC_pill_off_text, 0x6f8fb0}, {TC_focus, 0xffb020},      {TC_focus_text, 0x2a1a00},     {TC_meter_bar, 0x7ce0c0},
+    {TC_meter_weak, 0x7ce0c0},  {TC_meter_low, 0x7ce0c0},    {TC_meter_high, 0xff6050},     {TC_meter_over, 0xffb020},
+    {TC_popup, 0x102648},       {TC_popup_border, 0x7cc4ff},
 };
 
 static const uint32_t builtin_colors[B_OUTDOOR_NEG][TC_COUNT] = {   /* VISION and Outdoor-Negative are made from these */
