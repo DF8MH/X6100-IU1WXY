@@ -153,3 +153,12 @@ button.rm-ptt:disabled,#rm-listen:disabled{opacity:.5;cursor:default;filter:none
 label.check{display:flex;align-items:center;gap:6px;color:var(--text);font-size:15px;margin:0;cursor:pointer}
 label.check small{color:var(--dim)}
 label.check.off{opacity:.45;cursor:default}
+
+/* Logs page */
+.log-filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:10px}
+table.log td{white-space:nowrap}
+table.log td input{min-width:4em;width:100%}
+table.log td input[type=date]{margin-bottom:4px}
+.card h3 .tag{font-weight:400}
+.card h3 a.tag{color:#bcd;text-decoration:none}
+@media (max-width:700px){.log-filters{grid-template-columns:1fr 1fr}.log-filters #f-text{grid-column:1/-1}}

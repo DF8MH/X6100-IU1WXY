@@ -8,6 +8,7 @@ try:
     import zlib
 except ImportError:
     zlib = None
+import csv
 import io
 import json
 import os
@@ -585,6 +586,106 @@ def delete_field_log(name):
     except FileNotFoundError:
         return api_error(404, "Not found")
     return get_field()
+
+
+# Logs page: every QSO of every log in <FIELD_DIR>/logs (the day's logs YYYYMMDD.adi and the activations),
+# to see, filter, edit, delete and export. QSOs are addressed as (file, n) as edit_qso() counts them.
+
+def adif_fields(rec):
+    """The fields of an ADIF record, names in lower case."""
+    out, i = {}, 0
+    for m in re.finditer(r'<(\w+):(\d+)(?::\w)?>', rec):
+        if m.start() < i:
+            continue
+        n = int(m.group(2))
+        out[m.group(1).lower()] = rec[m.end():m.end() + n]
+        i = m.end() + n
+    return out
+
+
+def log_records(name):
+    """The QSO records of a log (records without CALL do not count, as in edit_qso)."""
+    try:
+        with open(field_path("logs", name), errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return []
+    return [p for p in adif_split(text)[1][:-1] if re.search(r'<call:\d+', p, re.I)]
+
+
+@app.route('/logs')
+def logs_page():
+    return bottle.template('logs')
+
+
+@app.get('/api/logs')
+def get_logs():
+    qsos = []
+    for log in field_logs():
+        for n, rec in enumerate(log_records(log["name"])):
+            qsos.append(dict(adif_fields(rec), file=log["name"], n=n))
+    return {"qsos": qsos, "active": field_active_log()}
+
+
+# Editable fields and what they may hold (no < or >: they would break the ADIF tags)
+LOG_FIELDS = {"call": r'[A-Z0-9/]{3,15}', "qso_date": r'\d{8}', "time_on": r'\d{4}(\d{2})?',
+              "band": r'\d{1,4}(\.\d+)?C?M|', "freq": r'\d{1,4}(\.\d{1,6})?|', "mode": r'[A-Z0-9-]{1,12}|',
+              "rst_sent": r'[+-]?\d{1,3}|', "rst_rcvd": r'[+-]?\d{1,3}|', "name": r'[^<>]{0,40}',
+              "qth": r'[^<>]{0,40}', "gridsquare": r'([A-R]{2}\d{2}([A-X]{2})?)?', "comment": r'[^<>]{0,80}',
+              "sota_ref": r'(%s)?' % SOTA_REF, "pota_ref": r'(%s)?' % POTA_REF}
+
+
+@app.put('/api/logs/<name>/<n:int>')
+def put_log_qso(name, n):
+    """JSON {field: value} for any of LOG_FIELDS; an empty value removes the field (CALL and the date stay)."""
+    try:
+        data = bottle.request.json
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or not data:
+        return api_error(400, "Invalid QSO")
+    clean = {}
+    for k, v in data.items():
+        v = str(v).strip()
+        v = v if k in ("name", "qth", "comment") else v.upper()
+        if k not in LOG_FIELDS or not re.fullmatch(LOG_FIELDS[k], v) or (k in ("call", "qso_date", "time_on") and not v):
+            return api_error(400, f"Invalid {k.upper()}: {v}")
+        clean[k] = v
+
+    def change(rec):
+        for k, v in clean.items():
+            rec = adif_set(rec, k.upper(), v) if v else adif_del(rec, k.upper())
+        return rec
+    return edit_qso(name, n, change) or {"status": "OK"}
+
+
+@app.post('/logs/export')
+def export_logs():
+    """Form field sel = "file:n,file:n,...", fmt = adi | csv: those QSOs as one ADIF or CSV download."""
+    want = {}
+    for item in bottle.request.forms.get("sel", "").split(","):
+        name, _, n = item.rpartition(":")
+        if name.endswith(".adi") and os.path.basename(name) == name and n.isdigit():
+            want.setdefault(name, set()).add(int(n))
+    recs = [rec for name in sorted(want) for n, rec in enumerate(log_records(name)) if n in want[name]]
+    stamp = time.strftime("%Y%m%d-%H%M")
+    if bottle.request.forms.get("fmt") == "csv":
+        cols = ["qso_date", "time_on", "call", "band", "freq", "mode", "rst_sent", "rst_rcvd", "name", "qth",
+                "gridsquare", "sota_ref", "pota_ref", "my_sota_ref", "my_pota_ref", "comment"]
+        out = io.StringIO()
+        w = csv.writer(out)
+        w.writerow([c.upper() for c in cols])
+        for rec in recs:
+            f = adif_fields(rec)
+            w.writerow([f.get(c, "") for c in cols])
+        body, ext, mime = out.getvalue(), "csv", "text/csv"
+    else:
+        body = "X6100 log export\n<adif_ver:5>3.1.4 <programid:12>X6100 IU1WXY <eoh>\n" + \
+               "".join(rec.strip() + " <eor>\n" for rec in recs)
+        ext, mime = "adi", "text/plain"
+    bottle.response.content_type = mime + "; charset=utf-8"
+    bottle.response.set_header("Content-Disposition", f'attachment; filename="x6100-log-{stamp}.{ext}"')
+    return body
 
 
 # Web remote: control and spectrum through the GUI's local socket (src/remote_server.cpp,

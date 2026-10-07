@@ -84,6 +84,10 @@ static void keyboard_cb(lv_event_t * e) {
     switch (code) {
         case LV_EVENT_KEY:
             switch (*key) {
+                case LV_KEY_ESC:    /* the on-screen keyboard has the focus: ESC (VOL press) leaves too */
+                    cancel();
+                    break;
+
                 case KEY_VOL_LEFT_EDIT:
                 case KEY_VOL_LEFT_SELECT:
                     radio_change_vol(-1);
