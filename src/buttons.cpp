@@ -1102,11 +1102,12 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
         bool fit = lv_font_get_line_height(&sony_22) + lv_font_get_line_height(&sony_32) + 9
                    <= BTN_HEIGHT - 2 * BTN_INSET;
         lv_label_set_text(b->label, name);
-        lv_obj_set_style_text_font(b->label, fit ? &sony_22 : &sony_20, 0);
+        lv_obj_set_style_text_font(b->label, theme_shape.vision ? &sony_24 : fit ? &sony_22 : &sony_20, 0);
         lv_obj_set_style_text_color(b->label, TC(text_head), 0);
-        lv_obj_align(b->label, LV_ALIGN_TOP_MID, 0, fit ? 4 : 2);
-        lv_obj_set_style_text_font(b->value, fit ? &sony_32 : &sony_28, 0);
-        lv_obj_align(b->value, LV_ALIGN_BOTTOM_MID, 0, fit ? -5 : -2);
+        lv_obj_align(b->label, LV_ALIGN_TOP_MID, 0, theme_shape.vision ? 0 : fit ? 4 : 2);
+        /* VISION: the value as big as the button takes, the name over it (capitals and digits: no overlap) */
+        lv_obj_set_style_text_font(b->value, theme_shape.vision ? &sony_36 : fit ? &sony_32 : &sony_28, 0);
+        lv_obj_align(b->value, LV_ALIGN_BOTTOM_MID, 0, theme_shape.vision ? 0 : fit ? -5 : -2);
         lv_label_set_text(b->value, nl + 1);
         lv_obj_clear_flag(b->value, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(b->parent, TC(btn), 0);
@@ -1124,7 +1125,8 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
     } else {
         lv_label_set_text(b->label, text);
     }
-    lv_obj_set_style_text_font(b->label, page ? &sony_28 : &sony_30, 0);
+    lv_obj_set_style_text_font(b->label, page ? (theme_shape.vision ? &sony_32 : &sony_28)
+                                              : (theme_shape.vision ? &sony_34 : &sony_30), 0);
     if (page) lv_obj_set_style_text_color(b->label, TC(btn_page_text), 0);
     else lv_obj_remove_local_style_prop(b->label, LV_STYLE_TEXT_COLOR, 0);   /* the button's: btn_text, btn_active_text, btn_off_text */
     lv_obj_center(b->label);
