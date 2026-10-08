@@ -66,7 +66,11 @@ let st = null;              // last state from the radio
 let tuneTarget = null, tuneUntil = 0;   // frequency being tuned from this page
 const holdUntil = {};       // slider -> time until which the radio doesn't move it
 
+/* An error shows for a few seconds; the next state after it says Connected again (a busy or refused
+ * command used to leave a red error while the radio worked) */
+let errorSince = 0, lostTimer = null;
 const showStatus = function(text, error=false) {
+  errorSince = error ? Date.now() : 0;
   const el = $("#rm-status");
   el.toggleClass("error", error);
   el.html('<span class="dot"></span>').append(document.createTextNode(text));
@@ -330,7 +334,9 @@ const connect = function() {
   es.onmessage = function(e) {
     const m = JSON.parse(e.data);
     if (m.t == "state") {
-      if (!st) showStatus("Connected");
+      clearTimeout(lostTimer);
+      lostTimer = null;
+      if (!st || (errorSince && Date.now() - errorSince > 4000)) showStatus("Connected");
       render(m);
     } else if (m.t == "spec") {
       addLine(m);
@@ -339,8 +345,8 @@ const connect = function() {
     }
   };
   es.addEventListener("fail", function(e) { st = null; showStatus(e.data, true); });
-  es.onerror = function() {
-    if (st) showStatus("Connection lost, retrying", true);
+  es.onerror = function() {   // the stream reconnects by itself (the server's socket timeout): lost only if it doesn't
+    if (st && !lostTimer) lostTimer = setTimeout(function() { lostTimer = null; showStatus("Connection lost, retrying", true); }, 3000);
     st = null;
   };
 }
