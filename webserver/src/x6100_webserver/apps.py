@@ -34,18 +34,23 @@ app = bottle.Bottle()
 
 
 @app.hook('before_request')
-def to_https():
-    """HTTPS by default: a page opened over HTTP goes to HTTPS (the web remote needs it). The API stays on
-    HTTP too: X6100 Link uses it, and its Android HTTP client would refuse the self-signed certificate."""
+def page_scheme():
+    """Only the Remote page needs HTTPS (the browser gives audio to secure pages only): it goes there, and
+    every other page back to HTTP, where the radio's self-signed certificate never shows a warning. The
+    API answers on both (X6100 Link uses HTTP)."""
     env = bottle.request.environ
-    if (not settings.HTTPS_PORT or str(env.get("SERVER_PORT")) == str(settings.HTTPS_PORT)
-            or bottle.request.method != "GET" or bottle.request.path.startswith("/api/")
+    if (not settings.HTTPS_PORT or bottle.request.method != "GET" or bottle.request.path.startswith("/api/")
             or "text/html" not in bottle.request.headers.get("Accept", "")):
         return
+    secure = str(env.get("SERVER_PORT")) == str(settings.HTTPS_PORT)
+    remote = bottle.request.path == "/remote"
+    if secure == remote:
+        return
     host = bottle.request.get_header("Host", "").split(":")[0] or env.get("SERVER_NAME", "")
-    port = "" if settings.HTTPS_PORT == 443 else ":%d" % settings.HTTPS_PORT
+    scheme, port, std = ("https", settings.HTTPS_PORT, 443) if remote else ("http", settings.HTTP_PORT, 80)
     query = ("?" + env["QUERY_STRING"]) if env.get("QUERY_STRING") else ""
-    bottle.redirect("https://%s%s%s%s" % (host, port, bottle.request.path, query), 302)
+    bottle.redirect("%s://%s%s%s%s" % (scheme, host, "" if port == std else ":%d" % port, bottle.request.path,
+                                       query), 302)
 
 bottle.TEMPLATE_PATH += [
     resources.files('x6100_webserver').joinpath('views'),

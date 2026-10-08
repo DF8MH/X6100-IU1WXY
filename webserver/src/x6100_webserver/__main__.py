@@ -137,6 +137,7 @@ def run():
     settings.CHANNELS_FILE = args.channels_file
     if args.https_port and not (args.debug and "BOTTLE_CHILD" not in os.environ):   # not in the reloader's parent
         start_https(apps.app, args.host, args.https_port, args.cert_dir)
+    settings.HTTP_PORT = args.port
     apps.app.run(server=ThreadedServer, host=args.host, port=args.port, debug=args.debug, reloader=args.debug)
 
 run()
