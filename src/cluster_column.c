@@ -14,6 +14,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "fonts/font_select.h"
+
+/* VISION: the sizes of the other themes here (an overlay on VISION's shorter waterfall) */
+#define NF(n) (theme_shape.vision ? font_down(&sony_##n, VISION_FONT_STEPS) : &sony_##n)
 
 #define COL_W   244
 #define TITLE_H 30
@@ -352,7 +356,7 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
     lv_obj_add_flag(hl, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(hl, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
-    title = cell(box, 0, COL_W - 2, 2, LV_TEXT_ALIGN_CENTER, ink(theme_hex(TC_text_head)), &sony_22);
+    title = cell(box, 0, COL_W - 2, 2, LV_TEXT_ALIGN_CENTER, ink(theme_hex(TC_text_head)), NF(22));
     lv_label_set_text(title, "DX Cluster");
     lv_obj_clear_flag(title, LV_OBJ_FLAG_HIDDEN);
 
@@ -361,11 +365,11 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
     for (int i = 0; i < POOL; i++) {
         lv_coord_t ry = TITLE_H + i * ROW_H;
 
-        rows[i].freq = cell(box, 4, FREQ_W, ry, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text_value), &sony_22);
-        rows[i].call = cell(box, 72, 99, ry + 2, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), &sony_20);
+        rows[i].freq = cell(box, 4, FREQ_W, ry, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text_value), NF(22));
+        rows[i].call = cell(box, 72, 99, ry + 2, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), NF(20));
         lv_label_set_long_mode(rows[i].call, LV_LABEL_LONG_DOT);   /* a long call ends in dots, clear of the mode */
-        rows[i].mode = cell(box, 173, 32, ry + 3, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), &sony_18);
-        rows[i].age  = cell(box, 207, 32, ry + 3, LV_TEXT_ALIGN_RIGHT, theme_hex(TC_text), &sony_18);
+        rows[i].mode = cell(box, 173, 32, ry + 3, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), NF(18));
+        rows[i].age  = cell(box, 207, 32, ry + 3, LV_TEXT_ALIGN_RIGHT, theme_hex(TC_text), NF(18));
     }
     lv_timer_create(timer_cb, 250, NULL);
     timer_cb(NULL);
