@@ -173,6 +173,8 @@ int main(void) {
         LV_LOG_WARN("Bundled themes not copied to /mnt/themes");
     theme_init(params.theme_name.x);    /* an unknown one falls back to IU1WXY */
     fonts_apply(theme_shape.font >= 0 ? theme_shape.font : params.font.x);
+    if (theme_shape.vision)
+        fonts_scale(VISION_FONT_STEPS);   /* everything bigger: apps, Settings, popups */
     styles_init();
 
     radio_init();

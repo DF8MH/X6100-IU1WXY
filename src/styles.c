@@ -166,8 +166,8 @@ void styles_init(void) {
 
     lv_style_init(&freq_style);
     lv_style_set_text_color(&freq_style, lv_color_white());
-    lv_style_set_text_font(&freq_style, theme_shape.vision ? &sony_30 : &sony_22);
-    lv_style_set_pad_ver(&freq_style, theme_shape.vision ? 3 : 9);
+    lv_style_set_text_font(&freq_style, &sony_22);   /* VISION: 28 (fonts_scale) */
+    lv_style_set_pad_ver(&freq_style, theme_shape.vision ? 5 : 9);
     lv_style_set_width(&freq_style, 150);
     lv_style_set_height(&freq_style, 36);
     lv_style_set_text_align(&freq_style, LV_TEXT_ALIGN_CENTER);

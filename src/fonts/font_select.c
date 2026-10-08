@@ -40,3 +40,15 @@ void fonts_apply(uint8_t choice) {
         sony[i]->fallback = &orig[i];
     }
 }
+
+/* VISION: every sony_N drawn `steps` sizes bigger (sony_20 as sony_26 with 3), up to sony_44; sony_60 stays.
+ * Call once, after fonts_apply() and before the UI is built */
+void fonts_scale(int steps) {
+    static lv_font_t was[N_FONTS];
+
+    for (unsigned i = 0; i < N_FONTS; i++) was[i] = *sony[i];
+    for (unsigned i = 0; i + 1 < N_FONTS; i++) {
+        unsigned to = i + steps < N_FONTS - 1 ? i + steps : N_FONTS - 2;
+        *sony[i]    = was[to];
+    }
+}

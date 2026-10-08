@@ -21,8 +21,13 @@
 #include <unistd.h>
 #include <math.h>
 
-#define HEIGHT 42
-#define LABEL_WIDTH 300
+/* Seven rows in the dialog's height (they ran 30 px past it, the status cut off), the values in one
+ * column wide enough for a longitude in degrees, minutes and seconds */
+#define ROWS        7
+#define HEIGHT      ((DIALOG_H - 12) / ROWS)
+#define LABEL_WIDTH 340
+#define VALUE_X     (30 + LABEL_WIDTH + 10)
+#define VALUE_W     (796 - VALUE_X - 20)
 
 static void construct_cb(lv_obj_t *parent);
 static void destruct_cb();
@@ -206,9 +211,10 @@ static void gps_status_update_timer(lv_timer_t * timer)
 
 static void construct_cb(lv_obj_t *parent) {
     lv_obj_t    *label;
-    lv_coord_t  y = 32;
+    lv_coord_t  y = 6;
 
     dialog.obj = dialog_init(parent);
+    lv_obj_set_style_text_font(dialog.obj, &sony_28, 0);   /* labels and values: 36 did not fit the labels */
 
     lv_group_add_obj(keyboard_group, dialog.obj);
     lv_obj_add_event_cb(dialog.obj, key_cb, LV_EVENT_KEY, NULL);
@@ -225,8 +231,8 @@ static void construct_cb(lv_obj_t *parent) {
     satellites_cnt = lv_label_create(dialog.obj);
 
     lv_label_set_text(satellites_cnt, "N/A");
-    lv_obj_set_size(satellites_cnt, 450, HEIGHT);
-    lv_obj_set_pos(satellites_cnt, LABEL_WIDTH + 50, y);
+    lv_obj_set_size(satellites_cnt, VALUE_W, HEIGHT);
+    lv_obj_set_pos(satellites_cnt, VALUE_X, y);
 
     y += HEIGHT;
 
@@ -241,8 +247,8 @@ static void construct_cb(lv_obj_t *parent) {
     fix = lv_label_create(dialog.obj);
 
     lv_label_set_text(fix, "N/A");
-    lv_obj_set_size(fix, 450, HEIGHT);
-    lv_obj_set_pos(fix, LABEL_WIDTH + 50, y);
+    lv_obj_set_size(fix, VALUE_W, HEIGHT);
+    lv_obj_set_pos(fix, VALUE_X, y);
 
     y += HEIGHT;
 
@@ -257,8 +263,8 @@ static void construct_cb(lv_obj_t *parent) {
     date = lv_label_create(dialog.obj);
 
     lv_label_set_text(date, "N/A");
-    lv_obj_set_size(date, 450, HEIGHT);
-    lv_obj_set_pos(date, LABEL_WIDTH + 50, y);
+    lv_obj_set_size(date, VALUE_W, HEIGHT);
+    lv_obj_set_pos(date, VALUE_X, y);
 
     y += HEIGHT;
 
@@ -273,8 +279,8 @@ static void construct_cb(lv_obj_t *parent) {
     lat = lv_label_create(dialog.obj);
 
     lv_label_set_text(lat, "N/A");
-    lv_obj_set_size(lat, 450, HEIGHT);
-    lv_obj_set_pos(lat, LABEL_WIDTH + 50, y);
+    lv_obj_set_size(lat, VALUE_W, HEIGHT);
+    lv_obj_set_pos(lat, VALUE_X, y);
 
     y += HEIGHT;
 
@@ -289,8 +295,8 @@ static void construct_cb(lv_obj_t *parent) {
     lon = lv_label_create(dialog.obj);
 
     lv_label_set_text(lon, "N/A");
-    lv_obj_set_size(lon, LABEL_WIDTH, HEIGHT);
-    lv_obj_set_pos(lon, LABEL_WIDTH + 50, y);
+    lv_obj_set_size(lon, VALUE_W, HEIGHT);
+    lv_obj_set_pos(lon, VALUE_X, y);
 
     y += HEIGHT;
 
@@ -305,8 +311,8 @@ static void construct_cb(lv_obj_t *parent) {
     qth = lv_label_create(dialog.obj);
 
     lv_label_set_text(qth, "N/A");
-    lv_obj_set_size(qth, 450, HEIGHT);
-    lv_obj_set_pos(qth, LABEL_WIDTH + 50, y);
+    lv_obj_set_size(qth, VALUE_W, HEIGHT);
+    lv_obj_set_pos(qth, VALUE_X, y);
 
     y += HEIGHT;
 
@@ -321,8 +327,8 @@ static void construct_cb(lv_obj_t *parent) {
     status = lv_label_create(dialog.obj);
 
     lv_label_set_text_fmt(status, "%s", "");
-    lv_obj_set_size(status, 450, HEIGHT);
-    lv_obj_set_pos(status, LABEL_WIDTH + 50, y);
+    lv_obj_set_size(status, VALUE_W, HEIGHT);
+    lv_obj_set_pos(status, VALUE_X, y);
 
     status_update_timer = lv_timer_create(gps_status_update_timer, 500,  NULL);
     lv_timer_ready(status_update_timer);

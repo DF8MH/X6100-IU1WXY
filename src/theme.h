@@ -191,6 +191,7 @@ typedef struct {
     int16_t btn_gap;        /* more space around the bottom buttons, 0..4 px (pill shapes show their corners) */
     bool    rule;           /* accent line under the top bar and over the active button (Holo) */
     bool    vision;         /* VISION: big type for weak eyes, a low top bar, a tall frequency strip, the S-meter on a row of its own */
+#define VISION_FONT_STEPS 3 /* VISION: every font this many sizes up, apps and Settings too (fonts_scale) */
     uint32_t waterfall[16];     /* palette stops from weak to strong signal */
     uint8_t  waterfall_n;       /* 0 = a built-in table (waterfall_table) */
     uint8_t  waterfall_table;   /* 0 gauss, 1 legacy */

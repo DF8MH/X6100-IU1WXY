@@ -9,6 +9,7 @@ enum { FONT_SONY, FONT_ROBOTO, FONT_DEJAVU, FONT_ARIAL };
 
 /* Call once at boot, before any style or widget uses the fonts */
 void fonts_apply(uint8_t choice);
+void fonts_scale(int steps);
 
 #ifdef __cplusplus
 }

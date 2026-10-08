@@ -3631,7 +3631,7 @@ static lv_obj_t * cf_toggle(uint8_t row, int col, const char *text, bool on, lv_
     lv_obj_add_event_cb(obj, cf_toggle_cb, LV_EVENT_VALUE_CHANGED, list);
 
     lv_obj_t *label = lv_label_create(obj);
-    lv_obj_set_style_text_font(label, &sony_18, 0);
+    lv_obj_set_style_text_font(label, theme_shape.vision ? &sony_14 : &sony_18, 0);   /* VISION scales it to 20: AM/FM fits */
     lv_label_set_text(label, text);
     lv_obj_center(label);
     return obj;

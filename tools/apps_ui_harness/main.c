@@ -1204,6 +1204,7 @@ int main(int argc, char **argv) {
     theme_init(getenv("THEME"));    /* THEME=Classic, or a file in out/themes_demo; default IU1WXY */
     if (getenv("FONT")) { params.font.x = atoi(getenv("FONT")); fonts_apply(params.font.x); }
     else if (theme_shape.font >= 0) fonts_apply(theme_shape.font);
+    if (theme_shape.vision) fonts_scale(VISION_FONT_STEPS);   /* as main.c */
     styles_init();
     lv_obj_t *scr = lv_scr_act();
     lv_obj_add_style(scr, &background_style, 0);

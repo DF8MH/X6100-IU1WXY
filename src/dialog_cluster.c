@@ -612,18 +612,25 @@ static void table_draw_end_cb(lv_event_t *e) {
 
     snprintf(text, sizeof(text), "%d.%03d.%d", s->freq_hz / 1000000, (s->freq_hz / 1000) % 1000,
              (s->freq_hz % 1000) / 100);
-    draw_text(dsc, FONT_MAIN, 0, 122, TC(text_value), LV_TEXT_ALIGN_RIGHT, text);
-    draw_text(dsc, FONT_MAIN, 136, 290, alert ? lv_color_hex(COLOR_ALERT_TEXT) : near ? lv_color_hex(COLOR_NEAR) : TC(text),
-              LV_TEXT_ALIGN_LEFT, s->dx);
+    /* VISION's bigger type: no spotter, the room to the others */
+    bool       v     = theme_shape.vision;
+    lv_coord_t call  = v ? 176 : 136, comm = v ? 380 : 410, time_x = v ? 660 : 690;
+
+    draw_text(dsc, FONT_MAIN, 0, v ? 164 : 122, TC(text_value), LV_TEXT_ALIGN_RIGHT, text);
+    draw_text(dsc, FONT_MAIN, call, v ? 360 : 290,
+              alert ? lv_color_hex(COLOR_ALERT_TEXT) : near ? lv_color_hex(COLOR_NEAR) : TC(text), LV_TEXT_ALIGN_LEFT,
+              s->dx);
     if (age <= NEW_MIN) {
         lv_coord_t w = lv_txt_get_width(s->dx, strlen(s->dx), FONT_MAIN, 0, 0);
-        draw_text(dsc, FONT_MAIN, 136 + w + 4, 310, lv_color_hex(COLOR_NEW), LV_TEXT_ALIGN_LEFT, "*");
+        draw_text(dsc, FONT_MAIN, call + w + 4, v ? 376 : 310, lv_color_hex(COLOR_NEW), LV_TEXT_ALIGN_LEFT, "*");
     }
-    draw_text(dsc, FONT_SMALL, 300, 400, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_LEFT, s->spotter);
-    draw_text(dsc, FONT_SMALL, 410, alert ? 620 : 690, TC(text_value), LV_TEXT_ALIGN_LEFT, s->comment);
-    if (alert) draw_text(dsc, FONT_SMALL, 624, 686, lv_color_hex(COLOR_ALERT_BORDER), LV_TEXT_ALIGN_RIGHT, "ALERT");
+    if (!v) draw_text(dsc, FONT_SMALL, 300, 400, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_LEFT, s->spotter);
+    draw_text(dsc, FONT_SMALL, comm, alert ? time_x - 110 : time_x - 10, TC(text_value), LV_TEXT_ALIGN_LEFT, s->comment);
+    if (alert)
+        draw_text(dsc, FONT_SMALL, time_x - 106, time_x - 4, lv_color_hex(COLOR_ALERT_BORDER), LV_TEXT_ALIGN_RIGHT,
+                  "ALERT");
     snprintf(text, sizeof(text), "%02d%02dZ", s->utc_min / 60, s->utc_min % 60);
-    draw_text(dsc, FONT_SMALL, 690, WIDTH - 12, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_RIGHT, text);
+    draw_text(dsc, FONT_SMALL, time_x, WIDTH - 12, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_RIGHT, text);
 }
 
 void dialog_cluster_tune_spot(const cluster_spot_t *s) {
@@ -746,6 +753,13 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_width(head_right, 260);
     lv_obj_set_style_text_align(head_right, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(head_right, 796 - 18 - 260, 12);
+    if (theme_shape.vision) {   /* bigger type: the band and VFO are big in the strip already */
+        lv_obj_add_flag(head_mid, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_width(head_left, 400);
+        lv_label_set_long_mode(head_left, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(head_right, 360);
+        lv_obj_set_x(head_right, 796 - 18 - 360);
+    }
 
     table = lv_table_create(dialog.obj);
     lv_obj_remove_style(table, NULL, LV_STATE_ANY | LV_PART_MAIN);
