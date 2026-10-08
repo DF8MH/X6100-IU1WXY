@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "../events.h"
+#include "../styles.h"
 #include "../theme.h"
 
 /*
@@ -321,6 +322,8 @@ void table_view_build(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_coord_t w
     lv_obj_set_style_border_color(s_table, TC(text), LV_PART_MAIN);
     lv_obj_set_style_border_opa(s_table, 128, LV_PART_MAIN);
     lv_obj_set_style_text_color(s_table, TC(text_soft), LV_PART_ITEMS);
+    /* Its own size: the dialog's 36 (taller still with DejaVu) left room for five rows */
+    lv_obj_set_style_text_font(s_table, &sony_26, LV_PART_ITEMS);
     lv_obj_set_style_pad_top(s_table, 3, LV_PART_ITEMS);
     lv_obj_set_style_pad_bottom(s_table, 3, LV_PART_ITEMS);
     lv_obj_set_style_pad_left(s_table, 5, LV_PART_ITEMS);
