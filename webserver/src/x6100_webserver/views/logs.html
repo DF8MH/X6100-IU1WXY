@@ -74,7 +74,7 @@ var render = function() {
     const rows = days[d];
     const files = [...new Set(rows.map(q => q.file))];
     const head = $("<h3>").text(d || "No date").append($("<span class='tag'>").text(rows.length + " QSO" + (rows.length == 1 ? "" : "s")));
-    files.forEach(f => head.append($("<a class='tag'>").attr("href", "/field/logs/" + encodeURIComponent(f)).attr("title", "Download the file").text(f)));
+    files.forEach(f => head.append($("<a class='tag' download>").attr("href", "/field/logs/" + encodeURIComponent(f)).attr("title", "Download the file").text(f)));
     const del = button("remove", "si-trash", "Delete this day's QSOs shown").on("click", () => deleteQsos(rows, `all ${rows.length} QSOs of ${d}`));
     head.append($("<span style='margin-left:auto'>").append(del));
     const tbody = $("<tbody>");
@@ -137,7 +137,7 @@ var exportShown = function(fmt) {
   if (!list.length) return showStatus("Nothing to export", true);
   $("#export [name=sel]").val(list.map(q => q.file + ":" + q.n).join(","));
   $("#export [name=fmt]").val(fmt);
-  $("#export").submit();
+  x6100PostForm($("#export")[0]);
 }
 
 var load = function(msg) {

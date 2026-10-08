@@ -57,7 +57,7 @@ var render = function(data) {
   if (data.update.running) timer = setTimeout(load, 3000);
   const body = $("#logs tbody").empty();
   data.logs.forEach(function(log) {
-    const a = $("<a>").attr("href", "/field/logs/" + encodeURIComponent(log.name)).text(log.name);
+    const a = $("<a download>").attr("href", "/field/logs/" + encodeURIComponent(log.name)).text(log.name);
     const del = $("<button type='button'>").text("Delete").on("click", function() { deleteLog(log.name); });
     body.append($("<tr>").append($("<td>").append(a), $("<td>").text(log.size), $("<td>").text(log.date), $("<td>").append(del)));
   });

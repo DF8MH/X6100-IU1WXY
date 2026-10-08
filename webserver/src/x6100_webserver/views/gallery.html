@@ -279,7 +279,7 @@ $("#selzip").on("click", function() {
     [].concat(p[k]).forEach(function(v) { form.append($("<input type='hidden'>").attr("name", k).val(v)); });
   });
   $("body").append(form);
-  form[0].submit();
+  x6100PostForm(form[0]);
   form.remove();
   showStatus("ZIP download started");
 });
