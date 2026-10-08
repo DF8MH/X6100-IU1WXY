@@ -41,6 +41,13 @@ void fonts_apply(uint8_t choice) {
     }
 }
 
+/* The sony_N `steps` sizes smaller (sony_60 stays): for screens that VISION's scale makes too big */
+const lv_font_t *font_down(const lv_font_t *f, int steps) {
+    for (int i = 0; i + 1 < (int)N_FONTS; i++)
+        if (sony[i] == f) return sony[i - steps > 0 ? i - steps : 0];
+    return f;
+}
+
 /* VISION: every sony_N drawn `steps` sizes bigger (sony_20 as sony_26 with 3), up to sony_44; sony_60 stays.
  * Call once, after fonts_apply() and before the UI is built */
 void fonts_scale(int steps) {

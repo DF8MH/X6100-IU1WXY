@@ -55,6 +55,10 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include "fonts/font_select.h"
+
+/* VISION: one size over the other themes here, not VISION_FONT_STEPS (too big for these tables) */
+#define VF(n) (theme_shape.vision ? font_down(&sony_##n, VISION_FONT_STEPS - 1) : &sony_##n)
 
 #ifndef FIELD_DIR   /* overridden by the UI harness */
 #define FIELD_DIR   "/mnt/field"
@@ -507,7 +511,7 @@ static lv_obj_t *row_create(lv_obj_t *parent, const char *text, lv_coord_t x, lv
     lv_obj_set_style_pad_ver(row, 4, 0);
     lv_obj_set_style_pad_hor(row, 8, 0);
     lv_obj_set_style_radius(row, 4, 0);
-    lv_obj_set_style_text_font(row, &sony_22, 0);
+    lv_obj_set_style_text_font(row, VF(22), 0);
     lv_obj_set_style_text_color(row, TC(text), 0);
     lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
     snprintf(buf, sizeof(buf), "%s", text);
@@ -530,7 +534,7 @@ static lv_obj_t *row_create(lv_obj_t *parent, const char *text, lv_coord_t x, lv
 static void list_head(const char *text, lv_coord_t x, lv_coord_t y) {
     lv_obj_t *head = row_create(body, text, x, y);
 
-    lv_obj_set_style_text_font(head, &sony_18, 0);
+    lv_obj_set_style_text_font(head, VF(18), 0);
     lv_obj_set_style_text_color(head, TC(text_dim), 0);
 }
 
@@ -763,8 +767,8 @@ static void build_home(void) {
         lv_obj_add_event_cb(t, tile_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)k);
 
         icon(t, home_icons[k], 96, (tw - 96) / 2 - 2, 24);
-        lv_obj_t *n = label(t, &sony_38, accent(k), 0, 136, tw - 4);
-        lv_obj_t *s = label(t, &sony_20, lv_color_mix(accent(k), TC(text), 160), 0, 186, tw - 4);
+        lv_obj_t *n = label(t, VF(38), accent(k), 0, 136, tw - 4);
+        lv_obj_t *s = label(t, VF(20), lv_color_mix(accent(k), TC(text), 160), 0, 186, tw - 4);
 
         lv_label_set_text(n, home_names[k]);
         lv_label_set_text(s, subs[k]);
@@ -821,15 +825,15 @@ static void build_ref(void) {
     head_set(st.prog == 'S' ? "sota" : "pota", t);
     lv_obj_t *p = panel(body, 8, 6, 384, h);
     icon(p, st.prog == 'S' ? "sota" : "pota", 64, 12, 12);
-    info_ref   = label(p, &sony_36, prog_accent(), 88, 10, 284);
-    info_name  = label(p, &sony_24, TC(text), 88, 54, 284);
-    info_lines = label(p, &sony_22, TC(text), 16, 100, 352);
+    info_ref   = label(p, VF(36), prog_accent(), 88, 10, 284);
+    info_name  = label(p, VF(24), TC(text), 88, 54, 284);
+    info_lines = label(p, VF(22), TC(text), 16, 100, 352);
     lv_label_set_long_mode(info_lines, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_line_space(info_lines, 6, 0);
-    lv_obj_t *s = label(p, &sony_18, TC(text_dim), 16, h - 70, 0);
+    lv_obj_t *s = label(p, VF(18), TC(text_dim), 16, h - 70, 0);
     lv_label_set_text(s, "STATUS");
     info_dot   = dot(p, 18, h - 40, 16, TC(err));
-    info_state = label(p, &sony_26, TC(err), 44, h - 46, 0);
+    info_state = label(p, VF(26), TC(err), 44, h - 46, 0);
 
     static const lv_coord_t widths[] = {130, 88, 150};
     list_create(body, 400, 38, W - 408, h - 32, widths, 3);
@@ -901,14 +905,14 @@ static void build_act(void) {
     head_set(st.prog == 'S' ? "sota" : "pota", t);
 
     lv_obj_t *p = panel(body, 8, 6, 584, h);
-    act_band    = label(p, &sony_28, lv_color_black(), 14, 8, 0);
+    act_band    = label(p, VF(28), lv_color_black(), 14, 8, 0);
     lv_obj_set_style_bg_color(act_band, prog_accent(), 0);
     lv_obj_set_style_bg_opa(act_band, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_hor(act_band, 10, 0);
     lv_obj_set_style_pad_ver(act_band, 4, 0);
     lv_obj_set_style_radius(act_band, 6, 0);
-    act_freq = label(p, &sony_60, TC(text), 120, 4, 0);
-    act_mode = label(p, &sony_36, TC(text), 480, 16, 0);
+    act_freq = label(p, VF(60), TC(text), 120, 4, 0);
+    act_mode = label(p, VF(36), TC(text), 480, 16, 0);
 
     /* S-meter segments */
     for (int i = 0; i < 13; i++) {
@@ -919,26 +923,26 @@ static void build_act(void) {
         lv_obj_set_style_radius(act_smeter[i], 2, 0);
         lv_obj_set_style_bg_opa(act_smeter[i], LV_OPA_COVER, 0);
     }
-    lv_obj_t *s = label(p, &sony_28, TC(text_dim), 102, 67, 0);   /* right before the first segment */
+    lv_obj_t *s = label(p, VF(28), TC(text_dim), 102, 67, 0);   /* right before the first segment */
     lv_label_set_text(s, "S");
-    act_sval = label(p, &sony_28, TC(text), 494, 67, 0);
+    act_sval = label(p, VF(28), TC(text), 494, 67, 0);
 
     lv_obj_t *box = panel(p, 12, 104, 558, h - 120);
     lv_obj_set_style_border_color(box, TC(text_dim), 0);
-    act_text = label(box, &sony_28, TC(text), 14, 10, 530);
+    act_text = label(box, VF(28), TC(text), 14, 10, 530);
     lv_label_set_long_mode(act_text, LV_LABEL_LONG_WRAP);
     lv_label_set_text_fmt(act_text, "CQ CQ CQ DE %s\n%s %s", my_call(), prog_name(), st.ref.ref);
-    lv_obj_t *name = label(box, &sony_34, TC(text_dim), 14, 72, 530);   /* the summit or park, big */
+    lv_obj_t *name = label(box, VF(34), TC(text_dim), 14, 72, 530);   /* the summit or park, big */
     lv_label_set_text(name, st.ref.name);
-    act_recent = label(box, &sony_22, TC(text_dim), 14, h - 120 - 3 * 24 - 12, 530);
+    act_recent = label(box, VF(22), TC(text_dim), 14, h - 120 - 3 * 24 - 12, 530);
 
     lv_obj_t *r = panel(body, 600, 6, W - 608, h);
     static const char *names[] = {"QSOs", "TIME", "LAST"};
     lv_obj_t         **vals[]  = {&act_qsos, &act_time, &act_last};
-    const lv_font_t   *fonts[] = {&sony_60, &sony_44, &sony_32};
+    const lv_font_t   *fonts[] = {VF(60), VF(44), VF(32)};
     lv_coord_t         ys[]    = {8, 124, 222};
     for (int k = 0; k < 3; k++) {
-        lv_obj_t *n = label(r, &sony_22, TC(text_dim), 0, ys[k], W - 610);
+        lv_obj_t *n = label(r, VF(22), TC(text_dim), 0, ys[k], W - 610);
         lv_label_set_text(n, names[k]);
         lv_obj_set_style_text_align(n, LV_TEXT_ALIGN_CENTER, 0);
         *vals[k] = label(r, fonts[k], k == 0 ? prog_accent() : TC(text), 0, ys[k] + 28, W - 610);
@@ -1013,7 +1017,7 @@ static void build_bands(void) {
     head_set("bands", "BAND OVERVIEW");
     list_create(body, 8, 36, W - 16, body_h - STATUS_H - 40, widths, 7);
     list_head("BAND\tACTIVITY\t\tSPOTS\tRBN\tHEARD YOU\t", 13, 6);
-    lv_obj_set_style_text_font(list, &sony_22, 0);
+    lv_obj_set_style_text_font(list, VF(22), 0);
     sel = cluster_band_of(cparam_i_get(cfg_fg_freq));
     bands_fill();
     buttons_load_page(&page_bands);
@@ -1064,13 +1068,13 @@ static void chip_create(knob_chip_t *c, const char *tag, lv_coord_t y) {
     lv_obj_set_style_border_width(c->box, 1, 0);
     lv_obj_set_style_radius(c->box, 6, 0);
     lv_obj_clear_flag(c->box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    c->tag = label(c->box, &sony_20, lv_color_black(), 4, 4, 0);
+    c->tag = label(c->box, VF(20), lv_color_black(), 4, 4, 0);
     lv_label_set_text(c->tag, tag);
     lv_obj_set_style_bg_opa(c->tag, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_hor(c->tag, 5, 0);
     lv_obj_set_style_pad_ver(c->tag, 2, 0);
     lv_obj_set_style_radius(c->tag, 4, 0);
-    c->name = label(c->box, &sony_24, TC(text_dim), 64, 4, 0);
+    c->name = label(c->box, VF(24), TC(text_dim), 64, 4, 0);
     c->bar  = lv_obj_create(c->box);
     lv_obj_remove_style_all(c->bar);
     lv_obj_set_style_bg_color(c->bar, TC(chip), 0);
@@ -1081,7 +1085,7 @@ static void chip_create(knob_chip_t *c, const char *tag, lv_coord_t y) {
     lv_obj_set_style_bg_color(c->fill, TC(btn_mark), 0);
     lv_obj_set_style_bg_opa(c->fill, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(c->fill, 3, 0);
-    c->val = label(c->box, &sony_24, TC(text), 0, 4, 90);
+    c->val = label(c->box, VF(24), TC(text), 0, 4, 90);
     lv_obj_set_style_text_align(c->val, LV_TEXT_ALIGN_RIGHT, 0);
 }
 
@@ -1765,13 +1769,13 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_border_width(head, 1, 0);
     lv_obj_set_style_border_color(head, TC(panel_border), 0);
     lv_obj_clear_flag(head, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *x = label(head, &sony_26, TC(text), 14, 9, 0);
+    lv_obj_t *x = label(head, VF(26), TC(text), 14, 9, 0);
     lv_label_set_text(x, "X6100");
     head_icon  = NULL;
-    title      = label(head, &sony_24, TC(text), 104, 10, 440);
+    title      = label(head, VF(24), TC(text), 104, 10, 440);
     head_dot   = dot(head, 556, 17, 12, TC(err));
-    head_right = label(head, &sony_22, TC(text), 572, 11, 100);
-    head_clock = label(head, &sony_38, TC(text), 670, 4, 118);   /* big: read at a glance outdoors */
+    head_right = label(head, VF(22), TC(text), 572, 11, 100);
+    head_clock = label(head, VF(38), TC(text), 670, 4, 118);   /* big: read at a glance outdoors */
     lv_obj_set_style_text_align(head_clock, LV_TEXT_ALIGN_RIGHT, 0);
 
     body = lv_obj_create(dialog.obj);
@@ -1780,7 +1784,7 @@ static void construct_cb(lv_obj_t *parent) {
     body_h = h - HEAD_H;
     lv_obj_set_size(body, W, body_h);
     lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
-    status = label(dialog.obj, &sony_20, TC(text_dim), 14, h - STATUS_H + 4, W - 28);
+    status = label(dialog.obj, VF(20), TC(text_dim), 14, h - STATUS_H + 4, W - 28);
     chip_create(&chips[0], "VOL", h - STATUS_H + 1);
     chip_create(&chips[1], "MFK", h - STATUS_H + 1);
 

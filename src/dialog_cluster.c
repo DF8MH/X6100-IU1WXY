@@ -29,6 +29,10 @@
 #include <string.h>
 #include <strings.h>
 #include <time.h>
+#include "fonts/font_select.h"
+
+/* VISION: one size over the other themes here, not VISION_FONT_STEPS (too big for these tables) */
+#define VF(n) (theme_shape.vision ? font_down(&sony_##n, VISION_FONT_STEPS - 1) : &sony_##n)
 
 #define WIDTH         771
 #define HEADER_H      38
@@ -46,8 +50,8 @@
 #define POP_HINT_H    56
 #define POP_MAX_ROWS_H (DIALOG_H - POP_HEAD_H - POP_HINT_H - 24)
 
-#define FONT_MAIN     (&sony_30) /* frequency and call */
-#define FONT_SMALL    (&sony_24) /* spotter, comment, time */
+#define FONT_MAIN     (VF(30)) /* frequency and call */
+#define FONT_SMALL    (VF(24)) /* spotter, comment, time */
 
 #define COLOR_NEAR_BG theme_hex(TC_near_bg)
 #define COLOR_SEL_BG  theme_hex(TC_sel_bg)
@@ -234,13 +238,13 @@ static void alert_show(const cluster_spot_t *s) {
     lv_obj_clear_flag(alert_box, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *title = lv_label_create(alert_box);
-    lv_obj_set_style_text_font(title, &sony_18, 0);
+    lv_obj_set_style_text_font(title, VF(18), 0);
     lv_obj_set_style_text_color(title, lv_color_hex(COLOR_ALERT_TEXT), 0);
     lv_label_set_text(title, "CLUSTER ALERT");
     lv_obj_set_pos(title, 14, 8);
 
     lv_obj_t *hint = lv_label_create(alert_box);
-    lv_obj_set_style_text_font(hint, &sony_18, 0);
+    lv_obj_set_style_text_font(hint, VF(18), 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(COLOR_DIM), 0);
     lv_label_set_text(hint, "MFK: tune");
     lv_obj_align(hint, LV_ALIGN_TOP_RIGHT, -14, 8);
@@ -742,14 +746,14 @@ static void construct_cb(lv_obj_t *parent) {
     view_mode  = 0;
 
     lv_color_t head_color = TC(text_head);
-    head_left             = make_label(dialog.obj, &sony_22, head_color);
+    head_left             = make_label(dialog.obj, VF(22), head_color);
     lv_obj_set_pos(head_left, 18, 12);
     lv_obj_set_width(head_left, 350);
-    head_mid = make_label(dialog.obj, &sony_22, head_color);
+    head_mid = make_label(dialog.obj, VF(22), head_color);
     lv_obj_set_width(head_mid, 250);
     lv_obj_set_style_text_align(head_mid, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_pos(head_mid, 800 / 2 - 125 + 40, 12);
-    head_right = make_label(dialog.obj, &sony_22, head_color);
+    head_right = make_label(dialog.obj, VF(22), head_color);
     lv_obj_set_width(head_right, 260);
     lv_obj_set_style_text_align(head_right, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(head_right, 796 - 18 - 260, 12);
@@ -784,11 +788,11 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_add_event_cb(table, table_draw_end_cb, LV_EVENT_DRAW_PART_END, NULL);
     lv_obj_add_event_cb(table, table_click_cb, LV_EVENT_CLICKED, NULL);
 
-    status_left = make_label(dialog.obj, &sony_22, lv_color_hex(COLOR_DIM));
+    status_left = make_label(dialog.obj, VF(22), lv_color_hex(COLOR_DIM));
     lv_obj_set_pos(status_left, 18, DIALOG_H - STATUS_H - 4);
     lv_obj_set_width(status_left, 440);
     lv_label_set_text(status_left, "MFK: browse - press: tune - VFO: follow");
-    status_right = make_label(dialog.obj, &sony_22, lv_color_hex(COLOR_DIM));
+    status_right = make_label(dialog.obj, VF(22), lv_color_hex(COLOR_DIM));
     lv_obj_set_width(status_right, 320);
     lv_obj_set_style_text_align(status_right, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(status_right, 796 - 18 - 320, DIALOG_H - STATUS_H - 4);
@@ -960,12 +964,12 @@ static void open_popup(void) {
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *head = lv_label_create(box);
-    lv_obj_set_style_text_font(head, &sony_22, 0);
+    lv_obj_set_style_text_font(head, VF(22), 0);
     lv_obj_set_style_text_color(head, TC(text_head), 0);
     lv_label_set_text(head, "CLUSTER SERVERS");
     lv_obj_set_pos(head, 22, 9);
     lv_obj_t *count = lv_label_create(box);
-    lv_obj_set_style_text_font(count, &sony_22, 0);
+    lv_obj_set_style_text_font(count, VF(22), 0);
     lv_obj_set_style_text_color(count, TC(text_head), 0);
     lv_label_set_text_fmt(count, "%d", srv_n);
     lv_obj_align(count, LV_ALIGN_TOP_RIGHT, -22, 9);
@@ -991,7 +995,7 @@ static void open_popup(void) {
         lv_obj_add_event_cb(row, server_row_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
 
         lv_obj_t *name = lv_label_create(row);
-        lv_obj_set_style_text_font(name, &sony_28, 0);
+        lv_obj_set_style_text_font(name, VF(28), 0);
         lv_label_set_long_mode(name, LV_LABEL_LONG_CLIP);
         lv_obj_set_width(name, 220);
         lv_label_set_text(name, srv[i].name);
@@ -1000,7 +1004,7 @@ static void open_popup(void) {
         char addr[sizeof(srv[i].host) + 8];
         snprintf(addr, sizeof(addr), "%s:%d", srv[i].host, srv[i].port);
         lv_obj_t *a = lv_label_create(row);
-        lv_obj_set_style_text_font(a, &sony_20, 0);
+        lv_obj_set_style_text_font(a, VF(20), 0);
         lv_label_set_long_mode(a, LV_LABEL_LONG_CLIP);
         lv_obj_set_width(a, 210);
         lv_obj_set_style_text_align(a, LV_TEXT_ALIGN_RIGHT, 0);
@@ -1013,12 +1017,12 @@ static void open_popup(void) {
         lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_color(dot, lv_color_hex(COLOR_NEW), 0);
         lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
-        lv_obj_align(dot, LV_ALIGN_RIGHT_MID, -22 - lv_txt_get_width(addr, strlen(addr), &sony_20, 0, 0) - 14, 0);
+        lv_obj_align(dot, LV_ALIGN_RIGHT_MID, -22 - lv_txt_get_width(addr, strlen(addr), VF(20), 0, 0) - 14, 0);
         if (!inuse) lv_obj_add_flag(dot, LV_OBJ_FLAG_HIDDEN);
     }
 
     lv_obj_t *hint = lv_label_create(box);
-    lv_obj_set_style_text_font(hint, &sony_18, 0);
+    lv_obj_set_style_text_font(hint, VF(18), 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(COLOR_DIM), 0);
     lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(hint, POP_W - 44);
