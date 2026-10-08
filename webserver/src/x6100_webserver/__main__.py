@@ -112,6 +112,7 @@ def start_https(app, host, port, cert_dir):
         logging.error("HTTPS: can't start on port %d (%s), HTTP only", port, e)
         return
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    settings.HTTPS_PORT = port
 
 
 def run():

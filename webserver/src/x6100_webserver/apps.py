@@ -32,6 +32,21 @@ from . import settings
 
 app = bottle.Bottle()
 
+
+@app.hook('before_request')
+def to_https():
+    """HTTPS by default: a page opened over HTTP goes to HTTPS (the web remote needs it). The API stays on
+    HTTP too: X6100 Link uses it, and its Android HTTP client would refuse the self-signed certificate."""
+    env = bottle.request.environ
+    if (not settings.HTTPS_PORT or str(env.get("SERVER_PORT")) == str(settings.HTTPS_PORT)
+            or bottle.request.method != "GET" or bottle.request.path.startswith("/api/")
+            or "text/html" not in bottle.request.headers.get("Accept", "")):
+        return
+    host = bottle.request.get_header("Host", "").split(":")[0] or env.get("SERVER_NAME", "")
+    port = "" if settings.HTTPS_PORT == 443 else ":%d" % settings.HTTPS_PORT
+    query = ("?" + env["QUERY_STRING"]) if env.get("QUERY_STRING") else ""
+    bottle.redirect("https://%s%s%s%s" % (host, port, bottle.request.path, query), 302)
+
 bottle.TEMPLATE_PATH += [
     resources.files('x6100_webserver').joinpath('views'),
 ]

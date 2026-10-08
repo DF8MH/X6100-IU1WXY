@@ -14,3 +14,4 @@ GUI_INIT = "/etc/init.d/S95gui"
 REMOTE_SOCK = "/tmp/x6100_remote.sock"
 FIELD_DIR = "/mnt/field"            # refs.tsv, qrz.conf, logs/*.adi (rootfs/usr/sbin/x6100-field)
 FIELD_CMD = "x6100-field"
+HTTPS_PORT = 0                      # set when the HTTPS server runs: pages opened over HTTP go there
