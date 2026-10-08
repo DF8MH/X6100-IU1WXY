@@ -44,9 +44,13 @@ static void update_cb(Subject *subj, void *user_data) {
     const char *band = note[0] && f == note_freq ? note : cluster_band_name(cluster_band_of(f));
 
     /* The open app in front of the band, so it's clear where the keys go */
-    if (app[0]) {
+    if (app[0] && theme_shape.vision) {   /* big type: on two lines, or it ran into the frequency */
+        lv_obj_set_style_text_font(band_label, &sony_24, 0);
+        lv_label_set_text_fmt(band_label, "#%06x %s#\n%s", theme_hex(TC_accent), app, band);
+    } else if (app[0]) {
         lv_label_set_text_fmt(band_label, "#%06x %s# %s", theme_hex(TC_accent), app, band);
     } else {
+        if (theme_shape.vision) lv_obj_set_style_text_font(band_label, &sony_36, 0);
         lv_label_set_text(band_label, band);
     }
     lv_label_set_text(mode_label, info_params_mode_label_get());
