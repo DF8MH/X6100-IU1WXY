@@ -5,13 +5,42 @@ overview is the [README](../README.md).
 
 ## Contents
 
-- [Usage](#usage): digital modes, JS8, WSPR, SSTV/WeFax/NavTex, RTTY and WeFax TX, CW decoder, CW Keyboard, DX Cluster, Field Ops (SOTA/POTA), Bands, Bluetooth, themes
+- [Usage](#usage): status bar, digital modes, JS8, WSPR, SSTV/WeFax/NavTex, RTTY and WeFax TX, CW decoder, CW Keyboard, DX Cluster, Field Ops (SOTA/POTA), Bands, Bluetooth, themes
 - [Web configurator](#web-configurator) and [companion app](#x6100-link-android)
 - [wfview server](#wfview-server), [Settings](#settings)
 - [Reference](#reference): Bluetooth CAT, CI-V commands, btcat-ctl, btaudio-ctl, files on /mnt
 - [Build](#build)
 
 ## Usage
+
+### Status bar
+
+The box at the top left of the main screen: the radio state on the first row,
+the connections on the second.
+
+| Item | Meaning |
+|---|---|
+| **VFO-A / VFO-B** | the VFO in use; **SPL-A / SPL-B** when split is on |
+| **USB-D, LSB, CW...** | the mode |
+| **AUTO, FAST, SLOW, OFF** | the AGC |
+| **PRE, ATT, ATU** | highlighted when the preamp, the attenuator or the tuner is on |
+
+Each icon of the second row is dark when off, grey when on but not connected
+yet, in colour when working:
+
+| Icon | Colour means |
+|---|---|
+| WiFi | **green** connected; grey on, no network; dark off |
+| Bluetooth | **blue** a device connected; grey on, nothing connected; dark off |
+| Note | **blue** Bluetooth headphones connected (A2DP) |
+| Keyboard | **amber** a Bluetooth CAT client connected; grey CAT bridge ready |
+| Arrow | **green** GPS position (fix in the last 10 s); grey GPS on, no fix |
+| DX | **green** DX cluster connected; grey connecting or retrying; dark stopped |
+
+In the middle the S-meter with the signal level in dBm. On the right the
+local time, the battery (icon and voltage) and the external supply voltage;
+the plug turns into a lightning bolt while charging. On battery only, the
+supply voltage is replaced by the battery percentage.
 
 ### Digital modes
 
