@@ -3,7 +3,7 @@
 <p align="center"><i>by Giovanni Ricciardi IU1WXY</i></p>
 
 <p align="center">Heartfelt thanks to <b>Oleg Belousov R1CBU</b>, <b>Georgy Dyuldin R2RFE</b>,
-<b>1KO125</b> by <b>Hany El Imam / TheMurusTeam</b> and the whole <b>X6100 community</b>: this firmware stands on their work.<br>
+<b>1KO125</b> by <b>Hany El Imam / TheMurusTeam</b> and the whole <b>X6100 community</b>.<br>
 Thanks to <b>Fabio IN3FOB</b> for the beta testing, but above all
 to <b>Leo CT7AUE</b>, <b>Angelo IU2VWK</b>, <b>Gianluca IW5DUA</b> and <b>Emilio IU8QTM</b>
 for their neverending patience, time and advices.</p>
