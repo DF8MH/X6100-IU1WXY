@@ -6,6 +6,7 @@
  *  Copyright (c) 2022-2023 Belousov Oleg aka R1CBU
  */
 
+#include "update_check.h"
 #include "lvgl/lvgl.h"
 #include "lv_drivers/display/fbdev.h"
 #include "lv_drivers/display/drm.h"
@@ -199,6 +200,7 @@ int main(void) {
     }
     qso_log_import_adif("/mnt/incoming_log.adi");
     dialog_cluster_start_client();
+    update_check_start();
 
     pthread_t thread;
     pthread_create(&thread, NULL, tick_thread, NULL);
