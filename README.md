@@ -18,7 +18,7 @@ DX cluster on the waterfall, themes, and full remote control from your phone or 
 > button and font, so the look can change completely without touching the code.
 > It runs daily on the author's radio, but expect rough edges. The
 > **companion app is alpha**: transmitting from it works, test it on a dummy
-> load first. Problems and ideas: open an issue.
+> load first. Problems and ideas: report them on [x6100-link.it](https://x6100-link.it/report.php).
 
 ## Remote control
 
