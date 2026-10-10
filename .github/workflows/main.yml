@@ -1,10 +1,8 @@
 name: Build image
+# By hand only (Actions > Build image > Run workflow): the releases are built locally with the image
+# attached, a run on every tag only added a second copy (and took 2 h, failing at times)
 on:
   workflow_dispatch:
-  push:
-    # Pattern matched against refs/tags
-    tags:
-      - '*'           # Push events to every tag not containing /
 
 # The repo's default token is read-only; the Release step needs to create
 # the release and attach the image.
