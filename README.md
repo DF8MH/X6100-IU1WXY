@@ -350,6 +350,8 @@ The firmware **sends no data to the author**. It contacts external services only
 - **WSPRnet**, if enabled: received spots go to wsprnet.org with callsign and locator.
 - **DX Cluster** and **Reverse Beacon Network**: they receive your callsign to log you in.
 
+The app and the radio contact the x6100-link.it server to check for updates.
+
 Everything else (settings, logs, pictures) stays on the SD card. Full notice, website included:
 [x6100-link.it/privacy.php](https://x6100-link.it/privacy.php).
 
