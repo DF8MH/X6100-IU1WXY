@@ -1,6 +1,6 @@
 <h1 align="center">X6100 custom firmware</h1>
 
-<p align="center"><i>by Giovanni Ricciardi IU1WXY</i></p>
+<p align="center"><i>by Giovanni Ricciardi IU1WXY</i> · <a href="https://iu1wxy.com"><b>iu1wxy.com</b></a></p>
 
 <p align="center">Heartfelt thanks to <b>Oleg Belousov R1CBU</b>, <b>Georgy Dyuldin R2RFE</b>,
 <b>1KO125</b> by <b>Hany El Imam / TheMurusTeam</b> and the whole <b>X6100 community</b>.<br>
