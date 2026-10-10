@@ -99,10 +99,17 @@ bool tx_player_stream(tx_fill_fn_t  fill,
     int16_t  ptr[1024 * 2];
     size_t   part;
 
+    /* Baseband r13: the power is held at the setting by the base, whose ALC then reads 8-10 at any
+     * drive (measured from -12 to 0 dB, 0.5 and 5 W): taken as overdrive it brought the level down
+     * to the floor at every transmission. There the level follows the power reading only.
+     * ponytail: measured on r13; r3-r12 keep the ALC until checked on one */
+    bool use_alc = x6100_control_get_base_ver().rev < 13;
+
     bool aborted = false;
     while (true) {
         float pwr = 0.0f, alc = 0.0f;
         bool  have = tx_info_refresh(&msg_id, &alc, &pwr, NULL);
+        if (!use_alc) alc = 0.0f;
         gain_offset = clamp_gain(gain_offset + tx_level_block(&level, have, pwr, alc));
         part = fill(ptr, sizeof(ptr) / sizeof(ptr[0]), fill_ctx);
         if (part == 0) {

@@ -2,7 +2,8 @@
  *  SPDX-License-Identifier: LGPL-2.1-or-later
  *
  *  Frequency strip: band on the left, VFO frequency in the middle, then the
- *  locator and the mode on the right. Always shown; the app dialogs start
+ *  locator and the mode on the right; over the locator the TX audio offset of
+ *  FT8/FT4/WSPR (the big digits stay on the dial, as WSJT-X). Always shown; the app dialogs start
  *  below it.
  */
 
@@ -22,7 +23,7 @@
 #define QTH_POLL_MS 3000
 
 static char      app[16];
-static lv_obj_t *strip, *band_label, *freq_label, *mode_label, *qth_dot, *qth_label;
+static lv_obj_t *strip, *band_label, *freq_label, *mode_label, *qth_dot, *qth_label, *tx_label;
 static char      note[64];
 static int32_t   note_freq;
 static int32_t   tx_offset = -1;
@@ -33,7 +34,7 @@ static void update_cb(Subject *subj, void *user_data) {
     uint16_t mhz, khz, hz;
     int32_t  f = cparam_i_get(cfg_fg_freq);
 
-    split_freq(tx_offset >= 0 ? f + tx_offset : f, &mhz, &khz, &hz);
+    split_freq(f, &mhz, &khz, &hz);
     if (param_i_get(cfg_band_split)) {
         uint16_t mhz2, khz2, hz2;
         split_freq(cparam_i_get(cfg_bg_freq), &mhz2, &khz2, &hz2);
@@ -54,6 +55,13 @@ static void update_cb(Subject *subj, void *user_data) {
         lv_label_set_text(band_label, band);
     }
     lv_label_set_text(mode_label, info_params_mode_label_get());
+
+    if (tx_offset >= 0) {
+        lv_label_set_text_fmt(tx_label, "TX %i Hz", (int)tx_offset);
+        lv_obj_clear_flag(tx_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(tx_label, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 /* The GPS locator (green dot) while there is a fix, else the saved QTH */
@@ -117,14 +125,22 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
         }
     }
 
-    /* Right: [dot] locator */
-    lv_obj_t *right = lv_obj_create(strip);
+    /* Right: the TX offset (digital apps) over [dot] locator */
+    lv_obj_t *col = lv_obj_create(strip);
+    lv_obj_remove_style_all(col);
+    lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
+    lv_obj_align(col, LV_ALIGN_RIGHT_MID, -14, 0);
+    tx_label = make_label(col, LV_ALIGN_DEFAULT, 0, v ? &sony_24 : &sony_20, theme_hex(TC_accent));
+    lv_obj_add_flag(tx_label, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t *right = lv_obj_create(col);
     lv_obj_remove_style_all(right);
     lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(right, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(right, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(right, 6, 0);
-    lv_obj_align(right, LV_ALIGN_RIGHT_MID, -14, 0);
 
     qth_dot = lv_obj_create(right);
     lv_obj_remove_style_all(qth_dot);
