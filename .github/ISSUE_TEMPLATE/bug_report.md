@@ -1,42 +1,27 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Something in the firmware does not work as it should
 title: ''
 labels: ''
 assignees: ''
 
 ---
 
-Issue tracker is **ONLY** used for reporting bugs. New features should be discussed on project's [discussions](https://github.com/gdyuldin/x6100_gui/discussions) or on [groups.io](https://groups.io/g/xiegu-x6100/topics)
+The issue tracker is for bugs of the X6100 IU1WXY firmware. Problems of the X6100 Link app go to [IU1WXY/X6100-Link](https://github.com/IU1WXY/X6100-Link/issues); you can also report from the website, [x6100-link.it](https://x6100-link.it/report.php).
 
+**Firmware version** (Settings → Info):
 
-<!--- Provide a general summary of the issue in the Title above -->
+**Base firmware version** (Settings → Info):
 
-## Expected Behavior
-<!--- Tell us what should happen -->
+## What happens
+<!--- What you were doing and what happened -->
 
-## Current Behavior
-<!--- Tell us what happens instead of the expected behavior -->
+## What you expected
 
-## Possible Solution
-<!--- Not obligatory, but suggest a fix/reason for the bug, -->
-
-## Steps to Reproduce
-<!--- Provide a link to a live example, or an unambiguous set of steps to -->
-<!--- reproduce this bug. Include code to reproduce, if relevant -->
+## Steps to reproduce
 1.
 2.
 3.
-4.
 
-## Context (Environment)
-<!--- How has this issue affected you? What are you trying to accomplish? -->
-<!--- Providing context helps us come up with a solution that is most useful in the real world -->
-
-<!--- Provide a general summary of the issue in the Title above -->
-
-## Detailed Description
-<!--- Provide a detailed description of the change or addition you are proposing -->
-
-## Possible Implementation
-<!--- Not obligatory, but suggest an idea for implementing addition or change -->
+## Screenshots, logs
+<!--- A screenshot (long press → screenshot) or /tmp/x6100_log.txt help a lot -->
