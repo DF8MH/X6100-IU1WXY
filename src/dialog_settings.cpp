@@ -3864,7 +3864,7 @@ static void make_info_page() {
     row = card_begin(LV_SYMBOL_HOME, "FIRMWARE");
     row = info_row(row, "Version", strrchr(VERSION, ' ') + 1);
     row = info_row(row, "Author", "Giovanni Ricciardi IU1WXY");
-    row = info_row(row, "Contact", "info@x6100-link.it");
+    row = info_row(row, "Contact", "giovanni@iu1wxy.com");
     row = info_row(row, "Based on", "R1CBU + gdyuldin builds");
     row = info_row(row, "Baseband", x6100_control_get_fw_version_str());   /* one card: nothing to focus, so no MFK scrolling */
     card_end(row);
