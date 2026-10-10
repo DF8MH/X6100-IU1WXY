@@ -148,17 +148,30 @@ int main(void)
            wefax_decoder_auto_start_generation(dec), wefax_decoder_auto_fax_confirmed(dec), stop, out_n);
     fails += !stop || out_n < PIC_H;
 
-    /* Column shift from the phasing pulse in the first kept row */
-    unsigned sh = 0, best = 0;
+    /* Column shift from the phasing pulse in the last kept phasing row (black
+     * with the 5% white pulse, mean 5..39): the decoder aligns the line during
+     * the phasing */
+    unsigned sh = 0, best = 0, ph = 0;
+    for (unsigned r = 0; r < out_n; r++) {
+        unsigned s = 0;
+        for (unsigned x = 0; x < WEFAX_WIDTH; x++)
+            s += out[r][x];
+        if (s >= 40 * WEFAX_WIDTH)
+            break;
+        if (s >= 5 * WEFAX_WIDTH)
+            ph = r;
+    }
     for (unsigned x = 0; x < WEFAX_WIDTH; x++) {
         unsigned s = 0;
         for (unsigned i = 0; i < WEFAX_WIDTH / 20; i++)
-            s += out[0][(x + i) % WEFAX_WIDTH];
+            s += out[ph][(x + i) % WEFAX_WIDTH];
         if (s > best) {
             best = s;
             sh   = x;
         }
     }
+
+    sh = (sh + WEFAX_WIDTH / 20) % WEFAX_WIDTH;   /* the picture starts after the pulse */
 
     /* First picture row */
     double   c = -2, cc, mae;

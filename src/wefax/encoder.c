@@ -121,8 +121,8 @@ static uint8_t level(const wefax_encoder_t *enc, double t)
     unsigned n    = (unsigned)line;
     double   x    = line - n;
 
-    if (n < PHASING_LINES)
-        return x < PHASING_PULSE ? 255 : 0;
+    if (n < PHASING_LINES)   /* the white pulse ends the line: the picture starts right after it */
+        return x >= 1.0 - PHASING_PULSE ? 255 : 0;
     n -= PHASING_LINES;
     if (n < enc->rows) {
         unsigned px = (unsigned)(x * WEFAX_WIDTH);

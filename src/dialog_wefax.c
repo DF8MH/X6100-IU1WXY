@@ -2083,7 +2083,7 @@ static void auto_finish_fax(void)
         return;
     }
 
-    wefax_decoder_reset(decoder);
+    /* set_mode resets the decoder; a second reset would drop the STOP holdoff */
     auto_start_generation_seen = 0;
     auto_fax_confirmed_seen = false;
     wefax_decoder_set_mode(
