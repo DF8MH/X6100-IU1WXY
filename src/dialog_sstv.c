@@ -12,6 +12,9 @@
 #include "textarea_window.h"
 #include "sstv/decoder.h"
 #include "sstv/encoder.h"
+#include "sstv/linesync.h"
+#include "sstv/preview.h"
+#include "sstv/vis.h"
 #include "radio.h"
 #include "remote_server.h"
 #include "tx_player.h"
@@ -362,6 +365,30 @@ static long cont_capacity = 0;
 static sstv_mode_t cont_mode = SSTV_MODE_ROBOT8_BW;
 static sstv_mode_t cont_decode_mode = SSTV_MODE_ROBOT8_BW;
 
+/* Manual RX "Auto" mode: the line-sync tracker (sstv/linesync.c, from
+ * 1KO125's x6100_gui 1.0.2) finds the mode from the 1200-Hz syncs, with no
+ * VIS.  In both Manual modes the tracker also ends the capture when the
+ * picture is over.  cont_ls is fed by audio_cb() under live_mutex. */
+static bool cont_autodetect = true;
+static sstv_linesync_t cont_ls;
+static volatile bool cont_locked = false;
+static volatile bool cont_lock_ui_pending = false;
+static long cont_limit = 0;
+
+/* Progressive display (sstv/preview.c): ui_timer_cb() draws the rows whose
+ * audio has arrived, from a slice copied under live_mutex; the final decode
+ * replaces it.  live_ls follows the Auto RX capture. */
+#define SSTV_PV_SLICE_MAX (2 * 1051 * SSTV_SAMPLE_RATE / 1000 + 256)   /* 2 Scottie DX lines */
+#define SSTV_PV_PERIOD_MS 200       /* canvas refresh while receiving */
+#define SSTV_PV_MAX_ROWS  8         /* rows per refresh */
+static sstv_linesync_t live_ls;
+static sstv_preview_t live_pv, cont_pv;
+static volatile bool live_pv_on = false, cont_pv_on = false;
+static float pv_slice[SSTV_PV_SLICE_MAX];
+static float live_vis_start_s = -1.0f;            /* VIS start in the last window found */
+static volatile int live_unsupported_vis = -1;
+static const char *volatile cont_fail_msg = NULL;    /* Manual decode gave no picture */
+
 static const sstv_mode_t cont_modes[] = {
     SSTV_MODE_ROBOT8_BW, SSTV_MODE_ROBOT36, SSTV_MODE_ROBOT72,
     SSTV_MODE_MARTIN_M1, SSTV_MODE_MARTIN_M2,
@@ -378,8 +405,23 @@ static const char *cont_mode_name(sstv_mode_t mode)
         case SSTV_MODE_MARTIN_M2: return "Martin M2";
         case SSTV_MODE_SCOTTIE_S1: return "Scottie S1";
         case SSTV_MODE_SCOTTIE_S2: return "Scottie S2";
+        case SSTV_MODE_SCOTTIE_DX: return "Scottie DX";
         default: return "Unknown";
     }
+}
+
+/* RX Mode button label: Manual RX mode, "Auto" = from the line syncs */
+static const char *cont_rx_mode_name(void)
+{
+    return cont_autodetect ? "Auto" : cont_mode_name(cont_mode);
+}
+
+/* Mode a Manual capture is decoded with (live_mutex held); unknown: the
+ * decoder thread classifies the whole capture */
+static sstv_mode_t cont_rx_decode_mode(void)
+{
+    if (!cont_autodetect) return cont_mode;
+    return cont_locked ? sstv_linesync_status(&cont_ls)->mode : SSTV_MODE_UNKNOWN;
 }
 
 /* Nominal image duration for Manual RX.  The capture limit adds five seconds
@@ -461,7 +503,7 @@ static void freq_cb(button_data_t *data)
 
 static void set_receiver_ui_stopped(void)
 {
-    set_status("Stand by.\n\n- Press Start Auto RX to start Autodecoder.\n\n- Press Start Manual RX to start Manual decoder, press RX Mode button to cycle all available modes for the Manual decoder.");
+    set_status("Stand by.\n\n- Press Start Auto RX to start Autodecoder.\n\n- Press Start Manual RX to start Manual decoder, press RX Mode button to cycle Auto (mode from the line syncs) and all available modes for the Manual decoder.");
     if (progress_bar) {
         lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
         lv_obj_add_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
@@ -594,227 +636,83 @@ static void render_scaled_image(void)
 }
 
 
-static float live_goertzel(const float *x, int n, float hz)
-{
-    int k = (int)(0.5f + (float)n * hz / (float)SSTV_SAMPLE_RATE);
-    float w = 2.0f * 3.14159265358979323846f * (float)k / (float)n;
-    float coeff = 2.0f * cosf(w), s0 = 0.0f, s1 = 0.0f, s2 = 0.0f;
-    for (int i = 0; i < n; ++i) { s0 = x[i] + coeff*s1 - s2; s2=s1; s1=s0; }
-    return s1*s1 + s2*s2 - coeff*s1*s2;
-}
-
-/* VIS tones are nominally 1100/1200/1300/1900 Hz.  Real transmitters and
- * SSB tuning can move them a little, so score a small frequency neighbourhood
- * instead of one exact Goertzel bin.  Keep the range well below the 100-Hz
- * spacing of the VIS data tones. */
-static float live_tone_power(const float *x, int n, float sec, float dur, int center_hz)
-{
-    int a=(int)(sec*SSTV_SAMPLE_RATE), cnt=(int)(dur*SSTV_SAMPLE_RATE);
-    if (a < 0 || a+cnt > n || cnt < 32) return -1.0f;
-    return live_goertzel(x+a,cnt,(float)center_hz);
-}
-
-static int live_tone(const float *x, int n, float sec, float dur)
-{
-    static const int hz[] = {1100,1200,1300,1900};
-    float best=-1.0f, second=-1.0f; int tone=0;
-    for (unsigned i=0;i<sizeof(hz)/sizeof(hz[0]);++i) {
-        float q=live_tone_power(x,n,sec,dur,hz[i]);
-        if (q>best) { second=best; best=q; tone=hz[i]; }
-        else if (q>second) second=q;
-    }
-    /* Do not reject a VIS symbol merely because the runner-up is close.
-     * With 15-18 ms symbol windows, 1100 and 1300 Hz are intrinsically
-     * difficult to separate by a large power ratio on noisy RF.  Frame-level
-     * validation (leader + start + parity + stop + supported VIS) provides
-     * the rejection against false triggers instead. */
-    return tone;
-}
-
-static bool live_break_near(const float *x, int n, float center)
-{
-    for (float d=-0.020f; d<=0.0201f; d+=0.004f)
-        if (live_tone(x,n,center+d,0.010f)==1200) return true;
-    return false;
-}
-
-
-static int live_tone_offset(const float *x, int n, float sec, float dur, int offset_hz)
-{
-    static const int hz[] = {1100,1200,1300,1900};
-    float best=-1.0f; int tone=0;
-    for (unsigned i=0;i<sizeof(hz)/sizeof(hz[0]);++i) {
-        float q=live_tone_power(x,n,sec,dur,hz[i]+offset_hz);
-        if (q>best) { best=q; tone=hz[i]; }
-    }
-    return tone;
-}
-
-static bool live_break_near_offset(const float *x, int n, float center, int offset_hz)
-{
-    for (float d=-0.020f; d<=0.0201f; d+=0.004f)
-        if (live_tone_offset(x,n,center+d,0.010f,offset_hz)==1200) return true;
-    return false;
-}
-
-
-/* V5: estimate the frequency offset from the two long VIS leader tones.
- * The offset is no longer a free search variable.  A real SSTV header must
- * first provide two strong, mutually consistent leader-frequency estimates;
- * only then is that measured offset frozen for break/start/data/parity/stop. */
-static bool live_measure_leader(const float *x, int n, float sec, float dur,
-                                int *freq_hz, float *quality)
-{
-    float best=-1.0f, runner=-1.0f;
-    int best_hz=0;
-    for (int hz=1740; hz<=2060; hz+=10) {
-        float q=live_tone_power(x,n,sec,dur,hz);
-        if (q>best) { runner=best; best=q; best_hz=hz; }
-        else if (q>runner) runner=q;
-    }
-    if (best <= 0.0f) return false;
-
-    /* Recompute the runner while ignoring the immediate main-lobe bins.
-     * This measures whether there is an actual narrow leader tone rather
-     * than merely choosing the largest bin in broadband noise. */
-    runner=-1.0f;
-    for (int hz=1740; hz<=2060; hz+=10) {
-        if (abs(hz-best_hz) < 40) continue;
-        float q=live_tone_power(x,n,sec,dur,hz);
-        if (q>runner) runner=q;
-    }
-    float qratio = best / (runner > 1.0e-20f ? runner : 1.0e-20f);
-    if (freq_hz) *freq_hz=best_hz;
-    if (quality) *quality=qratio;
-    return qratio >= 1.8f;
-}
-
-static bool live_supported_vis(int vis, sstv_info_t *out)
-{
-    memset(out,0,sizeof(*out)); out->vis=vis;
-    switch(vis) {
-        case 8:  out->mode=SSTV_MODE_ROBOT36; out->name="Robot 36"; out->width=320; out->height=240; break;
-        case 12: out->mode=SSTV_MODE_ROBOT72; out->name="Robot 72"; out->width=320; out->height=240; break;
-        case 40: out->mode=SSTV_MODE_MARTIN_M2; out->name="Martin M2"; out->width=320; out->height=256; break;
-        case 44: out->mode=SSTV_MODE_MARTIN_M1; out->name="Martin M1"; out->width=320; out->height=256; break;
-        case 56: out->mode=SSTV_MODE_SCOTTIE_S2; out->name="Scottie S2"; out->width=320; out->height=256; break;
-        case 60: out->mode=SSTV_MODE_SCOTTIE_S1; out->name="Scottie S1"; out->width=320; out->height=256; break;
-        case 76: out->mode=SSTV_MODE_SCOTTIE_DX; out->name="Scottie DX"; out->width=320; out->height=256; break;
-        default: return false;
-    }
-    return true;
-}
-
+/* VIS detection for Auto RX: sstv/vis.c, from 1KO125's x6100_gui 1.0.2.
+ * Called from audio_cb() with live_mutex held.  A valid header of a mode we
+ * do not decode is reported by ui_timer_cb(). */
 static bool live_find_vis(const float *x, int n, sstv_info_t *out)
 {
-    const float limit=(float)n/SSTV_SAMPLE_RATE-0.90f;
-
-    /* V3 first pass: preserve the historical 30-ms VIS detector exactly.
-     * Signals accepted by the old detector therefore keep priority. */
-    for (float t=0.0f; t<limit; t+=0.005f) {
-        if (live_tone(x,n,t+0.10f,0.020f)!=1900 ||
-            live_tone(x,n,t+0.295f,0.010f)!=1200 ||
-            live_tone(x,n,t+0.42f,0.020f)!=1900) continue;
-        int vis=0, valid=1;
-        for (int i=0;i<7;++i) {
-            int f=live_tone(x,n,t+0.640f+i*0.030f+0.005f,0.020f);
-            if (f==1100) vis|=1<<i;
-            else if (f!=1300) { valid=0; break; }
-        }
-        if (!valid) continue;
-        sstv_info_t candidate;
-        if (!live_supported_vis(vis,&candidate)) continue;
-        *out=candidate;
-        fprintf(stderr,"SSTV LIVE: legacy VIS header found in RF audio\n");
-        for (int i=0;i<7;++i)
-            fprintf(stderr,"SSTV LIVE: VIS bit %d = %d\n",i,(vis>>i)&1);
-        fprintf(stderr,"SSTV LIVE: VIS=%d -> %s (%dx%d)\n",vis,out->name,out->width,out->height);
+    sstv_vis_result_t r;
+    if (sstv_vis_detect(x, n, out, &r)) {
+        live_vis_start_s = r.start_s + r.slip_s;
+        fprintf(stderr, "SSTV LIVE: VIS=%d -> %s, offset %+.1f Hz, score %.2f\n",
+                out->vis, out->name, r.offset_hz, r.score);
         return true;
     }
-
-    /* V3 fallback: only after the historical detector has failed, search
-     * modest phase and bit-period errors and validate the complete VIS frame. */
-    for (float t=0.0f; t<limit; t+=0.005f) {
-        if (live_tone(x,n,t+0.10f,0.025f)!=1900 ||
-            !live_break_near(x,n,t+0.295f) ||
-            live_tone(x,n,t+0.42f,0.025f)!=1900) continue;
-
-        for (float bit=0.028f; bit<=0.0321f; bit+=0.001f) {
-            for (float phase=-0.006f; phase<=0.0061f; phase+=0.003f) {
-                float start=t+0.610f+phase;
-                float win=bit*0.55f;
-                float inset=(bit-win)*0.5f;
-                if (live_tone(x,n,start+inset,win)!=1200) continue;
-
-                int vis=0, ones=0, valid=1;
-                for (int i=0;i<7;++i) {
-                    int f=live_tone(x,n,start+(i+1)*bit+inset,win);
-                    if (f==1100) { vis|=1<<i; ++ones; }
-                    else if (f!=1300) { valid=0; break; }
-                }
-                if (!valid) continue;
-                int parity=live_tone(x,n,start+8*bit+inset,win);
-                int expected_parity=(ones&1)?1100:1300;
-                if (parity!=expected_parity) continue;
-                if (live_tone(x,n,start+9*bit+inset,win)!=1200) continue;
-
-                sstv_info_t candidate;
-                if (!live_supported_vis(vis,&candidate)) continue;
-                *out=candidate;
-                fprintf(stderr,"SSTV LIVE: robust VIS fallback found (bit %.1f ms, phase %+.1f ms)\n",bit*1000.0f,phase*1000.0f);
-                for (int i=0;i<7;++i)
-                    fprintf(stderr,"SSTV LIVE: VIS bit %d = %d\n",i,(vis>>i)&1);
-                fprintf(stderr,"SSTV LIVE: VIS=%d -> %s (%dx%d)\n",vis,out->name,out->width,out->height);
-                return true;
-            }
-        }
-    }
-    /* V5 final fallback: frequency-offset-aware, but leader-locked.
-     * Unlike V4, do NOT sweep offset until some supported VIS happens to fit.
-     * Measure it independently from both long 1900-Hz leaders and freeze it. */
-    for (float t=0.0f; t<limit; t+=0.005f) {
-        int lf1=0, lf2=0; float lq1=0.0f, lq2=0.0f;
-        if (!live_measure_leader(x,n,t+0.055f,0.140f,&lf1,&lq1) ||
-            !live_measure_leader(x,n,t+0.375f,0.140f,&lf2,&lq2)) continue;
-        if (abs(lf1-lf2)>20) continue;
-        int off=((lf1+lf2+1)/2)-1900;
-        off=(int)lroundf((float)off/10.0f)*10;
-        if (off < -150 || off > 150) continue;
-        if (off>=-20 && off<=20) continue; /* V3 already owns nominal tuning. */
-        if (!live_break_near_offset(x,n,t+0.295f,off)) continue;
-
-        for (float bit=0.028f; bit<=0.0321f; bit+=0.001f) {
-            for (float phase=-0.006f; phase<=0.0061f; phase+=0.003f) {
-                float start=t+0.610f+phase;
-                float win=bit*0.55f, inset=(bit-win)*0.5f;
-                if (live_tone_offset(x,n,start+inset,win,off)!=1200) continue;
-                int vis=0, ones=0, valid=1;
-                for (int i=0;i<7;++i) {
-                    int f=live_tone_offset(x,n,start+(i+1)*bit+inset,win,off);
-                    if (f==1100) { vis|=1<<i; ++ones; }
-                    else if (f!=1300) { valid=0; break; }
-                }
-                if (!valid) continue;
-                int parity=live_tone_offset(x,n,start+8*bit+inset,win,off);
-                if (parity != ((ones&1)?1100:1300)) continue;
-                if (live_tone_offset(x,n,start+9*bit+inset,win,off)!=1200) continue;
-                sstv_info_t candidate;
-                if (!live_supported_vis(vis,&candidate)) continue;
-                *out=candidate;
-                fprintf(stderr,"SSTV LIVE: V5 leader-locked VIS fallback found (leaders %d/%d Hz, offset %+d Hz, quality %.2f/%.2f, bit %.1f ms, phase %+.1f ms)\n",lf1,lf2,off,lq1,lq2,bit*1000.0f,phase*1000.0f);
-                for (int i=0;i<7;++i)
-                    fprintf(stderr,"SSTV LIVE: VIS bit %d = %d\n",i,(vis>>i)&1);
-                fprintf(stderr,"SSTV LIVE: VIS=%d -> %s (%dx%d)\n",vis,out->name,out->width,out->height);
-                return true;
-            }
-        }
-    }
+    if (r.unsupported_vis >= 0) live_unsupported_vis = r.unsupported_vis;
     return false;
+}
+
+/* Progressive display of the Auto RX capture just committed in
+ * live_samples[0..live_written), whose last SSTV_VIS_WINDOW_SAMPLES are the
+ * window the VIS was found in.  live_mutex held. */
+static void live_preview_start(void)
+{
+    double vis = (double)(live_written - SSTV_VIS_WINDOW_SAMPLES) + live_vis_start_s * SSTV_SAMPLE_RATE;
+    double row0 = vis + (SSTV_VIS_LEN_S + sstv_row0_anchor_after_vis(live_info.mode)) * SSTV_SAMPLE_RATE;
+    sstv_linesync_init(&live_ls, live_info.mode);
+    sstv_linesync_process(&live_ls, live_samples, (size_t)live_written);
+    sstv_preview_init(&live_pv, live_info.mode, vis >= 0.0 ? row0 : -1.0);
+    live_pv_on = true;
+}
+
+/* Draw the rows of pv whose audio has arrived in buf[0..*written), at most
+ * SSTV_PV_MAX_ROWS, straight into the canvas buffer (scaled like
+ * render_scaled_image()), then invalidate the canvas once.  The slice and
+ * the row state are copied under live_mutex (audio_cb() may restart the
+ * capture), the row is demodulated and drawn outside it.  Returns false
+ * when the capture is over. */
+static bool preview_tick(sstv_preview_t *pv, const sstv_linesync_t *ls, float *const *buf,
+                         const long *written, volatile bool *capturing)
+{
+    uint8_t        rgb[SSTV_MAX_W * 3];
+    sstv_preview_t row_pv;
+    int            drawn = 0;
+
+    for (int k = 0; k < SSTV_PV_MAX_ROWS; ++k) {
+        long a, b;
+        bool ok = false, on = true;
+        pthread_mutex_lock(&live_mutex);
+        if (!*capturing || !*buf) on = false;
+        else if (sstv_preview_need(pv, *written, sstv_linesync_status(ls), &a, &b) && b - a <= SSTV_PV_SLICE_MAX) {
+            memcpy(pv_slice, *buf + a, (size_t)(b - a) * sizeof(float));
+            row_pv = *pv;
+            pv->next_row++;
+            ok = true;
+        }
+        pthread_mutex_unlock(&live_mutex);
+        if (!on) return false;
+        if (!ok) break;
+        int row = sstv_preview_render(&row_pv, pv_slice, rgb);
+        if (row < 0 || !sstv_canvas) continue;
+        int h = row_pv.height, w = row_pv.width, out_h = SSTV_IMAGE_H, out_w = (w * out_h) / h;
+        if (out_w > SSTV_IMAGE_W) { out_w = SSTV_IMAGE_W; out_h = (h * out_w) / w; }
+        int x0 = (SSTV_IMAGE_W - out_w) / 2, y0 = (SSTV_IMAGE_H - out_h) / 2;
+        int oy1 = (int)(((int64_t)(row + 1) * out_h + h - 1) / h);
+        for (int oy = (int)(((int64_t)row * out_h + h - 1) / h); oy < oy1 && oy < out_h; ++oy)
+            for (int ox = 0; ox < out_w; ++ox) {
+                const uint8_t *q = rgb + (size_t)(ox * w / out_w) * 3;
+                sstv_buffer[(size_t)(y0 + oy) * SSTV_CANVAS_W + x0 + ox] = lv_color_make(q[0], q[1], q[2]);
+            }
+        ++drawn;
+    }
+    if (drawn && sstv_canvas) lv_obj_invalidate(sstv_canvas);
+    return true;
 }
 
 static float live_mode_seconds(sstv_mode_t m)
 {
     switch(m) {
+        case SSTV_MODE_ROBOT8_BW: return 8.0f;   /* VIS 2 is found since sstv/vis.c */
         case SSTV_MODE_ROBOT36: return 36.5f;
         case SSTV_MODE_ROBOT72: return 72.5f;
         case SSTV_MODE_MARTIN_M1: return 115.0f;
@@ -837,7 +735,7 @@ static button_data_t btn_sstv_page_3 = {
 };
 static button_data_t btn_start = { .type = BTN_TEXT, .label = "Start\nAuto RX", .press = start_cb };
 static button_data_t btn_cont_start = { .type = BTN_TEXT, .label = "Start\nManual RX", .press = cont_start_cb };
-static button_data_t btn_cont_mode = { .type = BTN_TEXT, .label = "RX Mode\nRobot 8", .press = cont_mode_cb };
+static button_data_t btn_cont_mode = { .type = BTN_TEXT, .label = "RX Mode\nAuto", .press = cont_mode_cb };
 static button_data_t btn_browser = { .type = BTN_TEXT, .label = "RX Pics\nBrowser", .press = browser_cb };
 static button_data_t btn_delete_picture = { .type = BTN_TEXT, .label = "Delete\npicture", .press = delete_picture_cb };
 static button_data_t btn_tx = { .type = BTN_TEXT, .label = "TX", .press = tx_ui_cb };
@@ -915,7 +813,7 @@ static void construct_cb(lv_obj_t *parent)
     lv_group_set_editing(keyboard_group, true);
 
     status_label = lv_label_create(dialog.obj);
-    lv_label_set_text(status_label, "Stand by.\nPress Start Auto RX to start Autodecoder.\nPress Start Manual RX to start Manual decoder, press Mode button to cycle all available modes for the Manual decoder.");
+    lv_label_set_text(status_label, "Stand by.\nPress Start Auto RX to start Autodecoder.\nPress Start Manual RX to start Manual decoder, press RX Mode button to cycle Auto (mode from the line syncs) and all available modes for the Manual decoder.");
     lv_obj_set_style_text_color(status_label, TC(text), 0);
     lv_obj_set_style_text_font(status_label, &sony_22, 0);
     lv_obj_set_width(status_label, APP_FRAME_W - SSTV_IMAGE_W - 30);
@@ -996,6 +894,11 @@ static void destruct_cb(void)
     cont_capturing = false;
     cont_decode_pending = false;
     cont_decoding = false;
+    cont_locked = false;
+    cont_lock_ui_pending = false;
+    cont_fail_msg = NULL;
+    live_pv_on = cont_pv_on = false;
+    live_unsupported_vis = -1;
     pthread_mutex_unlock(&live_mutex);
 
     free(live_samples);
@@ -1018,10 +921,11 @@ static void destruct_cb(void)
     /* Button_data objects are static and survive dialog destruction.  Restore
      * their default labels/mode now so the next open always starts clean. */
     cont_mode = SSTV_MODE_ROBOT8_BW;
+    cont_autodetect = true;
     cont_decode_mode = SSTV_MODE_ROBOT8_BW;
     btn_start.label = "Start\nAuto RX";
     btn_cont_start.label = "Start\nManual RX";
-    btn_cont_mode.label = "RX Mode\nRobot 8";
+    btn_cont_mode.label = "RX Mode\nAuto";
     btn_tx.label = "TX";
     tx_ui_state = SSTV_TX_UI_RX;
     tx_restore_auto_rx = false;
@@ -1145,11 +1049,14 @@ static void *live_decode_thread_cb(void *arg)
 static void *cont_decode_thread_cb(void *arg)
 {
     (void)arg;
+    /* Auto without a real-time lock: the mode from the whole capture */
+    if (cont_decode_mode == SSTV_MODE_UNKNOWN)
+        cont_decode_mode = sstv_linesync_classify(cont_samples, cont_written, SSTV_MODE_UNKNOWN, NULL);
     const char *name = cont_mode_name(cont_decode_mode);
     fprintf(stderr, "SSTV CONT: decoding manual %s capture from RAM (%ld samples @ %d Hz)\n",
             name, cont_written, SSTV_SAMPLE_RATE);
-    int rows = sstv_decode_cont_samples(cont_samples, cont_written, cont_decode_mode,
-                                        test_rgb, &test_info);
+    int rows = cont_decode_mode == SSTV_MODE_UNKNOWN ? -1 :
+               sstv_decode_cont_samples(cont_samples, cont_written, cont_decode_mode, test_rgb, &test_info);
     test_rows = rows > 0 ? rows : 0;
     if (rows > 0) {
         char saved_name[96] = {0};
@@ -1164,6 +1071,8 @@ static void *cont_decode_thread_cb(void *arg)
     cont_written = cont_capacity = 0;
     test_running = false;
     cont_decoding = false;
+    if (rows <= 0)
+        cont_fail_msg = cont_decode_mode == SSTV_MODE_UNKNOWN ? "No SSTV picture found" : "Decoding failed";
     fprintf(stderr, "SSTV CONT: decoder finished, rows=%d; receiver returned to stand-by\n", rows);
     return NULL;
 }
@@ -1203,9 +1112,40 @@ static void ui_timer_cb(lv_timer_t *timer)
      * here, in the UI context. */
     if (live_mode_ui_pending) {
         live_mode_ui_pending = false;
-        snprintf(tx_mode_label,sizeof(tx_mode_label),"RX Mode\n%s",cont_mode_name(cont_mode));
+        snprintf(tx_mode_label,sizeof(tx_mode_label),"RX Mode\n%s",cont_rx_mode_name());
         btn_cont_mode.label=tx_mode_label;
         if (btn_cont_mode.disp_btn) buttons_refresh(&btn_cont_mode);
+    }
+
+    if (live_unsupported_vis >= 0) {
+        msg_schedule_text_fmt("SSTV mode not supported (VIS %d)", live_unsupported_vis);
+        live_unsupported_vis = -1;
+    }
+
+    if (cont_lock_ui_pending) {
+        char status[192];
+        cont_lock_ui_pending = false;
+        snprintf(status, sizeof(status),
+                 "SSTV Manual decoder is running\n\n%s line syncs found\n\nPress Stop Manual RX to render received picture",
+                 cont_mode_name(sstv_linesync_status(&cont_ls)->mode));
+        if (cont_capturing) set_status(status);
+    }
+
+    /* Progressive display, in chunks of rows */
+    static uint32_t pv_last_ms;
+    if ((live_pv_on || cont_pv_on) && lv_tick_elaps(pv_last_ms) >= SSTV_PV_PERIOD_MS) {
+        pv_last_ms = lv_tick_get();
+        if (live_pv_on && !preview_tick(&live_pv, &live_ls, &live_samples, &live_written, &live_capturing))
+            live_pv_on = false;
+        if (cont_pv_on && !preview_tick(&cont_pv, &cont_ls, &cont_samples, &cont_written, &cont_capturing))
+            cont_pv_on = false;
+    }
+
+    if (cont_fail_msg) {
+        msg_schedule_text_fmt("%s", cont_fail_msg);
+        cont_fail_msg = NULL;
+        test_ready = false;
+        reset_ui_to_standby();
     }
 
     if (tx_ui_state == SSTV_TX_UI_SETUP &&
@@ -1332,7 +1272,8 @@ static void ui_timer_cb(lv_timer_t *timer)
         cont_decoding = true;
         fprintf(stderr, "SSTV CONT: STOP - starting manual RAM decoder\n");
         char status[96];
-        snprintf(status, sizeof(status), "Decoding Cont %s", cont_mode_name(cont_decode_mode));
+        snprintf(status, sizeof(status), "Decoding Cont %s",
+                 cont_decode_mode == SSTV_MODE_UNKNOWN ? "Auto" : cont_mode_name(cont_decode_mode));
         set_status(status);
         if (progress_bar) lv_obj_add_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
         shown_rows=0; test_rows=0; test_ready=false; test_running=true;
@@ -2694,7 +2635,7 @@ static void tx_return_to_auto_rx(void)
     tx_ui_state=SSTV_TX_UI_RX;
     tx_phase=SSTV_TX_PHASE_NONE;
     btn_tx.label="TX";
-    snprintf(tx_mode_label,sizeof(tx_mode_label),"RX Mode\n%s",cont_mode_name(cont_mode));
+    snprintf(tx_mode_label,sizeof(tx_mode_label),"RX Mode\n%s",cont_rx_mode_name());
     btn_cont_mode.label=tx_mode_label;
 
     pthread_mutex_lock(&live_mutex);
@@ -3707,9 +3648,17 @@ static void cont_mode_cb(button_data_t *data)
     unsigned count = sizeof(cont_modes)/sizeof(cont_modes[0]);
     unsigned idx = 0;
     while (idx < count && cont_modes[idx] != cont_mode) ++idx;
-    cont_mode = cont_modes[(idx + 1) % count];
+    if (tx_ui_state == SSTV_TX_UI_RX && cont_autodetect) {
+        cont_autodetect = false;            /* RX: Auto, then every mode, then Auto */
+        cont_mode = cont_modes[0];
+    } else if (tx_ui_state == SSTV_TX_UI_RX && idx + 1 >= count) {
+        cont_autodetect = true;
+    } else {
+        cont_mode = cont_modes[(idx + 1) % count];
+    }
     snprintf(tx_mode_label, sizeof(tx_mode_label), "%s Mode\n%s",
-             tx_ui_state == SSTV_TX_UI_RX ? "RX" : "TX", cont_mode_name(cont_mode));
+             tx_ui_state == SSTV_TX_UI_RX ? "RX" : "TX",
+             tx_ui_state == SSTV_TX_UI_RX ? cont_rx_mode_name() : cont_mode_name(cont_mode));
     btn_cont_mode.label = tx_mode_label;
     if (btn_cont_mode.disp_btn) buttons_refresh(&btn_cont_mode);
 
@@ -3729,7 +3678,7 @@ static void cont_start_cb(button_data_t *data)
     if (cont_capturing) {
         cont_capturing = false;
         if (cont_written > 0) {
-            cont_decode_mode = cont_mode;
+            cont_decode_mode = cont_rx_decode_mode();
             cont_decode_pending = true;
             fprintf(stderr, "SSTV CONT: STOP requested after %.1f s (%ld samples); decode pending as %s\n",
                     (double)cont_written/SSTV_SAMPLE_RATE, cont_written, cont_mode_name(cont_decode_mode));
@@ -3748,7 +3697,8 @@ static void cont_start_cb(button_data_t *data)
         return;
     }
 
-    float cont_limit_seconds = cont_mode_seconds(cont_mode) + 5.0f;
+    /* Auto: the limit becomes the picture length once the mode is found */
+    float cont_limit_seconds = cont_autodetect ? (float)SSTV_CONT_MAX_SECONDS : cont_mode_seconds(cont_mode) + 5.0f;
     if (cont_limit_seconds > (float)SSTV_CONT_MAX_SECONDS)
         cont_limit_seconds = (float)SSTV_CONT_MAX_SECONDS;
     cont_capacity = (long)(cont_limit_seconds * (float)SSTV_SAMPLE_RATE);
@@ -3760,21 +3710,31 @@ static void cont_start_cb(button_data_t *data)
         return;
     }
     cont_written=0;
+    cont_limit=cont_capacity;
+    cont_locked=false;
+    sstv_linesync_init(&cont_ls, cont_autodetect ? SSTV_MODE_UNKNOWN : cont_mode);
+    /* forced mode: rows start at the tracker's first sync; Auto: at the lock */
+    if (!cont_autodetect) sstv_preview_init(&cont_pv, cont_mode, -1.0);
+    cont_pv_on=!cont_autodetect;
     cont_capturing=true;
     pthread_mutex_unlock(&live_mutex);
 
     if (sstv_canvas) lv_canvas_fill_bg(sstv_canvas, lv_color_white(), LV_OPA_COVER);
     char status[192];
-    snprintf(status, sizeof(status),
-             "SSTV Manual decoder is running\n\nDecoding %s signal\n\nPress Stop Manual RX to render received picture",
-             cont_mode_name(cont_mode));
+    if (cont_autodetect)
+        snprintf(status, sizeof(status),
+                 "SSTV Manual decoder is running\n\nSearching the line syncs for the SSTV mode\n\nPress Stop Manual RX to render received picture");
+    else
+        snprintf(status, sizeof(status),
+                 "SSTV Manual decoder is running\n\nDecoding %s signal\n\nPress Stop Manual RX to render received picture",
+                 cont_mode_name(cont_mode));
     set_status(status);
     if (progress_bar) lv_obj_add_flag(progress_bar, LV_OBJ_FLAG_HIDDEN);
     btn_cont_start.label = "Stop\nManual RX";
     if (btn_cont_start.disp_btn) buttons_refresh(&btn_cont_start);
     update_rx_controls();
     fprintf(stderr,"SSTV CONT: START - manual %s capture at %d Hz, auto-stop after %.1f s\n",
-            cont_mode_name(cont_mode),SSTV_SAMPLE_RATE,cont_limit_seconds);
+            cont_rx_mode_name(),SSTV_SAMPLE_RATE,cont_limit_seconds);
 }
 
 static void start_cb(button_data_t *data)
@@ -3844,13 +3804,29 @@ static void audio_cb(unsigned int n, float *samples)
         if (copy>0) {
             memcpy(cont_samples+cont_written,samples,(size_t)copy*sizeof(float));
             cont_written += copy;
+            sstv_linesync_process(&cont_ls,samples,(size_t)copy);
         }
-        if (cont_written >= cont_capacity) {
+        const sstv_ls_status_t *ls=sstv_linesync_status(&cont_ls);
+        if (!cont_locked && ls->state!=SSTV_LS_SEARCH) {
+            cont_locked=true;
+            cont_lock_ui_pending=true;
+            if (cont_autodetect) {
+                /* the whole picture from its first sync, then stop */
+                long lim=(long)ls->first_sync+(long)((sstv_linesync_picture_seconds(ls->mode)+5.0)*SSTV_SAMPLE_RATE);
+                if (lim<cont_limit) cont_limit=lim;
+                sstv_preview_init(&cont_pv,ls->mode,-1.0);
+                cont_pv_on=true;
+            }
+            fprintf(stderr,"SSTV CONT: line syncs locked: %s after %.1f s\n",
+                    cont_mode_name(ls->mode),(double)cont_written/SSTV_SAMPLE_RATE);
+        }
+        if (cont_written >= cont_limit || ls->state==SSTV_LS_LOST) {
             cont_capturing=false;
-            cont_decode_mode=cont_mode;
+            cont_decode_mode=cont_rx_decode_mode();
             cont_decode_pending=true;
-            fprintf(stderr,"SSTV CONT: mode timeout reached after %.1f s; stopping and decoding %s\n",
-                    (double)cont_written/SSTV_SAMPLE_RATE,cont_mode_name(cont_decode_mode));
+            fprintf(stderr,"SSTV CONT: %s after %.1f s (clock %+.0f ppm); stopping and decoding %s\n",
+                    ls->state==SSTV_LS_LOST ? "end of picture" : "time limit",
+                    (double)cont_written/SSTV_SAMPLE_RATE,ls->clock_ppm,cont_mode_name(cont_decode_mode));
         }
         pthread_mutex_unlock(&live_mutex);
         return;
@@ -3861,7 +3837,10 @@ static void audio_cb(unsigned int n, float *samples)
     if (live_capturing) {
         long room=live_target-live_written;
         long copy=(long)n < room ? (long)n : room;
-        if (copy>0) { memcpy(live_samples+live_written,samples,(size_t)copy*sizeof(float)); live_written+=copy; }
+        if (copy>0) {
+            memcpy(live_samples+live_written,samples,(size_t)copy*sizeof(float)); live_written+=copy;
+            sstv_linesync_process(&live_ls,samples,(size_t)copy);   /* progressive display */
+        }
         static int last_sec=-1;
         int sec=(int)(live_written/SSTV_SAMPLE_RATE);
         if (sec/10 != last_sec/10) {
@@ -3920,6 +3899,7 @@ static void audio_cb(unsigned int n, float *samples)
                     live_target=restart_target;
                     live_info=restart_info;
                     live_canvas_clear_pending=true;
+                    live_preview_start();
 
                     /* Same reply-mode update used by the normal first VIS. */
                     switch (live_info.mode) {
@@ -3996,6 +3976,7 @@ static void audio_cb(unsigned int n, float *samples)
                 for (size_t i=0;i<keep;++i) live_samples[i]=live_ring[(oldest+i)%SSTV_PREBUF_SAMPLES];
                 live_written=(long)keep;
                 live_capturing=true;
+                live_preview_start();
                 if (live_restart_enabled) {
                     /* Start the parallel detector from audio AFTER this VIS. */
                     live_ring_pos=0;
@@ -4043,7 +4024,7 @@ static void tx_ui_cb(button_data_t *data)
         lv_group_set_editing(keyboard_group, true);
 
         btn_tx.label = "TX";
-        snprintf(tx_mode_label, sizeof(tx_mode_label), "RX Mode\n%s", cont_mode_name(cont_mode));
+        snprintf(tx_mode_label, sizeof(tx_mode_label), "RX Mode\n%s", cont_rx_mode_name());
         btn_cont_mode.label = tx_mode_label;
 
         if (tx_restore_auto_rx) {

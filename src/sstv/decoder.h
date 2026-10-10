@@ -51,4 +51,24 @@ int sstv_decode_samples(const float *samples, long count, sstv_mode_t mode, uint
  * usable sync found in the arbitrary capture. */
 int sstv_decode_cont_samples(const float *samples, long count, sstv_mode_t mode, uint8_t *rgb, sstv_info_t *info);
 
+/* ---- Progressive display (sstv/preview.c) ----
+ * FM front end of the decoders: frequency (Hz) of every sample of x[0..n).
+ * Returns a malloc'd array (free() it) or NULL.  Keep ~100 samples of
+ * margin on each side of a row when applied to a slice. */
+float *sstv_fm_demod(const float *x, long n);
+
+/* Width in pixels of a row of mode (160 for Robot 8, else 320; 0 unknown). */
+int sstv_row_width(sstv_mode_t mode);
+
+/* Seconds from the end of the VIS to the anchor sync of picture row 0 (the
+ * line sync for Robot/Martin, the B/R sync for Scottie); <0 if unknown. */
+double sstv_row0_anchor_after_vis(sstv_mode_t mode);
+
+/* Draw one row of mode into rgb_row (sstv_row_width() * 3 bytes) with the
+ * decoders' channel layout.  freq[0..n): sstv_fm_demod() output; base: index
+ * in freq of the row's anchor sync; scale: measured / nominal line period.
+ * Robot 36 is drawn in grey (its chroma alternates between rows).  Returns 0,
+ * or <0 if the row is not all inside freq[0..n) or the mode is unknown. */
+int sstv_render_row(sstv_mode_t mode, const float *freq, long n, long base, double scale, uint8_t *rgb_row);
+
 #endif

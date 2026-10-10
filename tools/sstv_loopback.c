@@ -5,7 +5,7 @@
  *
  *   cd ~/X6100-IU1WXY
  *   gcc -O2 -o /tmp/sstv_loopback tools/sstv_loopback.c src/sstv/encoder.c src/sstv/decoder.c \
- *       -Isrc -lpng -lsndfile -lm && /tmp/sstv_loopback
+ *       src/sstv/vis.c src/sstv/linesync.c -Isrc -lpng -lsndfile -lm -lpthread && /tmp/sstv_loopback
  *
  * Exit status 0 when every mode passes.
  */

@@ -33,6 +33,9 @@ target_sources(${PROJECT_NAME} PUBLIC
     cluster_column.c
     sstv/decoder.c
     sstv/encoder.c
+    sstv/vis.c
+    sstv/linesync.c
+    sstv/preview.c
     wefax/decoder.c
     wefax/encoder.c
     navtex/decoder.cpp

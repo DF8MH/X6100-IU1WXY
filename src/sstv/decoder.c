@@ -1,4 +1,6 @@
 #include "decoder.h"
+#include "vis.h"
+#include "linesync.h"
 
 #include <sndfile.h>
 #include <math.h>
@@ -1094,6 +1096,27 @@ int sstv_decode_cont_samples(const float *samples, long count, sstv_mode_t mode,
         default: return -2;
     }
 
+    /* The robust decoders read a first sync more than 5 s into the block as
+     * a late chain inside the picture.  When the picture starts late in the
+     * capture (Start pressed before the transmission), cut the audio before
+     * it: a few lines before the first sync of the line-sync tracker's lock. */
+    {
+        sstv_linesync_t ls;
+        sstv_linesync_init(&ls, mode);
+        sstv_linesync_process(&ls, samples, (size_t)count);
+        if (ls.st.state != SSTV_LS_SEARCH) {
+            double back = 4.0 * sstv_linesync_line_seconds(mode);
+            if (back > 2.5) back = 2.5;
+            long a = (long)ls.st.first_sync - (long)llround((back + 0.2) * SR);
+            if (a > 0) {
+                fprintf(stderr, "SSTV CONT: picture starts %.1f s into the capture; skipping the audio before it\n",
+                        (double)ls.st.first_sync / SR);
+                samples += a;
+                count -= a;
+            }
+        }
+    }
+
     long pad = (long)llround(preroll_s * (double)SR);
     long total = pad + count;
     float *work = calloc((size_t)total, sizeof(float));
@@ -1106,6 +1129,115 @@ int sstv_decode_cont_samples(const float *samples, long count, sstv_mode_t mode,
     int rows = sstv_decode_samples(work, total, mode, rgb, info);
     free(work);
     return rows;
+}
+
+/* ---- Progressive display support (see decoder.h) ---- */
+
+float *sstv_fm_demod(const float *x, long n)
+{
+    float *freq = (x && n > 0) ? malloc((size_t)n * sizeof(float)) : NULL;
+    if (!freq) return NULL;
+    float h[HILBERT_N];
+    for (int k = 0; k < HILBERT_N; ++k) {
+        int m = k - HILBERT_M;
+        float ideal = (m != 0 && (m & 1)) ? (2.0f / (PI * (float)m)) : 0.0f;
+        h[k] = ideal * (0.54f - 0.46f * cosf(2.0f * PI * (float)k / (float)(HILBERT_N - 1)));
+    }
+    float prev = 0.0f, ring[SMOOTH_N] = {0}, sum = 0.0f;
+    int rp = 0;
+    for (long i = 0; i < n; ++i) {
+        float q = 0.0f;
+        if (i >= HILBERT_N - 1)
+            for (int k = 0; k < HILBERT_N; ++k) q += h[k] * x[i - k];
+        float re = (i >= HILBERT_M) ? x[i - HILBERT_M] : 0.0f;
+        float ph = atan2f(q, re), d = ph - prev;
+        prev = ph;
+        while (d > PI) d -= 2.0f * PI;
+        while (d < -PI) d += 2.0f * PI;
+        float f = fabsf(d) * ((float)SR / (2.0f * PI));
+        if (f > 4000.0f) f = 4000.0f;
+        sum -= ring[rp]; ring[rp] = f; sum += f;
+        rp = (rp + 1) % SMOOTH_N;
+        freq[i] = sum / (float)SMOOTH_N;
+    }
+    return freq;
+}
+
+int sstv_row_width(sstv_mode_t mode)
+{
+    for (unsigned i = 0; i < sizeof(modes) / sizeof(modes[0]); ++i)
+        if (modes[i].mode == mode) return modes[i].w;
+    return 0;
+}
+
+static double scottie_channel_ms(sstv_mode_t mode)
+{
+    return mode == SSTV_MODE_SCOTTIE_S1 ? 138.240 : mode == SSTV_MODE_SCOTTIE_S2 ? 88.064 :
+           mode == SSTV_MODE_SCOTTIE_DX ? 345.600 : 0.0;
+}
+
+double sstv_row0_anchor_after_vis(sstv_mode_t mode)
+{
+    double ch = scottie_channel_ms(mode);
+    if (ch > 0.0) return (9.0 + 1.5 + ch + 1.5 + ch) / 1000.0;   /* start sync, G, B, then the B/R sync */
+    return sstv_row_width(mode) > 0 ? 0.0 : -1.0;
+}
+
+int sstv_render_row(sstv_mode_t mode, const float *freq, long n, long base, double scale, uint8_t *rgb_row)
+{
+    const double k = (double)SR / 1000.0 * scale;      /* samples per ms */
+    float a[320], b[320], c[320];
+    int w = sstv_row_width(mode);
+    double ch = scottie_channel_ms(mode);
+#define AT(ms) (base + (long)llround((ms) * k))
+    switch (mode) {
+    case SSTV_MODE_ROBOT8_BW:
+        if (base < 0 || AT(66.0) >= n) return -1;
+        segment(freq, n, AT(10.0), AT(66.0), a, w);
+        for (int x = 0; x < w; ++x) rgb_row[x*3] = rgb_row[x*3+1] = rgb_row[x*3+2] = clamp8(a[x]);
+        return 0;
+    case SSTV_MODE_ROBOT36:
+        if (base < 0 || AT(100.0) >= n) return -1;
+        segment(freq, n, AT(12.0), AT(100.0), a, w);
+        for (int x = 0; x < w; ++x) rgb_row[x*3] = rgb_row[x*3+1] = rgb_row[x*3+2] = clamp8(a[x]);
+        return 0;
+    case SSTV_MODE_ROBOT72:
+        if (base < 0 || AT(300.0) >= n) return -1;
+        segment(freq, n, AT(12.0), AT(150.0), a, w);
+        segment(freq, n, AT(156.0), AT(225.0), b, w);
+        segment(freq, n, AT(231.0), AT(300.0), c, w);
+        for (int x = 0; x < w; ++x) {
+            float y = a[x], cr = b[x] - 128.0f, cb = c[x] - 128.0f;
+            rgb_row[x*3] = clamp8(y + 1.402f*cr);
+            rgb_row[x*3+1] = clamp8(y - 0.714136f*cr - 0.344136f*cb);
+            rgb_row[x*3+2] = clamp8(y + 1.772f*cb);
+        }
+        return 0;
+    case SSTV_MODE_MARTIN_M1:
+    case SSTV_MODE_MARTIN_M2: {
+        double m = mode == SSTV_MODE_MARTIN_M1 ? 146.432 : 73.216, g0 = 4.862 + 0.572;
+        double b0 = g0 + m + 0.572, r0 = b0 + m + 0.572;
+        if (base < 0 || AT(r0 + m) >= n) return -1;
+        segment(freq, n, AT(g0), AT(g0 + m), a, w);
+        segment(freq, n, AT(b0), AT(b0 + m), b, w);
+        segment(freq, n, AT(r0), AT(r0 + m), c, w);
+        for (int x = 0; x < w; ++x) { rgb_row[x*3] = clamp8(c[x]); rgb_row[x*3+1] = clamp8(a[x]); rgb_row[x*3+2] = clamp8(b[x]); }
+        return 0;
+    }
+    case SSTV_MODE_SCOTTIE_S1:
+    case SSTV_MODE_SCOTTIE_S2:
+    case SSTV_MODE_SCOTTIE_DX:
+        /* anchored on the B/R sync: G and B before it, R after it */
+        if (AT(-(2.0 * ch + 1.5)) < 0 || AT(10.5 + ch) >= n) return -1;
+        segment(freq, n, AT(-(2.0 * ch + 1.5)), AT(-(ch + 1.5)), a, w);
+        segment(freq, n, AT(-ch), base, b, w);
+        segment(freq, n, AT(10.5), AT(10.5 + ch), c, w);
+        for (int x = 0; x < w; ++x) { rgb_row[x*3] = clamp8(c[x]); rgb_row[x*3+1] = clamp8(a[x]); rgb_row[x*3+2] = clamp8(b[x]); }
+        return 0;
+    default:
+        return -1;
+    }
+#undef AT
 }
 
 /* Scottie family decoder.  Unlike Martin, the regular 1200 Hz sync pulse
@@ -1269,98 +1401,6 @@ static int scottie_decode_wav(const char *path, uint8_t *rgb, sstv_mode_t mode)
 }
 
 
-static float goertzel_power(const float *x, int n, int sr, float hz)
-{
-    int k = (int)(0.5f + (float)n * hz / (float)sr);
-    float w = 2.0f * PI * (float)k / (float)n;
-    float coeff = 2.0f * cosf(w), s0 = 0, s1 = 0, s2 = 0;
-    for (int i = 0; i < n; ++i) { s0 = x[i] + coeff*s1 - s2; s2=s1; s1=s0; }
-    return s1*s1 + s2*s2 - coeff*s1*s2;
-}
-
-static float vis_tone_power(const float *x, long n, float sec, float dur, int center_hz)
-{
-    long a=(long)(sec*SR), cnt=(long)(dur*SR);
-    if (a < 0 || a+cnt > n || cnt < 32) return -1.0f;
-    return goertzel_power(x+a,(int)cnt,SR,(float)center_hz);
-}
-
-static int classify_tone(const float *x, long n, float sec, float dur)
-{
-    static const int hz[] = {1100,1200,1300,1900};
-    float best=-1, second=-1; int tone=0;
-    for (unsigned i=0;i<sizeof(hz)/sizeof(hz[0]);++i) {
-        float p=vis_tone_power(x,n,sec,dur,hz[i]);
-        if (p>best) {second=best; best=p; tone=hz[i];}
-        else if (p>second) second=p;
-    }
-    /* Do not reject a VIS symbol merely because the runner-up is close.
-     * With 15-18 ms symbol windows, 1100 and 1300 Hz are intrinsically
-     * difficult to separate by a large power ratio on noisy RF.  Frame-level
-     * validation (leader + start + parity + stop + supported VIS) provides
-     * the rejection against false triggers instead. */
-    return tone;
-}
-
-
-static int classify_tone_offset(const float *x, long n, float sec, float dur, int offset_hz)
-{
-    static const int hz[] = {1100,1200,1300,1900};
-    float best=-1.0f; int tone=0;
-    for (unsigned i=0;i<sizeof(hz)/sizeof(hz[0]);++i) {
-        float p=vis_tone_power(x,n,sec,dur,hz[i]+offset_hz);
-        if (p>best) { best=p; tone=hz[i]; }
-    }
-    return tone;
-}
-
-static int vis_break_near_offset(const float *x, long n, float center, int offset_hz)
-{
-    for (float d=-0.020f; d<=0.0201f; d+=0.004f)
-        if (classify_tone_offset(x,n,center+d,0.010f,offset_hz)==1200) return 1;
-    return 0;
-}
-
-
-/* V5: derive frequency offset from the two long VIS leaders before decoding.
- * This prevents broadband noise from freely choosing an offset that happens
- * to make a supported VIS code fit. */
-static int measure_vis_leader(const float *x, long n, float sec, float dur,
-                              int *freq_hz, float *quality)
-{
-    float best=-1.0f, runner=-1.0f; int best_hz=0;
-    for (int hz=1740; hz<=2060; hz+=10) {
-        float q=vis_tone_power(x,n,sec,dur,hz);
-        if (q>best) { runner=best; best=q; best_hz=hz; }
-        else if (q>runner) runner=q;
-    }
-    if (best <= 0.0f) return 0;
-    runner=-1.0f;
-    for (int hz=1740; hz<=2060; hz+=10) {
-        if (abs(hz-best_hz) < 40) continue;
-        float q=vis_tone_power(x,n,sec,dur,hz);
-        if (q>runner) runner=q;
-    }
-    float qratio=best/(runner>1.0e-20f?runner:1.0e-20f);
-    if (freq_hz) *freq_hz=best_hz;
-    if (quality) *quality=qratio;
-    return qratio>=1.8f;
-}
-
-static const mode_desc_t *find_mode(int vis)
-{
-    for (unsigned i=0;i<sizeof(modes)/sizeof(modes[0]);++i)
-        if (modes[i].vis==vis) return &modes[i];
-    return NULL;
-}
-
-static int vis_break_near(const float *x, long n, float center)
-{
-    for (float d=-0.020f; d<=0.0201f; d+=0.004f)
-        if (classify_tone(x,n,center+d,0.010f)==1200) return 1;
-    return 0;
-}
-
 int sstv_detect_wav(const char *path, sstv_info_t *info)
 {
     if (!info) return -1;
@@ -1368,111 +1408,29 @@ int sstv_detect_wav(const char *path, sstv_info_t *info)
     fprintf(stderr,"SSTV: opening %s\n",path);
     SF_INFO si={0}; SNDFILE *sf=sf_open(path,SFM_READ,&si);
     if (!sf) { fprintf(stderr,"SSTV: open failed: %s\n",sf_strerror(NULL)); return -2; }
-    fprintf(stderr,"SSTV: WAV sr=%d channels=%d frames=%lld\n",si.samplerate,si.channels,(long long)si.frames);
     if (si.channels!=1 || si.samplerate!=SR) { sf_close(sf); fprintf(stderr,"SSTV: unsupported WAV format\n"); return -3; }
     float *x=malloc((size_t)si.frames*sizeof(float));
     if (!x) {sf_close(sf); return -4;}
     sf_count_t got=sf_readf_float(sf,x,si.frames); sf_close(sf);
     if (got!=si.frames) {free(x); return -5;}
 
-    float limit=fminf(5.0f,(float)si.frames/SR-0.95f);
-
-    /* V3: preserve the historical detector as the first pass.  This makes
-     * the robust detector an extension of behaviour already validated on RF,
-     * rather than a replacement for it. */
-    int legacy_candidate=0;
-    for (float header=0.0f; header<limit; header+=0.005f) {
-        if (!(classify_tone(x,si.frames,header+0.10f,0.020f)==1900 &&
-              classify_tone(x,si.frames,header+0.295f,0.010f)==1200 &&
-              classify_tone(x,si.frames,header+0.42f,0.020f)==1900)) continue;
-        ++legacy_candidate;
-        int vis=0, valid=1;
-        for (int i=0;i<7;++i) {
-            int f=classify_tone(x,si.frames,header+0.640f+i*0.030f+0.005f,0.020f);
-            if (f==1100) vis|=1<<i;
-            else if (f!=1300) { valid=0; break; }
+    /* Same scan as Auto RX: 1-s blocks every 50 ms, VIS starting in the first 5 s */
+    long n=(long)si.frames;
+    for (long w=0; w<=5L*SR && w<n; w+=SR/20) {
+        long len=n-w < SR ? n-w : SR;
+        sstv_vis_result_t r;
+        if (sstv_vis_detect(x+w,(int)len,info,&r)) {
+            fprintf(stderr,"SSTV: VIS=%d -> %s (%dx%d) at %.3f s, offset %+.1f Hz\n",
+                    info->vis,info->name,info->width,info->height,(double)w/SR+r.start_s,r.offset_hz);
+            free(x); return 0;
         }
-        if (!valid) continue;
-        const mode_desc_t *m=find_mode(vis);
-        if (!m) continue;
-        fprintf(stderr,"SSTV: legacy VIS accepted at %.3f s\n",header);
-        info->vis=vis; info->mode=m->mode; info->name=m->name; info->width=m->w; info->height=m->h;
-        fprintf(stderr,"SSTV: VIS=%d -> %s (%dx%d)\n",vis,m->name,m->w,m->h);
-        free(x); return 0;
-    }
-
-    /* Only if the historical path fails, try the tolerant clock/phase path. */
-    int robust_candidate=0;
-    for (float header=0.0f; header<limit; header+=0.005f) {
-        if (classify_tone(x,si.frames,header+0.10f,0.025f)!=1900 ||
-            !vis_break_near(x,si.frames,header+0.295f) ||
-            classify_tone(x,si.frames,header+0.42f,0.025f)!=1900) continue;
-        ++robust_candidate;
-
-        for (float bit=0.028f; bit<=0.0321f; bit+=0.001f) {
-            for (float phase=-0.006f; phase<=0.0061f; phase+=0.003f) {
-                float start=header+0.610f+phase;
-                float win=bit*0.55f, inset=(bit-win)*0.5f;
-                if (classify_tone(x,si.frames,start+inset,win)!=1200) continue;
-                int vis=0, ones=0, valid=1;
-                for (int i=0;i<7;++i) {
-                    int f=classify_tone(x,si.frames,start+(i+1)*bit+inset,win);
-                    if (f==1100) {vis|=1<<i; ++ones;}
-                    else if (f!=1300) {valid=0; break;}
-                }
-                if (!valid) continue;
-                int parity=classify_tone(x,si.frames,start+8*bit+inset,win);
-                if (parity != ((ones&1)?1100:1300)) continue;
-                if (classify_tone(x,si.frames,start+9*bit+inset,win)!=1200) continue;
-                const mode_desc_t *m=find_mode(vis);
-                if (!m) continue;
-                fprintf(stderr,"SSTV: robust VIS fallback accepted at %.3f s (bit %.1f ms, phase %+.1f ms)\n",header,bit*1000.0f,phase*1000.0f);
-                info->vis=vis; info->mode=m->mode; info->name=m->name; info->width=m->w; info->height=m->h;
-                fprintf(stderr,"SSTV: VIS=%d -> %s (%dx%d)\n",vis,m->name,m->w,m->h);
-                free(x); return 0;
-            }
+        if (r.unsupported_vis>=0) {
+            fprintf(stderr,"SSTV: unsupported VIS %d\n",r.unsupported_vis);
+            free(x); return -7;
         }
+        if (len<SR) break;
     }
-    /* V5 final fallback: measure the offset from both long leader tones,
-     * require them to agree, then freeze that offset for the whole VIS. */
-    int offset_candidate=0;
-    for (float header=0.0f; header<limit; header+=0.005f) {
-        int lf1=0, lf2=0; float lq1=0.0f, lq2=0.0f;
-        if (!measure_vis_leader(x,si.frames,header+0.055f,0.140f,&lf1,&lq1) ||
-            !measure_vis_leader(x,si.frames,header+0.375f,0.140f,&lf2,&lq2)) continue;
-        if (abs(lf1-lf2)>20) continue;
-        int off=((lf1+lf2+1)/2)-1900;
-        off=(int)lroundf((float)off/10.0f)*10;
-        if (off < -150 || off > 150) continue;
-        if (off>=-20 && off<=20) continue;
-        if (!vis_break_near_offset(x,si.frames,header+0.295f,off)) continue;
-        ++offset_candidate;
-
-        for (float bit=0.028f; bit<=0.0321f; bit+=0.001f) {
-            for (float phase=-0.006f; phase<=0.0061f; phase+=0.003f) {
-                float start=header+0.610f+phase;
-                float win=bit*0.55f, inset=(bit-win)*0.5f;
-                if (classify_tone_offset(x,si.frames,start+inset,win,off)!=1200) continue;
-                int vis=0, ones=0, valid=1;
-                for (int i=0;i<7;++i) {
-                    int f=classify_tone_offset(x,si.frames,start+(i+1)*bit+inset,win,off);
-                    if (f==1100) {vis|=1<<i; ++ones;}
-                    else if (f!=1300) {valid=0; break;}
-                }
-                if (!valid) continue;
-                int parity=classify_tone_offset(x,si.frames,start+8*bit+inset,win,off);
-                if (parity != ((ones&1)?1100:1300)) continue;
-                if (classify_tone_offset(x,si.frames,start+9*bit+inset,win,off)!=1200) continue;
-                const mode_desc_t *m=find_mode(vis);
-                if (!m) continue;
-                fprintf(stderr,"SSTV: V5 leader-locked VIS fallback accepted at %.3f s (leaders %d/%d Hz, offset %+d Hz, quality %.2f/%.2f, bit %.1f ms, phase %+.1f ms)\n",header,lf1,lf2,off,lq1,lq2,bit*1000.0f,phase*1000.0f);
-                info->vis=vis; info->mode=m->mode; info->name=m->name; info->width=m->w; info->height=m->h;
-                fprintf(stderr,"SSTV: VIS=%d -> %s (%dx%d)\n",vis,m->name,m->w,m->h);
-                free(x); return 0;
-            }
-        }
-    }
-    fprintf(stderr,"SSTV: no valid supported VIS found (legacy candidates=%d, robust candidates=%d, offset candidates=%d)\n",legacy_candidate,robust_candidate,offset_candidate);
+    fprintf(stderr,"SSTV: no valid supported VIS found\n");
     free(x); return -6;
 }
 

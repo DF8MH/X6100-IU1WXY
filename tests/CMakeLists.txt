@@ -65,3 +65,11 @@ add_executable(test_wefax test_wefax.c ../src/wefax/decoder.c ../src/wefax/encod
 target_include_directories(test_wefax PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(test_wefax PRIVATE PNG::PNG m)
 add_test(NAME test_wefax COMMAND $<TARGET_FILE:test_wefax>)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SNDFILE REQUIRED IMPORTED_TARGET sndfile)
+add_executable(test_sstv test_sstv.c ../src/sstv/decoder.c ../src/sstv/encoder.c ../src/sstv/vis.c
+    ../src/sstv/linesync.c ../src/sstv/preview.c)
+target_include_directories(test_sstv PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test_sstv PRIVATE PNG::PNG PkgConfig::SNDFILE Threads::Threads m)
+add_test(NAME test_sstv COMMAND $<TARGET_FILE:test_sstv>)
