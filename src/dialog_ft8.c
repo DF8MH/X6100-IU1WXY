@@ -490,7 +490,8 @@ static void construct_cb(lv_obj_t *parent) {
 
     lv_waterfall_set_palette(waterfall, (lv_color_t*)wf_palette, 256);
     lv_waterfall_set_size(waterfall, WIDTH, WF_HEIGHT);
-    lv_waterfall_set_min(waterfall, -27);
+    lv_waterfall_set_min(waterfall, 0);    /* above the noise floor (on_psd_cb), as JS8 */
+    lv_waterfall_set_max(waterfall, 30);
 
     lv_obj_set_pos(waterfall, 13, 13);
 
@@ -1011,6 +1012,11 @@ static void waterfall_add_data(void *data) {
     free(wf_data->psd);
 }
 
+static int cmp_float(const void *a, const void *b) {
+    float x = *(const float *)a, y = *(const float *)b;
+    return (x > y) - (x < y);
+}
+
 static void on_psd_cb(const float *psd, uint16_t nfft, float sec_since_slot_start,
                       const slot_info_t *info, void *ctx) {
     (void)sec_since_slot_start;
@@ -1028,6 +1034,21 @@ static void on_psd_cb(const float *psd, uint16_t nfft, float sec_since_slot_star
     wf_data.size = high_bin - low_bin;
     wf_data.psd = (float *)calloc(sizeof(float), wf_data.size);
     memcpy((void*)wf_data.psd, (void*)&psd[low_bin], wf_data.size * sizeof(float));
+
+    /* Relative to the noise floor (the 30th percentile of the row, smoothed over ~2 s), as
+     * JS8: the fixed -27..0 dB left it near black at the radio's audio level */
+    static float floor_db;
+    static bool  floor_set;
+    float       *sorted = malloc(wf_data.size * sizeof(float));
+    if (sorted) {
+        memcpy(sorted, wf_data.psd, wf_data.size * sizeof(float));
+        qsort(sorted, wf_data.size, sizeof(float), cmp_float);
+        floor_db  = floor_set ? floor_db + 0.05f * (sorted[wf_data.size * 3 / 10] - floor_db) : sorted[wf_data.size * 3 / 10];
+        floor_set = true;
+        free(sorted);
+    }
+    for (size_t i = 0; i < wf_data.size; i++) wf_data.psd[i] -= floor_db;
+
     scheduler_put(waterfall_add_data, &wf_data, sizeof(wf_data));
 }
 

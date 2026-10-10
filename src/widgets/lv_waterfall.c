@@ -61,6 +61,21 @@ void lv_waterfall_set_palette(lv_obj_t * obj, lv_color_t * palette, uint16_t cnt
     waterfall->palette_cnt = cnt;
 
     memcpy(waterfall->palette, palette, cnt * sizeof(waterfall->palette[0]));
+#if LV_COLOR_DEPTH == 32
+    /* The palettes have alpha 0 (wf_palette): on the DRM overlay that is a hole showing the
+     * main waterfall on the primary plane, still while an app is open */
+    for (uint16_t i = 0; i < cnt; i++) {
+        waterfall->palette[i].ch.alpha = 0xff;
+    }
+#endif
+}
+
+/* Opaque black: zeros are transparent on the DRM overlay (see lv_waterfall_set_palette) */
+static void clear_ring(lv_waterfall_t * waterfall) {
+    lv_color_t * px = (lv_color_t *)waterfall->ring;
+    size_t       n  = 2 * waterfall->dsc->data_size / sizeof(lv_color_t);
+
+    for (size_t i = 0; i < n; i++) px[i] = lv_color_black();
 }
 
 /* The image is a window of `h` lines into a ring of 2 x h lines, the newest
@@ -91,7 +106,7 @@ void lv_waterfall_set_size(lv_obj_t * obj, lv_coord_t w, lv_coord_t h) {
 
     waterfall->ring = lv_mem_alloc(2 * waterfall->dsc->data_size);
     LV_ASSERT_MALLOC(waterfall->ring);
-    memset(waterfall->ring, 0, 2 * waterfall->dsc->data_size);
+    clear_ring(waterfall);
     waterfall->head = 0;
     waterfall->dsc->data = waterfall->ring;
 
@@ -107,7 +122,7 @@ void lv_waterfall_clear_data(lv_obj_t * obj) {
     if (!waterfall->ring) {
         return;
     }
-    memset(waterfall->ring, 0, 2 * waterfall->dsc->data_size);
+    clear_ring(waterfall);
     lv_img_cache_invalidate_src(waterfall->dsc);
     invalidate_exact(obj);
 }
