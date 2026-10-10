@@ -11,7 +11,7 @@
 #include "rotary.h"
 #include "encoder.h"
 
-#define VERSION "x6100 IU1WXY firmware - v0.109"
+#define VERSION "x6100 IU1WXY firmware - v0.110"
 
 
 extern rotary_t     *vol;
