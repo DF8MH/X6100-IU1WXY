@@ -17,15 +17,19 @@
 #include "cfg/cfg_api.h"
 #include "dsp.h"
 #include "remote_server.h"
+#include "msg.h"
 
 #include <pthread.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define NAVTEX_TEST_WAV "/mnt/navtex_test.wav"
+#define NAVTEX_SAVE_DIR "/mnt/navtex"   /* navtex-YYYYMMDD-HHMMSS.txt, on the web Files page (idea from 1KO125) */
 #define NAVTEX_TEST_CHUNK 256
 
 #define NAVTEX_TEXT_MAX 65536 //32768
@@ -39,6 +43,7 @@ static void destruct_cb(void);
 static void audio_cb(unsigned int n, float *samples);
 static void close_cb(button_data_t *data);
 static void clear_cb(button_data_t *data);
+static void save_cb(button_data_t *data);
 static void test_cb(button_data_t *data);
 static void freq_cb(button_data_t *data);
 static void *test_thread_cb(void *arg);
@@ -86,6 +91,12 @@ static button_data_t btn_clear = {
     .press = clear_cb
 };
 
+static button_data_t btn_save = {
+    .type = BTN_TEXT,
+    .label = "Save",
+    .press = save_cb
+};
+
 static button_data_t btn_freq = {
     .type = BTN_TEXT,
     .label = "Freq.",
@@ -99,7 +110,7 @@ static button_data_t btn_test = {
 };
 
 static buttons_page_t btn_page_1 = {
-    .items = { &btn_page, &btn_freq, NULL, &btn_clear, &btn_close }
+    .items = { &btn_page, &btn_freq, &btn_save, &btn_clear, &btn_close }
 };
 
 static dialog_t dialog = {
@@ -618,6 +629,29 @@ static void clear_cb(button_data_t *data)
         lv_obj_scroll_to_y(scroll, 0, LV_ANIM_OFF);
 }
 
+/* The text on screen to a file, then cleared */
+static void save_cb(button_data_t *data)
+{
+    char   name[64];
+    time_t now = time(NULL);
+    FILE  *f;
+
+    if (!text_len) {
+        msg_update_text_fmt("Nothing to save");
+        return;
+    }
+    mkdir(NAVTEX_SAVE_DIR, 0755);
+    strftime(name, sizeof(name), NAVTEX_SAVE_DIR "/navtex-%Y%m%d-%H%M%S.txt", gmtime(&now));
+    f = fopen(name, "w");
+    if (!f || fwrite(text_buf, 1, text_len, f) != text_len) {
+        if (f) fclose(f);
+        msg_update_text_fmt("NAVTEX: save failed");
+        return;
+    }
+    fclose(f);
+    clear_cb(data);
+    msg_update_text_fmt("Saved %s", name + sizeof(NAVTEX_SAVE_DIR));
+}
 
 static void test_cb(button_data_t *data)
 {
