@@ -100,9 +100,10 @@ static void upload_cb(button_data_t *b);
 static void tx_next_cb(button_data_t *b);
 static void clear_cb(button_data_t *b);
 
-static buttons_page_t btn_page_1;
+static buttons_page_t btn_page_1, btn_page_2;
 
-static button_data_t btn_page    = {.type = BTN_TEXT, .label = "(WSPR 1:1)"};
+static button_data_t btn_page    = {.type = BTN_TEXT, .label = "(WSPR 1:2)", .press = button_next_page_cb, .hold = button_prev_page_cb, .next = &btn_page_2, .prev = &btn_page_2};
+static button_data_t btn_page2   = {.type = BTN_TEXT, .label = "(WSPR 2:2)", .press = button_next_page_cb, .hold = button_prev_page_cb, .next = &btn_page_1, .prev = &btn_page_1};
 static button_data_t btn_tx_pct  = {.type = BTN_TEXT_FN, .label_fn = tx_pct_label, .press = tx_pct_cb};
 static button_data_t btn_tx_next = {.type = BTN_TEXT_FN, .label_fn = tx_next_label, .press = tx_next_cb};
 static button_data_t btn_upload  = {.type = BTN_TEXT_FN, .label_fn = upload_label, .press = upload_cb};
@@ -110,6 +111,10 @@ static button_data_t btn_clear   = {.type = BTN_TEXT, .label = "Clear", .press =
 
 static buttons_page_t btn_page_1 = {
     .items = {&btn_page, &btn_tx_pct, &btn_tx_next, &btn_upload, &btn_clear},
+};
+
+static buttons_page_t btn_page_2 = {
+    .items = {&btn_page2, &btn_dig_pwr},
 };
 
 static dialog_t dialog = {

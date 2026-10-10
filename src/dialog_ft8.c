@@ -202,7 +202,7 @@ static buttons_page_t btn_page_1 = {
 };
 
 static buttons_page_t btn_page_2 = {
-    {&button_page_2, &button_hold_freq, &button_auto_en_dis, &button_force_save}
+    {&button_page_2, &button_hold_freq, &button_auto_en_dis, &button_force_save, &btn_dig_pwr}
 };
 
 static buttons_page_t btn_page_3 = {

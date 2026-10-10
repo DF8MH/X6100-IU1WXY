@@ -440,20 +440,21 @@ static buttons_page_t page_3;
 static buttons_page_t page_4;
 static buttons_page_t page_5;
 static buttons_page_t page_6;
+static buttons_page_t page_7;
 
-static button_data_t btn_p1      = {.type = BTN_TEXT, .label = "(JS8 1:6)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_2, .prev = &page_6};
+static button_data_t btn_p1      = {.type = BTN_TEXT, .label = "(JS8 1:7)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_2, .prev = &page_7};
 static button_data_t btn_show    = {.type = BTN_TEXT_FN, .label_fn = show_label_getter, .press = show_cb};
 static button_data_t btn_reply   = {.type = BTN_TEXT, .label = "Reply", .press = reply_cb};
 static button_data_t btn_send    = {.type = BTN_TEXT, .label = "Send...", .press = send_cb};
 static button_data_t btn_hw_cpy  = {.type = BTN_TEXT, .label = "HW CPY?", .press = hw_cpy_cb};
 
-static button_data_t btn_p2    = {.type = BTN_TEXT, .label = "(JS8 2:6)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_3, .prev = &page_1};
+static button_data_t btn_p2    = {.type = BTN_TEXT, .label = "(JS8 2:7)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_3, .prev = &page_1};
 static button_data_t btn_cq    = {.type = BTN_TEXT_FN, .label_fn = cq_label_getter, .press = cq_cb, .hold = cq_hold_cb};
 static button_data_t btn_hb    = {.type = BTN_TEXT, .label = "Heart-\nbeat", .press = heartbeat_cb};
 static button_data_t btn_query = {.type = BTN_TEXT, .label = "Query >", .press = query_cb};
 static button_data_t btn_clear = {.type = BTN_TEXT, .label = "Clear", .press = clear_cb};
 
-static button_data_t btn_p3        = {.type = BTN_TEXT, .label = "(JS8 3:6)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_4, .prev = &page_2};
+static button_data_t btn_p3        = {.type = BTN_TEXT, .label = "(JS8 3:7)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_4, .prev = &page_2};
 static button_data_t btn_time_sync = {.type = BTN_TEXT, .label = "Time\nSync", .press = time_sync_cb, .hold = time_sync_hold_cb};
 static button_data_t btn_hold      = {.type = BTN_TEXT_FN, .label_fn = hold_label_getter, .press = hold_cb};
 static button_data_t btn_stations  = {.type = BTN_TEXT_FN, .label_fn = stations_label_getter, .press = stations_cb};
@@ -463,26 +464,29 @@ static buttons_page_t page_1 = {{&btn_p1, &btn_cq, &btn_hb, &btn_query, &btn_hw_
 static buttons_page_t page_2 = {{&btn_p2, &btn_show, &btn_reply, &btn_send, &btn_clear}};
 static buttons_page_t page_3 = {{&btn_p3, &btn_time_sync, &btn_hold, &btn_stations, &btn_inbox}};
 
-static button_data_t btn_p4     = {.type = BTN_TEXT, .label = "(JS8 4:6)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_5, .prev = &page_3};
+static button_data_t btn_p4     = {.type = BTN_TEXT, .label = "(JS8 4:7)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_5, .prev = &page_3};
 static button_data_t btn_auto   = {.type = BTN_TEXT_FN, .label_fn = auto_label_getter, .press = auto_cb};
 static button_data_t btn_hbauto = {.type = BTN_TEXT_FN, .label_fn = hb_label_getter, .press = hb_cb, .hold = hb_hold_cb};
 static button_data_t btn_hbackk = {.type = BTN_TEXT_FN, .label_fn = hb_ack_label_getter, .press = hb_ack_cb};
 static button_data_t btn_texts  = {.type = BTN_TEXT, .label = "Settings...", .press = texts_cb};
 static buttons_page_t page_4 = {{&btn_p4, &btn_auto, &btn_hbauto, &btn_hbackk, &btn_texts}};
 
-static button_data_t  btn_p5        = {.type = BTN_TEXT, .label = "(JS8 5:6)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_6, .prev = &page_4};
+static button_data_t  btn_p5        = {.type = BTN_TEXT, .label = "(JS8 5:7)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_6, .prev = &page_4};
 static button_data_t  btn_aprs      = {.type = BTN_TEXT, .label = "APRS >", .press = aprs_cb};
 static button_data_t  btn_log       = {.type = BTN_TEXT, .label = "Log QSO", .press = log_cb};
 static button_data_t  btn_act       = {.type = BTN_TEXT_FN, .label_fn = act_label_getter, .press = act_cb, .hold = act_hold_cb};
 static button_data_t  btn_prompt    = {.type = BTN_TEXT_FN, .label_fn = prompt_label_getter, .press = prompt_cb};
 static buttons_page_t page_5        = {{&btn_p5, &btn_aprs, &btn_log, &btn_act, &btn_prompt}};
 
-static button_data_t  btn_p6        = {.type = BTN_TEXT, .label = "(JS8 6:6)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_1, .prev = &page_5};
+static button_data_t  btn_p6        = {.type = BTN_TEXT, .label = "(JS8 6:7)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_7, .prev = &page_5};
 static button_data_t  btn_alerts    = {.type = BTN_TEXT, .label = "Alerts >", .press = alerts_cb};
 static button_data_t  btn_speed     = {.type = BTN_TEXT_FN, .label_fn = speed_label_getter, .press = speed_cb, .hold = speed_hold_cb};
 static button_data_t  btn_decode    = {.type = BTN_TEXT_FN, .label_fn = decode_label_getter, .press = decode_cb};
 static button_data_t  btn_freq      = {.type = BTN_TEXT_FN, .label_fn = freq_label_getter, .press = freq_cb};
 static buttons_page_t page_6        = {{&btn_p6, &btn_alerts, &btn_speed, &btn_decode, &btn_freq}};
+
+static button_data_t  btn_p7        = {.type = BTN_TEXT, .label = "(JS8 7:7)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_1, .prev = &page_6};
+static buttons_page_t page_7        = {{&btn_p7, &btn_dig_pwr}};
 
 static dialog_t dialog = {
     .run          = false,

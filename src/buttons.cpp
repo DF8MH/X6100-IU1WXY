@@ -9,6 +9,8 @@
 
 #include "controls.h"
 #include "util.h"
+#include "radio.h"
+#include "tx_player.h"
 #include "cfg/settings_manager.h"
 #include "cfg/encoder_defaults.h"
 
@@ -170,6 +172,29 @@ static button_data_t btn_vol = {
 
 static button_data_t btn_sql = make_encoder_btn(sql_label_getter, CTRL_SQL, (Subject*)&cfg_sm.p_squelch);
 static button_data_t btn_rfg = make_encoder_btn(rfg_label_getter, CTRL_RFG, (Subject*)&cfg_sm.p_rfgain);
+/* TX power in the digital apps: press for the next step, up to the apps' 5 W cap */
+static const char *dig_pwr_label() {
+    static char buf[20];
+    snprintf(buf, sizeof(buf), "Power\n%g W", cfg_sm.p_pwr.get());
+    return buf;
+}
+
+static void dig_pwr_cb(button_data_t *data) {
+    static const float steps[] = {0.5f, 1.0f, 2.0f, 3.0f, TX_PLAYER_MAX_PWR_W};
+    float p = cfg_sm.p_pwr.get(), next = steps[0];
+
+    for (float s : steps) {
+        if (s > p + 0.05f) {
+            next = s;
+            break;
+        }
+    }
+    radio_set_pwr(next);
+}
+
+button_data_t btn_dig_pwr = {
+    .type = BTN_TEXT_FN, .label_fn = dig_pwr_label, .press = dig_pwr_cb, .subj = (Subject *)&cfg_sm.p_pwr};
+
 static button_data_t btn_tx_pwr = make_encoder_btn(tx_power_label_getter, CTRL_PWR, (Subject*)&cfg_sm.p_pwr);
 static button_data_t btn_flt_low  = make_encoder_btn(filter_low_label_getter, CTRL_FILTER_LOW, (Subject*)&cfg_sm.cp_cur_filter_low);
 static button_data_t btn_flt_high = make_encoder_btn(filter_high_label_getter, CTRL_FILTER_HIGH, (Subject*)&cfg_sm.cp_cur_filter_high);
@@ -335,10 +360,23 @@ static button_data_t btn_field   = make_app_btn("Field\nOps", ACTION_APP_FIELD);
 static button_data_t btn_bands   = make_app_btn("Bands", ACTION_APP_BANDS);
 
 /* RTTY */
+extern buttons_page_t buttons_page_rtty;
+extern buttons_page_t buttons_page_rtty_2;
 static button_data_t btn_rtty_p1 = {
     .type  = BTN_TEXT,
-    .label = "(RTTY 1:1)",
-    .press = NULL,
+    .label = "(RTTY 1:2)",
+    .press = button_next_page_cb,
+    .hold  = button_prev_page_cb,
+    .next  = &buttons_page_rtty_2,
+    .prev  = &buttons_page_rtty_2,
+};
+static button_data_t btn_rtty_p2 = {
+    .type  = BTN_TEXT,
+    .label = "(RTTY 2:2)",
+    .press = button_next_page_cb,
+    .hold  = button_prev_page_cb,
+    .next  = &buttons_page_rtty,
+    .prev  = &buttons_page_rtty,
 };
 static button_data_t btn_rtty_rate = {
     .type  = BTN_TEXT,
@@ -467,6 +505,9 @@ static buttons_page_t page_app_3 = {
 
 buttons_page_t buttons_page_rtty = {
     {&btn_rtty_p1, &btn_rtty_rate, &btn_rtty_shift, &btn_rtty_center, &btn_rtty_reverse}
+};
+buttons_page_t buttons_page_rtty_2 = {
+    {&btn_rtty_p2, &btn_dig_pwr}
 };
 
 buttons_group_t buttons_group_gen = {
