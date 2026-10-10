@@ -26,6 +26,11 @@
 #define GAIN_MIN_DB (-30.0f)
 #define GAIN_MAX_DB 0.0f
 
+/* The learned offset (kept between transmissions) never below this: an overdriven or long
+ * transmission (SSTV) could push it to the floor, and the ramp up (8 dB a transmission at
+ * most, tx_level.c) took many transmissions to bring the power back */
+#define LEARNED_MIN_DB (-12.0f)
+
 static float clamp_gain(float g) {
     return g > GAIN_MAX_DB ? GAIN_MAX_DB : g < GAIN_MIN_DB ? GAIN_MIN_DB : g;
 }
@@ -75,7 +80,7 @@ bool tx_player_stream(tx_fill_fn_t  fill,
         radio_set_pwr(TX_PLAYER_MAX_PWR_W);
     }
 
-    float gain_offset      = base_gain_offset + params.ft8_output_gain_offset.x;
+    float gain_offset      = base_gain_offset + LV_MAX(params.ft8_output_gain_offset.x, LEARNED_MIN_DB);
     float play_gain_offset = audio_set_play_vol(gain_offset + 6.0f);
     gain_offset           -= play_gain_offset;
 
@@ -120,7 +125,7 @@ bool tx_player_stream(tx_fill_fn_t  fill,
 
     /* The learned gain offset is shared by FT8 and JS8: same audio path. */
     params_float_set(&params.ft8_output_gain_offset,
-                     gain_offset - base_gain_offset + play_gain_offset);
+                     LV_MAX(gain_offset - base_gain_offset + play_gain_offset, LEARNED_MIN_DB));
     audio_play_wait();
     radio_set_modem(false);
     radio_set_freq((int32_t)radio_freq);
