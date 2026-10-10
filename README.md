@@ -336,6 +336,23 @@ from WSJT-X (K1JT, K9AN). Libraries: LVGL, cJSON, FFTW, liquid-dsp, libpng,
 bottle, PulseAudio, BlueZ. Fonts: Roboto, DejaVu, Arial, Sony Sketch.
 Hardware: Xiegu.
 
+## Privacy and disclaimer
+
+This is an **open source** project, provided **as is, without any warranty**: you install and use it **at your own
+risk** (see the [licence](LICENSE)). The author is not liable for any damage to the radio, accessories or data.
+
+The firmware **sends no data to the author**. It contacts external services only when you use the feature concerned:
+
+- **POTA**: spots, Field Ops self-spots included, go to pota.app with callsign, park, frequency and mode, and are
+  public; the park list comes from pota.app.
+- **SOTA**: the summit list comes from sota.org.uk.
+- **QRZ Logbook**, if enabled: QSOs go to QRZ.com with your API key.
+- **WSPRnet**, if enabled: received spots go to wsprnet.org with callsign and locator.
+- **DX Cluster** and **Reverse Beacon Network**: they receive your callsign to log you in.
+
+Everything else (settings, logs, pictures) stays on the SD card. Full notice, website included:
+[x6100-link.it/privacy.php](https://x6100-link.it/privacy.php).
+
 ## License
 
 The GUI is LGPL-2.1-or-later ([LICENSE](LICENSE)); the vendored js8core and
