@@ -178,6 +178,10 @@ lv_obj_t * textarea_window_open(textarea_window_cb_t ok, textarea_window_cb_t ca
     }
 
     lv_group_add_obj(keyboard_group, text);
+    /* The focus here: opened from a list (JS8 APRS, status, saved messages) it stayed on the
+     * list's buttons under the window and the keyboard took no input */
+    lv_group_focus_obj(keyboard ? keyboard : text);
+    lv_group_set_editing(keyboard_group, true);
 
     return window;
 }
