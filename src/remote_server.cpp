@@ -509,6 +509,22 @@ static uint32_t log_rev() {
     return rev;
 }
 
+/* This radio's id of the device ping (/mnt/device_id, update_check.c): X6100 Link adds it to its
+ * own ping, so the site counts the radio and its app once. "" until the ping thread made it */
+static const char *device_id() {
+    static char id[40];
+
+    if (!id[0]) {
+        FILE *f = fopen("/mnt/device_id", "r");
+        if (f) {
+            if (fgets(id, sizeof(id), f))
+                id[strspn(id, "0123456789abcdef")] = 0;
+            fclose(f);
+        }
+    }
+    return id;
+}
+
 static int state_line(char *buf, size_t size) {
     int32_t     mode = cfg_sm.cp_cur_mode.get();
     int32_t     agc  = cfg_sm.cp_cur_agc.get();
@@ -535,7 +551,7 @@ static int state_line(char *buf, size_t size) {
                     "{\"t\":\"state\",\"vfo\":\"%s\",\"freq\":%i,\"freq_bg\":%i,\"mode\":\"%s\",\"band\":\"%s\","
                     "\"filter\":%i,\"flo\":%i,\"fhi\":%i,\"rfgain\":%i,\"sql\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
                     "\"nb_level\":%i,\"nb_width\":%i,\"nr_level\":%i,\"pwr\":%i,\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s,"
-                    "\"cwt\":%s,\"logrev\":%u}\n",
+                    "\"cwt\":%s,\"logrev\":%u,\"did\":\"%s\"}\n",
                     cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? "A" : "B",
                     cfg_sm.cp_fg_freq.get(), cfg_sm.cp_bg_freq.get(),
                     (mode >= 0 && mode <= x6100_mode_nfm) ? mode_names[mode] : "?", band_name(),
@@ -545,11 +561,11 @@ static int state_line(char *buf, size_t size) {
                     (agc >= 0 && agc <= x6100_agc_auto) ? agc_names[agc] : "?",
                     cfg_sm.p_nb.get() != 0, cfg_sm.p_nr.get() != 0,
                     cfg_sm.p_nb_level.get(), cfg_sm.p_nb_width.get(), cfg_sm.p_nr_level.get(),
-                    (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax, cwt, log_rev());
+                    (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax, cwt, log_rev(), device_id());
 }
 
 static void send_state(client_t *c) {
-    char buf[2048];
+    char buf[2560];     /* Field Ops' ax (1600) and the rest */
     int  l = state_line(buf, sizeof(buf));
 
     if (l > 0 && (size_t)l < sizeof(buf))
