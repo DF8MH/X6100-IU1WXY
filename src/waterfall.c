@@ -35,6 +35,7 @@ typedef struct {
     uint8_t values[WATERFALL_NFFT];
     uint32_t center_freq;
     uint32_t width;
+    uint8_t  floor;     /* 75th percentile: above it the row has signals */
 } wf_data_row_t;
 
 static lv_obj_t         *obj;
@@ -198,7 +199,8 @@ void waterfall_data(float *data_buf, uint16_t size, bool tx, uint32_t base_freq,
     wf_rows[last_row_id].center_freq = base_freq;
     wf_rows[last_row_id].width = width_hz;
 
-    float temp_buf[size];
+    float    temp_buf[size];
+    uint16_t hist[256] = {0};
     liquid_vectorf_addscalar(data_buf, size, -min, temp_buf);
     liquid_vectorf_mulscalar(temp_buf, size, 255.0f / (max - min), temp_buf);
     for (uint16_t x = 0; x < size; x++) {
@@ -214,7 +216,11 @@ void waterfall_data(float *data_buf, uint16_t size, bool tx, uint32_t base_freq,
         }
 
         wf_rows[last_row_id].values[x] = id;
+        hist[id]++;
     }
+    uint32_t n = 0, id = 0;
+    while (id < 255 && (n += hist[id]) < size * 3 / 4) id++;
+    wf_rows[last_row_id].floor = id;
     __atomic_add_fetch(&new_rows, 1, __ATOMIC_RELEASE);
     scheduler_put_noargs(refresh_waterfall);
 }
@@ -380,6 +386,20 @@ void waterfall_refresh_period_set(uint8_t k) {
 }
 
 
+/* A part out of the row's band (tuned away from it) shows the row's own noise, its
+ * values at scattered places capped where signals start, not black */
+static inline uint8_t noise_px(const wf_data_row_t *row, size_t i) {
+    uint8_t v = row->values[(i * 2654435761u + (uintptr_t) row) % WATERFALL_NFFT];
+
+    return v < row->floor ? v : row->floor;
+}
+
+static void noise_fill(const wf_data_row_t *row, size_t i0, size_t i1, uint8_t *dst) {
+    for (size_t i = i0; i < i1; i++) {
+        dst[i] = noise_px(row, i);
+    }
+}
+
 #define LERP_INTERP_M 3
 #define LERP_INTERP_FRAC (1 << LERP_INTERP_M)
 /* Pixels i0..i1-1 of a row (dst is indexed by pixel) */
@@ -398,7 +418,7 @@ static inline void lerp_range(wf_data_row_t *row_data, uint32_t dst_center_freq,
 
     if ((src_start > dst_end) || (src_end < dst_start)) {
         // No overlap
-        memset(dst + i0, 0, i1 - i0);
+        noise_fill(row_data, i0, i1, dst);
         return;
     }
 
@@ -408,12 +428,12 @@ static inline void lerp_range(wf_data_row_t *row_data, uint32_t dst_center_freq,
         // src pos is multiplied by 8
         int32_t src_pos = (freq - src_start) * (WATERFALL_NFFT << LERP_INTERP_M) / row_data->width;
         if (src_pos < 0) {
-            dst[i] = 0;
+            dst[i] = noise_px(row_data, i);
             continue;
         }
         uint32_t src_pos_int = (uint32_t)src_pos >> LERP_INTERP_M;
         if (src_pos_int >= (WATERFALL_NFFT - 2)) {
-            dst[i] = 0;
+            dst[i] = noise_px(row_data, i);
         } else {
             int16_t v0 = row_data->values[src_pos_int];
             int16_t v1 = row_data->values[src_pos_int + 1];
