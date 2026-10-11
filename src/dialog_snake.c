@@ -247,9 +247,19 @@ static void exit_cb(button_data_t *b) {
     main_screen_close_app();
 }
 
+/* One knob step a turn was too touchy: a turn every KNOB_STEPS steps the same way */
+#define KNOB_STEPS 4
+
 static void rotary_cb(int32_t diff) {
-    if (diff)
-        steer(diff > 0 ? 1 : -1);
+    static int32_t acc;
+
+    if ((acc > 0 && diff < 0) || (acc < 0 && diff > 0))
+        acc = 0;
+    acc += diff;
+    if (acc >= KNOB_STEPS || acc <= -KNOB_STEPS) {
+        steer(acc > 0 ? 1 : -1);
+        acc = 0;
+    }
 }
 
 static void key_cb(lv_event_t *e) {
@@ -279,8 +289,10 @@ static void key_cb(lv_event_t *e) {
 
 static void construct_cb(lv_obj_t *parent) {
     dialog.obj = dialog_init(parent);
-    /* see-through: the live waterfall is the playing field */
-    lv_obj_set_style_bg_opa(dialog.obj, LV_OPA_TRANSP, 0);
+    /* see-through but darkened: the live waterfall is the playing field, the snake stands out */
+    lv_obj_set_style_bg_color(dialog.obj, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(dialog.obj, LV_OPA_60, 0);
+    lv_obj_set_style_bg_grad_dir(dialog.obj, LV_GRAD_DIR_NONE, 0);
     lv_obj_set_style_bg_img_opa(dialog.obj, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(dialog.obj, 0, 0);
     lv_obj_set_style_shadow_width(dialog.obj, 0, 0);
