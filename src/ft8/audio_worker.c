@@ -34,7 +34,7 @@ struct audio_worker_s {
     int32_t        filter_low_hz;
     int32_t        filter_high_hz;
     uint16_t       nfft;
-    uint8_t        fps_ms;            /* min interval between PSD emissions */
+    uint16_t       fps_ms;            /* min interval between PSD emissions */
 
     audio_worker_cb_t cb;
 
@@ -234,7 +234,7 @@ audio_worker_t *audio_worker_create(int audio_sample_rate,
     w->filter_low_hz  = filter_low_hz;
     w->filter_high_hz = filter_high_hz;
     w->nfft           = (uint16_t)(WORKER_DISPLAY_WIDTH * w->sample_rate / span);
-    w->fps_ms         = (uint8_t)(1000 / 5);   /* 5 Hz update cap */
+    w->fps_ms         = (uint16_t)(1000 / 2.5);   /* 2.5 Hz: the 80 px above the log show two slots */
     if (cb) w->cb = *cb;
 
     pthread_mutex_init(&w->audio_mux, NULL);

@@ -64,6 +64,7 @@
 
 #define WIDTH           771
 #define WF_HEIGHT       (DIALOG_H - 26)   /* 13 px margins above and below */
+#define WF_VISIBLE      80     /* waterfall above the log: ~32 s, two slots, to find a clear spot */
 
 #define UNKNOWN_SNR     99
 
@@ -521,7 +522,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     /* Table */
 
-    table_view_build(dialog.obj, 13, 13 + 55, WIDTH, WF_HEIGHT - 55);
+    table_view_build(dialog.obj, 13, 13 + WF_VISIBLE, WIDTH, WF_HEIGHT - WF_VISIBLE);
     table_view_set_press_cb(on_table_press);
     table_view_actions_t tv_actions = {
         .on_close      = on_table_close,
