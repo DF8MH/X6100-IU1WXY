@@ -954,6 +954,69 @@ def clear_memory(dbcon, id):
     return read_slots(dbcon)
 
 
+@app.route('/cw_messages')
+def cw_messages():
+    return bottle.template('cw_messages')
+
+
+CW_MSG_MAX = 64     # as the radio's editor (textarea_window)
+
+
+def read_cw_messages(dbcon):
+    return {"messages": [{"id": i, "text": t} for i, t in dbcon.execute("SELECT id, val FROM msg_cw ORDER BY id")],
+            "max": CW_MSG_MAX}
+
+
+def cw_text():
+    """The text of the request: printable ASCII, 1 to CW_MSG_MAX characters."""
+    data = bottle.request.json
+    text = str(data.get("text", "")).strip() if isinstance(data, dict) else ""
+    if not text or len(text) > CW_MSG_MAX or not all(" " <= c <= "~" for c in text):
+        raise ValueError("1 to %d characters, letters, digits and symbols only" % CW_MSG_MAX)
+    return text
+
+
+@app.get('/api/cw_messages')
+def get_cw_messages(dbcon):
+    return read_cw_messages(dbcon)
+
+
+@app.post('/api/cw_messages')
+def add_cw_message(dbcon):
+    try:
+        text = cw_text()
+        with dbcon:
+            dbcon.execute("INSERT INTO msg_cw (val) VALUES (?)", (text,))
+    except ValueError as ex:
+        return api_error(400, str(ex))
+    except sqlite3.Error as ex:
+        return api_error(500, f"Can't save: {ex}")
+    return read_cw_messages(dbcon)
+
+
+@app.put('/api/cw_messages/<id:int>')
+def set_cw_message(dbcon, id):
+    try:
+        text = cw_text()
+        with dbcon:
+            dbcon.execute("UPDATE msg_cw SET val = ? WHERE id = ?", (text, id))
+    except ValueError as ex:
+        return api_error(400, str(ex))
+    except sqlite3.Error as ex:
+        return api_error(500, f"Can't save: {ex}")
+    return read_cw_messages(dbcon)
+
+
+@app.delete('/api/cw_messages/<id:int>')
+def delete_cw_message(dbcon, id):
+    try:
+        with dbcon:
+            dbcon.execute("DELETE FROM msg_cw WHERE id = ?", (id,))
+    except sqlite3.Error as ex:
+        return api_error(500, f"Can't save: {ex}")
+    return read_cw_messages(dbcon)
+
+
 def read_channels():
     """Valid channels from channels.json; invalid ones are skipped like the GUI does."""
     try:
