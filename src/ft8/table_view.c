@@ -137,6 +137,12 @@ void table_view_push_ui(const cell_data_t *src) {
         }
     }
 
+    /* A decode or a TX takes the place of the "RX ..." row under it: that row only shows the
+     * receiving goes on while nothing comes (each row has its own time now) */
+    if (!is_rx_header(src) && rows > 0 && is_rx_header(row_cell((uint16_t)(rows - 1)))) {
+        rows--;
+    }
+
     cell_data_t *stored = pool_alloc_and_copy(src);
     lv_table_set_cell_value(s_table, rows, 0, stored->text);
     set_row_cell(rows, stored);

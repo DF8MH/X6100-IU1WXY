@@ -87,6 +87,8 @@ static ft8_state_t state = RX_PROCESS;
 static SubjectInt *tx_enabled;
 static SubjectInt *cq_enabled;
 static bool        tx_time_slot;
+/* UTC start of the slot being received, "HH:MM:SS": in front of each row of it (worker thread) */
+static char        slot_time[9] = "--:--:--";
 
 static ftx_tx_msg_t tx_msg;
 
@@ -887,15 +889,21 @@ static void add_tx_text(const char * text) {
     cell_data_t  cell_data;
     cell_data.cell_type = CELL_TX_MSG;
 
-    strncpy(cell_data.text, text, sizeof(cell_data.text) - 1);
-    if (strncmp(cell_data.text, "CQ_", 3) == 0) {
-        cell_data.text[2] = ' ';
+    char clean[sizeof(cell_data.text)];
+    struct timespec now;
+
+    snprintf(clean, sizeof(clean), "%s", text);
+    if (strncmp(clean, "CQ_", 3) == 0) {
+        clean[2] = ' ';
     }
+    clock_gettime(CLOCK_REALTIME, &now);
+    strftime(cell_data.text, 10, "%H:%M:%S ", gmtime(&now.tv_sec));
+    snprintf(cell_data.text + 9, sizeof(cell_data.text) - 9, "%s", clean);
     scheduler_put(table_view_add_msg_cb, &cell_data, sizeof(cell_data_t));
 
     cJSON *o = cJSON_CreateObject();
     cJSON_AddStringToObject(o, "t", "ft8_tx");
-    cJSON_AddStringToObject(o, "text", cell_data.text);
+    cJSON_AddStringToObject(o, "text", clean);
     remote_event(o);
 }
 
@@ -972,7 +980,7 @@ static void add_rx_text(int16_t snr, const char * text, slot_info_t *s_info, flo
     }
 
     cell_data.cell_type = cell_type;
-    strncpy(cell_data.text, text, sizeof(cell_data.text) - 1);
+    snprintf(cell_data.text, sizeof(cell_data.text), "%s %s", slot_time, text);
     cell_data.meta = meta;
     cell_data.odd = s_info->odd;
     if (station_qth()[0] != 0) {
@@ -1088,12 +1096,12 @@ static void on_tick_cb(const slot_info_t *info, bool new_slot,
 
     if (new_slot) {
         state = RX_PROCESS;
+        struct timespec now;
+        clock_gettime(CLOCK_REALTIME, &now);
+        struct tm *ts = gmtime(&now.tv_sec);
+        snprintf(slot_time, sizeof(slot_time), "%02i:%02i:%02i", ts->tm_hour, ts->tm_min, ts->tm_sec);
         if (!have_tx_msg || !subject_i_get(tx_enabled)) {
-            struct timespec now;
-            clock_gettime(CLOCK_REALTIME, &now);
-            struct tm *ts = gmtime(&now.tv_sec);
-            add_info("RX %s %02i:%02i:%02i", cfg_digital_label_get(),
-                     ts->tm_hour, ts->tm_min, ts->tm_sec);
+            add_info("RX %s %s", cfg_digital_label_get(), slot_time);
         }
     }
 }
