@@ -107,6 +107,11 @@ jobs:
 
     # Boot logo: the kernel's framebuffer logo shown at power on (800x480,
     # reduced to 224 colours by buildroot).
+    - name: Kernel UHID (Bluetooth Low Energy keyboards)
+      run: |
+        D=AetherX6100Buildroot/br2_external/board/X6100/linux/sun8i-r16-x6100_defconfig
+        grep -q "^CONFIG_UHID=" $D || echo "CONFIG_UHID=m" >> $D
+
     - name: Custom boot logo
       run: |
         cp x6100_gui/boot/logo.png AetherX6100Buildroot/br2_external/board/X6100/linux/logo.png

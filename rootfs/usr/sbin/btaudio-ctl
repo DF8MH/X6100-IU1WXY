@@ -164,16 +164,30 @@ pair() {
 	# One bluetoothctl session with an agent: a one-shot "bluetoothctl pair"
 	# exits before the headphones answer and the pairing is dropped.
 	# Scanning keeps the device known (bluez forgets it ~30 s after a scan).
+	# KeyboardDisplay: a keyboard asks for a code to type on it (passkey or
+	# legacy PIN), written to /tmp/bt_passkey for the GUI; a confirmation is
+	# answered yes. Headphones pair without any of it, as before.
+	rm -f /tmp/bt_passkey /tmp/bt_pair.log
 	{
-		echo "agent NoInputNoOutput"; echo default-agent
-		echo "scan on"; sleep 5
-		echo "pair $1"
-		for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+		echo "agent off"; echo "agent KeyboardDisplay"; echo default-agent
+		echo "scan on"
+		# the pair command is lost if the device was not seen yet: wait for it (30 s at most)
+		for _ in $(seq 1 30); do
 			sleep 1
+			grep -q "$1" /tmp/bt_pair.log 2>/dev/null && break
+		done
+		sleep 1
+		echo "pair $1"
+		for _ in $(seq 1 40); do
+			sleep 1
+			code=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/bt_pair.log 2>/dev/null | grep -o -E "(Passkey|PIN code):? *[0-9]+" | tail -1 | grep -o -E "[0-9]+$")
+			[ -n "$code" ] && [ ! -f /tmp/bt_passkey ] && echo "$code" > /tmp/bt_passkey
+			grep -q "Confirm passkey" /tmp/bt_pair.log 2>/dev/null && ! grep -q "^yes$" /tmp/bt_pair.ans 2>/dev/null && { echo yes; echo yes > /tmp/bt_pair.ans; }
 			bluetoothctl info "$1" 2>/dev/null | grep -q "Paired: yes" && break
 		done
 		echo "scan off"; echo quit
-	} | bluetoothctl >/dev/null 2>&1
+	} | bluetoothctl > /tmp/bt_pair.log 2>&1
+	rm -f /tmp/bt_passkey /tmp/bt_pair.ans
 	bluetoothctl info "$1" 2>/dev/null | grep -q "Paired: yes" || { echo "Pairing failed"; return 1; }
 	bluetoothctl trust "$1" >/dev/null 2>&1
 	save_pairings

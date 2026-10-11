@@ -2862,7 +2862,27 @@ static void bt_refresh() {
     btaudio_run("list", bt_list_done, (void *)(intptr_t)wl_gen);
 }
 
+/* While pairing: the code a keyboard wants typed on it (btaudio-ctl writes /tmp/bt_passkey) */
+static lv_timer_t *bt_passkey_timer;
+
+static void bt_passkey_cb(lv_timer_t *t) {
+    char  code[16] = "";
+    FILE *f = fopen("/tmp/bt_passkey", "r");
+
+    (void)t;
+    if (!f) return;
+    if (fgets(code, sizeof(code), f) && bt.scan_note) {
+        code[strcspn(code, "\r\n")] = 0;
+        lv_label_set_text_fmt(bt.scan_note, "type %s and Enter on the keyboard", code);
+    }
+    fclose(f);
+}
+
 static void bt_action_done(const char *out, int status, void *user) {
+    if (bt_passkey_timer) {
+        lv_timer_del(bt_passkey_timer);
+        bt_passkey_timer = NULL;
+    }
     if ((intptr_t)user != wl_gen) {
         return;
     }
@@ -2883,6 +2903,9 @@ static void bt_action(const std::string &args, const std::string &note) {
     bt.busy = true;
     if (bt.scan_note) {
         lv_label_set_text(bt.scan_note, note.c_str());
+    }
+    if (args.rfind("pair ", 0) == 0 && !bt_passkey_timer) {
+        bt_passkey_timer = lv_timer_create(bt_passkey_cb, 500, NULL);
     }
     btaudio_run(args.c_str(), bt_action_done, (void *)(intptr_t)wl_gen);
 }
