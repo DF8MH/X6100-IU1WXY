@@ -38,6 +38,10 @@ static void keypad_input_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
     keypad_t            *keypad = (keypad_t*) drv->user_data;
 
     if (read(keypad->fd, &in, sizeof(struct input_event)) > 0) {
+        /* All the queued events in one pass: one per pass took 4 GUI loops for a key
+         * (press, sync, release, sync), 100 ms and more while the screen is busy */
+        data->continue_reading = true;
+
         if (in.type == EV_KEY) {
             backlight_tick();
 
@@ -55,6 +59,11 @@ static void keypad_input_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 
                 case BTN_TRIGGER_HAPPY27:
                     mfk->pressed = (in.value != 0);
+                    /* The encoder samples it at its next read: a quick press and release
+                     * in the same pass would be lost */
+                    data->continue_reading = false;
+                    data->key = keypad->evdev_key;
+                    data->state = keypad->evdev_state;
                     return;
 
                 /* Front side */
