@@ -483,13 +483,25 @@ void drm_wf_present(const uint32_t *src, int32_t x, int32_t w) {
     drm_wf_present_ring(src, x, w, 0);
 }
 
+/* The strips presented (waterfall, spectrum) and the buffers that miss their latest
+ * columns: those get them from wf_shadow just before they are shown (drm_commit),
+ * unless the strip was presented again meanwhile. A range for all of them, copied
+ * at the next present, also copied again the strips that present was redrawing. */
+#define MAX_STRIPS 4
+static struct {
+    int32_t x, w;
+    bool    stale[2];
+} strips[MAX_STRIPS];
+static int nstrips;
+
+static void copy_cols(struct drm_buffer *buf, int32_t x, int32_t w) {
+    for (int32_t y = 0; y < PANEL_H; y++) {
+        memcpy(buf->map + y * buf->pitch + x * 4, wf_shadow + y * PANEL_W + x, w * 4);
+    }
+}
+
 void drm_wf_present_ring(const uint32_t *src, int32_t x, int32_t w, int32_t head) {
-    /* Columns written to one buffer and not yet to the other (several strips:
-     * waterfall, spectrum): the other one gets them on its next present */
-    static int32_t     stale_x1[2] = {PANEL_W, PANEL_W}, stale_x2[2];
-    struct drm_buffer *buf;
-    int                b;
-    int32_t            x1, x2;
+    int i, b;
 
     if (!planes || x < 0 || w <= 0 || x + w > PANEL_W) {
         return;
@@ -501,18 +513,21 @@ void drm_wf_present_ring(const uint32_t *src, int32_t x, int32_t w, int32_t head
         memcpy(d, s + head, (w - head) * 4);
         memcpy(d + w - head, s, head * 4);
     }
+    for (i = 0; i < nstrips && strips[i].x != x; i++) {}
+    if (i == nstrips) {
+        if (nstrips == MAX_STRIPS) {
+            i = 0;              /* not expected: the oldest is forgotten */
+        } else {
+            nstrips++;
+        }
+        strips[i].x = x;
+    }
+    strips[i].w = w;
     wait_flip();
     b = primary.back;
-    buf = &primary.bufs[b];
-    x1 = LV_MIN(x, stale_x1[b]);
-    x2 = LV_MAX(x + w, stale_x2[b]);
-    for (int32_t y = 0; y < PANEL_H; y++) {
-        memcpy(buf->map + y * buf->pitch + x1 * 4, wf_shadow + y * PANEL_W + x1, (x2 - x1) * 4);
-    }
-    stale_x1[b] = PANEL_W;
-    stale_x2[b] = 0;
-    stale_x1[b ^ 1] = LV_MIN(x, stale_x1[b ^ 1]);
-    stale_x2[b ^ 1] = LV_MAX(x + w, stale_x2[b ^ 1]);
+    copy_cols(&primary.bufs[b], x, w);
+    strips[i].stale[b] = false;
+    strips[i].stale[b ^ 1] = true;
     primary.ready = true;
 }
 
@@ -524,6 +539,14 @@ void drm_commit(void) {
         return;
     }
     wait_flip();
+    if (planes && primary.ready) {
+        for (int i = 0; i < nstrips; i++) {
+            if (strips[i].stale[primary.back]) {
+                copy_cols(&primary.bufs[primary.back], strips[i].x, strips[i].w);
+                strips[i].stale[primary.back] = false;
+            }
+        }
+    }
 
     if (!crtc_set) {
         ret = first_commit();
