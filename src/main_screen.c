@@ -602,6 +602,7 @@ static void apps_disable() {
         mem_load(MEM_BACKUP_ID);    /* the radio as before RTTY, as the other apps */
     }
     rtty_set_state(RTTY_OFF);
+    radio_set_digi_cap(false);
     panel_update_visibility(false);
 }
 
@@ -624,6 +625,10 @@ void main_screen_start_app(press_action_t app_action) {
         case ACTION_APP_FT8: case ACTION_APP_JS8: case ACTION_APP_WSPR: case ACTION_APP_SSTV:
         case ACTION_APP_WEFAX: case ACTION_APP_NAVTEX:
             dialog_app_memory(app_name(app_action));
+            radio_set_digi_cap(true);
+            break;
+        case ACTION_APP_RTTY:
+            radio_set_digi_cap(true);
             break;
         default:
             break;

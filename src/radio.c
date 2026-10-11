@@ -31,6 +31,7 @@
 #include "tx_info.h"
 #include "info.h"
 #include "dialog_swrscan.h"
+#include "tx_player.h"
 #include "cw.h"
 #include "btaudio.h"
 #include "audio.h"
@@ -134,6 +135,11 @@ static uint64_t         now_time;
 static uint64_t         prev_time;
 static uint64_t         idle_time;
 static bool             mute = false;
+static bool             digi_cap;       /* a digital app is open: never above its cap */
+
+static void set_txpwr(float w) {
+    x6100_control_txpwr_set(digi_cap && w > TX_PLAYER_MAX_PWR_W ? TX_PLAYER_MAX_PWR_W : w);
+}
 
 static cfloat           samples_buf[RADIO_SAMPLES*2];
 
@@ -221,7 +227,7 @@ void radio_start() {
 
     subject_subscribe_and_notify((Subject*)cfg_volume, on_volume_change, NULL);
     subject_subscribe_and_notify((Subject*)cfg_squelch, on_change_uint8, x6100_control_sql_set);
-    subject_subscribe_and_notify((Subject*)cfg_pwr, on_change_float, x6100_control_txpwr_set);
+    subject_subscribe_and_notify((Subject*)cfg_pwr, on_change_float, set_txpwr);
     subject_subscribe_and_notify((Subject*)cfg_output_gain, on_change_float, x6100_control_adc_dac_gain_set);
     subject_subscribe_and_notify((Subject*)cfg_band_dac_offset, on_change_float, x6100_control_dac_gain_set);
     subject_subscribe_and_notify((Subject*)cfg_atu_enabled, on_change_uint8, x6100_control_atu_set);
@@ -409,13 +415,18 @@ void radio_stop_swrscan() {
         state = RADIO_RX;
         radio_lock();
         x6100_control_swrscan_set(false);
-        x6100_control_txpwr_set(param_f_get(cfg_pwr));
+        set_txpwr(param_f_get(cfg_pwr));
         radio_unlock();
     }
 }
 
 void radio_set_pwr(float d) {
-    WITH_RADIO_LOCK(x6100_control_txpwr_set(d));
+    WITH_RADIO_LOCK(set_txpwr(d));
+}
+
+void radio_set_digi_cap(bool on) {
+    digi_cap = on;
+    radio_set_pwr(param_f_get(cfg_pwr));
 }
 
 void radio_set_tx_filter(uint16_t low, uint16_t high) {
@@ -478,6 +489,12 @@ void radio_set_line_out(uint8_t d) {
 
 void radio_set_qsk_time(uint16_t ms) {
     WITH_RADIO_LOCK(x6100_control_qsk_time_set(ms));
+}
+
+void radio_set_rec_moni(bool on) {
+    int32_t moni = param_i_get(cfg_moni);
+
+    WITH_RADIO_LOCK(x6100_control_moni_set(on && moni < 30 ? 30 : moni));
 }
 
 void radio_set_morse_key(bool on) {
@@ -768,7 +785,7 @@ static void recover_processing_audio_inputs() {
     x6100_control_modem_set(true);
     usleep(50000);
     x6100_control_modem_set(false);
-    x6100_control_txpwr_set(param_f_get(cfg_pwr));
+    set_txpwr(param_f_get(cfg_pwr));
     x6100_control_vfo_mode_set(vfo, cparam_i_get(cfg_cur_mode));
     radio_unlock();
 }

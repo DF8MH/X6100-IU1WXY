@@ -938,7 +938,7 @@ static void destruct_cb(void)
     tx_instruction_hide();
     tx_phase = SSTV_TX_PHASE_NONE;
     sstv_browser_close();
-    radio_set_pwr(param_f_get(cfg_pwr));   /* the 5 W cap ends with the app, as in WSPR */
+    radio_set_pwr(param_f_get(cfg_pwr));   /* the 7 W cap ends with the app, as in WSPR */
 
     fprintf(stderr, "SSTV: dialog closed; Auto RX and Manual RX reset to defaults\n");
 

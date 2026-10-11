@@ -33,6 +33,7 @@
 #include "avi_writer.h"
 #include "audio.h"
 #include "recorder.h"
+#include "radio.h"
 #include "buttons.h"
 #include "msg.h"
 #include "styles.h"
@@ -319,6 +320,7 @@ static void timer_cb(lv_timer_t *t) {
     } else if (s == IDLE) {                         /* the writer is done, or failed */
         if (active) {
             active = false;
+            radio_set_rec_moni(false);
             buttons_screen_rec_update();
         }
         if (error == 1) {
@@ -417,12 +419,14 @@ static bool start() {
     shown = -1;
     t0 = now_ms();
     active = true;
+    radio_set_rec_moni(true);
     set_state(RUN);
 
     pthread_t   th;
 
     if (pthread_create(&th, NULL, writer_thread, NULL) != 0) {
         active = false;
+        radio_set_rec_moni(false);
         set_state(IDLE);
         msg_update_text_fmt("Screen rec error");
         return false;
@@ -445,6 +449,7 @@ bool screen_rec_is_on() {
 void screen_rec_toggle() {
     if (active) {
         active = false;
+        radio_set_rec_moni(false);
         request_stop();
     } else {
         start();

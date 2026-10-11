@@ -58,6 +58,8 @@ void radio_change_mute();
 void radio_vol_refresh();
 
 void radio_set_pwr(float d);
+/* While a digital app is open the radio never goes above TX_PLAYER_MAX_PWR_W */
+void radio_set_digi_cap(bool on);
 /* Radio only, not saved: settings keep cfg_tx_filter_low/high. */
 void radio_set_tx_filter(uint16_t low, uint16_t high);
 /* Noise reduction, noise blanker, notch and auto-notch off (the base
@@ -86,5 +88,7 @@ void radio_set_line_out(uint8_t d);
 void radio_set_morse_key(bool on);
 /* Break-in delay of the base, ms (cfg_qsk_time is the setting; the CW encoder holds TX longer) */
 void radio_set_qsk_time(uint16_t ms);
+/* The TX voice reaches the screen recording only through the monitor: at least 30 while recording */
+void radio_set_rec_moni(bool on);
 
 int8_t radio_get_audio_in_lvl();

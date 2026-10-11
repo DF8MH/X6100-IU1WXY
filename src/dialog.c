@@ -14,6 +14,7 @@
 #include "styles.h"
 #include "theme.h"
 #include "main_screen.h"
+#include "radio.h"
 #include "freq_strip.h"
 #include "cfg/cfg_api.h"
 #include "keyboard.h"
@@ -122,6 +123,7 @@ void dialog_destruct() {
         if (mem_name[0]) {
             app_mem_save(mem_name);     /* before the radio goes back to before the app */
             mem_name[0] = 0;
+            radio_set_digi_cap(false);
         }
 
         if (current_dialog->obj) {

@@ -7,7 +7,7 @@
  *  recorded (wspr/wspr.c) and decoded at 114 s, after the 110.6 s signal;
  *  the spots go to the table and, when Upload is on, to WSPRnet. A TX cycle
  *  (chosen at random with the TX % chance, or "TX next") sends the beacon
- *  from 1 s: call, 4-character locator and power, at most 5 W.
+ *  from 1 s: call, 4-character locator and power, at most 7 W.
  *
  *  Threads: the cycle thread keeps the time and transmits (tx_player blocks
  *  for the whole beacon); each decode runs in a thread of its own, with a

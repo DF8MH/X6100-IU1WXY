@@ -27,7 +27,7 @@ extern "C" {
 #define TX_PLAYER_AUDIO_HZ 1325
 
 /* Digital modes are capped at this power. */
-#define TX_PLAYER_MAX_PWR_W 5.0f
+#define TX_PLAYER_MAX_PWR_W 7.0f
 
 /* Abort-check callback. Return true to stop TX after the current block. */
 typedef bool (*tx_abort_fn_t)(void *ctx);
