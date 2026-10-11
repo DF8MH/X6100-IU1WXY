@@ -247,18 +247,24 @@ static void exit_cb(button_data_t *b) {
     main_screen_close_app();
 }
 
-/* One knob step a turn was too touchy: a turn every KNOB_STEPS steps the same way */
-#define KNOB_STEPS 4
+/* The knob was too touchy: its events are counted (the size of each grows with the acceleration),
+ * a turn every KNOB_EVENTS the same way, then KNOB_PAUSE_MS of rest so one flick is one turn */
+#define KNOB_EVENTS   6
+#define KNOB_PAUSE_MS 350
 
 static void rotary_cb(int32_t diff) {
-    static int32_t acc;
+    static int      acc;
+    static uint32_t last_turn;
 
+    if (!diff || lv_tick_elaps(last_turn) < KNOB_PAUSE_MS)
+        return;
     if ((acc > 0 && diff < 0) || (acc < 0 && diff > 0))
         acc = 0;
-    acc += diff;
-    if (acc >= KNOB_STEPS || acc <= -KNOB_STEPS) {
+    acc += diff > 0 ? 1 : -1;
+    if (acc >= KNOB_EVENTS || acc <= -KNOB_EVENTS) {
         steer(acc > 0 ? 1 : -1);
-        acc = 0;
+        acc       = 0;
+        last_turn = lv_tick_get();
     }
 }
 
