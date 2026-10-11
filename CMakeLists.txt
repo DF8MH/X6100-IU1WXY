@@ -55,6 +55,8 @@ else()
                 USE_SOURCE_PERMISSIONS
         )
         install(DIRECTORY images DESTINATION share/x6100)
+        # Callsign -> country for the FT8/FT4 table (AD1C, country-files.com)
+        install(FILES third-party/cty/cty.dat DESTINATION share/x6100)
         # Copied to /mnt/themes at start when missing (main.c)
         install(DIRECTORY themes/RS DESTINATION share/x6100/themes)
 endif()

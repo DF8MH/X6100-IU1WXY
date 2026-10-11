@@ -38,6 +38,8 @@
 #include "ft8/cq_scheduler.h"
 #include "ft8/table_view.h"
 #include "ft8_udp.h"
+#include "dxcc.h"
+#include "flags.h"
 #include "ft8/tx_worker.h"
 #include "tx_player.h"
 #include "widgets/lv_waterfall.h"
@@ -1018,6 +1020,7 @@ static void remote_rx_event(int16_t snr, const char *text, bool odd, const ftx_m
 static void add_rx_text(int16_t snr, const char * text, slot_info_t *s_info, float freq_hz, float time_sec) {
 
     ftx_msg_meta_t meta;
+    memset(&meta, 0, sizeof(meta));     /* the parser fills call_de only for the messages it knows */
     meta.freq_hz = freq_hz;
     meta.time_sec = time_sec;
     char * old_msg = strdup(tx_msg.msg);
@@ -1060,6 +1063,20 @@ static void add_rx_text(int16_t snr, const char * text, slot_info_t *s_info, flo
     cell_data.cell_type = cell_type;
     snprintf(cell_data.text, sizeof(cell_data.text), "%s %s", slot_time, text);
     cell_data.meta = meta;
+    /* The sender's country and flag, from the call (cty.dat), as JTDX (from SP2KMO's upstream PR #282) */
+    cell_data.country[0]    = '\0';
+    cell_data.cty_prefix[0] = '\0';
+    cell_data.flag          = -1;
+    const char *cty_name, *cty_prefix;
+    if (meta.type != FXT_MSG_TYPE_OTHER && meta.call_de[0] && dxcc_lookup(meta.call_de, &cty_name, &cty_prefix)) {
+        snprintf(cell_data.country, sizeof(cell_data.country), "%s", cty_name);
+        snprintf(cell_data.cty_prefix, sizeof(cell_data.cty_prefix), "%s", cty_prefix);
+        for (size_t i = 0; i < sizeof(flag_of) / sizeof(flag_of[0]); i++)
+            if (!strcmp(flag_of[i].prefix, cty_prefix)) {
+                cell_data.flag = (int16_t)flag_of[i].flag;
+                break;
+            }
+    }
     cell_data.odd = s_info->odd;
     if (station_qth()[0] != 0) {
         if (strlen(meta.grid) > 0) {

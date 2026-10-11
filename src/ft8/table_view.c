@@ -9,12 +9,14 @@
 #include "table_view.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "../events.h"
 #include "../styles.h"
 #include "../theme.h"
+#include "../flags.h"
 
 /*
  *  Cell data is owned by a fixed-size ring pool. We do NOT use LVGL's
@@ -230,6 +232,61 @@ static void draw_part_begin_cb(lv_event_t *e) {
     }
 }
 
+static lv_coord_t text_width(const char *text, const lv_draw_label_dsc_t *ld) {
+    lv_point_t size;
+
+    lv_txt_get_size(&size, text, ld->font, ld->letter_space, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    return size.x;
+}
+
+/* Flag k as an LVGL image, converted on first use */
+static const lv_img_dsc_t *flag_img(int k) {
+    static lv_img_dsc_t img[sizeof(flag_px) / sizeof(flag_px[0])];
+    static lv_color_t  *px[sizeof(flag_px) / sizeof(flag_px[0])];
+
+    if (k < 0 || k >= (int)(sizeof(flag_px) / sizeof(flag_px[0]))) return NULL;
+    if (!px[k]) {
+        if (!(px[k] = malloc(FLAG_W * FLAG_H * sizeof(lv_color_t)))) return NULL;
+        for (int i = 0; i < FLAG_W * FLAG_H; i++)
+            px[k][i] = lv_color_make(flag_px[k][3 * i], flag_px[k][3 * i + 1], flag_px[k][3 * i + 2]);
+        img[k].header.cf = LV_IMG_CF_TRUE_COLOR;
+        img[k].header.w  = FLAG_W;
+        img[k].header.h  = FLAG_H;
+        img[k].data_size = FLAG_W * FLAG_H * sizeof(lv_color_t);
+        img[k].data      = (const uint8_t *)px[k];
+    }
+    return &img[k];
+}
+
+/* The sender's flag and country, right-aligned up to `right`: the name when it fits after the
+ * message (`text_end`), else its prefix, else the flag only (from SP2KMO's upstream PR #282) */
+static void draw_country(lv_obj_draw_part_dsc_t *dsc, const cell_data_t *cd, lv_area_t *area, lv_coord_t right,
+                         lv_coord_t text_end) {
+    const lv_img_dsc_t *flag = flag_img(cd->flag);
+
+    if (flag && right - FLAG_W >= text_end + 16) {
+        lv_draw_img_dsc_t id;
+        lv_area_t         fa;
+        lv_draw_img_dsc_init(&id);
+        fa.x2 = right;
+        fa.x1 = right - FLAG_W + 1;
+        fa.y1 = (area->y1 + area->y2 - FLAG_H) / 2;
+        fa.y2 = fa.y1 + FLAG_H - 1;
+        lv_draw_img(dsc->draw_ctx, &id, &fa, flag);
+        right -= FLAG_W + 6;
+    }
+    const char *choice[2] = {cd->country, cd->cty_prefix};
+    for (int i = 0; i < 2; i++) {
+        if (!choice[i][0]) continue;
+        lv_coord_t w = text_width(choice[i], dsc->label_dsc);
+        if (right - w < text_end + 16) continue;
+        area->x1 = right - w;
+        area->x2 = right;
+        lv_draw_label(dsc->draw_ctx, dsc->label_dsc, area, choice[i], NULL);
+        return;
+    }
+}
+
 static void draw_part_end_cb(lv_event_t *e) {
     lv_obj_t               *obj = lv_event_get_target(e);
     lv_obj_draw_part_dsc_t *dsc = lv_event_get_draw_part_dsc(e);
@@ -263,12 +320,17 @@ static void draw_part_end_cb(lv_event_t *e) {
     snprintf(buf, sizeof(buf), "%i dB", cd->meta.local_snr);
     lv_draw_label(dsc->draw_ctx, dsc->label_dsc, &area, buf, NULL);
 
+    lv_coord_t right    = area.x1 - 10;
+    lv_coord_t text_end = dsc->draw_area->x1 + lv_obj_get_style_pad_left(obj, LV_PART_ITEMS) +
+                          text_width(cd->text, dsc->label_dsc);
     if (cd->dist > 0) {
         area.x2 = area.x1 - 10;
         area.x1 = area.x2 - 200;
         snprintf(buf, sizeof(buf), "%i km", cd->dist);
         lv_draw_label(dsc->draw_ctx, dsc->label_dsc, &area, buf, NULL);
+        right = area.x2 - text_width(buf, dsc->label_dsc) - 16;
     }
+    draw_country(dsc, cd, &area, right, text_end);
 }
 
 static void cell_press_cb(lv_event_t *e) {

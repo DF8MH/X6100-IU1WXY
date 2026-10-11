@@ -54,6 +54,9 @@ typedef struct {
     ftx_msg_meta_t          meta;
     char                    text[64];
     qso_log_search_worked_t worked_type;
+    char                    country[24];    /* the sender's country, "" unknown (dxcc.c) */
+    char                    cty_prefix[8];  /* its primary prefix ("DL") */
+    int16_t                 flag;           /* its flag in flags.h, -1 none */
 } cell_data_t;
 
 /* Optional dialog-level actions invoked from the table's key handler. */
