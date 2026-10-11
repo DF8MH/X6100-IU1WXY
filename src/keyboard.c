@@ -81,7 +81,7 @@ static bool has_letters(const char *path) {
 
 /* USB keyboards by path; Bluetooth ones have no path link: by their keys */
 static char* search_kbd_device() {
-    static char path[64];
+    static char path[256];   /* a by-path link behind a hub is longer than 64 */
     glob_t      globbuf;
     bool        found = false;
 

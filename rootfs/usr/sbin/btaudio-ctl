@@ -48,7 +48,8 @@ name() { echo "$1" | sed -n 's/^[[:space:]]*Alias: //p' | head -n 1; }
 # Role from `bluetoothctl info`: hp = A2DP headphones, kbd = keyboard (CW
 # keyboard app), cat = phone/tablet (SPP)
 role() {
-	if echo "$1" | grep -q "Icon: input-keyboard"; then
+	# a Low Energy keyboard may show no icon, only the HID services (HOGP 1812, HID 1124)
+	if echo "$1" | grep -q -e "Icon: input-keyboard" -e "00001812-" -e "00001124-"; then
 		echo kbd
 	elif echo "$1" | grep -q "Icon: audio-"; then
 		echo hp

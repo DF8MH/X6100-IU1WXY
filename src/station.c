@@ -36,7 +36,24 @@ static bool check_ftx_msg_encoding(const char *text) {
 
 }
 
+/* A keyboard without Caps Lock types lowercase: taken as capitals, not dropped
+ * (from randal007's upstream PR #281) */
+static void callsign_insert_cb(lv_event_t *e) {
+    const char *in = lv_event_get_param(e);
+    static char up[8];
+    size_t      n = strlen(in);
+    bool        lower = false;
+
+    if (n >= sizeof(up)) return;
+    for (size_t i = 0; i <= n; i++) {
+        up[i] = in[i] >= 'a' && in[i] <= 'z' ? (char)(in[i] - 'a' + 'A') : in[i];
+        lower |= up[i] != in[i];
+    }
+    if (lower) lv_textarea_set_insert_replace(lv_event_get_target(e), up);
+}
+
 void station_callsign_edit(lv_obj_t *text) {
+    lv_obj_add_event_cb(text, callsign_insert_cb, LV_EVENT_INSERT, NULL);
     lv_textarea_set_accepted_chars(text,
         "0123456789/"
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
