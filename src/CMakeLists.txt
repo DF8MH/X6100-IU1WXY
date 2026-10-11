@@ -22,6 +22,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     sstv_resources.c
     dialog_cluster.c
     freq_list.c
+    js8_map.c
     dialog_modes.c
     dialog_cw_trainer.c
     dialog_cw_kbd.c

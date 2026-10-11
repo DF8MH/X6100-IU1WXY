@@ -10,6 +10,7 @@
  */
 
 #include "dialog_js8.h"
+#include "js8_map.h"
 
 #include "js8/js8_rx.h"
 #include "js8/js8_tx.h"
@@ -198,6 +199,8 @@ static void        log_close(void);
 static void        log_offer(const char *call);
 
 static void        log_refresh(void);
+static void        map_close(void);
+static void        map_cb(button_data_t *btn);
 static const char *inbox_label_getter(void);
 static void        inbox_cb(button_data_t *btn);
 static void        inbox_close(void);
@@ -295,6 +298,7 @@ static lv_obj_t      *log_list;        /* Log QSO popup, when open */
 static lv_obj_t      *inbox_list;      /* Inbox popup (list or one message), when open */
 static lv_obj_t      *alerts_list;     /* Alerts popup, when open */
 static lv_obj_t      *freq_list;       /* Freq popup, when open */
+static lv_obj_t      *map_obj;         /* QSO map, when open */
 static lv_obj_t      *spot_list;       /* POTA / SOTA spot form, when open */
 static char           alert_words[128]; /* "VE7ABC @POTA SOTA", ALERTS= in JS8_TEXTS_PATH */
 static char           groups_text[96];  /* "@NET @GROUP2": groups we're in, GROUPS= in JS8_TEXTS_PATH */
@@ -486,7 +490,8 @@ static button_data_t  btn_freq      = {.type = BTN_TEXT_FN, .label_fn = freq_lab
 static buttons_page_t page_6        = {{&btn_p6, &btn_alerts, &btn_speed, &btn_decode, &btn_freq}};
 
 static button_data_t  btn_p7        = {.type = BTN_TEXT, .label = "(JS8 7:7)", .press = js8_next_page_cb, .hold = js8_prev_page_cb, .next = &page_1, .prev = &page_6};
-static buttons_page_t page_7        = {{&btn_p7, &btn_dig_pwr}};
+static button_data_t  btn_map       = {.type = BTN_TEXT, .label = "Map", .press = map_cb};
+static buttons_page_t page_7        = {{&btn_p7, &btn_dig_pwr, &btn_map}};
 
 static dialog_t dialog = {
     .run          = false,
@@ -2622,6 +2627,7 @@ static void close_popups(void) {
     alerts_close();
     freq_close();
     spot_close();
+    map_close();
 }
 
 /* One-press messages for the selected station: MFK to move, press or tap
@@ -3966,7 +3972,7 @@ static void spot_show(bool sota, spot_item_t focus) {
  * logged without Save. */
 
 static bool any_popup(void) {
-    return query_list || texts_list || aprs_list || log_list || inbox_list || alerts_list || freq_list || spot_list;
+    return query_list || texts_list || aprs_list || log_list || inbox_list || alerts_list || freq_list || spot_list || map_obj;
 }
 
 static bool find_station(const char *call, js8_station_t *out) {
@@ -5339,6 +5345,45 @@ static void freq_cb(button_data_t *btn) {
     if (popup_guard()) return;
     if (composing) return;
     freq_show();
+}
+
+/* ---- QSO map --------------------------------------------------------------- */
+
+static void map_close(void) {
+    if (!map_obj) return;
+    lv_obj_del_async(map_obj);
+    map_obj = NULL;
+    if (table && !composing) {
+        lv_group_add_obj(keyboard_group, table);
+        lv_group_focus_obj(table);
+        lv_group_set_editing(keyboard_group, true);
+    }
+}
+
+static void map_key_cb(lv_event_t *e) {
+    if (*((uint32_t *)lv_event_get_param(e)) == LV_KEY_ESC) map_close();
+}
+
+/* Over the waterfall and the list: the world, the station and a path to each QSO of the log */
+static void map_cb(button_data_t *btn) {
+    (void)btn;
+    user_touch();
+    if (map_obj) { /* Map again closes it */
+        map_close();
+        return;
+    }
+    if (popup_guard()) return;
+    if (composing) return;
+    map_obj = js8_map_create(dialog.obj, WIDTH, WF_HEIGHT, station_qth(), JS8_LOG_PATH);
+    if (!map_obj) {
+        msg_update_text_fmt("Not enough memory for the map");
+        return;
+    }
+    lv_obj_set_pos(map_obj, 13, 13);
+    lv_group_remove_obj(table);
+    lv_obj_add_event_cb(map_obj, map_key_cb, LV_EVENT_KEY, NULL);
+    lv_group_add_obj(keyboard_group, map_obj);
+    lv_group_focus_obj(map_obj);
 }
 
 /* ---- Web remote ---------------------------------------------------------- */
