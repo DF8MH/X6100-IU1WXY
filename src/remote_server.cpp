@@ -482,13 +482,14 @@ static const char *band_name() {
 }
 
 /* Changes when a log of /mnt/field/logs is written, edited or deleted, by the radio or the
- * web server: the apps reload theirs, so each device sees what another logged. Once a second. */
+ * web server: the apps reload theirs, so each device sees what another logged. Shared by the
+ * clients of one state round (every STATE_MS). */
 static uint32_t log_rev() {
     static uint64_t when;
     static uint32_t rev;
     uint64_t        now = get_time();
 
-    if (now - when < 1000)
+    if (now - when < STATE_MS / 2)
         return rev;
     when = now;
     rev  = 0;
