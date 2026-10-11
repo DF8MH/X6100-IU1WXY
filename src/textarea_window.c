@@ -107,6 +107,12 @@ static void keyboard_cb(lv_event_t * e) {
         case LV_EVENT_CANCEL:
             cancel();
             break;
+
+        case LV_EVENT_FOCUSED:
+            /* A long knob press leaves edit mode (LVGL): the knob then moved the focus to the
+             * text box instead of the keys and the keyboard looked stuck */
+            if (!lv_group_get_editing(keyboard_group)) lv_group_set_editing(keyboard_group, true);
+            break;
     }
 }
 
@@ -168,6 +174,7 @@ lv_obj_t * textarea_window_open(textarea_window_cb_t ok, textarea_window_cb_t ca
         lv_obj_add_event_cb(keyboard, keyboard_cb, LV_EVENT_READY, NULL);
         lv_obj_add_event_cb(keyboard, keyboard_cb, LV_EVENT_CANCEL, NULL);
         lv_obj_add_event_cb(keyboard, keyboard_cb, LV_EVENT_KEY, NULL);
+        lv_obj_add_event_cb(keyboard, keyboard_cb, LV_EVENT_FOCUSED, NULL);
 
         lv_obj_set_style_bg_color(keyboard, bg_color, LV_PART_MAIN);
         lv_obj_add_style(keyboard, &dialog_item_focus_style, LV_STATE_FOCUSED | LV_PART_ITEMS);
