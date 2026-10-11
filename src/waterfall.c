@@ -75,6 +75,7 @@ static uint8_t          zoom = 1;
  * centre or zoom redraws it all */
 static bool             direct = false;
 static uint32_t         *wfp;
+static int32_t          wfp_head;   /* each portrait row of wfp is a ring: the newest column is at wfp_head */
 static int32_t          wfp_center = 0;
 static uint32_t         wfp_bw = 0;
 static bool             wfp_full = true;
@@ -433,7 +434,7 @@ static void direct_column(const wf_data_row_t *row, uint32_t bandwidth, int32_t 
 
     lerp_range((wf_data_row_t *) row, wfp_center, bandwidth, i0, i1, dst);
     for (size_t i = i0; i < i1; i++) {
-        wfp[(WIDTH - 1 - i) * height + col] = wf_palette[dst[i]] | 0xff000000;
+        wfp[(WIDTH - 1 - i) * height + (wfp_head + col) % height] = wf_palette[dst[i]] | 0xff000000;
     }
 }
 
@@ -494,11 +495,8 @@ static void direct_redraw(int new_row) {
     } else if (px || new_row) {
         /* The new rows first, at the old centre; then the slide moves them with the rest */
         if (new_row) {
-            for (size_t y = 0; y < WIDTH; y++) {
-                uint32_t *r = wfp + y * height;
-
-                memmove(r + new_row, r, (height - new_row) * sizeof(uint32_t));
-            }
+            /* The ring turns: nothing moves (a memmove of the whole image per row before) */
+            wfp_head = (wfp_head - new_row + height) % height;
             for (int32_t col = 0; col < new_row; col++) {
                 direct_column(&wf_rows[(last_row_id - col + height) % height], bandwidth, col, 0, WIDTH);
             }
@@ -526,7 +524,7 @@ static void direct_redraw(int new_row) {
     }
     lv_obj_get_coords(obj, &a);
 #if USE_DRM
-    drm_wf_present(wfp, a.y1, height);
+    drm_wf_present_ring(wfp, a.y1, height, wfp_head);
 #endif
 }
 

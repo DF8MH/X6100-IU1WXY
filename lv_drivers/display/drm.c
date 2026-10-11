@@ -480,6 +480,10 @@ void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p
 }
 
 void drm_wf_present(const uint32_t *src, int32_t x, int32_t w) {
+    drm_wf_present_ring(src, x, w, 0);
+}
+
+void drm_wf_present_ring(const uint32_t *src, int32_t x, int32_t w, int32_t head) {
     /* Columns written to one buffer and not yet to the other (several strips:
      * waterfall, spectrum): the other one gets them on its next present */
     static int32_t     stale_x1[2] = {PANEL_W, PANEL_W}, stale_x2[2];
@@ -491,7 +495,11 @@ void drm_wf_present(const uint32_t *src, int32_t x, int32_t w) {
         return;
     }
     for (int32_t y = 0; y < PANEL_H; y++) {
-        memcpy(wf_shadow + y * PANEL_W + x, src + y * w, w * 4);
+        const uint32_t *s = src + y * w;
+        uint32_t       *d = wf_shadow + y * PANEL_W + x;
+
+        memcpy(d, s + head, (w - head) * 4);
+        memcpy(d + w - head, s, head * 4);
     }
     wait_flip();
     b = primary.back;

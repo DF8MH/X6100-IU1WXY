@@ -66,6 +66,14 @@ static lv_disp_drv_t        disp_drv;
 
 void * tick_thread (void *args);
 
+#if USE_DRM
+/* Transparent screen: LVGL cleared the whole draw buffer (6 MB) before every area it redraws,
+ * even the clock's seconds, ~30 times a second. The area is drawn packed: clear just that. */
+static void clear_cb(lv_disp_drv_t *drv, uint8_t *buf, uint32_t size) {
+    memset(buf, 0, lv_area_get_size(drv->draw_ctx->buf_area) * sizeof(lv_color_t));
+}
+#endif
+
 /* Display settings that would break the screen are put right at every start
  * (an old or hand-edited params.db, a backup restored from another version):
  * the spectrum is disabled in this firmware, the font
@@ -135,6 +143,7 @@ int main(void) {
 #if USE_DRM
     /* GUI over the waterfall plane: see-through parts keep their alpha */
     disp_drv.screen_transp = drm_planes();
+    disp_drv.clear_cb = clear_cb;
 #endif
     // disp_drv.sw_rotate  = 1;
     // disp_drv.rotated    = LV_DISP_ROT_90;
