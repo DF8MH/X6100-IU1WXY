@@ -1257,6 +1257,10 @@ static uint8_t make_switch_row(uint8_t row, const char *text, ParamInt &param) {
     return row + 1;
 }
 
+static uint8_t make_smeter_needle(uint8_t row) {
+    return make_switch_row(row, "Needle S-meter", cfg_sm.p_smeter_needle);
+}
+
 static uint8_t make_cluster_column(uint8_t row) {
     return make_switch_row(row, "Cluster column", cfg_sm.p_cluster_column);
 }
@@ -3792,6 +3796,7 @@ static void make_display_page() {
     row = make_band_plan(row);
     row = make_cluster_spots_wf(row);
     row = make_cluster_column(row);
+    row = make_smeter_needle(row);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_SETTINGS, "INTERFACE");

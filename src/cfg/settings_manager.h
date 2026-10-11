@@ -114,6 +114,9 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_cluster_spots_wf{"cluster_spots_wf", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // S-meter drawn as a needle on a dial instead of the bars
+    Parameter<int32_t> p_smeter_needle{"smeter_needle", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_band_plan{"band_plan", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Tuning snap to the cluster spots on the waterfall: detents held on a

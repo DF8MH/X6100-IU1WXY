@@ -65,6 +65,7 @@ extern ParamInt         *cfg_knob_info;          // p_knob_info
 extern ParamInt         *cfg_spectrum_show;      // p_spectrum_show
 extern ParamInt         *cfg_cluster_spots_wf;   // p_cluster_spots_wf
 extern ParamInt         *cfg_band_plan;          // p_band_plan
+extern ParamInt         *cfg_smeter_needle;      // p_smeter_needle
 extern ParamInt         *cfg_cluster_column;     // p_cluster_column
 extern ParamInt         *cfg_cluster_order;      // p_cluster_order
 extern ParamInt         *cfg_cluster_all_bands;  // p_cluster_all_bands

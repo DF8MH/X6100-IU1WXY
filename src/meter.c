@@ -17,6 +17,7 @@
 #include "scheduler.h"
 
 #include <math.h>
+#include <stdio.h>
 
 #define NUM_ITEMS   7
 #define METER_PEAK_HOLD 1500
@@ -70,6 +71,31 @@ static void update_db_label() {
 
 #define VISION_VALUE_W 150   /* VISION: room for "S9+40" right of the bars */
 
+/* VISION keeps the bars: its meter is a wide, low row with the value beside it */
+static bool needle_on(void) {
+    return param_i_get(cfg_smeter_needle) && !theme_shape.vision;
+}
+
+/* The dB value: under the bars, or under the dial in the needle's dim colour */
+static void db_label_place(void) {
+    if (theme_shape.vision) {
+        lv_obj_align(db_val_label, LV_ALIGN_RIGHT_MID, -12, 0);
+    } else if (needle_on()) {
+        lv_obj_set_style_text_font(db_val_label, &sony_18, 0);
+        lv_obj_set_style_text_color(db_val_label, TC(text_dim), 0);
+        lv_obj_align(db_val_label, LV_ALIGN_BOTTOM_MID, 0, -1);
+    } else {
+        lv_obj_set_style_text_font(db_val_label, &sony_20, 0);
+        lv_obj_set_style_text_color(db_val_label, TC(text), 0);
+        lv_obj_align(db_val_label, LV_ALIGN_BOTTOM_MID, 0, -2);
+    }
+}
+
+static void on_needle_change(Subject *subj, void *user_data) {
+    db_label_place();
+    lv_obj_invalidate(obj);
+}
+
 /* Bar i of n at db */
 static lv_color_t bar_color(int16_t db, uint8_t i, uint8_t n) {
     if (theme_shape.meter_gradient) {
@@ -83,12 +109,114 @@ static lv_color_t bar_color(int16_t db, uint8_t i, uint8_t n) {
     return db <= noise_level ? TC(text_mute) : TC(meter_bar);
 }
 
+/* Needle S-meter (Settings, Display): a dial whose pivot is under the box, so only the top of
+ * the arc shows. S1..S9 take 70% of the arc in meter_bar, +20 and +40 the rest in meter_high
+ * (thicker, the red zone of a real meter), the needle in tx: every colour from the theme. */
+#define NEEDLE_A0       (-32)          /* degrees from vertical, left end */
+#define NEEDLE_A1       32
+#define NEEDLE_S9_U     0.7f
+
+static float needle_u(float db) {
+    float u = db <= S9 ? (db - S1) / (float)(S9 - S1) * NEEDLE_S9_U
+                       : NEEDLE_S9_U + (db - S9) / (float)(S9_40 - S9) * (1.0f - NEEDLE_S9_U);
+    return LV_CLAMP(0.0f, u, 1.0f);
+}
+
+static lv_point_t needle_pt(lv_point_t c, float a_deg, lv_coord_t r) {
+    float      a = a_deg * (float)M_PI / 180.0f;
+    lv_point_t p = {c.x + (lv_coord_t)lroundf(r * sinf(a)), c.y - (lv_coord_t)lroundf(r * cosf(a))};
+    return p;
+}
+
+static void needle_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx) {
+    lv_coord_t          w = lv_obj_get_width(obj);
+    lv_coord_t          r = w * 76 / 100;                  /* wide and flat: 198 px on the 260 px box */
+    lv_point_t          c = {obj->coords.x1 + w / 2, obj->coords.y1 + 24 + r};   /* the arc top 24 px down */
+    lv_draw_arc_dsc_t   arc_dsc;
+    lv_draw_line_dsc_t  line_dsc;
+    lv_draw_label_dsc_t label_dsc;
+    float               span = NEEDLE_A1 - NEEDLE_A0;
+
+    /* LVGL arcs: 0 degrees at 3 o'clock, clockwise; vertical up is 270 */
+    lv_draw_arc_dsc_init(&arc_dsc);
+    arc_dsc.color = TC(meter_bar);
+    arc_dsc.width = 2;
+    lv_draw_arc(draw_ctx, &arc_dsc, &c, r, 270 + NEEDLE_A0, 270 + NEEDLE_A0 + (int)(span * NEEDLE_S9_U));
+    arc_dsc.color = TC(meter_high);
+    arc_dsc.width = 5;
+    lv_draw_arc(draw_ctx, &arc_dsc, &c, r + 2, 270 + NEEDLE_A0 + (int)(span * NEEDLE_S9_U), 270 + NEEDLE_A1);
+
+    lv_draw_line_dsc_init(&line_dsc);
+    lv_draw_label_dsc_init(&label_dsc);
+    label_dsc.font = &sony_20;
+
+    for (int s = 1; s <= 9; s++) {      /* a tick a S unit, long ones and numbers on the odd */
+        float      a   = NEEDLE_A0 + span * needle_u(S1 + (s - 1) * 6);
+        bool       big = s % 2;
+        lv_point_t p1  = needle_pt(c, a, r), p2 = needle_pt(c, a, r - (big ? 9 : 5));
+
+        line_dsc.color = TC(meter_bar);
+        line_dsc.width = big ? 2 : 1;
+        lv_draw_line(draw_ctx, &line_dsc, &p1, &p2);
+        if (big) {
+            char       txt[4];
+            lv_point_t sz, l = needle_pt(c, a, r + 13);
+            lv_area_t  area;
+
+            snprintf(txt, sizeof(txt), s == 1 ? "S1" : "%d", s);
+            lv_txt_get_size(&sz, txt, label_dsc.font, 0, 0, LV_COORD_MAX, 0);
+            area.x1 = l.x - sz.x / 2;
+            area.y1 = l.y - sz.y / 2;
+            area.x2 = area.x1 + sz.x;
+            area.y2 = area.y1 + sz.y;
+            label_dsc.color = TC(text);
+            lv_draw_label(draw_ctx, &label_dsc, &area, txt, NULL);
+        }
+    }
+    for (int d = 10; d <= 40; d += 10) {
+        float      a   = NEEDLE_A0 + span * needle_u(S9 + d);
+        bool       big = d % 20 == 0;
+        lv_point_t p1  = needle_pt(c, a, r + 2), p2 = needle_pt(c, a, r - (big ? 10 : 6));
+
+        line_dsc.color = TC(meter_high);
+        line_dsc.width = big ? 2 : 1;
+        lv_draw_line(draw_ctx, &line_dsc, &p1, &p2);
+        if (big) {
+            char       txt[4];
+            lv_point_t sz, l = needle_pt(c, a, r + 14);
+            lv_area_t  area;
+
+            snprintf(txt, sizeof(txt), "+%d", d);
+            lv_txt_get_size(&sz, txt, label_dsc.font, 0, 0, LV_COORD_MAX, 0);
+            area.x1 = l.x - sz.x / 2;
+            area.y1 = l.y - sz.y / 2;
+            area.x2 = area.x1 + sz.x;
+            area.y2 = area.y1 + sz.y;
+            label_dsc.color = TC(meter_over);
+            lv_draw_label(draw_ctx, &label_dsc, &area, txt, NULL);
+        }
+    }
+
+    /* The needle, from the pivot to just past the arc */
+    lv_point_t tip = needle_pt(c, NEEDLE_A0 + span * needle_u(meter_db), r + 2);
+
+    line_dsc.color       = TC(tx);
+    line_dsc.width       = 2;
+    line_dsc.round_end   = 1;
+    lv_draw_line(draw_ctx, &line_dsc, &c, &tip);
+}
+
 static void meter_draw_cb(lv_event_t * e) {
     lv_obj_t            *obj = lv_event_get_target(e);
     lv_draw_ctx_t       *draw_ctx = lv_event_get_draw_ctx(e);
     lv_draw_rect_dsc_t  rect_dsc;
     lv_draw_label_dsc_t label_dsc;
     lv_area_t           area;
+
+    if (needle_on()) {
+        needle_draw(obj, draw_ctx);
+        return;
+    }
 
     /* R1CBU layout fitted to the box: bars full width, dB value below */
     lv_coord_t y1 = obj->coords.y1 + 11;
@@ -196,12 +324,10 @@ lv_obj_t * meter_init(lv_obj_t * parent) {
 
     db_val_label = lv_label_create(obj);
     lv_obj_set_style_text_font(db_val_label, theme_shape.vision ? &sony_40 : &sony_20, 0);
-    if (theme_shape.vision)
-        lv_obj_align(db_val_label, LV_ALIGN_RIGHT_MID, -12, 0);
-    else
-        lv_obj_align(db_val_label, LV_ALIGN_BOTTOM_MID, 0, -2);
     lv_obj_set_style_text_color(db_val_label, TC(text), 0);
+    db_label_place();
     lv_label_set_text(db_val_label, "");
+    subject_subscribe_delayed((Subject*)cfg_smeter_needle, on_needle_change, NULL);
     return obj;
 }
 
