@@ -3,7 +3,7 @@
  *
  *  Xiegu X6100 LVGL GUI
  *
- *  Waterfall Snake: a hidden game (long press on APP > GPS). The dialog is transparent, so the
+ *  Waterfall Snake: a hidden game (long press on APP > GPS, or 3 s on 14.141.414 or 7.070.700). The dialog is transparent, so the
  *  snake moves over the live waterfall; the main knob or the MFK turn it left or right, the MFK
  *  press pauses (or starts again after a game over), VOL press leaves. The edges wrap around:
  *  only biting yourself ends the game. The best score stays in /mnt/snake_best.
@@ -18,6 +18,7 @@
 #include "main_screen.h"
 #include "cluster_column.h"
 #include "buttons.h"
+#include "cfg/cfg_api.h"
 #include "lvgl/lvgl.h"
 
 #include <stdio.h>
@@ -339,6 +340,27 @@ static void construct_cb(lv_obj_t *parent) {
     srand(time(NULL));
     timer = lv_timer_create(step, STEP_MS, NULL);
     reset();
+}
+
+/* Magic frequencies: within 10 Hz, as the tuning steps may not land on the last digit */
+static void watch_cb(lv_timer_t *t) {
+    static int  held;
+    static bool used;   /* once a game opened here: not again until the VFO leaves the frequency */
+    int32_t     f     = cparam_i_get(cfg_fg_freq);
+    bool        magic = labs(f - 14141414) <= 10 || labs(f - 7070700) <= 10;
+
+    if (!magic)
+        used = false;
+    held = magic && !used && !dialog_is_run() ? held + 1 : 0;
+    if (held >= 6) {    /* 6 x 500 ms */
+        held = 0;
+        used = true;
+        main_screen_start_app(ACTION_APP_SNAKE);
+    }
+}
+
+void dialog_snake_watch(void) {
+    lv_timer_create(watch_cb, 500, NULL);
 }
 
 static void destruct_cb(void) {

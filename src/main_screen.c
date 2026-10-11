@@ -1830,6 +1830,7 @@ lv_obj_t * main_screen() {
     subject_subscribe_delayed((Subject*)cfg_cluster_column, on_cluster_column_change, NULL);
 
     knobs_init(obj);
+    dialog_snake_watch();
 
     buttons_init(obj);
     buttons_load_page(&buttons_page_vol_1);
