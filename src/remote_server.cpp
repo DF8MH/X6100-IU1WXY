@@ -41,6 +41,7 @@ extern "C" {
     #include "cw_tune_ui.h"
     #include "dialog_cw_kbd.h"
     #include "dialog_field.h"
+    #include "dialog_snake.h"
     #include "dialog_ft8.h"
     #include "dialog_js8.h"
     #include "dialog_navtex.h"
@@ -278,6 +279,8 @@ static const char *current_app() {
         return "CW";
     if (dialog_type_is_run(dialog_field))
         return "Field";
+    if (dialog_type_is_run(dialog_snake))
+        return "Snake";
     if (rtty_get_state() != RTTY_OFF)
         return "RTTY";
     return "";
