@@ -8,6 +8,9 @@
 
 #include "dialog.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include "styles.h"
 #include "theme.h"
 #include "main_screen.h"
@@ -24,6 +27,49 @@ static int32_t      restore_mode = -1;     /* the mode before an app changed it,
 static int32_t      forced_mode;
 
 static bool         restore_mem;            /* dialog_restore_radio_on_close() */
+static char         mem_name[8];            /* dialog_app_memory(): the open app's, "" none */
+
+#define APP_FREQS "/mnt/app_freqs"
+
+bool app_mem_load(const char *name, int32_t *freq, int32_t *mode) {
+    FILE *f = fopen(APP_FREQS, "r");
+    char  n[16];
+    int   fr, md;
+    bool  ok = false;
+
+    if (!f) return false;
+    while (!ok && fscanf(f, "%15s %d %d", n, &fr, &md) == 3) {
+        ok = !strcmp(n, name);
+    }
+    fclose(f);
+    if (ok) {
+        *freq = fr;
+        *mode = md;
+    }
+    return ok;
+}
+
+void app_mem_save(const char *name) {
+    char  lines[16][48], n[16];
+    int   cnt = 0, fr, md;
+    FILE *f = fopen(APP_FREQS, "r");
+
+    if (f) {
+        while (cnt < 16 && fscanf(f, "%15s %d %d", n, &fr, &md) == 3) {
+            if (strcmp(n, name)) snprintf(lines[cnt++], sizeof(lines[0]), "%s %d %d", n, fr, md);
+        }
+        fclose(f);
+    }
+    if (!(f = fopen(APP_FREQS ".tmp", "w"))) return;
+    for (int i = 0; i < cnt; i++) fprintf(f, "%s\n", lines[i]);
+    fprintf(f, "%s %d %d\n", name, (int)cparam_i_get(cfg_fg_freq), (int)cparam_i_get(cfg_cur_mode));
+    fclose(f);
+    rename(APP_FREQS ".tmp", APP_FREQS);
+}
+
+void dialog_app_memory(const char *name) {
+    snprintf(mem_name, sizeof(mem_name), "%s", name);
+}
 
 void dialog_restore_mode_on_close(int32_t mode, int32_t forced) {
     restore_mode = mode;
@@ -44,6 +90,11 @@ void dialog_construct(dialog_t *dialog, lv_obj_t *parent) {
         main_screen_keys_enable(false);
         if (dialog->restore_radio) {
             mem_save(MEM_BACKUP_ID);
+        }
+        int32_t freq, mode;
+        if (mem_name[0] && app_mem_load(mem_name, &freq, &mode)) {
+            main_screen_set_freq(freq);
+            cparam_i_set(cfg_cur_mode, mode);
         }
         dialog->prev_page = buttons_get_cur_page();
         buttons_unload_page();
@@ -67,6 +118,10 @@ void dialog_destruct() {
 
         if (current_dialog->destruct_cb) {
             current_dialog->destruct_cb();
+        }
+        if (mem_name[0]) {
+            app_mem_save(mem_name);     /* before the radio goes back to before the app */
+            mem_name[0] = 0;
         }
 
         if (current_dialog->obj) {

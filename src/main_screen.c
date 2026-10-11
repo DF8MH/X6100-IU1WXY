@@ -597,6 +597,10 @@ static void apps_disable() {
     dialog_destruct();
     freq_strip_set_app(NULL);
 
+    if (rtty_get_state() != RTTY_OFF) {
+        app_mem_save("RTTY");
+        mem_load(MEM_BACKUP_ID);    /* the radio as before RTTY, as the other apps */
+    }
     rtty_set_state(RTTY_OFF);
     panel_update_visibility(false);
 }
@@ -615,8 +619,25 @@ void main_screen_start_app(press_action_t app_action) {
     }
     apps_disable();
 
+    /* The digital apps open where they were last used */
     switch (app_action) {
-        case ACTION_APP_RTTY:
+        case ACTION_APP_FT8: case ACTION_APP_JS8: case ACTION_APP_WSPR: case ACTION_APP_SSTV:
+        case ACTION_APP_WEFAX: case ACTION_APP_NAVTEX:
+            dialog_app_memory(app_name(app_action));
+            break;
+        default:
+            break;
+    }
+
+    switch (app_action) {
+        case ACTION_APP_RTTY: {
+            int32_t freq, mode;
+            mem_save(MEM_BACKUP_ID);
+            if (app_mem_load("RTTY", &freq, &mode)) {
+                main_screen_set_freq(freq);
+                cparam_i_set(cfg_cur_mode, mode);
+            }
+        }
             buttons_load_page(&buttons_page_rtty);
             rtty_set_state(RTTY_RX);
             panel_update_visibility(true);

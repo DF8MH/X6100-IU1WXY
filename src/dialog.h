@@ -46,6 +46,13 @@ void dialog_restore_mode_on_close(int32_t mode, int32_t forced);
 /* The app just opened (one without restore_radio) gives back frequency and mode when it closes */
 void dialog_restore_radio_on_close(void);
 
+/* Each digital app opens where it was last used (frequency and mode, /mnt/app_freqs):
+ * the next dialog_construct() tunes to name's after saving the radio, its close keeps
+ * the app's last ones for the next time. The two calls for an app without a dialog (RTTY) */
+void dialog_app_memory(const char *name);
+bool app_mem_load(const char *name, int32_t *freq, int32_t *mode);
+void app_mem_save(const char *name);
+
 void dialog_send(lv_event_code_t event_code, void *param);
 bool dialog_is_run();
 bool dialog_type_is_run(dialog_t *dialog);
