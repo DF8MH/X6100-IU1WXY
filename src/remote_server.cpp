@@ -25,6 +25,9 @@
 #include "cfg/settings_manager.h"
 #include "util.h"
 
+#include <dirent.h>
+#include <sys/stat.h>
+
 #include <algorithm>
 #include <atomic>
 #include <deque>
@@ -478,6 +481,32 @@ static const char *band_name() {
     return name;
 }
 
+/* Changes when a log of /mnt/field/logs is written, edited or deleted, by the radio or the
+ * web server: the apps reload theirs, so each device sees what another logged. Once a second. */
+static uint32_t log_rev() {
+    static uint64_t when;
+    static uint32_t rev;
+    uint64_t        now = get_time();
+
+    if (now - when < 1000)
+        return rev;
+    when = now;
+    rev  = 0;
+    DIR *d = opendir("/mnt/field/logs");
+    if (!d)
+        return rev;
+    struct dirent *e;
+    struct stat    st;
+    char           path[300];
+    while ((e = readdir(d))) {
+        snprintf(path, sizeof(path), "/mnt/field/logs/%s", e->d_name);
+        if (e->d_name[0] != '.' && stat(path, &st) == 0)
+            rev = rev * 31 + (uint32_t)st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000 + (uint32_t)st.st_size;
+    }
+    closedir(d);
+    return rev;
+}
+
 static int state_line(char *buf, size_t size) {
     int32_t     mode = cfg_sm.cp_cur_mode.get();
     int32_t     agc  = cfg_sm.cp_cur_agc.get();
@@ -504,7 +533,7 @@ static int state_line(char *buf, size_t size) {
                     "{\"t\":\"state\",\"vfo\":\"%s\",\"freq\":%i,\"freq_bg\":%i,\"mode\":\"%s\",\"band\":\"%s\","
                     "\"filter\":%i,\"flo\":%i,\"fhi\":%i,\"rfgain\":%i,\"sql\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
                     "\"nb_level\":%i,\"nb_width\":%i,\"nr_level\":%i,\"pwr\":%i,\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s,"
-                    "\"cwt\":%s}\n",
+                    "\"cwt\":%s,\"logrev\":%u}\n",
                     cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? "A" : "B",
                     cfg_sm.cp_fg_freq.get(), cfg_sm.cp_bg_freq.get(),
                     (mode >= 0 && mode <= x6100_mode_nfm) ? mode_names[mode] : "?", band_name(),
@@ -514,7 +543,7 @@ static int state_line(char *buf, size_t size) {
                     (agc >= 0 && agc <= x6100_agc_auto) ? agc_names[agc] : "?",
                     cfg_sm.p_nb.get() != 0, cfg_sm.p_nr.get() != 0,
                     cfg_sm.p_nb_level.get(), cfg_sm.p_nb_width.get(), cfg_sm.p_nr_level.get(),
-                    (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax, cwt);
+                    (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax, cwt, log_rev());
 }
 
 static void send_state(client_t *c) {
