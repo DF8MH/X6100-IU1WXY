@@ -134,6 +134,8 @@ static bool        updating;        /* the reference list downloads */
 static bool        end_armed;
 static bool        spotted;      /* this activation is on pota.app: End posts a QRT spot */
 static time_t      end_armed_at;
+static bool        spot_armed;   /* Spot asks before posting: a second press within 4 s sends */
+static time_t      spot_armed_at;
 
 /* The remote state, written on the LVGL thread, read by the remote server */
 static pthread_mutex_t remote_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -238,7 +240,24 @@ static bool ref_ok(const char *r) {
     return true;
 }
 
+/* FT8/FT4 dial frequencies, kHz: in USB or DIG on one of them the mode is that, not SSB */
+static const char *digi_mode(void) {
+    static const int ft8[] = {1840, 3573, 5357, 7074, 10136, 14074, 18100, 21074, 24915, 28074, 50313};
+    static const int ft4[] = {3575, 7047, 10140, 14080, 18104, 21140, 24919, 28180, 50318};
+    int32_t          hz    = cparam_i_get(cfg_fg_freq);
+
+    for (size_t i = 0; i < sizeof(ft8) / sizeof(ft8[0]); i++)
+        if (hz >= ft8[i] * 1000 - 500 && hz <= ft8[i] * 1000 + 3500)
+            return "FT8";
+    for (size_t i = 0; i < sizeof(ft4) / sizeof(ft4[0]); i++)
+        if (hz >= ft4[i] * 1000 - 500 && hz <= ft4[i] * 1000 + 3500)
+            return "FT4";
+    return NULL;
+}
+
 static const char *adif_mode(void) {
+    const char *d = digi_mode();
+
     switch (cparam_i_get(cfg_cur_mode)) {
         case x6100_mode_cw:
         case x6100_mode_cwr:
@@ -249,9 +268,9 @@ static const char *adif_mode(void) {
             return "FM";
         case x6100_mode_lsb_dig:
         case x6100_mode_usb_dig:
-            return "FT8";
+            return d ? d : "FT8";
         default:
-            return "SSB";
+            return d ? d : "SSB";
     }
 }
 
@@ -599,7 +618,8 @@ static button_data_t b_ref2   = {.type = BTN_TEXT, .label = "(2:2)", .press = pa
 static button_data_t b_act1   = {.type = BTN_TEXT, .label = "(1:2)", .press = page_cb};
 static button_data_t b_act2   = {.type = BTN_TEXT, .label = "(2:2)", .press = page_cb};
 static button_data_t b_act    = {.type = BTN_TEXT_FN, .label_fn = activate_label, .press = activate_cb};
-static button_data_t b_spot   = {.type = BTN_TEXT, .label = "Spot", .press = spot_cb};
+static const char *spot_label(void);
+static button_data_t b_spot   = {.type = BTN_TEXT_FN, .label_fn = spot_label, .press = spot_cb};
 static button_data_t b_log    = {.type = BTN_TEXT, .label = "Log\nQSO", .press = log_cb};
 static button_data_t b_ref    = {.type = BTN_TEXT, .label = "Ref...", .press = ref_cb};
 static button_data_t b_update = {.type = BTN_TEXT, .label = "Update\nlist", .press = update_cb};
@@ -659,6 +679,10 @@ static void cq_level_change(int d) {
 
 static const char *activate_label(void) {
     return !st.active ? "Start" : end_armed ? "End?" : "End";
+}
+
+static const char *spot_label(void) {
+    return spot_armed ? "Spot?" : "Spot";
 }
 
 static void page_cb(button_data_t *b) {
@@ -1152,6 +1176,7 @@ static void show(screen_t s) {
     st.screen = s;
     state_save();
     end_armed = false;
+    spot_armed = false;
     info_ref  = NULL;
     act_freq  = NULL;
     list      = NULL;
@@ -1286,6 +1311,16 @@ static void spot(void) {
 }
 
 static void spot_cb(button_data_t *b) {
+    if (!spot_armed || time(NULL) - spot_armed_at > 4) {
+        spot_armed    = true;
+        spot_armed_at = time(NULL);
+        buttons_refresh(&b_spot);
+        msg_update_text_fmt("Press Spot again to post %s %.1f %s", st.have_ref ? st.ref.ref : "",
+                            cparam_i_get(cfg_fg_freq) / 1000.0, adif_mode());
+        return;
+    }
+    spot_armed = false;
+    buttons_refresh(&b_spot);
     spot();
 }
 
@@ -1727,6 +1762,10 @@ static void timer_cb(lv_timer_t *t) {
     if (end_armed && now - end_armed_at > 4) {
         end_armed = false;
         buttons_refresh(&b_act);
+    }
+    if (spot_armed && now - spot_armed_at > 4) {
+        spot_armed = false;
+        buttons_refresh(&b_spot);
     }
     msg_voice_poll(false);
     log_watch();
