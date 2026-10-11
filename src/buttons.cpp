@@ -500,7 +500,7 @@ static buttons_page_t page_app_2 = {
     {&btn_app_p2, &btn_settings, &btn_cwt, &btn_cw_kbd, &btn_field}
 };
 static buttons_page_t page_app_3 = {
-    {&btn_app_p3, &btn_bands, &btn_gps}
+    {&btn_app_p3, &btn_bands, &btn_gps, &btn_screen_rec}   /* the MFK 3:3 one too */
 };
 
 /* RTTY */
