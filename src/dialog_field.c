@@ -1261,15 +1261,25 @@ static void spot(void) {
         msg_update_text_fmt("Choose the %s reference first", prog_name());
         return;
     }
-    if (st.ref.type == 'S') {
-        /* SOTAwatch spots need an API client approved by SOTA: not yet */
-        msg_update_text_fmt("SOTAwatch: not available yet. Post an alert, then CQ in CW: RBNHole spots you");
-        return;
-    }
     if (!my_call()[0]) {
         msg_update_text_fmt("Set your callsign in Settings");
         return;
     }
+    if (st.ref.type == 'S') {
+        /* On the DX cluster: SOTAwatch's API needs a client approved by SOTA, APRS2SOTA a
+         * registration (RBNHole still spots a CW CQ after an alert on SOTAwatch) */
+        char comment[48];
+        snprintf(comment, sizeof(comment), "SOTA %s %s", st.ref.ref, adif_mode());
+        if (cluster_client_send_spot(cparam_i_get(cfg_fg_freq) / 1000.0, my_call(), comment))
+            msg_update_text_fmt("SOTA spot on the DX clusters: %s %.1f %s", st.ref.ref,
+                                cparam_i_get(cfg_fg_freq) / 1000.0, adif_mode());
+        else
+            msg_update_text_fmt("DX cluster not running: no SOTA spot");
+        return;
+    }
+    char comment[48];
+    snprintf(comment, sizeof(comment), "POTA %s %s", st.ref.ref, adif_mode());
+    cluster_client_send_spot(cparam_i_get(cfg_fg_freq) / 1000.0, my_call(), comment);   /* the DX clusters too */
     if (job_start(spot_done, HELPER " pota-spot --call %s --freq-khz %.1f --ref %s --mode %s", my_call(),
                   cparam_i_get(cfg_fg_freq) / 1000.0, st.ref.ref, adif_mode()))
         msg_update_text_fmt("POTA spot: %s %.1f %s...", st.ref.ref, cparam_i_get(cfg_fg_freq) / 1000.0, adif_mode());

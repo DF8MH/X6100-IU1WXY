@@ -120,6 +120,10 @@ bool cluster_parse_server(const char *text, char *host, size_t host_size, int *p
 void cluster_client_start(const char *host, int port, const char *callsign);
 void cluster_client_stop(void);
 
+/* Posts a spot on every cluster link ("DX <kHz> <call> <comment>"), each sends it once logged in,
+ * within 2 minutes. False when the client is not running. */
+bool cluster_client_send_spot(double khz, const char *call, const char *comment);
+
 /* Retries at once when waiting after a failure (e.g. the WiFi is back). */
 void cluster_client_retry(void);
 

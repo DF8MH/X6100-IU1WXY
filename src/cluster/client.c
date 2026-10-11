@@ -43,7 +43,7 @@ static volatile bool   reconnect_requested; /* new server or callsign */
 /* More sources into the same store, whose "same DX within 1 kHz" keeps one spot: EXTRA_LINKS
  * other servers of the list (one node only gets its own region's spots well) and pota.app's
  * activator spots. Their threads leave the state shown, the main server's, alone. */
-#define EXTRA_LINKS      2
+#define EXTRA_LINKS      4
 #define POTA_SPOTS       "/usr/sbin/x6100-pota-spots"
 #define POTA_POLL_MS     60000
 static __thread bool   extra_link;
@@ -61,6 +61,11 @@ static cluster_state_t state     = CLUSTER_STOPPED;
 static char            state_detail[64];
 
 static char host_name[128];
+static char     spot_cmd[128];  /* cluster_client_send_spot(): to every link, under lock */
+static unsigned spot_seq;
+static int64_t  spot_at;
+static __thread unsigned spot_sent; /* the link's last spot_seq sent */
+#define SPOT_VALID_MS 120000        /* a link that logs in later doesn't send an old spot */
 static int  host_port;
 static char login_call[CLUSTER_CALL_LEN];
 
@@ -140,6 +145,10 @@ int cluster_servers_load(cluster_server_t *out, int max) {
         {"DB0SUE", "db0sue.de", 8000},
         {"GB7DJK", "gb7djk.dxcluster.net", 7300},
         {"AE5E", "dxspots.com", 23},
+        {"HamQTH", "hamqth.com", 7300},
+        {"IZ7AUH", "dx.iz7auh.net", 8000},
+        {"ON0DXK", "on0dxk.dyndns.org", 8000},
+        {"N2WQ", "dxc.n2wq.com", 7300},
     };
     if (n == 0) {
         while (n < max && n < (int)(sizeof(defaults) / sizeof(defaults[0]))) {
@@ -650,6 +659,15 @@ static bool session(int fd, const char *call) {
             send_text(fd, spider ? "sh/dx " SHOW_DX_COUNT "\r\n" : "sh/dx/" SHOW_DX_COUNT "\r\n");
             asked_spots = true;
         }
+        if (logged_in && asked_spots && spot_sent != spot_seq) {
+            char cmd[sizeof(spot_cmd)];
+            pthread_mutex_lock(&lock);
+            memcpy(cmd, spot_cmd, sizeof(cmd));
+            spot_sent = spot_seq;
+            bool fresh = now - spot_at < SPOT_VALID_MS;
+            pthread_mutex_unlock(&lock);
+            if (fresh && cmd[0]) send_text(fd, cmd);
+        }
         if (now - last_rx > IDLE_TIMEOUT_MS) break;
         if (r < 0 && errno != EINTR) break;
         if (r <= 0) continue;
@@ -851,6 +869,18 @@ void cluster_client_start(const char *host, int port, const char *callsign) {
         start_thread(pota_cb, NULL);
     }
     pthread_mutex_unlock(&lock);
+}
+
+bool cluster_client_send_spot(double khz, const char *call, const char *comment) {
+    pthread_mutex_lock(&lock);
+    bool ok = thread_running && !stop_requested;
+    if (ok) {
+        snprintf(spot_cmd, sizeof(spot_cmd), "DX %.1f %s %s\r\n", khz, call, comment);
+        spot_seq++;
+        spot_at = now_ms();
+    }
+    pthread_mutex_unlock(&lock);
+    return ok;
 }
 
 void cluster_client_stop(void) {
