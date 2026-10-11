@@ -11,6 +11,15 @@ nav{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
 nav a{color:var(--dim);text-decoration:none;padding:7px 12px;border-radius:8px;font-size:14px}
 nav a:hover{color:var(--text);background:#1b2a40}
 nav a[aria-current]{color:#111;background:var(--accent);font-weight:600}
+/* Groups with a menu: open on hover, or on a tap (focus) on touch screens */
+nav .grp{position:relative}
+nav .grp>button{background:none;border:0;color:var(--dim);padding:7px 12px;border-radius:8px;font:inherit;font-size:14px;cursor:pointer}
+nav .grp>button:hover,nav .grp:focus-within>button{color:var(--text);background:#1b2a40}
+nav .grp>button[aria-current]{color:#111;background:var(--accent);font-weight:600}
+nav .sub{display:none;position:absolute;right:0;top:100%;z-index:50;min-width:170px;padding:6px;margin-top:4px;background:#13203a;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+nav .grp:hover .sub,nav .grp:focus-within .sub{display:flex;flex-direction:column;gap:2px}
+nav .sub a{white-space:nowrap}
+nav .sub::before{content:"";position:absolute;left:0;right:0;top:-6px;height:6px}
 main{max-width:980px;margin:0 auto;padding:28px 20px}
 h2{margin:0 0 4px;font-size:22px}
 .sub{color:var(--dim);margin:0 0 22px}

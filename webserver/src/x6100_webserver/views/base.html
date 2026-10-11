@@ -7,7 +7,7 @@
     <link rel="icon" type="image/vnd.microsoft.icon" href="/static/favicon.ico" />
 
     <title>{{title}} - X6100 WebServer</title>
-    <link href="/static/css/base.css" rel="stylesheet">
+    <link href="/static/css/base.css?v=2" rel="stylesheet">  <!-- v: new after a style change, browsers keep the old one -->
     <link href="/static/css/siimple-icons.css" rel="stylesheet" />
 
 
@@ -76,9 +76,25 @@
           <div>X6100 <small>{{call + ' · ' if call else ''}}configurator</small> <small class="by">by IU1WXY</small></div>
         </a>
         <nav>
-          % for href, label in [('/', 'General'), ('/bands', 'Bands'), ('/digital_modes', 'Digital modes'), ('/cluster', 'Cluster'), ('/field', 'Field'), ('/logs', 'Logs'),('/wfview', 'wfview'), ('/memories', 'Memories'), ('/cw_messages', 'CW messages'), ('/files/', 'Files'), ('/gallery', 'Gallery'), ('/remote', 'Remote'), ('/backup', 'Backup'), ('/time', 'Time')]:
-          % current = request.path == href or (href != '/' and request.path.startswith(href))
-          <a href="{{href}}"{{!' aria-current="page"' if current else ''}}>{{label}}</a>
+          % menu = [('General', [('/', 'General')]),
+          %         ('Frequencies', [('/bands', 'Bands'), ('/digital_modes', 'Digital modes'), ('/memories', 'Memories')]),
+          %         ('Operating', [('/remote', 'Remote'), ('/cluster', 'Cluster'), ('/field', 'Field Ops'), ('/cw_messages', 'CW messages'), ('/logs', 'Logs')]),
+          %         ('Files', [('/files/', 'Files'), ('/gallery', 'Gallery'), ('/backup', 'Backup')]),
+          %         ('System', [('/time', 'Time'), ('/wfview', 'wfview')])]
+          % for group, items in menu:
+          % here = [request.path == h or (h != '/' and request.path.startswith(h)) for h, _ in items]
+          % if len(items) == 1:
+          <a href="{{items[0][0]}}"{{!' aria-current="page"' if here[0] else ''}}>{{group}}</a>
+          % else:
+          <div class="grp">
+            <button type="button"{{!' aria-current="page"' if any(here) else ''}}>{{group}} &#9662;</button>
+            <div class="sub">
+              % for (h, label), cur in zip(items, here):
+              <a href="{{h}}"{{!' aria-current="page"' if cur else ''}}>{{label}}</a>
+              % end
+            </div>
+          </div>
+          % end
           % end
         </nav>
       </div>
