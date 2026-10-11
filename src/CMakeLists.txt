@@ -23,6 +23,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     dialog_cluster.c
     freq_list.c
     js8_map.c
+    ft8_udp.c
     dialog_modes.c
     dialog_cw_trainer.c
     dialog_cw_kbd.c

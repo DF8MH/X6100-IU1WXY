@@ -37,6 +37,7 @@
 #include "ft8/audio_worker.h"
 #include "ft8/cq_scheduler.h"
 #include "ft8/table_view.h"
+#include "ft8_udp.h"
 #include "ft8/tx_worker.h"
 #include "tx_player.h"
 #include "widgets/lv_waterfall.h"
@@ -224,6 +225,66 @@ static dialog_t dialog = {
 
 dialog_t *dialog_ft8 = &dialog;
 
+/* ---- WSJT-X datagrams over UDP (ft8_udp.c, from SP2KMO's upstream PR #275) ----
+ * Status whenever something a logger shows changes (RX/TX, audio offset, dial, the station
+ * worked) and with each heartbeat: one 250 ms timer compares and sends. */
+
+#define UDP_POLL_MS         250
+#define UDP_HEARTBEAT_POLLS 60      /* 15 s, as WSJT-X */
+
+static lv_timer_t *udp_timer;
+static uint32_t    udp_polls;
+static int         udp_last_state = -1;
+static int32_t     udp_last_df    = -1;
+static int64_t     udp_last_freq  = -1;
+static char        udp_last_dx[16];
+
+static const char *udp_mode_str(void) {
+    return param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? "FT8" : "FT4";
+}
+
+/* The station worked: the pending TX message starts with it ("DXCALL MYCALL ..."), but CQ */
+static void udp_current_dx_call(char *out, size_t out_sz) {
+    size_t i = 0;
+
+    while (tx_msg.msg[i] && tx_msg.msg[i] != ' ' && i < out_sz - 1) {
+        out[i] = tx_msg.msg[i];
+        i++;
+    }
+    out[i] = '\0';
+    if (strcmp(out, "CQ") == 0) out[0] = '\0';
+}
+
+static void udp_status_send(void) {
+    char     dx_call[16];
+    uint32_t df = params.ft8_tx_freq.x;
+
+    udp_current_dx_call(dx_call, sizeof(dx_call));
+    ft8_udp_send_status((uint64_t)cparam_i_get(cfg_fg_freq), udp_mode_str(), params.callsign.x, station_qth(),
+                        dx_call, df, df, state == TX_PROCESS, state != TX_PROCESS);
+    udp_last_state = (int)state;
+    udp_last_df    = (int32_t)df;
+    udp_last_freq  = (int64_t)cparam_i_get(cfg_fg_freq);
+    snprintf(udp_last_dx, sizeof(udp_last_dx), "%s", dx_call);
+}
+
+static void udp_timer_cb(lv_timer_t *t) {
+    char dx_call[16];
+
+    (void)t;
+    if (++udp_polls >= UDP_HEARTBEAT_POLLS) {
+        udp_polls = 0;
+        ft8_udp_send_heartbeat();
+        udp_status_send();
+        return;
+    }
+    udp_current_dx_call(dx_call, sizeof(dx_call));
+    if ((int)state != udp_last_state || (int32_t)params.ft8_tx_freq.x != udp_last_df ||
+        (int64_t)cparam_i_get(cfg_fg_freq) != udp_last_freq || strcmp(dx_call, udp_last_dx) != 0) {
+        udp_status_send();
+    }
+}
+
 static void save_qso(const char *remote_callsign, const char *remote_grid, const int r_snr, const int s_snr) {
     time_t now = time(NULL);
 
@@ -242,6 +303,8 @@ static void save_qso(const char *remote_callsign, const char *remote_grid, const
     // Save QSO to sqlite log
     qso_log_record_save(qso);
     dialog_field_day_log(&qso);
+    ft8_udp_log_qso(now, qso.remote_call, remote_grid, (uint64_t)cparam_i_get(cfg_fg_freq), udp_mode_str(), s_snr,
+                    r_snr, (int)param_f_get(cfg_pwr), params.callsign.x, station_qth());
 
     if (strlen(remote_grid) >= 4) {
         double lat, lon, dist;
@@ -333,6 +396,12 @@ static void destruct_cb() {
     // TODO: check free mem
     keyboard_close();
     worker_done();
+    /* After the decoder thread, which sends too */
+    if (udp_timer) {
+        lv_timer_del(udp_timer);
+        udp_timer = NULL;
+    }
+    ft8_udp_deinit();
     table_view_destroy();
 
     dsp_set_waterfall_enabled(true);
@@ -561,6 +630,14 @@ static void construct_cb(lv_obj_t *parent) {
 
     /* Logger */
     ft8_log = adif_log_init("/mnt/ft_log.adi");
+
+    /* WSJT-X datagrams over UDP (GridTracker, JTAlert...): /mnt/ft8_udp.conf */
+    ft8_udp_init();
+    udp_polls      = 0;
+    udp_last_state = -1;
+    ft8_udp_send_heartbeat();
+    udp_status_send();
+    udp_timer = lv_timer_create(udp_timer_cb, UDP_POLL_MS, NULL);
 
     if (param_f_get(cfg_pwr) > MAX_PWR) {
         radio_set_pwr(MAX_PWR);
@@ -1003,6 +1080,9 @@ static void add_rx_text(int16_t snr, const char * text, slot_info_t *s_info, flo
 static void on_message_cb(const char *text, int snr, float freq_hz, float time_sec,
                           const slot_info_t *info, void *ctx) {
     (void)ctx;
+    /* To WSJT-X listeners first (worker thread, non-blocking socket) */
+    ft8_udp_send_decode(true, param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? "~" : "+", text, (int32_t)snr,
+                        time_sec, (uint32_t)(freq_hz + 0.5f));
     add_rx_text((int16_t)snr, text, (slot_info_t *)info, freq_hz, time_sec);
 }
 
