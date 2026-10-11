@@ -112,8 +112,10 @@ const char *station_qth(void) {
     double      lat, lon;
     int         age;
 
-    /* A current fix, as for the GPS icon */
-    if (gps_last_fix(&lat, &lon, &age) && age < 10) {
+    /* A current fix, as for the GPS icon; else the phone's while X6100 Link is connected (it
+     * sends a position only when it moves). The QTH set is never changed: it is back as soon
+     * as both are gone */
+    if ((gps_last_fix(&lat, &lon, &age) && age < 10) || gps_phone_fix(&lat, &lon, &age)) {
         qth_pos_to_str(lat, lon, grid);
         snprintf(gps_qth, sizeof(gps_qth), "%s", grid);
         return gps_qth;

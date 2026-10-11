@@ -421,7 +421,8 @@ static void client_close(client_t *c) {
     c->fd = -1;
     if (c->sub) {
         c->sub = false;
-        subscribers--;
+        if (--subscribers == 0)
+            gps_phone_clear();  /* the QTH goes back to the radio's GPS or the one set */
     }
 }
 

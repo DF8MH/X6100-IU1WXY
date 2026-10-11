@@ -28,3 +28,5 @@ bool gps_last_fix(double *lat, double *lon, int *age_s);
 /* The phone's position (companion app, remote "location"), any thread; and the latest one */
 void gps_phone_set(double lat, double lon);
 bool gps_phone_fix(double *lat, double *lon, int *age_s);
+/* The phone went (no X6100 Link connected): its position no longer counts */
+void gps_phone_clear(void);

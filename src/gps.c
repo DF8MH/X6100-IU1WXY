@@ -133,6 +133,12 @@ void gps_phone_set(double lat, double lon) {
     pthread_mutex_unlock(&fix_lock);
 }
 
+void gps_phone_clear(void) {
+    pthread_mutex_lock(&fix_lock);
+    phone_when = 0;
+    pthread_mutex_unlock(&fix_lock);
+}
+
 bool gps_phone_fix(double *lat, double *lon, int *age_s) {
     pthread_mutex_lock(&fix_lock);
     bool ok = phone_when != 0;
