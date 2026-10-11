@@ -84,5 +84,7 @@ void radio_set_line_in(uint8_t d);
 void radio_set_line_out(uint8_t d);
 
 void radio_set_morse_key(bool on);
+/* Break-in delay of the base, ms (cfg_qsk_time is the setting; the CW encoder holds TX longer) */
+void radio_set_qsk_time(uint16_t ms);
 
 int8_t radio_get_audio_in_lvl();

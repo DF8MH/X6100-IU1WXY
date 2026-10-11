@@ -99,12 +99,22 @@ static void send_morse(char *str, long dit_nsec, long dah_nsec) {
     wait_nsec(dah_nsec - dit_nsec);
 }
 
+/* A message holds the transmitter through its gaps: the break-in delay set (100-130 ms for
+ * the key) dropped the relay between letters and words, which clicked on and off. Longer
+ * than a word space, 1 s at most; the setting is back when the message is over. */
+static void hold_tx(long world_space_nsec, bool on) {
+    long ms = world_space_nsec / 1000000L + 150;
+    radio_set_qsk_time(on ? (ms > 1000 ? 1000 : (uint16_t)ms) : (uint16_t)param_i_get(cfg_qsk_time));
+}
+
 /* Keys the text (again after a pause, as a beacon) until done or stopped.
  * Stopping is by flag: the key is always released by this thread. */
 static void * endecode_thread(void *arg) {
     long dit_nsec         = 20000000L / (param_i_get(cfg_key_speed)) * 60;
     long dah_nsec         = dit_nsec * param_f_get(cfg_key_ratio);
     long world_space_nsec = dit_nsec * 7;
+
+    hold_tx(world_space_nsec, true);
 
     while (!stop_req) {
         char    *morse;
@@ -128,15 +138,18 @@ static void * endecode_thread(void *arg) {
                 break;
             }
             state = CW_ENCODER_BEACON_IDLE;
+            hold_tx(world_space_nsec, false);   /* receive between beacons */
             for (int t = params.cw_encoder_period * 10; t > 0 && !stop_req; t--) {
                 pause_left = (t + 9) / 10;
                 usleep(100000);
             }
+            hold_tx(world_space_nsec, true);
             state        = CW_ENCODER_BEACON;
             current_char = current_msg;
         }
     }
     radio_set_morse_key(false);
+    hold_tx(world_space_nsec, false);
     state = CW_ENCODER_IDLE;
     return NULL;
 }

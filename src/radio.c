@@ -476,6 +476,10 @@ void radio_set_line_out(uint8_t d) {
     CHANGE_PARAM(d, params.line_out, params.dirty.line_out, x6100_control_lineout_set);
 }
 
+void radio_set_qsk_time(uint16_t ms) {
+    WITH_RADIO_LOCK(x6100_control_qsk_time_set(ms));
+}
+
 void radio_set_morse_key(bool on) {
     x6100_gpio_set(x6100_pin_morse_key, on ? 0 : 1);
 }
