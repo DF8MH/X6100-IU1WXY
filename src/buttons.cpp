@@ -349,7 +349,12 @@ static button_data_t btn_nr_level = make_encoder_btn(nr_level_label_getter, CTRL
 /* APP */
 
 static button_data_t btn_swr  = make_app_btn("SWR\nScan", ACTION_APP_SWRSCAN);
-static button_data_t btn_gps  = make_app_btn("GPS", ACTION_APP_GPS);
+static void snake_cb(button_data_t *data) {
+    main_screen_start_app(ACTION_APP_SNAKE);
+}
+
+/* A long press opens the hidden game */
+static button_data_t btn_gps  = {.type = BTN_TEXT, .label = "GPS", .press = button_app_page_cb, .hold = snake_cb, .ctrl = ACTION_APP_GPS};
 
 static button_data_t btn_rec      = make_app_btn("RX\nRecorder", ACTION_APP_RECORDER);
 static button_data_t btn_settings = make_app_btn("Settings", ACTION_APP_SETTINGS);

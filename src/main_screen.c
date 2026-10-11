@@ -43,6 +43,7 @@
 #include "dialog_gps.h"
 #include "dialog_field.h"
 #include "dialog_bands.h"
+#include "dialog_snake.h"
 #include "dialog_qth.h"
 #include "dialog_recorder.h"
 #include "dialog_wifi.h"
@@ -589,6 +590,7 @@ static const char *app_name(press_action_t a) {
         case ACTION_APP_CW_KBD:     return "CW Keyboard";
         case ACTION_APP_FIELD:      return "Field Ops";
         case ACTION_APP_BANDS:      return "Bands";
+        case ACTION_APP_SNAKE:      return "Snake";
         default:                    return NULL;    /* Modes menu: a menu, not an app */
     }
 }
@@ -714,6 +716,10 @@ void main_screen_start_app(press_action_t app_action) {
 
         case ACTION_APP_BANDS:
             dialog_construct(dialog_bands, obj);
+            break;
+
+        case ACTION_APP_SNAKE:
+            dialog_construct(dialog_snake, obj);
             break;
 
         default:

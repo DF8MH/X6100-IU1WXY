@@ -44,6 +44,7 @@ static cluster_spot_t band[CLUSTER_MAX_SPOTS];  /* the listed spots, by frequenc
 static int            band_n;
 static bool           active;                   /* MFK item "Cluster" */
 static bool           has_sel;
+static bool           hidden;                   /* cluster_column_hide(): a game over the waterfall */
 static cluster_spot_t sel;                      /* highlighted spot, kept by call + freq */
 
 /* Outdoor themes: the whole column in the text colour, the colours fade in the sun */
@@ -133,7 +134,7 @@ static void redraw(void) {
     if (!box) {
         return;
     }
-    if (!param_i_get(cfg_cluster_column)) {
+    if (!param_i_get(cfg_cluster_column) || hidden) {
         lv_obj_add_flag(box, LV_OBJ_FLAG_HIDDEN);
         return;
     }
@@ -262,6 +263,11 @@ static void timer_cb(lv_timer_t *t) {
         last_vfo = vfo;
         redraw();
     }
+}
+
+void cluster_column_hide(bool hide) {
+    hidden = hide;
+    redraw();
 }
 
 void cluster_column_set_active(bool on) {

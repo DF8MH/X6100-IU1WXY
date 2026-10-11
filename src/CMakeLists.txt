@@ -54,6 +54,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     dialog_wspr.c app_frame.c update_check.c
     dialog_field.c
     dialog_bands.c
+    dialog_snake.c
 )
 
 add_subdirectory(fonts)

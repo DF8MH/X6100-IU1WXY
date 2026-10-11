@@ -27,6 +27,9 @@ void cluster_column_refresh(void);
 /* The MFK "Cluster" item is active: a highlight row is shown and moved */
 void cluster_column_set_active(bool on);
 
+/* Hidden whatever the setting (the snake game plays over the waterfall) */
+void cluster_column_hide(bool hide);
+
 /* Moves the highlight by dir spots (clamped); returns the highlighted call ("" if none) */
 const char *cluster_column_move(int dir);
 
