@@ -12,6 +12,7 @@
 #include "cfg/cfg_api.h"
 #include "cw.h"
 #include "cw_encoder.h"
+#include "params/params.h"
 #include "events.h"
 #include "keyboard.h"
 #include "msg.h"
@@ -41,6 +42,9 @@ static void stop_btn_cb(button_data_t *btn);
 static void clear_btn_cb(button_data_t *btn);
 static void close_btn_cb(button_data_t *btn);
 
+static void msg_btn_cb(button_data_t *btn);
+static void enqueue(const char *text);
+
 static button_data_t btn_p1    = {.type = BTN_TEXT, .label = "(CW KBD 1:1)", .press = NULL};
 static button_data_t btn_send  = {.type = BTN_TEXT, .label = "Send", .press = send_btn_cb};
 static button_data_t btn_stop  = {.type = BTN_TEXT, .label = "Stop", .press = stop_btn_cb};
@@ -48,6 +52,45 @@ static button_data_t btn_clear = {.type = BTN_TEXT, .label = "Clear", .press = c
 static button_data_t btn_close = {.type = BTN_TEXT, .label = "Close", .press = close_btn_cb};
 
 static buttons_page_t page = {{&btn_p1, &btn_send, &btn_stop, &btn_clear, &btn_close}};
+
+/* The MSG > CW messages (also on the web page CW messages), 4 a page after the first: a press
+ * sends one as a typed line */
+#define MSGS 8
+static char           msgs[MSGS][PARAMS_MSG_CW_LEN];
+static char           msg_label[MSGS][16];
+static button_data_t  btn_msg[MSGS];
+static buttons_page_t page_msg[2];
+static button_data_t  btn_pm[2] = {
+    {.type = BTN_TEXT, .press = button_next_page_cb},
+    {.type = BTN_TEXT, .press = button_next_page_cb},
+};
+
+static void msg_btn_cb(button_data_t *btn) {
+    enqueue(msgs[btn - btn_msg]);
+}
+
+/* Buttons and page labels for the messages there are (none: one page, as before) */
+static void msgs_load(void) {
+    static char p_label[3][16];
+    int         n     = params_msg_cw_list(msgs, MSGS);
+    int         pages = 1 + (n + 3) / 4;
+
+    for (int i = 0; i < MSGS; i++) {
+        btn_msg[i] = (button_data_t){.type = BTN_TEXT, .label = msg_label[i], .press = msg_btn_cb};
+        snprintf(msg_label[i], sizeof(msg_label[i]), "%.10s", msgs[i]);
+        page_msg[i / 4].items[1 + i % 4] = i < n ? &btn_msg[i] : NULL;
+    }
+    snprintf(p_label[0], sizeof(p_label[0]), "(CW KBD 1:%d)", pages);
+    btn_p1.label = p_label[0];
+    btn_p1.press = pages > 1 ? button_next_page_cb : NULL;
+    btn_p1.next  = &page_msg[0];
+    for (int k = 0; k < 2; k++) {
+        snprintf(p_label[k + 1], sizeof(p_label[k + 1]), "(CW KBD %d:%d)", k + 2, pages);
+        btn_pm[k].label   = p_label[k + 1];
+        btn_pm[k].next    = k + 2 < pages ? &page_msg[k + 1] : &page;
+        page_msg[k].items[0] = &btn_pm[k];
+    }
+}
 
 static dialog_t dialog = {
     .run          = false,
@@ -319,6 +362,8 @@ static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, uint32_t color) 
 
 static void construct_cb(lv_obj_t *parent) {
     dialog.obj = dialog_init(parent);
+    msgs_load();
+    buttons_load_page(&page);   /* with the page count just found */
 
     head = label(dialog.obj, &sony_20, COLOR_HEAD);
     lv_label_set_recolor(head, true);

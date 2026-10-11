@@ -260,6 +260,9 @@ void params_str_set(params_str_t *var, const char *x);
 void params_float_set(params_float_t *var, float x);
 
 void params_msg_cw_load();
+/* The MSG > CW texts in their order (the web page writes them too), at most max */
+#define PARAMS_MSG_CW_LEN 65
+int params_msg_cw_list(char (*out)[PARAMS_MSG_CW_LEN], int max);
 void params_msg_cw_new(const char *val);
 void params_msg_cw_edit(uint32_t id, const char *val);
 void params_msg_cw_delete(uint32_t id);
