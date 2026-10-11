@@ -39,6 +39,7 @@
 #include "ft8/table_view.h"
 #include "ft8_udp.h"
 #include "dxcc.h"
+#include "js8_map.h"
 #include "flags.h"
 #include "ft8/tx_worker.h"
 #include "tx_player.h"
@@ -188,6 +189,9 @@ static buttons_page_t btn_page_1;
 static buttons_page_t btn_page_2;
 static buttons_page_t btn_page_3;
 
+static void map_cb(struct button_data_t *btn_data);
+static lv_obj_t *map_obj;   /* QSO map, when open */
+
 static button_data_t button_page_1 = { .type=BTN_TEXT, .label = "(FT8 1:3)", .press = button_next_page_cb, .next=&btn_page_2};
 static button_data_t button_show_cq_all = { .type=BTN_TEXT_FN, .label_fn = cq_all_label_getter, .press = show_cq_all_cb};
 static button_data_t button_mode_ft4_ft8 = { .type=BTN_TEXT_FN, .label_fn = protocol_label_getter, .press = mode_ft4_ft8_cb};
@@ -202,6 +206,7 @@ static button_data_t button_force_save = { .type=BTN_TEXT, .label = "Force QSO\n
 static button_data_t button_page_3 = { .type=BTN_TEXT, .label = "(FT8 3:3)", .press = button_next_page_cb, .next=&btn_page_1};
 static button_data_t button_cq_mod = { .type=BTN_TEXT, .label = "CQ\nModifier", .press = cq_modifier_cb };
 static button_data_t button_time_sync = { .type=BTN_TEXT, .label = "Time\nSync", .press = time_sync };
+static button_data_t button_map = { .type=BTN_TEXT, .label = "Map", .press = map_cb };
 
 static buttons_page_t btn_page_1 = {
     {&button_page_1, &button_show_cq_all, &button_mode_ft4_ft8, &button_tx_cq_en_dis, &button_tx_call_en_dis}
@@ -212,7 +217,7 @@ static buttons_page_t btn_page_2 = {
 };
 
 static buttons_page_t btn_page_3 = {
-    {&button_page_3, &button_cq_mod, &button_time_sync}
+    {&button_page_3, &button_cq_mod, &button_time_sync, &button_map}
 };
 
 static dialog_t dialog = {
@@ -374,6 +379,38 @@ static void worker_done() {
 /* Table widget lifecycle, draw, scroll and message insertion all live
  * in ft8/table_view.c. The dialog only owns the surrounding state. */
 
+/* QSO map: the world, the station and a path to each QSO of the FT8/FT4 log (js8_map.c) */
+static void map_close(void) {
+    if (!map_obj) return;
+    lv_obj_del_async(map_obj);
+    map_obj = NULL;
+    lv_group_add_obj(keyboard_group, table);
+    lv_group_focus_obj(table);
+    lv_group_set_editing(keyboard_group, true);
+}
+
+static void map_key_cb(lv_event_t *e) {
+    if (*((uint32_t *)lv_event_get_param(e)) == LV_KEY_ESC) map_close();
+}
+
+static void map_cb(struct button_data_t *btn_data) {
+    (void)btn_data;
+    if (map_obj) {
+        map_close();
+        return;
+    }
+    map_obj = js8_map_create(dialog.obj, WIDTH, WF_HEIGHT, station_qth(), "/mnt/ft_log.adi");
+    if (!map_obj) {
+        msg_update_text_fmt("Not enough memory for the map");
+        return;
+    }
+    lv_obj_set_pos(map_obj, 13, 13);
+    lv_group_remove_obj(table);
+    lv_obj_add_event_cb(map_obj, map_key_cb, LV_EVENT_KEY, NULL);
+    lv_group_add_obj(keyboard_group, map_obj);
+    lv_group_focus_obj(map_obj);
+}
+
 static void key_cb(lv_event_t * e) {
     uint32_t key = *((uint32_t *) lv_event_get_param(e));
 
@@ -396,6 +433,7 @@ static void key_cb(lv_event_t * e) {
 
 static void destruct_cb() {
     // TODO: check free mem
+    map_obj = NULL;     /* deleted with the dialog */
     keyboard_close();
     worker_done();
     /* After the decoder thread, which sends too */

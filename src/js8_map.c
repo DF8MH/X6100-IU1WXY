@@ -211,8 +211,12 @@ lv_obj_t *js8_map_create(lv_obj_t *parent, lv_coord_t w, lv_coord_t h, const cha
         double lat, lon;
         qth_str_to_pos(qsos[i].grid, &lat, &lon);
         lv_point_t p = project(lat, lon);
+        lv_point_t size;
         dot(canvas, p, 2, TC(ok));
-        lv_canvas_draw_text(canvas, p.x + 4, p.y - 8, 90, &label, qsos[i].call);
+        lv_txt_get_size(&size, qsos[i].call, label.font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        /* left of the dot near the right edge, not cut */
+        lv_coord_t x = p.x + 4 + size.x < w ? p.x + 4 : p.x - 4 - size.x;
+        lv_canvas_draw_text(canvas, x, p.y - 8, size.x + 2, &label, qsos[i].call);
     }
     dot(canvas, project(my_lat, my_lon), 4, TC(err));
 
