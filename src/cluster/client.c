@@ -21,6 +21,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <stdint.h>
 #include <unistd.h>
 
 #define CONNECT_TIMEOUT_MS 10000
@@ -39,7 +40,20 @@ static bool            thread_running; /* under lock */
 static volatile bool   stop_requested;
 static volatile bool   reconnect_requested; /* new server or callsign */
 
-#define ABORTED() (stop_requested || reconnect_requested)
+/* More sources into the same store, whose "same DX within 1 kHz" keeps one spot: EXTRA_LINKS
+ * other servers of the list (one node only gets its own region's spots well) and pota.app's
+ * activator spots. Their threads leave the state shown, the main server's, alone. */
+#define EXTRA_LINKS      2
+#define POTA_SPOTS       "/usr/sbin/x6100-pota-spots"
+#define POTA_POLL_MS     60000
+static __thread bool   extra_link;
+static volatile unsigned extras_gen;       /* +1: other servers or callsign changed */
+static __thread unsigned my_gen;          /* the extra link's, at its connect */
+static bool            extras_running;      /* under lock */
+static char            extra_host[EXTRA_LINKS][128];
+static int             extra_port[EXTRA_LINKS];
+
+#define ABORTED() (stop_requested || (extra_link ? my_gen != extras_gen : reconnect_requested))
 
 static cluster_store_t store;
 static uint32_t        store_gen = 1;
@@ -64,6 +78,7 @@ static uint16_t utc_now_min(void) {
 }
 
 static void set_state(cluster_state_t s, const char *detail) {
+    if (extra_link) return;
     pthread_mutex_lock(&lock);
     state = s;
     snprintf(state_detail, sizeof(state_detail), "%s", detail ? detail : "");
@@ -717,12 +732,102 @@ static void *thread_cb(void *arg) {
     }
 }
 
+/* Another server, as thread_cb() but without touching the state shown */
+static void *extra_cb(void *arg) {
+    int i     = (int)(intptr_t)arg;
+    int delay = RETRY_MIN_MS;
+
+    extra_link = true;
+    while (!stop_requested) {
+        char host[sizeof(extra_host[0])], call[sizeof(login_call)];
+        int  port;
+        pthread_mutex_lock(&lock);
+        my_gen = extras_gen;
+        memcpy(host, extra_host[i], sizeof(host));
+        memcpy(call, login_call, sizeof(call));
+        port = extra_port[i];
+        pthread_mutex_unlock(&lock);
+
+        int fd = host[0] ? open_socket(host, port) : -1;
+        if (fd >= 0 && session(fd, call)) delay = RETRY_MIN_MS;
+        for (int t = 0; t < delay && !stop_requested && my_gen == extras_gen; t += 500) usleep(500000);
+        delay = my_gen != extras_gen ? RETRY_MIN_MS : (delay * 2 < RETRY_MAX_MS ? delay * 2 : RETRY_MAX_MS);
+    }
+    return NULL;
+}
+
+/* pota.app's activator spots, a minute apart, through POTA_SPOTS */
+static void *pota_cb(void *arg) {
+    (void)arg;
+    extra_link = true;
+    while (!stop_requested) {
+        FILE *f = popen(POTA_SPOTS " 2>/dev/null", "r");
+        char  line[256];
+        while (f && fgets(line, sizeof(line), f)) {
+            char          *fld[5];
+            char          *w = line;
+            cluster_spot_t sp;
+            int            n;
+            line[strcspn(line, "\r\n")] = 0;
+            for (n = 0; n < 5 && w; n++) {
+                fld[n] = w;
+                if ((w = strchr(w, '|'))) *w++ = 0;
+            }
+            if (n < 5 || strlen(fld[4]) != 4) continue;
+            memset(&sp, 0, sizeof(sp));
+            sp.freq_hz = atoi(fld[0]);
+            snprintf(sp.dx, sizeof(sp.dx), "%s", fld[1]);
+            snprintf(sp.spotter, sizeof(sp.spotter), "%s", fld[2]);
+            snprintf(sp.comment, sizeof(sp.comment), "%s", fld[3]);
+            sp.utc_min = (uint16_t)(atoi(fld[4]) / 100 * 60 + atoi(fld[4]) % 100);
+            if (sp.freq_hz <= 0 || !sp.dx[0] || cluster_age_min(sp.utc_min, utc_now_min()) > MAX_AGE_MIN) continue;
+            pthread_mutex_lock(&lock);
+            cluster_store_add(&store, &sp);
+            store_gen++;
+            pthread_mutex_unlock(&lock);
+        }
+        if (f) pclose(f);
+        for (int t = 0; t < POTA_POLL_MS && !stop_requested; t += 500) usleep(500000);
+    }
+    return NULL;
+}
+
+static void start_thread(void *(*fn)(void *), void *arg) {
+    pthread_t      t;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_create(&t, &attr, fn, arg);
+    pthread_attr_destroy(&attr);
+}
+
+/* The other servers: the first EXTRA_LINKS of the list on another host (under lock) */
+static void pick_extras(const char *main_host) {
+    cluster_server_t list[CLUSTER_MAX_SERVERS];
+    int              n = cluster_servers_load(list, CLUSTER_MAX_SERVERS), k = 0;
+    char             host[EXTRA_LINKS][128] = {{0}};
+    int              port[EXTRA_LINKS]      = {0};
+
+    for (int i = 0; i < n && k < EXTRA_LINKS; i++) {
+        if (strcasecmp(list[i].host, main_host) == 0) continue;
+        snprintf(host[k], sizeof(host[k]), "%s", list[i].host);
+        port[k++] = list[i].port;
+    }
+    if (memcmp(host, extra_host, sizeof(host)) || memcmp(port, extra_port, sizeof(port))) {
+        memcpy(extra_host, host, sizeof(host));
+        memcpy(extra_port, port, sizeof(port));
+        extras_gen++;
+    }
+}
+
 /* The thread is detached and never joined: a DNS lookup or a connect can
  * block for seconds, and closing the app must not wait for it. */
 void cluster_client_start(const char *host, int port, const char *callsign) {
     pthread_mutex_lock(&lock);
     if (strcmp(host_name, host) != 0 || strcmp(login_call, callsign) != 0 || host_port != port)
         reconnect_requested = true; /* the running session picks up the change */
+    if (strcmp(login_call, callsign) != 0) extras_gen++;
+    pick_extras(host);
     snprintf(host_name, sizeof(host_name), "%s", host);
     snprintf(login_call, sizeof(login_call), "%s", callsign);
     host_port      = port;
@@ -739,6 +844,11 @@ void cluster_client_start(const char *host, int port, const char *callsign) {
             snprintf(state_detail, sizeof(state_detail), "no thread");
         }
         pthread_attr_destroy(&attr);
+    }
+    if (!extras_running) {
+        extras_running = true;
+        for (int i = 0; i < EXTRA_LINKS; i++) start_thread(extra_cb, (void *)(intptr_t)i);
+        start_thread(pota_cb, NULL);
     }
     pthread_mutex_unlock(&lock);
 }
