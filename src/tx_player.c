@@ -76,7 +76,8 @@ bool tx_player_stream(tx_fill_fn_t  fill,
                       float         base_gain_offset,
                       tx_abort_fn_t abort_check,
                       void         *abort_check_ctx) {
-    if (param_f_get(cfg_pwr) > TX_PLAYER_MAX_PWR_W) {
+    bool capped = param_f_get(cfg_pwr) > TX_PLAYER_MAX_PWR_W;
+    if (capped) {
         radio_set_pwr(TX_PLAYER_MAX_PWR_W);
     }
 
@@ -137,6 +138,9 @@ bool tx_player_stream(tx_fill_fn_t  fill,
     radio_set_modem(false);
     radio_set_freq((int32_t)radio_freq);
     audio_set_play_vol(params.play_gain_db_f.x);
+    if (capped) {
+        radio_set_pwr(param_f_get(cfg_pwr));   /* RTTY and WeFax left the radio at 5 W, also in SSB after */
+    }
 
     return !aborted;
 }

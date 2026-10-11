@@ -751,7 +751,7 @@ static buttons_page_t btn_page_2 = {
     .items = { &btn_sstv_page_2, &btn_freq, &btn_browser, &btn_delete_picture, &btn_restart }
 };
 static buttons_page_t btn_page_3 = {
-    .items = { &btn_sstv_page_3, &btn_test, NULL, NULL, &btn_close }
+    .items = { &btn_sstv_page_3, &btn_test, &btn_dig_pwr, NULL, &btn_close }
 };
 
 static dialog_t dialog = {

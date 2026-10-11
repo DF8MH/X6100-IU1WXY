@@ -84,6 +84,7 @@ static void key_cb(lv_event_t *e);
 static void fax_page_1_cb(button_data_t *data);
 static void fax_page_2_cb(button_data_t *data);
 static void fax_page_3_cb(button_data_t *data);
+static void fax_page_4_cb(button_data_t *data);
 
 static void fax_browser_cb(button_data_t *data);
 static void fix_align_cb(button_data_t *data);
@@ -327,7 +328,7 @@ static unsigned int vertical_accumulator = 0;
  *
  * F1 cycles locally:
  *
- *     FAX 1:3 -> FAX 2:3 -> FAX 3:3 -> FAX 1:3
+ *     FAX 1:4 -> FAX 2:4 -> FAX 3:4 -> FAX 4:4 (TX power) -> FAX 1:4
  *
  * This deliberately does not modify the global button page groups
  * in buttons.cpp.
@@ -338,7 +339,7 @@ static unsigned int vertical_accumulator = 0;
  */
 static button_data_t btn_fax_page_1 = {
     .type = BTN_TEXT,
-    .label = "(FAX 1:3)",
+    .label = "(FAX 1:4)",
     .press = fax_page_2_cb
 };
 
@@ -374,7 +375,7 @@ static button_data_t btn_clear = {
  */
 static button_data_t btn_fax_page_2 = {
     .type = BTN_TEXT,
-    .label = "(FAX 2:3)",
+    .label = "(FAX 2:4)",
     .press = fax_page_3_cb
 };
 
@@ -412,8 +413,8 @@ static button_data_t btn_save = {
  */
 static button_data_t btn_fax_page_3 = {
     .type = BTN_TEXT,
-    .label = "(FAX 3:3)",
-    .press = fax_page_1_cb
+    .label = "(FAX 3:4)",
+    .press = fax_page_4_cb
 };
 
 static button_data_t btn_fax_browser = {
@@ -471,6 +472,20 @@ static buttons_page_t btn_page_3 = {
         &btn_fix_align,
         &btn_fix_tilt,
         &btn_save_fax
+    }
+};
+
+/* FAX 4:4 - TX power (the transmission starts from X6100 Link or the web) */
+static button_data_t btn_fax_page_4 = {
+    .type = BTN_TEXT,
+    .label = "(FAX 4:4)",
+    .press = fax_page_1_cb
+};
+
+static buttons_page_t btn_page_4 = {
+    .items = {
+        &btn_fax_page_4,
+        &btn_dig_pwr,
     }
 };
 
@@ -2227,6 +2242,14 @@ static void fax_page_3_cb(button_data_t *data)
     buttons_load_page(
         &btn_page_3
     );
+}
+
+static void fax_page_4_cb(button_data_t *data)
+{
+    (void)data;
+
+    fax_browser_close();
+    buttons_load_page(&btn_page_4);
 }
 
 

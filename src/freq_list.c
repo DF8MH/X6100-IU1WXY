@@ -157,13 +157,19 @@ void freq_list_open(lv_obj_t *parent, const char *title, const freq_list_item_t 
     lv_obj_remove_style_all(panel);
     lv_obj_add_style(panel, &dialog_style, 0);
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+    /* dialog_style places it on the screen: inside an app's dialog (SSTV, NAVTEX), already at
+     * DIALOG_Y, it went down twice and its bottom under the buttons */
+    lv_area_t pa;
+    lv_obj_update_layout(parent);
+    lv_obj_get_content_coords(parent, &pa);   /* children are placed from the padding in */
+    lv_obj_set_pos(panel, lv_obj_get_style_x(panel, 0) - pa.x1, lv_obj_get_style_y(panel, 0) - pa.y1);
 
     int32_t   vfo  = cparam_i_get(cfg_fg_freq);
     lv_obj_t *head = lv_label_create(panel);
     lv_obj_set_style_text_font(head, &sony_20, 0);
     lv_obj_set_style_text_color(head, lv_color_hex(COLOR_HEAD), 0);
     lv_label_set_recolor(head, true);
-    lv_label_set_text_fmt(head, "%s #%06x - VFO %d.%03d.%02d USB#", title, theme_hex(TC_text), vfo / 1000000, (vfo / 1000) % 1000,
+    lv_label_set_text_fmt(head, "%s #%06x - VFO %d.%03d.%02d#", title, theme_hex(TC_text), vfo / 1000000, (vfo / 1000) % 1000,
                           (vfo % 1000) / 10);
     lv_obj_set_pos(head, 18, HEADER_Y);
 
