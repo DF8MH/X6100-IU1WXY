@@ -19,6 +19,8 @@
 #include "theme.h"
 #include "util.h"
 #include "info.h"
+#include "mic_level.h"
+#include "radio.h"
 
 #define UPDATE_UI_MS 40
 
@@ -252,6 +254,12 @@ void tx_info_update(float p, float s, float a) {
             alc  = a;
             vswr = s;
             break;
+        case x6100_mode_lsb:
+        case x6100_mode_usb:
+        case x6100_mode_am:
+        case x6100_mode_nfm:
+            if (radio_get_state() == RADIO_TX) mic_level_update(a, p);   /* not while the ATU tunes */
+            /* fall through */
         default:
             lpf(&pwr, p, beta, 0.0f);
             lpf(&alc, a, beta, 0.0f);

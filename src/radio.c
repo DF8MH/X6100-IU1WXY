@@ -471,8 +471,15 @@ void radio_set_ptt(bool tx) {
     WITH_RADIO_LOCK(x6100_control_ptt_set(tx));
 }
 
+static bool modem_on;
+
 void radio_set_modem(bool tx) {
+    modem_on = tx;
     WITH_RADIO_LOCK(x6100_control_modem_set(tx));
+}
+
+bool radio_get_modem(void) {
+    return modem_on;
 }
 
 void radio_speaker_play(bool on) {

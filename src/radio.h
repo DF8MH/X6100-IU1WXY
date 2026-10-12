@@ -77,6 +77,7 @@ void radio_stop_swrscan();
 void radio_poweroff();
 void radio_set_ptt(bool tx);
 void radio_set_modem(bool tx);
+bool radio_get_modem(void);   /* the TX audio from the GUI (apps, recordings), not the mic */
 /* The base plays this app's audio on the speaker (as voice prompts and the
  * recorder do) - and while it does, the audio it sends us isn't the
  * receiver's. Off puts the mics back. */

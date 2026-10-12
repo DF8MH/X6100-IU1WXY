@@ -73,3 +73,9 @@ add_executable(test_sstv test_sstv.c ../src/sstv/decoder.c ../src/sstv/encoder.c
 target_include_directories(test_sstv PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(test_sstv PRIVATE PNG::PNG PkgConfig::SNDFILE Threads::Threads m)
 add_test(NAME test_sstv COMMAND $<TARGET_FILE:test_sstv>)
+
+add_executable(test_mic_level test_mic_level.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/mic_level.c)
+target_include_directories(test_mic_level PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_compile_definitions(test_mic_level PRIVATE MIC_LEVEL_DECISIONS_ONLY)
+target_link_libraries(test_mic_level PRIVATE Catch2::Catch2WithMain)
+add_test(NAME test_mic_level COMMAND $<TARGET_FILE:test_mic_level> --colour-mode=ansi )
