@@ -1257,8 +1257,55 @@ static uint8_t make_switch_row(uint8_t row, const char *text, ParamInt &param) {
     return row + 1;
 }
 
+static void smeter_type_update_cb(lv_event_t *e) {
+    cfg_sm.p_smeter_needle.set(lv_dropdown_get_selected(lv_event_get_target(e)));
+}
+
+/* Bars, or a needle on a dial */
 static uint8_t make_smeter_needle(uint8_t row) {
-    return make_switch_row(row, "Needle S-meter", cfg_sm.p_smeter_needle);
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "S-meter type");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = lv_dropdown_create(grid);
+    dialog_item(&dialog, obj);
+    lv_obj_add_style(lv_dropdown_get_list(obj), &dialog_dropdown_list_style, 0);
+    lv_dropdown_set_options(obj, " Bars \n Needle ");
+    lv_dropdown_set_symbol(obj, NULL);
+    lv_dropdown_set_selected(obj, cfg_sm.p_smeter_needle.get());
+    lv_obj_add_event_cb(obj, smeter_type_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_size(obj, SMALL_3, ROW_H);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+
+    return row + 1;
+}
+
+static void smeter_color_update_cb(lv_event_t *e) {
+    cfg_sm.p_smeter_color.set(lv_dropdown_get_selected(lv_event_get_target(e)));
+}
+
+/* Theme: as the theme draws it. Scale: green, yellow, red along the scale. Level: the lit bars all
+ * in the colour of the signal */
+static uint8_t make_smeter_color(uint8_t row) {
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "S-meter colours");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = lv_dropdown_create(grid);
+    dialog_item(&dialog, obj);
+    lv_obj_add_style(lv_dropdown_get_list(obj), &dialog_dropdown_list_style, 0);
+    lv_dropdown_set_options(obj, " Theme \n Scale \n Level ");
+    lv_dropdown_set_symbol(obj, NULL);
+    lv_dropdown_set_selected(obj, cfg_sm.p_smeter_color.get());
+    lv_obj_add_event_cb(obj, smeter_color_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_size(obj, SMALL_3, ROW_H);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+
+    return row + 1;
 }
 
 static uint8_t make_cluster_column(uint8_t row) {
@@ -3797,6 +3844,8 @@ static void make_display_page() {
     row = make_cluster_spots_wf(row);
     row = make_cluster_column(row);
     row = make_smeter_needle(row);
+    row = make_smeter_color(row);
+    row = make_param_switch(row, "Needle lamp", cfg_sm.p_smeter_lamp);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_SETTINGS, "INTERFACE");
@@ -3901,6 +3950,183 @@ static uint8_t info_row(uint8_t row, const char *label, const char *val) {
     return row + 1;
 }
 
+/* Diagnostics (Info): x6100-diag collects them, they are shown here and go to x6100-link.it only
+ * with Send. The first time a short note says what they are for. */
+#define DIAG_CTL "/usr/sbin/x6100-diag"
+#define DIAG_ACK "/mnt/x6100-diag.ack"
+
+static lv_obj_t *diag_note;     /* the row's note, NULL off the page */
+static lv_obj_t *diag_btn;
+static lv_obj_t *diag_panel;
+static bool      diag_busy;
+
+static void diag_ptr_clear_cb(lv_event_t *e) {
+    *(lv_obj_t **)lv_event_get_user_data(e) = NULL;
+}
+
+static void diag_say(const char *s) {
+    if (diag_note) lv_label_set_text(diag_note, s);
+}
+
+static void diag_close(void *arg) {
+    if (!diag_panel) return;
+    lv_obj_del(diag_panel);
+    if (diag_btn) lv_group_focus_obj(diag_btn);
+    lv_group_set_editing(keyboard_group, false);
+}
+
+static void diag_sent(const char *out, int status, void *user) {
+    char s[64];
+
+    diag_busy = false;
+    if (status == 0 && *out) {
+        snprintf(s, sizeof(s), "sent, code %.12s", out);
+        diag_say(s);
+    } else {
+        diag_say("not sent: no internet?");
+    }
+}
+
+static void diag_send(void *arg) {
+    FILE *f;
+
+    diag_close(NULL);
+    if ((f = fopen(DIAG_ACK, "w"))) fclose(f);
+    diag_busy = true;
+    diag_say("sending...");
+    sh_run(DIAG_CTL " send", diag_sent, NULL);
+}
+
+static void diag_key_cb(lv_event_t *e) {
+    lv_obj_t *box = (lv_obj_t *)lv_event_get_user_data(e);
+
+    switch (*((uint32_t *)lv_event_get_param(e))) {
+        case LV_KEY_LEFT:
+        case LV_KEY_UP:     lv_obj_scroll_by(box, 0, 60, LV_ANIM_OFF); break;
+        case LV_KEY_RIGHT:
+        case LV_KEY_DOWN:   lv_obj_scroll_by(box, 0, -60, LV_ANIM_OFF); break;
+        case LV_KEY_ENTER:  lv_async_call(diag_send, NULL); break;
+        case LV_KEY_ESC:    lv_async_call(diag_close, NULL); break;
+        case KEY_VOL_LEFT_EDIT:
+        case KEY_VOL_LEFT_SELECT:   radio_change_vol(-1); break;
+        case KEY_VOL_RIGHT_EDIT:
+        case KEY_VOL_RIGHT_SELECT:  radio_change_vol(1); break;
+    }
+}
+
+static void diag_click_cb(lv_event_t *e) {
+    lv_async_call(lv_event_get_user_data(e) ? diag_send : diag_close, NULL);
+}
+
+static lv_obj_t * diag_panel_btn(lv_obj_t *parent, const char *text, bool send) {
+    lv_obj_t *obj = lv_btn_create(parent);
+
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_size(obj, 160, 40);
+    lv_obj_set_style_radius(obj, 8, 0);
+    lv_obj_set_style_border_width(obj, 2, 0);
+    lv_obj_set_style_border_color(obj, send ? TC(ok) : TC(control_border), 0);
+    lv_obj_add_event_cb(obj, diag_click_cb, LV_EVENT_CLICKED, send ? (void *)1 : NULL);
+    obj = wl_label(obj, &sony_22, theme_hex(TC_text), 0);
+    lv_label_set_text(obj, text);
+    lv_obj_center(obj);
+    return obj;
+}
+
+/* What will be sent, scrolled with the MFK; press or Send sends, ESC or Cancel closes */
+static void diag_collected(const char *out, int status, void *user) {
+    std::string text;
+    char        buf[1024];
+    size_t      n;
+    FILE       *f = fopen("/tmp/x6100-diag.txt", "r");
+
+    diag_busy = false;
+    if (!f || !dialog.obj) {
+        if (f) fclose(f);
+        diag_say("could not collect them");
+        return;
+    }
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) text.append(buf, n);
+    fclose(f);
+    diag_say("");
+
+    diag_panel = lv_obj_create(dialog.obj);
+    lv_obj_add_event_cb(diag_panel, diag_ptr_clear_cb, LV_EVENT_DELETE, &diag_panel);
+    lv_obj_remove_style_all(diag_panel);
+    lv_obj_set_size(diag_panel, lv_pct(94), lv_pct(92));
+    lv_obj_center(diag_panel);
+    lv_obj_set_style_bg_color(diag_panel, TC(popup), 0);
+    lv_obj_set_style_bg_opa(diag_panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(diag_panel, TC(popup_border), 0);
+    lv_obj_set_style_border_width(diag_panel, 2, 0);
+    lv_obj_set_style_radius(diag_panel, theme_shape.radius_popup, 0);
+    lv_obj_set_style_pad_all(diag_panel, 12, 0);
+    lv_obj_set_style_pad_row(diag_panel, 8, 0);
+    lv_obj_set_flex_flow(diag_panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_clear_flag(diag_panel, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *obj = wl_label(diag_panel, &sony_22, theme_hex(TC_text_head), 0);
+    lv_label_set_text(obj, "Send these diagnostics to IU1WXY?");
+
+    if (access(DIAG_ACK, F_OK) != 0) {     /* the first time only */
+        obj = wl_label(diag_panel, &sony_18, theme_hex(TC_text_value), 0);
+        lv_obj_set_width(obj, lv_pct(100));
+        lv_label_set_long_mode(obj, LV_LABEL_LONG_WRAP);
+        lv_label_set_text(obj, "Thanks for helping! This is only read by IU1WXY to understand the problem, and "
+                               "deleted within 90 days. It is a friendly, best-effort help: the firmware comes "
+                               "as it is, with no warranty, and sending is always up to you.");
+    }
+
+    lv_obj_t *box = lv_obj_create(diag_panel);
+    lv_obj_remove_style_all(box);
+    lv_obj_set_width(box, lv_pct(100));
+    lv_obj_set_flex_grow(box, 1);
+    lv_obj_set_style_bg_color(box, TC(bg), 0);
+    lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_all(box, 6, 0);
+    obj = wl_label(box, &sony_16, theme_hex(TC_text_dim), 0);
+    lv_obj_set_width(obj, lv_pct(100));
+    lv_label_set_long_mode(obj, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(obj, text.c_str());
+    lv_obj_align(obj, LV_ALIGN_TOP_LEFT, 0, 0);
+
+    lv_obj_t *row = lv_obj_create(diag_panel);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, lv_pct(100), 40);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 12, 0);
+    obj = wl_label(row, &sony_16, theme_hex(TC_text_dim), 0);
+    lv_label_set_text(obj, "MFK: scroll - press: send - ESC: cancel");
+    lv_obj_set_flex_grow(obj, 1);
+    diag_panel_btn(row, "Cancel", false);
+    diag_panel_btn(row, "Send", true);
+
+    lv_group_add_obj(keyboard_group, diag_panel);
+    lv_obj_add_event_cb(diag_panel, diag_key_cb, LV_EVENT_KEY, box);
+    lv_group_focus_obj(diag_panel);
+    lv_group_set_editing(keyboard_group, true);
+}
+
+static void diag_btn_cb(lv_event_t *e) {
+    char cmd[160];
+
+    if (diag_busy || diag_panel) return;
+    diag_busy = true;
+    diag_say("collecting...");
+    snprintf(cmd, sizeof(cmd), DIAG_CTL " collect '%s' '%s'", strrchr(VERSION, ' ') + 1, x6100_control_get_fw_version_str());
+    sh_run(cmd, diag_collected, NULL);
+}
+
+static uint8_t make_diag(uint8_t row) {
+    wl_row_label(row, "Diagnostics");
+    diag_btn = wl_button(row, "Send...", diag_btn_cb);
+    lv_obj_add_event_cb(diag_btn, diag_ptr_clear_cb, LV_EVENT_DELETE, &diag_btn);
+    diag_note = wl_note(row);
+    lv_obj_add_event_cb(diag_note, diag_ptr_clear_cb, LV_EVENT_DELETE, &diag_note);
+    return row + 1;
+}
+
 /* Info: cards and rows as the other tabs, in the same font */
 static void make_info_page() {
     grid_delete();
@@ -3911,9 +4137,9 @@ static void make_info_page() {
     row = info_row(row, "Version", strrchr(VERSION, ' ') + 1);
     row = info_row(row, "Author", "Giovanni Ricciardi IU1WXY");
     row = info_row(row, "Contact", "giovanni@iu1wxy.com");
-    row = info_row(row, "Based on", "R1CBU + gdyuldin builds");
     row = info_row(row, "Baseband", x6100_control_get_fw_version_str());
     row = make_update_alert(row);
+    row = make_diag(row);
     card_end(row);
 }
 

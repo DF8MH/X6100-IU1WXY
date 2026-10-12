@@ -1,0 +1,52 @@
+#!/bin/sh
+# Diagnostics for IU1WXY (Settings > Info > Diagnostics), sent only after the
+# user has read them on the screen and pressed Send.
+#   x6100-diag collect VERSION BASEBAND   writes /tmp/x6100-diag.txt
+#   x6100-diag send                       posts it to x6100-link.it, prints the code
+# Bluetooth and system state only: no WiFi networks, no positions, no logbook.
+
+OUT=/tmp/x6100-diag.txt
+MAX=60000
+
+collect() {
+	{
+		echo "X6100 diagnostics, $(date -u '+%Y-%m-%d %H:%M') UTC"
+		echo "firmware $1, baseband $2, kernel $(uname -r)"
+		echo "up $(cut -d. -f1 /proc/uptime) s, free memory $(awk '/MemAvailable/ {print $2}' /proc/meminfo) kB"
+		echo
+		echo "== Bluetooth controller"
+		bluetoothctl show 2>&1 | grep -v -e "^\s*UUID:" -e "Modalias"
+		echo
+		echo "== Bluetooth devices"
+		for mac in $(bluetoothctl devices 2>/dev/null | awk '{print $2}'); do
+			bluetoothctl info "$mac" 2>&1
+			echo
+		done
+		echo "== Last pairing"
+		sed 's/\x1b\[[0-9;]*[a-zA-Z]//g; s/\r//g' /tmp/bt_pair.log 2>/dev/null | grep -v "^\s*$" | tail -n 80
+		echo
+		echo "== Input devices"
+		grep -E "^(N|H|B: EV)" /proc/bus/input/devices 2>/dev/null
+		echo
+		echo "== Kernel messages (Bluetooth, HID, USB)"
+		dmesg 2>/dev/null | grep -i -E "bluetooth|hci|rtl|hid|input|usb" | tail -n 80
+	} | tr -cd '\11\12\40-\176' | head -c $MAX > $OUT   # plain ASCII: the site shows it as it is
+	wc -l < $OUT
+}
+
+send() {
+	[ -s $OUT ] || { echo "Nothing to send"; exit 1; }
+	python3 -c "
+import sys, urllib.request as u
+d = open('$OUT', 'rb').read()
+r = u.urlopen(u.Request('https://x6100-link.it/api/diag.php', data=d, headers={'Content-Type': 'text/plain'}), timeout=20)
+print(r.read().decode().strip())
+" 2>/dev/null || { echo "Send failed"; exit 1; }
+	rm -f $OUT
+}
+
+case "$1" in
+	collect) collect "$2" "$3";;
+	send)    send;;
+	*)       echo "Usage: $0 collect VERSION BASEBAND | send"; exit 1;;
+esac

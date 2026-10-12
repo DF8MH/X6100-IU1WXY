@@ -959,6 +959,58 @@ def cw_messages():
     return bottle.template('cw_messages')
 
 
+# Display: the screen options of Settings > Display, read and set live through the GUI socket
+# (disp_get / disp_set, src/remote_server.cpp); the GUI checks names and ranges
+
+def display_call(cmd):
+    try:
+        with remote_connect(3) as sock, sock.makefile("rb") as f:
+            sock.sendall(json.dumps(cmd).encode() + b"\n")
+            return json.loads(f.readline() or b"{}")
+    except (OSError, ValueError):
+        return None
+
+
+@app.route('/display')
+def display():
+    return bottle.template('display')
+
+
+@app.get('/api/display')
+def display_get():
+    reply = display_call({"cmd": "disp_get"})
+    if not reply or reply.get("t") != "disp":
+        return api_error(503, "Radio GUI not reachable")
+    reply.pop("t", None)
+    return reply
+
+
+@app.post('/api/display')
+def display_set():
+    try:
+        data = bottle.request.json
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("name"), str) or len(data["name"]) > 23:
+        return api_error(400, "Invalid option")
+    cmd = {"cmd": "disp_set", "text": data["name"]}
+    if data["name"] == "theme":
+        if not isinstance(data.get("theme"), str) or len(data["theme"]) > 31:
+            return api_error(400, "Invalid theme")
+        cmd["theme"] = data["theme"]
+    else:
+        val = data.get("val")
+        if not isinstance(val, int) or isinstance(val, bool):
+            return api_error(400, "Invalid value")
+        cmd["val"] = val
+    reply = display_call(cmd)
+    if reply is None:
+        return api_error(503, "Radio GUI not reachable")
+    if reply.get("t") != "ok":
+        return api_error(409, reply.get("err", "Rejected by the radio"))
+    return {"status": "OK"}
+
+
 CW_MSG_MAX = 64     # as the radio's editor (textarea_window)
 
 

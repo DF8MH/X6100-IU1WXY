@@ -23,6 +23,7 @@
 
 #include "cfg/db.h"
 #include "cfg/settings_manager.h"
+#include "cfg/settings_manager_api.h"
 #include "util.h"
 
 #include <dirent.h>
@@ -56,6 +57,9 @@ extern "C" {
     #include "rtty.h"
     #include "scheduler.h"
     #include "waterfall.h"
+    #include "params/params.h"
+    #include "backlight.h"
+    #include "theme.h"
 
     #include "lvgl/lvgl.h"
     #include <ctype.h>
@@ -811,6 +815,145 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
     return "Unknown command";
 }
 
+/* Screen options for the web configurator (Display page): {"cmd":"disp_get"} answers
+ * {"t":"disp",...}; {"cmd":"disp_set","text":name,"val":v} (the theme: "theme":<name>) is
+ * applied on the GUI thread, as the Settings page does it */
+static const struct {
+    const char         *name;
+    Parameter<int32_t> *p;
+    int32_t             min, max;
+} disp_ints[] = {
+    {"wf_mode", &cfg_sm.p_wf_mode, 0, 1},
+    {"auto_level", &cfg_sm.p_auto_level_enabled, 0, 1},
+    {"wf_speed", &cfg_sm.p_waterfall_speed, 1, 5},
+    {"band_plan", &cfg_sm.p_band_plan, 0, 1},
+    {"cluster_spots_wf", &cfg_sm.p_cluster_spots_wf, 0, 1},
+    {"cluster_column", &cfg_sm.p_cluster_column, 0, 1},
+    {"smeter_needle", &cfg_sm.p_smeter_needle, 0, 1},
+    {"smeter_color", &cfg_sm.p_smeter_color, 0, 2},
+    {"smeter_lamp", &cfg_sm.p_smeter_lamp, 0, 1},
+    {"knob_info", &cfg_sm.p_knob_info, 0, 1},
+};
+
+static const struct {
+    const char    *name;
+    params_bool_t *b;
+} disp_bools[] = {
+    {"wf_center_line", &params.waterfall_center_line},
+    {"wf_zoom", &params.waterfall_zoom},
+    {"wf_smooth", &params.waterfall_smooth_scroll},
+    {"mag_freq", &params.mag_freq},
+    {"mag_info", &params.mag_info},
+    {"mag_alc", &params.mag_alc},
+};
+
+typedef struct {
+    char    name[24];
+    char    text[40];
+    int32_t val;
+} disp_set_t;
+
+static void disp_apply(void *arg) {
+    disp_set_t *d = (disp_set_t *)arg;
+
+    for (auto &o : disp_ints)
+        if (!strcmp(d->name, o.name))
+            o.p->set(d->val);
+    for (auto &o : disp_bools)
+        if (!strcmp(d->name, o.name))
+            params_bool_set(o.b, d->val);
+    if (!strcmp(d->name, "auto_level_offset")) {
+        cfg_sm.p_auto_level_offset.set(d->val / 10.0f);
+    } else if (!strcmp(d->name, "bright_normal") || !strcmp(d->name, "bright_idle")) {
+        bool normal = d->name[7] == 'n';
+        params_lock();
+        if (normal)
+            params.brightness_normal = d->val;
+        else
+            params.brightness_idle = d->val;
+        params_unlock(normal ? &params.dirty.brightness_normal : &params.dirty.brightness_idle);
+        if (normal)
+            backlight_set_brightness(params.brightness_normal);
+    } else if (!strcmp(d->name, "bright_timeout")) {
+        params_lock();
+        params.brightness_timeout = d->val;
+        params_unlock(&params.dirty.brightness_timeout);
+        backlight_tick();
+    } else if (!strcmp(d->name, "bright_buttons")) {
+        backlight_set_buttons((buttons_light_t)d->val);
+    } else if (!strcmp(d->name, "theme")) {
+        /* as Settings: the GUI saves and starts again with it (x6100_daemon) */
+        params_str_set(&params.theme_name, d->text);
+        params_flush();
+        cfg_api_flush_all();
+        exit(0);
+    }
+}
+
+static const char *disp_set(cJSON *req, disp_set_t *d) {
+    cJSON *t = cJSON_GetObjectItemCaseSensitive(req, "text");
+    if (!cJSON_IsString(t) || strlen(t->valuestring) >= sizeof(d->name))
+        return "Invalid option";
+    memset(d, 0, sizeof(*d));
+    strcpy(d->name, t->valuestring);
+    if (!strcmp(d->name, "theme")) {
+        cJSON *n = cJSON_GetObjectItemCaseSensitive(req, "theme");
+        char   names[32][32];
+        int    count = theme_list(names, 32);
+
+        for (int i = 0; cJSON_IsString(n) && i < count; i++)
+            if (!strcmp(n->valuestring, names[i])) {
+                snprintf(d->text, sizeof(d->text), "%s", names[i]);
+                return NULL;
+            }
+        return "Unknown theme";
+    }
+    int32_t min = 0, max = 1;
+    bool    known = false;
+    for (auto &o : disp_ints)
+        if (!strcmp(d->name, o.name)) {
+            min = o.min, max = o.max, known = true;
+        }
+    for (auto &o : disp_bools)
+        if (!strcmp(d->name, o.name))
+            known = true;
+    if (!strcmp(d->name, "auto_level_offset"))
+        min = -150, max = 150, known = true;   /* tenths of dB */
+    if (!strcmp(d->name, "bright_normal") || !strcmp(d->name, "bright_idle"))
+        min = -1, max = 9, known = true;
+    if (!strcmp(d->name, "bright_timeout"))
+        min = 5, max = 120, known = true;
+    if (!strcmp(d->name, "bright_buttons"))
+        min = 0, max = 2, known = true;
+    if (!known)
+        return "Unknown option";
+    if (!get_int(req, min, max, &d->val))
+        return "Invalid value";
+    return NULL;
+}
+
+static void disp_get(client_t *c) {
+    char   buf[2048];
+    int    l = snprintf(buf, sizeof(buf), "{\"t\":\"disp\"");
+    char   names[32][32];
+    int    count = theme_list(names, 32);
+
+    for (auto &o : disp_ints)
+        l += snprintf(buf + l, sizeof(buf) - l, ",\"%s\":%d", o.name, (int)o.p->get());
+    for (auto &o : disp_bools)
+        l += snprintf(buf + l, sizeof(buf) - l, ",\"%s\":%d", o.name, o.b->x ? 1 : 0);
+    l += snprintf(buf + l, sizeof(buf) - l,
+                  ",\"auto_level_offset\":%d,\"bright_normal\":%d,\"bright_idle\":%d,\"bright_timeout\":%d,"
+                  "\"bright_buttons\":%d,\"theme\":\"%s\",\"themes\":[",
+                  (int)lroundf(cfg_sm.p_auto_level_offset.get() * 10), params.brightness_normal, params.brightness_idle,
+                  params.brightness_timeout, (int)params.brightness_buttons, params.theme_name.x);
+    for (int i = 0; i < count && l < (int)sizeof(buf) - 40; i++)
+        l += snprintf(buf + l, sizeof(buf) - l, "%s\"%s\"", i ? "," : "", names[i]);
+    l += snprintf(buf + l, sizeof(buf) - l, "]}\n");
+    if (l > 0 && l < (int)sizeof(buf))
+        client_send(c, buf, l);
+}
+
 static void handle_line(client_t *c, const char *line) {
     cJSON      *req  = cJSON_Parse(line);
     cJSON      *name = cJSON_GetObjectItemCaseSensitive(req, "cmd");
@@ -821,6 +964,14 @@ static void handle_line(client_t *c, const char *line) {
         err = "Bad request";
     } else if (!strcmp(name->valuestring, "get")) {
         send_state(c);
+    } else if (!strcmp(name->valuestring, "disp_get")) {
+        disp_get(c);
+    } else if (!strcmp(name->valuestring, "disp_set")) {
+        disp_set_t d;
+        if (!(err = disp_set(req, &d))) {
+            scheduler_put(disp_apply, &d, sizeof(d));
+            client_send(c, "{\"t\":\"ok\"}\n", 11);
+        }
     } else if (!strcmp(name->valuestring, "sub")) {
         if (!c->sub && subscribers >= MAX_SUBS) {
             err = "Too many remote pages open";

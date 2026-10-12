@@ -48,9 +48,106 @@ static lv_obj_t              *s_table      = NULL;
 static table_view_press_cb_t  s_press_cb   = NULL;
 static table_view_actions_t   s_actions    = {0};
 
+/*
+ *  "For you": the last messages to this station, one row a caller, pinned in a small table
+ *  under the list whatever the Show filter, so they don't scroll away. A caller leaves when we
+ *  send it 73 / RR73 or after PIN_TTL_MS without news. The MFK goes down into it from the last
+ *  row of the list (s_pin_sel >= 0), a press answers that caller as a press on the list does.
+ */
+#define PIN_MAX     3
+#define PIN_TTL_MS  120000
+
+static lv_obj_t    *s_pin;
+static cell_data_t  s_pin_cd[PIN_MAX];
+static uint32_t     s_pin_at[PIN_MAX];
+static int          s_pin_n;
+static int          s_pin_sel = -1;     /* the MFK row in the pin table, -1: in the list */
+static uint16_t     s_list_row;         /* the list's row while the MFK is in the pin table */
+static uint16_t     s_sel_prev;         /* the list's selected row after the last key */
+static bool         s_own_key;          /* a key sent by push_ui (autoscroll), not the MFK */
+static lv_coord_t   s_y, s_h;
+static lv_timer_t  *s_pin_timer;
+
 static inline cell_data_t *row_cell(uint16_t r) {
     if (r >= TABLE_MAX_ROWS_INTERNAL) return NULL;
     return s_row_cell[r];
+}
+
+/* The cell of row r of the list or of the pin table */
+static cell_data_t *cell_of(lv_obj_t *obj, uint16_t r) {
+    if (obj == s_pin) return r < s_pin_n ? &s_pin_cd[r] : NULL;
+    return row_cell(r);
+}
+
+/* The pin table shown under the list with its rows, the list shorter by its height */
+static void pin_layout(void) {
+    if (!s_pin || !s_table) return;
+    if (!s_pin_n) {
+        lv_obj_add_flag(s_pin, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_height(s_table, s_h);
+        s_pin_sel = -1;
+        return;
+    }
+    lv_table_set_row_cnt(s_pin, s_pin_n);
+    for (int i = 0; i < s_pin_n; i++)
+        lv_table_set_cell_value(s_pin, i, 0, s_pin_cd[i].text);
+    lv_obj_clear_flag(s_pin, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_update_layout(s_pin);
+    lv_coord_t ph = lv_obj_get_height(s_pin);
+    lv_obj_set_y(s_pin, s_y + s_h - ph);
+    lv_obj_set_height(s_table, s_h - ph - 4);
+    if (s_pin_sel >= s_pin_n) s_pin_sel = s_pin_n - 1;
+    lv_obj_invalidate(s_pin);
+}
+
+static void pin_drop(int i) {
+    memmove(&s_pin_cd[i], &s_pin_cd[i + 1], (size_t)(s_pin_n - i - 1) * sizeof(s_pin_cd[0]));
+    memmove(&s_pin_at[i], &s_pin_at[i + 1], (size_t)(s_pin_n - i - 1) * sizeof(s_pin_at[0]));
+    s_pin_n--;
+}
+
+/* A message to us: its caller's row, newest at the bottom */
+static void pin_add(const cell_data_t *cd) {
+    if (!cd->meta.call_de[0]) return;
+    for (int i = 0; i < s_pin_n; i++)
+        if (!strcmp(s_pin_cd[i].meta.call_de, cd->meta.call_de)) {
+            pin_drop(i);
+            break;
+        }
+    if (s_pin_n == PIN_MAX) pin_drop(0);
+    s_pin_cd[s_pin_n] = *cd;
+    s_pin_at[s_pin_n] = lv_tick_get();
+    s_pin_n++;
+    pin_layout();
+}
+
+/* We sent 73 or RR73: the QSO with the callers named in it is over */
+static void pin_tx(const char *text) {
+    size_t n = strlen(text);
+    bool   end = (n >= 3 && !strcmp(text + n - 3, " 73")) || (n >= 4 && !strcmp(text + n - 4, "RR73"));
+    bool   changed = false;
+
+    if (!end) return;
+    for (int i = s_pin_n - 1; i >= 0; i--) {
+        char word[16];
+        snprintf(word, sizeof(word), " %s ", s_pin_cd[i].meta.call_de);
+        if (strstr(text, word)) {
+            pin_drop(i);
+            changed = true;
+        }
+    }
+    if (changed) pin_layout();
+}
+
+static void pin_expire_cb(lv_timer_t *t) {
+    (void)t;
+    bool changed = false;
+    for (int i = s_pin_n - 1; i >= 0; i--)
+        if (lv_tick_elaps(s_pin_at[i]) > PIN_TTL_MS) {
+            pin_drop(i);
+            changed = true;
+        }
+    if (changed) pin_layout();
 }
 
 static inline void set_row_cell(uint16_t r, cell_data_t *cd) {
@@ -149,9 +246,16 @@ void table_view_push_ui(const cell_data_t *src) {
     lv_table_set_cell_value(s_table, rows, 0, stored->text);
     set_row_cell(rows, stored);
 
+    if (src->cell_type == CELL_RX_TO_ME)
+        pin_add(src);
+    else if (src->cell_type == CELL_TX_MSG)
+        pin_tx(src->text);
+
     if (scroll) {
         static int32_t c = LV_KEY_DOWN;
+        s_own_key = true;
         lv_event_send(s_table, LV_EVENT_KEY, &c);
+        s_own_key = false;
     }
 }
 
@@ -169,6 +273,8 @@ void table_view_reset(void) {
     lv_table_set_row_cnt(s_table, 1);
     lv_table_set_cell_value(s_table, 0, 0, WAIT_SYNC_TEXT);
     s_pool_write = 0;
+    s_pin_n = 0;    /* another band or mode: the callers of the old one are gone */
+    pin_layout();
 }
 
 /* -------- LVGL event plumbing ------------------------------------------ */
@@ -182,9 +288,9 @@ static void draw_part_begin_cb(lv_event_t *e) {
     uint32_t row = dsc->id / lv_table_get_col_cnt(obj);
     uint32_t col = dsc->id - row * lv_table_get_col_cnt(obj);
     (void)col;
-    cell_data_t *cd = row_cell((uint16_t)row);
+    cell_data_t *cd = cell_of(obj, (uint16_t)row);
 
-    dsc->rect_dsc->bg_opa = LV_OPA_50;
+    dsc->rect_dsc->bg_opa = obj == s_pin ? LV_OPA_80 : LV_OPA_50;
 
     if (!cd) {
         dsc->label_dsc->align = LV_TEXT_ALIGN_CENTER;
@@ -227,7 +333,7 @@ static void draw_part_begin_cb(lv_event_t *e) {
     uint16_t selected_row;
     uint16_t selected_col;
     lv_table_get_selected_cell(obj, &selected_row, &selected_col);
-    if (selected_row == row) {
+    if (obj == s_pin ? s_pin_sel == (int)row : (s_pin_sel < 0 && selected_row == row)) {
         dsc->rect_dsc->bg_color = lv_color_lighten(dsc->rect_dsc->bg_color, 20);
     }
 }
@@ -296,7 +402,7 @@ static void draw_part_end_cb(lv_event_t *e) {
     uint32_t row = dsc->id / lv_table_get_col_cnt(obj);
     uint32_t col = dsc->id - row * lv_table_get_col_cnt(obj);
     (void)col;
-    cell_data_t *cd = row_cell((uint16_t)row);
+    cell_data_t *cd = cell_of(obj, (uint16_t)row);
     if (!cd) return;
 
     if ((cd->cell_type != CELL_RX_MSG) &&
@@ -334,19 +440,61 @@ static void draw_part_end_cb(lv_event_t *e) {
 }
 
 static void cell_press_cb(lv_event_t *e) {
-    (void)e;
     if (!s_press_cb) return;
 
     uint16_t row, col;
+    if (lv_event_get_target(e) == s_pin) {    /* touched */
+        lv_table_get_selected_cell(s_pin, &row, &col);
+        if (row < s_pin_n) s_press_cb(&s_pin_cd[row]);
+        return;
+    }
+    if (s_pin_sel >= 0 && s_pin_sel < s_pin_n) {    /* the MFK on the pin table */
+        s_press_cb(&s_pin_cd[s_pin_sel]);
+        return;
+    }
     lv_table_get_selected_cell(s_table, &row, &col);
     (void)col;
     cell_data_t *cd = row_cell(row);
     s_press_cb(cd);
 }
 
+/* The MFK past the last row of the list goes on into the pin table, up from its first row
+ * back into the list. The list moved its own selection already (class first): put it back */
+static void pin_key(uint32_t key) {
+    lv_table_t *tbl = (lv_table_t *)s_table;
+    uint16_t    rows = lv_table_get_row_cnt(s_table);
+    uint16_t    row, col;
+
+    lv_table_get_selected_cell(s_table, &row, &col);
+    if (s_own_key) {
+        s_sel_prev = row;
+        return;
+    }
+    if (key == LV_KEY_DOWN || key == LV_KEY_RIGHT) {
+        if (s_pin_sel >= 0) {
+            tbl->row_act = s_list_row;
+            if (s_pin_sel < s_pin_n - 1) s_pin_sel++;
+        } else if (s_pin_n && rows && s_sel_prev == rows - 1 && row == rows - 1) {
+            s_list_row = row;
+            s_pin_sel  = 0;
+        }
+    } else if (key == LV_KEY_UP || key == LV_KEY_LEFT) {
+        if (s_pin_sel >= 0) {
+            tbl->row_act = s_list_row;
+            s_pin_sel--;
+        }
+    } else {
+        return;
+    }
+    lv_table_get_selected_cell(s_table, &s_sel_prev, &col);
+    lv_obj_invalidate(s_table);
+    if (s_pin) lv_obj_invalidate(s_pin);
+}
+
 static void key_cb(lv_event_t *e) {
     uint32_t key = *((uint32_t *)lv_event_get_param(e));
 
+    if (lv_event_get_target(e) == s_table) pin_key(key);
     switch (key) {
     case LV_KEY_ESC:
         if (s_actions.on_close) s_actions.on_close();
@@ -398,9 +546,50 @@ void table_view_build(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_coord_t w
     lv_obj_set_style_pad_right(s_table, 0, LV_PART_ITEMS);
 
     lv_table_set_cell_value(s_table, 0, 0, WAIT_SYNC_TEXT);
+
+    /* "For you" under it: the same rows, a smaller font, a line of the to-me colour on top */
+    s_y = y;
+    s_h = h;
+    s_pin_n   = 0;
+    s_pin_sel = -1;
+    s_pin = lv_table_create(parent);
+    lv_obj_remove_style(s_pin, NULL, LV_STATE_ANY | LV_PART_MAIN);
+    lv_obj_add_event_cb(s_pin, cell_press_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(s_pin, draw_part_begin_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
+    lv_obj_add_event_cb(s_pin, draw_part_end_cb, LV_EVENT_DRAW_PART_END, NULL);
+    lv_obj_set_pos(s_pin, x, y + h);
+    lv_obj_set_width(s_pin, w);
+    lv_obj_set_height(s_pin, LV_SIZE_CONTENT);
+    lv_table_set_col_cnt(s_pin, 1);
+    lv_table_set_col_width(s_pin, 0, w - 2);
+    lv_obj_set_style_border_width(s_pin, 0, LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(s_pin, 224, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_pin, TC(panel), LV_PART_MAIN);
+    lv_obj_set_style_border_side(s_pin, LV_BORDER_SIDE_TOP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(s_pin, 3, LV_PART_MAIN);
+    lv_obj_set_style_border_color(s_pin, TC(ft8_to_me), LV_PART_MAIN);
+    lv_obj_set_style_text_color(s_pin, TC(text), LV_PART_ITEMS);
+    lv_obj_set_style_text_font(s_pin, &sony_22, LV_PART_ITEMS);
+    lv_obj_set_style_pad_top(s_pin, 2, LV_PART_ITEMS);
+    lv_obj_set_style_pad_bottom(s_pin, 2, LV_PART_ITEMS);
+    lv_obj_set_style_pad_left(s_pin, 5, LV_PART_ITEMS);
+    lv_obj_set_style_pad_right(s_pin, 0, LV_PART_ITEMS);
+    lv_obj_clear_flag(s_pin, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_pin, LV_OBJ_FLAG_HIDDEN);
+    s_pin_timer = lv_timer_create(pin_expire_cb, 5000, NULL);
 }
 
 void table_view_destroy(void) {
+    if (s_pin_timer) {
+        lv_timer_del(s_pin_timer);
+        s_pin_timer = NULL;
+    }
+    if (s_pin) {
+        lv_obj_del(s_pin);
+        s_pin = NULL;
+    }
+    s_pin_n   = 0;
+    s_pin_sel = -1;
     if (s_table) {
         /* LVGL will delete its internal cell strings; we never wrote to
          * cell user_data, so its NULL slots have nothing to free. */

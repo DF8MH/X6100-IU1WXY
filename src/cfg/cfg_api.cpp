@@ -36,6 +36,8 @@ ParamInt         *cfg_spectrum_show       = nullptr;
 ParamInt         *cfg_cluster_spots_wf    = nullptr;
 ParamInt         *cfg_band_plan           = nullptr;
 ParamInt         *cfg_smeter_needle       = nullptr;
+ParamInt         *cfg_smeter_color        = nullptr;
+ParamInt         *cfg_smeter_lamp         = nullptr;
 ParamInt         *cfg_cluster_column      = nullptr;
 ParamInt         *cfg_cluster_order       = nullptr;
 ParamInt         *cfg_cluster_all_bands   = nullptr;
@@ -174,6 +176,8 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_cluster_spots_wf = &cfg_sm.p_cluster_spots_wf;
     cfg_band_plan        = &cfg_sm.p_band_plan;
     cfg_smeter_needle    = &cfg_sm.p_smeter_needle;
+    cfg_smeter_color     = &cfg_sm.p_smeter_color;
+    cfg_smeter_lamp      = &cfg_sm.p_smeter_lamp;
     cfg_cluster_column = &cfg_sm.p_cluster_column;
     cfg_cluster_order    = &cfg_sm.p_cluster_order;
     cfg_cluster_all_bands = &cfg_sm.p_cluster_all_bands;

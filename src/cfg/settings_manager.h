@@ -115,7 +115,13 @@ class SettingsManager {
     Parameter<int32_t> p_cluster_spots_wf{"cluster_spots_wf", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // S-meter drawn as a needle on a dial instead of the bars
+    // S-meter colours: 0 the theme, 1 the scale (green, yellow, red along it), 2 the level (all lit bars)
+    Parameter<int32_t> p_smeter_color{"smeter_color", 0, 0, 2,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_smeter_needle{"smeter_needle", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Needle S-meter on an amber dial lit from below, as the old analog meters
+    Parameter<int32_t> p_smeter_lamp{"smeter_lamp", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_band_plan{"band_plan", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};

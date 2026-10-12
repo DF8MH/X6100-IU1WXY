@@ -48,7 +48,12 @@ static void done(void *arg) {
 }
 
 void btaudio_run(const char *args, btaudio_done_cb_t cb, void *user) {
-    std::string cmd = std::string(BTAUDIO_CTL " ") + args + " 2>&1";
+    sh_run((std::string(BTAUDIO_CTL " ") + args).c_str(), cb, user);
+}
+
+/* Any command in a thread, its output and status to cb on the GUI thread */
+void sh_run(const char *command, btaudio_done_cb_t cb, void *user) {
+    std::string cmd = std::string(command) + " 2>&1";
     std::thread([cmd, cb, user]() {
         result_t *r = new result_t{"", -1, cb, user};
         FILE *fp = popen(cmd.c_str(), "r");

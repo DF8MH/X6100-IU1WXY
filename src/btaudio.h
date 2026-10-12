@@ -20,6 +20,7 @@ void btaudio_init(void);
 
 /* Run "btaudio-ctl <args>" in a worker thread; cb (may be NULL) gets the result. */
 void btaudio_run(const char *args, btaudio_done_cb_t cb, void *user);
+void sh_run(const char *command, btaudio_done_cb_t cb, void *user);
 
 bool btaudio_mute_get(void);
 void btaudio_mute_set(bool on);
