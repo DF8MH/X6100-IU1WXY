@@ -41,6 +41,7 @@ extern "C" {
     #include "cw_tune_ui.h"
     #include "dialog_cw_kbd.h"
     #include "dialog_field.h"
+    #include "dialog_cluster.h"
     #include "dialog_snake.h"
     #include "dialog_ft8.h"
     #include "dialog_js8.h"
@@ -550,11 +551,15 @@ static int state_line(char *buf, size_t size) {
     if (cw_tune_recent(&cwt_hz))
         snprintf(cwt, sizeof(cwt), "%d", cwt_hz);
 
+    /* The last spot tuned with the MFK: the app puts its call in the log entry */
+    char     spot[16];
+    uint32_t spot_seq = dialog_cluster_tuned(spot, sizeof(spot));
+
     return snprintf(buf, size,
                     "{\"t\":\"state\",\"vfo\":\"%s\",\"freq\":%i,\"freq_bg\":%i,\"mode\":\"%s\",\"band\":\"%s\","
                     "\"filter\":%i,\"flo\":%i,\"fhi\":%i,\"rfgain\":%i,\"sql\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
                     "\"nb_level\":%i,\"nb_width\":%i,\"nr_level\":%i,\"pwr\":%i,\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s,"
-                    "\"cwt\":%s,\"logrev\":%u,\"did\":\"%s\"}\n",
+                    "\"cwt\":%s,\"logrev\":%u,\"did\":\"%s\",\"spot\":\"%s\",\"spotseq\":%u}\n",
                     cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? "A" : "B",
                     cfg_sm.cp_fg_freq.get(), cfg_sm.cp_bg_freq.get(),
                     (mode >= 0 && mode <= x6100_mode_nfm) ? mode_names[mode] : "?", band_name(),
@@ -564,7 +569,7 @@ static int state_line(char *buf, size_t size) {
                     (agc >= 0 && agc <= x6100_agc_auto) ? agc_names[agc] : "?",
                     cfg_sm.p_nb.get() != 0, cfg_sm.p_nr.get() != 0,
                     cfg_sm.p_nb_level.get(), cfg_sm.p_nb_width.get(), cfg_sm.p_nr_level.get(),
-                    (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax, cwt, log_rev(), device_id());
+                    (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax, cwt, log_rev(), device_id(), spot, spot_seq);
 }
 
 static void send_state(client_t *c) {

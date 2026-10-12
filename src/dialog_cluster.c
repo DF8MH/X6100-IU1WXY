@@ -637,8 +637,21 @@ static void table_draw_end_cb(lv_event_t *e) {
     draw_text(dsc, FONT_SMALL, time_x, WIDTH - 12, lv_color_hex(COLOR_DIM), LV_TEXT_ALIGN_RIGHT, text);
 }
 
+/* The last spot tuned here (MFK on the column or the Cluster app): X6100 Link puts its call in
+ * the log entry. Read by the remote thread: ponytail: no lock, a torn call costs one log prefill */
+static char     tuned_call[16];
+static uint32_t tuned_seq;
+
+uint32_t dialog_cluster_tuned(char *call, size_t size) {
+    snprintf(call, size, "%s", tuned_call);
+    return tuned_seq;
+}
+
 void dialog_cluster_tune_spot(const cluster_spot_t *s) {
     x6100_mode_t mode;
+
+    snprintf(tuned_call, sizeof(tuned_call), "%s", s->dx);
+    tuned_seq++;
     switch (cluster_guess_mode(s)) {
         case CLUSTER_MODE_CW:   mode = x6100_mode_cw; break;
         case CLUSTER_MODE_LSB:  mode = x6100_mode_lsb; break;
