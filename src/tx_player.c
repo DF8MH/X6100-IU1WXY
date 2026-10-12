@@ -23,13 +23,13 @@
 
 #include <aether_radio/x6100_control/control.h>
 
-#define GAIN_MIN_DB (-30.0f)
+#define GAIN_MIN_DB (-42.0f)
 #define GAIN_MAX_DB 0.0f
 
 /* The learned offset (kept between transmissions) never below this: an overdriven or long
  * transmission (SSTV) could push it to the floor, and the ramp up (8 dB a transmission at
  * most, tx_level.c) took many transmissions to bring the power back */
-#define LEARNED_MIN_DB (-12.0f)
+#define LEARNED_MIN_DB (-42.0f)
 
 static float clamp_gain(float g) {
     return g > GAIN_MAX_DB ? GAIN_MAX_DB : g < GAIN_MIN_DB ? GAIN_MIN_DB : g;
@@ -100,17 +100,14 @@ bool tx_player_stream(tx_fill_fn_t  fill,
     int16_t  ptr[1024 * 2];
     size_t   part;
 
-    /* Baseband r13: the power is held at the setting by the base, whose ALC then reads 8-10 at any
-     * drive (measured from -12 to 0 dB, 0.5 and 5 W): taken as overdrive it brought the level down
-     * to the floor at every transmission. There the level follows the power reading only.
-     * ponytail: measured on r13; r3-r12 keep the ALC until checked on one */
-    bool use_alc = x6100_control_get_base_ver().rev < 13;
-
+    /* Baseband r13 at 5 W (2026-10-12): the power holds at the setting from 0 dB down to -36 dB of
+     * drive, while the ALC falls 9.9, 9.7, 9.3, 8.3, 7.0, 3.8, 0 (6 dB steps). The level used to be
+     * learned no lower than -12 dB, where the ALC reads 9: the ALC rule now takes it down to where
+     * the ALC just stops, about -36 dB, and the floors leave room for that. */
     bool aborted = false;
     while (true) {
         float pwr = 0.0f, alc = 0.0f;
         bool  have = tx_info_refresh(&msg_id, &alc, &pwr, NULL);
-        if (!use_alc) alc = 0.0f;
         gain_offset = clamp_gain(gain_offset + tx_level_block(&level, have, pwr, alc));
         part = fill(ptr, sizeof(ptr) / sizeof(ptr[0]), fill_ctx);
         if (part == 0) {

@@ -16,18 +16,28 @@ void tx_level_start(tx_level_t *l, float target_w) {
     l->target_w = target_w;
 }
 
+static float tx_level_decide(tx_level_t *l);
+
 float tx_level_block(tx_level_t *l, bool have, float pwr_w, float alc) {
     l->blocks++;
-    if (l->blocks <= TX_LEVEL_SETTLE_BLOCKS || !have) return 0.0f;
+    if (l->blocks <= TX_LEVEL_SETTLE_BLOCKS) return 0.0f;
+    /* A decision every half second of blocks, on the readings that came in it: the radio sends
+     * about 2.5 a second, so counting readings made a window of 5 s and the drive crept down
+     * by 1-2 dB a transmission */
+    l->wb++;
+    if (!have) return l->wb >= TX_LEVEL_WINDOW_BLOCKS && l->n ? tx_level_decide(l) : 0.0f;
     if (alc < 0.0f) alc = 0.0f;
     if (alc > 10.0f) alc = 10.0f;
     l->n++;
     l->sum_pwr += pwr_w;
     l->sum_alc += alc;
-    if (l->n < TX_LEVEL_WINDOW_BLOCKS) return 0.0f;
+    if (l->wb < TX_LEVEL_WINDOW_BLOCKS) return 0.0f;
+    return tx_level_decide(l);
+}
 
+static float tx_level_decide(tx_level_t *l) {
     float p = l->sum_pwr / l->n, a = l->sum_alc / l->n;
-    l->n = 0;
+    l->n = l->wb = 0;
     l->sum_pwr = l->sum_alc = 0.0f;
 
     float d = 0.0f;

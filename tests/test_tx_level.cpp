@@ -212,3 +212,15 @@ TEST_CASE("drive level: just short with the ALC at zero, there in the first tran
         CHECK(f[i].mean_alc <= 1.0f);
     }
 }
+
+TEST_CASE("drive level: the radio's sparse readings still give a decision every half second", "[js8][txlevel]") {
+    // The X6100 sends about 2.5 readings a second, one every 9 blocks. Measured on baseband r13
+    // at 5 W: ALC 8 at -20 dB, 0 at -36 dB, the power held at the setting all the way.
+    tx_level_t l;
+    tx_level_start(&l, 5.0f);
+    float total = 0.0f;
+    for (int b = 0; b < FRAME_BLOCKS; b++) total += tx_level_block(&l, b % 9 == 0, 5.4f, 8.0f);
+    std::printf("[txlevel] ALC 8, a reading every 9 blocks: %.1f dB in one transmission\n", total);
+    CHECK(total < -10.0f); // was -1.5 dB with the window counted in readings
+    CHECK(total >= -20.0f);
+}

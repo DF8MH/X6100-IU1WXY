@@ -3982,6 +3982,10 @@ static void diag_sent(const char *out, int status, void *user) {
     if (status == 0 && *out) {
         snprintf(s, sizeof(s), "sent, code %.12s", out);
         diag_say(s);
+    } else if (!strncmp(out, "CLOSED", 6)) {
+        diag_say("not accepted now: ask IU1WXY first");
+    } else if (!strncmp(out, "LIMIT", 5)) {
+        diag_say("too many today, try tomorrow");
     } else {
         diag_say("not sent: no internet?");
     }

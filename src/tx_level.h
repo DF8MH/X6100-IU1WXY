@@ -31,7 +31,7 @@ extern "C" {
 #endif
 
 #define TX_LEVEL_SETTLE_BLOCKS 30    /* about 1.3 s: the PA and the ALC settle first */
-#define TX_LEVEL_WINDOW_BLOCKS 12    /* about 0.5 s of readings per decision */
+#define TX_LEVEL_WINDOW_BLOCKS 12    /* about 0.5 s of blocks per decision */
 #define TX_LEVEL_ALC_HIGH      0.5f  /* the radio's ALC (0-10) above this: overdriven */
 #define TX_LEVEL_ALC_SHOWS     0.1f  /* from this the ALC is working: hold there */
 #define TX_LEVEL_DOWN_MAX_DB   0.75f /* the most the drive drops in one window */
@@ -44,6 +44,7 @@ typedef struct {
     float target_w; /* the power asked for */
     int   blocks;   /* blocks played so far */
     int   n;        /* readings in the current window */
+    int   wb;       /* blocks in the current window */
     float sum_pwr;
     float sum_alc;
     bool  held;     /* the level was found (or had to come down): no more ramping up */
