@@ -12,6 +12,7 @@
 #include "adif.h"
 
 #include "util.h"
+#include "qth/qth.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -87,6 +88,15 @@ void adif_add_qso(adif_log l, qso_log_record_t qso)
     write_freq(l->fd, qso.freq_mhz);
     write_str(l->fd, "GRIDSQUARE", qso.remote_grid);
     write_str(l->fd, "MY_GRIDSQUARE", qso.local_grid);
+    /* ADIF DISTANCE, km between the two locators, when both are known */
+    if (strlen(qso.local_grid) >= 4 && strlen(qso.remote_grid) >= 4 &&
+        qth_grid_check(qso.local_grid) && qth_grid_check(qso.remote_grid)) {
+        double lat1, lon1, lat2, lon2;
+
+        qth_str_to_pos(qso.local_grid, &lat1, &lon1);
+        qth_str_to_pos(qso.remote_grid, &lat2, &lon2);
+        write_int(l->fd, "DISTANCE", (int)(qth_pos_dist(lat1, lon1, lat2, lon2) + 0.5));
+    }
     fprintf(l->fd, "<EOR>\r\n");
     fflush(l->fd);
 }
