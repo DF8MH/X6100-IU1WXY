@@ -41,7 +41,7 @@ send() {
 import sys, urllib.request as u, urllib.error as e
 d = open('$OUT', 'rb').read()
 try:
-    r = u.urlopen(u.Request('https://x6100-link.it/api/diag.php', data=d, headers={'Content-Type': 'text/plain'}), timeout=20)
+    r = u.urlopen(u.Request('https://x6100-link.it/api/diag.php?id=$(cat /mnt/device_id 2>/dev/null | tr -cd 'A-Za-z0-9-')', data=d, headers={'Content-Type': 'text/plain'}), timeout=20)
     print(r.read().decode().strip())
 except e.HTTPError as x:
     print({403: 'CLOSED', 429: 'LIMIT'}.get(x.code, 'ERROR')); sys.exit(2)
