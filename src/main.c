@@ -88,10 +88,6 @@ static void fix_uint8(params_uint8_t *p) {
 }
 
 static void display_settings_check(void) {
-    if (param_i_get(cfg_spectrum_show)) {
-        fprintf(stderr, "Settings: spectrum_show on, set off (the spectrum is disabled)\n");
-        param_i_set(cfg_spectrum_show, 0);
-    }
     if (params.font.x > FONT_DEJAVU) {
         fprintf(stderr, "Settings: font %u unknown, set to the default\n", params.font.x);
         params_uint8_set(&params.font, FONT_SONY);

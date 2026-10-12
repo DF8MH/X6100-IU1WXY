@@ -1178,13 +1178,19 @@ static uint8_t make_transverter(uint8_t row, ParamInt &from, ParamInt &to, Param
 
 /* Spectrum above the waterfall on/off; the waterfall takes its place */
 
-/* Not in the menu any more (the spectrum is always off); kept with the other
- * spectrum rows for when it comes back */
-__attribute__((unused)) static uint8_t make_spectrum_show(uint8_t row) {
+/* The main screen is laid out at start: the GUI saves and restarts at once (x6100_daemon starts it
+ * again), as for the theme. Runs after switch_bool's own callback has set the value */
+static void spectrum_show_cb(lv_event_t *e) {
+    params_flush();
+    cfg_api_flush_all();
+    exit(0);
+}
+
+static uint8_t make_spectrum_show(uint8_t row) {
     lv_obj_t *obj;
 
     obj = lv_label_create(grid);
-    lv_label_set_text(obj, "Show (restart)");
+    lv_label_set_text(obj, "Spectrum");
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     obj = lv_obj_create(grid);
@@ -1194,8 +1200,32 @@ __attribute__((unused)) static uint8_t make_spectrum_show(uint8_t row) {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_center(obj);
     obj = switch_bool(obj, cfg_sm.p_spectrum_show);
+    lv_obj_add_event_cb(obj, spectrum_show_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_set_width(obj, SMALL_3 - 30);
 
+    return row + 1;
+}
+
+/* Spectrum fill, peaks */
+static uint8_t make_spectrum_fill_peak(uint8_t row) {
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "Fill, peaks");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    for (int i = 0; i < 2; i++) {
+        obj = lv_obj_create(grid);
+        lv_obj_set_size(obj, SMALL_3, ROW_H);
+        lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, i ? 4 : 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+        lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_center(obj);
+        obj = switch_bool(obj, i ? &params.spectrum_peak : &params.spectrum_filled);
+        lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_FOCUSED, NULL);
+        lv_obj_add_event_cb(obj, change_bg_opa_cb, LV_EVENT_DEFOCUSED, NULL);
+        lv_obj_set_width(obj, SMALL_3 - 30);
+    }
     return row + 1;
 }
 
@@ -3827,8 +3857,11 @@ static void make_display_page() {
     row = make_backlight(row);
     card_end(row);
 
-    /* The spectrum is always off (display_settings_check() in main.c): only
-     * the waterfall levels are left of its settings */
+    row = card_begin(LV_SYMBOL_IMAGE, "SPECTRUM");
+    row = make_spectrum_show(row);
+    if (cfg_sm.p_spectrum_show.get()) row = make_spectrum_fill_peak(row);
+    card_end(row);
+
     row = card_begin(LV_SYMBOL_DOWNLOAD, "WATERFALL");
     row = make_waterfall_mode(row);
     row = make_auto_offset(row);

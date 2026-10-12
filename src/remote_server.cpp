@@ -832,6 +832,7 @@ static const struct {
     {"smeter_needle", &cfg_sm.p_smeter_needle, 0, 1},
     {"smeter_color", &cfg_sm.p_smeter_color, 0, 2},
     {"smeter_lamp", &cfg_sm.p_smeter_lamp, 0, 1},
+    {"spectrum_show", &cfg_sm.p_spectrum_show, 0, 1},   /* the GUI restarts (disp_apply) */
     {"knob_info", &cfg_sm.p_knob_info, 0, 1},
 };
 
@@ -845,6 +846,8 @@ static const struct {
     {"mag_freq", &params.mag_freq},
     {"mag_info", &params.mag_info},
     {"mag_alc", &params.mag_alc},
+    {"spectrum_filled", &params.spectrum_filled},
+    {"spectrum_peak", &params.spectrum_peak},
 };
 
 typedef struct {
@@ -881,9 +884,9 @@ static void disp_apply(void *arg) {
         backlight_tick();
     } else if (!strcmp(d->name, "bright_buttons")) {
         backlight_set_buttons((buttons_light_t)d->val);
-    } else if (!strcmp(d->name, "theme")) {
+    } else if (!strcmp(d->name, "theme") || !strcmp(d->name, "spectrum_show")) {
         /* as Settings: the GUI saves and starts again with it (x6100_daemon) */
-        params_str_set(&params.theme_name, d->text);
+        if (d->name[0] == 't') params_str_set(&params.theme_name, d->text);
         params_flush();
         cfg_api_flush_all();
         exit(0);

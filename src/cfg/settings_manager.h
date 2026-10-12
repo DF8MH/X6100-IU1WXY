@@ -110,7 +110,8 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, {}, &global_params_};
     Parameter<int32_t> p_knob_info{"knob_info", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
-    Parameter<int32_t> p_spectrum_show{"spectrum_show", true, 0, 1,
+    // The spectrum above the waterfall (Settings > Display, the GUI restarts): off by default
+    Parameter<int32_t> p_spectrum_show{"spectrum_show", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_cluster_spots_wf{"cluster_spots_wf", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
