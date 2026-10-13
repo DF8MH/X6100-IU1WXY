@@ -17,6 +17,7 @@
 #include "../styles.h"
 #include "../theme.h"
 #include "../flags.h"
+#include "../cfg/cfg_api.h"
 
 /*
  *  Cell data is owned by a fixed-size ring pool. We do NOT use LVGL's
@@ -290,7 +291,7 @@ static void draw_part_begin_cb(lv_event_t *e) {
     (void)col;
     cell_data_t *cd = cell_of(obj, (uint16_t)row);
 
-    dsc->rect_dsc->bg_opa = obj == s_pin ? LV_OPA_80 : LV_OPA_50;
+    dsc->rect_dsc->bg_opa = obj == s_pin ? LV_OPA_80 : 115;
 
     if (!cd) {
         dsc->label_dsc->align = LV_TEXT_ALIGN_CENTER;
@@ -532,22 +533,24 @@ void table_view_build(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_coord_t w
     lv_table_set_col_width(s_table, 0, w - 2);
 
     lv_obj_set_style_border_width(s_table, 0, LV_PART_ITEMS);
-    lv_obj_set_style_bg_opa(s_table, 192, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(s_table, LV_OPA_60, LV_PART_MAIN);
     lv_obj_set_style_bg_color(s_table, TC(panel), LV_PART_MAIN);
     lv_obj_set_style_border_width(s_table, theme_shape.border, LV_PART_MAIN);
     lv_obj_set_style_border_color(s_table, TC(text), LV_PART_MAIN);
     lv_obj_set_style_border_opa(s_table, 128, LV_PART_MAIN);
     lv_obj_set_style_text_color(s_table, TC(text_soft), LV_PART_ITEMS);
     /* Its own size: the dialog's 36 (taller still with DejaVu) left room for five rows */
-    lv_obj_set_style_text_font(s_table, &sony_26, LV_PART_ITEMS);
-    lv_obj_set_style_pad_top(s_table, 3, LV_PART_ITEMS);
-    lv_obj_set_style_pad_bottom(s_table, 3, LV_PART_ITEMS);
+    /* Decoder text Compact (Settings > Display, after SP2KMO): more rows */
+    bool compact = param_i_get(cfg_digi_text_compact);
+    lv_obj_set_style_text_font(s_table, compact ? &sony_20 : &sony_26, LV_PART_ITEMS);
+    lv_obj_set_style_pad_top(s_table, compact ? 2 : 3, LV_PART_ITEMS);
+    lv_obj_set_style_pad_bottom(s_table, compact ? 2 : 3, LV_PART_ITEMS);
     lv_obj_set_style_pad_left(s_table, 5, LV_PART_ITEMS);
     lv_obj_set_style_pad_right(s_table, 0, LV_PART_ITEMS);
 
     lv_table_set_cell_value(s_table, 0, 0, WAIT_SYNC_TEXT);
 
-    /* "For you" under it: the same rows, a smaller font, a line of the to-me colour on top */
+    /* "For you" under it: the same rows in the Large font, a line of the to-me colour on top */
     s_y = y;
     s_h = h;
     s_pin_n   = 0;
@@ -569,9 +572,9 @@ void table_view_build(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_coord_t w
     lv_obj_set_style_border_width(s_pin, 3, LV_PART_MAIN);
     lv_obj_set_style_border_color(s_pin, TC(ft8_to_me), LV_PART_MAIN);
     lv_obj_set_style_text_color(s_pin, TC(text), LV_PART_ITEMS);
-    lv_obj_set_style_text_font(s_pin, &sony_22, LV_PART_ITEMS);
-    lv_obj_set_style_pad_top(s_pin, 2, LV_PART_ITEMS);
-    lv_obj_set_style_pad_bottom(s_pin, 2, LV_PART_ITEMS);
+    lv_obj_set_style_text_font(s_pin, &sony_26, LV_PART_ITEMS);   /* always the Large rows: the calls must stand out */
+    lv_obj_set_style_pad_top(s_pin, 3, LV_PART_ITEMS);
+    lv_obj_set_style_pad_bottom(s_pin, 3, LV_PART_ITEMS);
     lv_obj_set_style_pad_left(s_pin, 5, LV_PART_ITEMS);
     lv_obj_set_style_pad_right(s_pin, 0, LV_PART_ITEMS);
     lv_obj_clear_flag(s_pin, LV_OBJ_FLAG_SCROLLABLE);

@@ -24,6 +24,7 @@ void panel_clear();
 void panel_update_visibility(bool clear);
 void panel_add_text(const char * text);
 void panel_set_info(const char * text);
+void panel_keep_below(lv_coord_t y);
 
 #ifdef __cplusplus
 }

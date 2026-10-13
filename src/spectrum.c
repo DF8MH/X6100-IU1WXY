@@ -142,13 +142,22 @@ static lv_color_t fill_color(void) {
     return fill_own() ? lv_color_hex(param_i_get(cfg_spectrum_fill_color)) : trace_color();
 }
 
+/* The fill fading from its colour at the trace to the background at the bottom, the trace drawn
+ * over it (after R1CBU's gradient fill, OpenX6100) */
+static bool fill_grad(void) {
+    return params.spectrum_filled.x && param_i_get(cfg_spectrum_fill_gradient);
+}
+
 static void spectrum_draw_cb(lv_event_t *e) {
     lv_obj_t          *obj      = lv_event_get_target(e);
     lv_draw_ctx_t     *draw_ctx = lv_event_get_draw_ctx(e);
     lv_draw_line_dsc_t main_line_dsc;
     lv_draw_line_dsc_t peak_line_dsc;
     lv_draw_line_dsc_t trace_dsc;
+    lv_draw_rect_dsc_t grad_dsc;
     lv_point_t         trace_prev = {0, 0};
+    bool               grad  = fill_grad();
+    bool               trace = fill_own() || grad;
 
     float min, max;
     levels_get(&min, &max);
@@ -162,6 +171,10 @@ static void spectrum_draw_cb(lv_event_t *e) {
     lv_draw_line_dsc_init(&trace_dsc);
     trace_dsc.color = trace_color();
     trace_dsc.width = 1;
+    lv_draw_rect_dsc_init(&grad_dsc);
+    grad_dsc.bg_grad.dir = LV_GRAD_DIR_VER;
+    grad_dsc.bg_grad.stops[0].color = fill_color();
+    grad_dsc.bg_grad.stops[1].color = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
 
     lv_draw_line_dsc_init(&peak_line_dsc);
 
@@ -216,8 +229,14 @@ static void spectrum_draw_cb(lv_event_t *e) {
             main_b.y = y1 + h;
         }
 
-        lv_draw_line(draw_ctx, &main_line_dsc, &main_a, &main_b);
-        if (fill_own()) {
+        if (grad) {
+            lv_area_t col = {main_a.x, main_a.y, main_a.x, main_b.y};
+
+            lv_draw_rect(draw_ctx, &grad_dsc, &col);
+        } else {
+            lv_draw_line(draw_ctx, &main_line_dsc, &main_a, &main_b);
+        }
+        if (trace) {
             if (i) lv_draw_line(draw_ctx, &trace_dsc, &trace_prev, &main_a);
             trace_prev = main_a;
         }
@@ -480,7 +499,9 @@ static void direct_render(void) {
     }
     uint32_t bg = TC(panel).full | 0xff000000u;
     uint32_t line = trace_color().full | 0xff000000u;
-    uint32_t fill = fill_color().full | 0xff000000u;
+    lv_color_t fc   = fill_color(), pc = TC(panel);
+    uint32_t   fill = fc.full | 0xff000000u;
+    bool       grad = fill_grad();
 
     for (int32_t i = 0; i < SPECTRUM_SIZE * h; i++) {
         sbuf[i] = bg;
@@ -510,11 +531,12 @@ static void direct_render(void) {
             int top = (1.0f - (spectrum_buf[i] - min) / (max - min)) * h;
             uint32_t *p = &sbuf[(SPECTRUM_SIZE - 1 - x) * h];
 
-            for (int y = LV_MAX(top, 0); y < h; y++) {
-                p[y] = fill;
+            top = LV_MAX(top, 0);
+            for (int y = top; y < h; y++) {
+                p[y] = grad ? lv_color_mix(fc, pc, (h - y) * 255 / (h - top)).full | 0xff000000u : fill;
             }
         }
-        if (fill_own()) polyline(spectrum_buf, min, max, offset, line);
+        if (fill_own() || grad) polyline(spectrum_buf, min, max, offset, line);
     } else {
         polyline(spectrum_buf, min, max, offset, line);
     }

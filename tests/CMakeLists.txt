@@ -79,3 +79,8 @@ target_include_directories(test_mic_level PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
 target_compile_definitions(test_mic_level PRIVATE MIC_LEVEL_DECISIONS_ONLY)
 target_link_libraries(test_mic_level PRIVATE Catch2::Catch2WithMain)
 add_test(NAME test_mic_level COMMAND $<TARGET_FILE:test_mic_level> --colour-mode=ansi )
+
+add_executable(test_freq_strip test_freq_strip.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/freq_strip.c)
+target_compile_definitions(test_freq_strip PRIVATE FREQ_STRIP_STEP_ONLY)
+target_link_libraries(test_freq_strip PRIVATE Catch2::Catch2WithMain)
+add_test(NAME test_freq_strip COMMAND $<TARGET_FILE:test_freq_strip> --colour-mode=ansi )

@@ -2093,7 +2093,7 @@ static void construct_cb(lv_obj_t *parent) {
     /* Transmit: same 7 W cap and gain start as the FT8 app. */
     if (param_f_get(cfg_pwr) > TX_PLAYER_MAX_PWR_W) {
         radio_set_pwr(TX_PLAYER_MAX_PWR_W);
-        msg_schedule_text_fmt("Power was limited to %0.0fW", TX_PLAYER_MAX_PWR_W);
+        msg_schedule_text_fmt("Power is limited to %0.0fW", TX_PLAYER_MAX_PWR_W);
     }
     base_gain_offset = tx_player_base_gain_offset();
     tx_start();

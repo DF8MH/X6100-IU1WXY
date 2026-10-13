@@ -37,7 +37,7 @@ extern "C" {
  * strip and the S-meter on a row of its own under it; the apps start at the same y in both */
 extern int top_bar_h, freq_strip_h, clock_w, meter_row_h;
 
-#define TOP_BAR_STD_H   76
+#define TOP_BAR_STD_H   66
 #define FREQ_STRIP_STD_H 50
 #define TOP_BAR_HEIGHT  top_bar_h
 #define TOP_BAR_MARGIN  2

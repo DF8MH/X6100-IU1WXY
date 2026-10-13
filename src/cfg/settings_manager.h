@@ -113,6 +113,12 @@ class SettingsManager {
     // The spectrum above the waterfall (Settings > Display, the GUI restarts): off by default
     Parameter<int32_t> p_spectrum_show{"spectrum_show", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Its height in px (as upstream bdf4ef63 "Add spectrum height"; read at start, the GUI restarts)
+    Parameter<int32_t> p_spectrum_height{"spectrum_height", 76, 60, 160,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Decoder text: 0 Large (the stock look), 1 Compact (smaller, more lines); from SP2KMO's upstream c2fbe40c
+    Parameter<int32_t> p_digi_text_compact{"digi_text_compact", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_cluster_spots_wf{"cluster_spots_wf", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Walkie Talkie: a portrait screen instead of the main one (read at start, the GUI restarts)
@@ -130,8 +136,17 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_spectrum_fill_color{"spectrum_fill_color", -1, -1, 0xffffff,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // The fill fading from its colour at the trace to the background at the bottom (0 = solid)
+    Parameter<int32_t> p_spectrum_fill_gradient{"spectrum_fill_gradient", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     // S-meter colours: 0 the theme, 1 the scale (green, yellow, red along it), 2 the level (all lit bars)
     Parameter<int32_t> p_smeter_color{"smeter_color", 0, 0, 2,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // With the theme colours (0 above): the S-meter bars / needle scale and the SWR bar in
+    // their own 0xRRGGBB, -1 the theme's (after dl2zw's meter and SWR colours, OpenX6100)
+    Parameter<int32_t> p_smeter_bar_color{"smeter_bar_color", -1, -1, 0xffffff,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_swr_color{"swr_color", -1, -1, 0xffffff,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_smeter_needle{"smeter_needle", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};

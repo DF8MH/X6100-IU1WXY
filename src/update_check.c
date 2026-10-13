@@ -138,22 +138,68 @@ static void device_id(char *id, size_t size) {
     }
 }
 
+/* The station callsign for the site (it finds the user by it, IU1WXY/P as IU1WXY): upper case,
+ * [A-Z0-9/] of 3-15 characters, else "" (not sent) */
+static void ping_call(char *call, size_t size) {
+    size_t n = 0;
+
+    for (const char *c = params.callsign.x; *c && n + 1 < size; c++) {
+        char u = (char)toupper((unsigned char)*c);
+        if (!isalnum((unsigned char)u) && u != '/') { n = 0; break; }
+        call[n++] = u;
+    }
+    call[n] = '\0';
+    if (n < 3 || n > 15) call[0] = '\0';
+}
+
+/* The CID of the microSD the radio runs from (mmcblk0, the root): maker, OEM, name, revision,
+ * serial and date, 32 hex digits; the serial alone repeats on no-brand cards. Else "" */
+static void ping_sd(char *sd, size_t size) {
+    FILE *f = fopen("/sys/block/mmcblk0/device/cid", "r");
+
+    sd[0] = '\0';
+    if (!f) return;
+    if (fscanf(f, "%32[0-9a-fA-F]", sd) != 1 || strlen(sd) != 32) sd[0] = '\0';
+    fclose(f);
+    for (char *c = sd; *c; c++) *c = (char)tolower((unsigned char)*c);
+}
+
+/* The SoC serial (Allwinner SID, fixed in the chip): the radio itself, whatever SD it runs from.
+ * 16 hex digits from /proc/cpuinfo, else "" */
+static void ping_hw(char *hw, size_t size) {
+    FILE *f = fopen("/proc/cpuinfo", "r");
+    char  line[128];
+
+    hw[0] = '\0';
+    if (!f) return;
+    while (fgets(line, sizeof(line), f))
+        if (sscanf(line, "Serial : %16[0-9a-fA-F]", hw) == 1) break;
+    fclose(f);
+    if (strlen(hw) != 16) hw[0] = '\0';
+    for (char *c = hw; *c; c++) *c = (char)tolower((unsigned char)*c);
+    (void)size;
+}
+
 static void *ping_thread(void *arg) {
-    char id[40], qth[16], cmd[320];
+    char id[40], qth[16], call[20], sd[36], hw[20], cmd[460];
     bool was_up = false;
     int  wait = 0;
 
     (void)arg;
     device_id(id, sizeof(id));
+    ping_sd(sd, sizeof(sd));
+    ping_hw(hw, sizeof(hw));
     while (1) {
         bool up = net_up();
 
         if (up && (!was_up || wait <= 0)) {
             snprintf(qth, sizeof(qth), "%s", station_qth());
+            ping_call(call, sizeof(call));
             snprintf(cmd, sizeof(cmd),
                      "python3 -c \"import urllib.request as u;u.urlopen('https://x6100-link.it/api/ping.php"
-                     "?id=%s&kind=radio&ver=%s%s%s',timeout=15)\" >/dev/null 2>&1",
-                     id, strrchr(VERSION, ' ') + 1, grid_ok(qth) ? "&qth=" : "", grid_ok(qth) ? qth : "");
+                     "?id=%s&kind=radio&ver=%s%s%s%s%s%s%s%s%s',timeout=15)\" >/dev/null 2>&1",
+                     id, strrchr(VERSION, ' ') + 1, grid_ok(qth) ? "&qth=" : "", grid_ok(qth) ? qth : "",
+                     call[0] ? "&call=" : "", call, sd[0] ? "&sd=" : "", sd, hw[0] ? "&hw=" : "", hw);
             if (system(cmd) == -1) { /* nothing to do: the next round tries again */ }
             wait = 300;
         }

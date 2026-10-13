@@ -783,7 +783,7 @@ static void construct_cb(lv_obj_t *parent)
 
     if (param_f_get(cfg_pwr) > MAX_PWR) {
         radio_set_pwr(MAX_PWR);
-        msg_schedule_text_fmt("Power was limited to %0.0fW", MAX_PWR);
+        msg_schedule_text_fmt("Power is limited to %0.0fW", MAX_PWR);
     }
 
     sstv_canvas = lv_canvas_create(dialog.obj);

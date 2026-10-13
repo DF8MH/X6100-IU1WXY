@@ -63,6 +63,8 @@ extern ParamInt         *cfg_auto_level_enabled; // p_auto_level_enabled
 extern ParamFloat       *cfg_auto_level_offset;  // p_auto_level_offset
 extern ParamInt         *cfg_knob_info;          // p_knob_info
 extern ParamInt         *cfg_spectrum_show;      // p_spectrum_show
+extern ParamInt         *cfg_spectrum_height;    // p_spectrum_height
+extern ParamInt         *cfg_digi_text_compact;  // p_digi_text_compact
 extern ParamInt         *cfg_cluster_spots_wf;   // p_cluster_spots_wf
 extern ParamInt         *cfg_walkie;             // p_walkie
 extern ParamInt         *cfg_walkie_mem;         // p_walkie_mem
@@ -72,6 +74,9 @@ extern ParamInt         *cfg_smeter_color;       // p_smeter_color
 extern ParamInt         *cfg_wf_palette;         // p_wf_palette
 extern ParamInt         *cfg_spectrum_line_color; // p_spectrum_line_color
 extern ParamInt         *cfg_spectrum_fill_color; // p_spectrum_fill_color
+extern ParamInt         *cfg_spectrum_fill_gradient; // p_spectrum_fill_gradient
+extern ParamInt         *cfg_smeter_bar_color;   // p_smeter_bar_color
+extern ParamInt         *cfg_swr_color;          // p_swr_color
 extern ParamInt         *cfg_smeter_lamp;        // p_smeter_lamp
 extern ParamInt         *cfg_cluster_column;     // p_cluster_column
 extern ParamInt         *cfg_cluster_order;      // p_cluster_order

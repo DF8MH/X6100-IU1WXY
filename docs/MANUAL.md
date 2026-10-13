@@ -175,8 +175,8 @@ The radio held upright, the knobs on top, with a plain screen: VFO or memory,
 RX/TX, frequency, mode, S-meter, and the VOL, SQL and PWR bars. It follows the
 theme.
 
-Where: Settings > Display > SPECTRUM > Walkie Talkie (also on the web
-configurator's Display page). The screen restarts in portrait.
+Where: Settings > General > CONTROLS > Walkie Talkie. The screen restarts in
+portrait.
 
 - PTT: the PTT key on the side of the radio. It transmits with the built-in
   microphone; the border turns red and the S-meter shows the power and SWR.
@@ -215,7 +215,7 @@ base is too old.
 |---|---|
 | STATION | callsign, QTH locator |
 | DATE / TIME | date, time, time zone |
-| CONTROLS | Freq acceleration, Accel. onset, Charger (Off, On, Shadow), S-meter cal |
+| CONTROLS | Freq acceleration, Accel. onset, Charger (Off, On, Shadow), S-meter cal, Walkie Talkie (see [Walkie Talkie mode](#walkie-talkie-mode)) |
 | TRANSVERTERS | two transverters: from, to, shift |
 | WFVIEW SERVER | on/off, user, password, server port and status, connected client |
 
@@ -238,7 +238,7 @@ S-meter cal: see [S-meter](#s-meter). WFVIEW SERVER: see
 | Card | Options |
 |---|---|
 | BACKLIGHT | timeout and brightness, buttons brightness (Always Off, Always On, Temporarily On) |
-| SPECTRUM | Spectrum, Fill, Peaks (see [Waterfall](#waterfall)), Walkie Talkie (see [Walkie Talkie mode](#walkie-talkie-mode)) |
+| SPECTRUM | Spectrum, Fill, Peaks (see [Waterfall](#waterfall)) |
 | WATERFALL | see [Waterfall](#waterfall) |
 | MAIN SCREEN | Band plan, Cluster spots, Cluster column, S-meter type, S-meter colours, Needle lamp |
 | INTERFACE | Popups Freq/Info/ALC, Knob info, Theme, Font |
@@ -342,7 +342,7 @@ WeFax) set their audio level by themselves.
 TX power while a digital app is open:
 
 - The power is capped at 7 W. With a higher setting the app says so
-  ("Power was limited to 7W"), and the setting comes back when you close it.
+  ("Power is limited to 7W"), and the setting comes back when you close it.
 - The Power button in the apps sets the power: 0.5, 1, 2, 3, 5, 7 W.
 - Digital apps reopen on their last frequency and mode.
 

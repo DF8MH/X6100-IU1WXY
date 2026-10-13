@@ -106,10 +106,10 @@ lv_obj_t * clock_init(lv_obj_t * parent) {
     lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 0);
 
     time_label = lv_label_create(row);
-    lv_obj_set_style_text_font(time_label, theme_shape.vision ? &sony_40 : &sony_44, 0);
+    lv_obj_set_style_text_font(time_label, theme_shape.vision ? &sony_40 : &sony_38, 0);
 
     sec_label = lv_label_create(row);
-    lv_obj_set_style_text_font(sec_label, &sony_26, 0);
+    lv_obj_set_style_text_font(sec_label, &sony_22, 0);
     lv_obj_set_style_pad_bottom(sec_label, 2, 0);
     if (theme_shape.vision)
         lv_obj_add_flag(sec_label, LV_OBJ_FLAG_HIDDEN);

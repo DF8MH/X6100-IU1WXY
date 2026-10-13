@@ -94,6 +94,7 @@ static void (*sink_wpm)(int);
 void cw_decoder_set_sink(void (*text)(const char *), void (*wpm)(int)) { sink_text = text; sink_wpm = wpm; }
 void harness_decode_wpm(int w) { if (sink_wpm) sink_wpm(w); }
 void harness_decode(const char *t) { if (sink_text) sink_text(t); }
+extern void *cfg_rit, *cfg_xit, *cfg_dnf, *cfg_mode_freq_step;
 int32_t param_i_get(const void *p) {
     if (p == cfg_wspr_tx_pct) return harness_wspr_tx_pct;
     if (p == cfg_wspr_tx_freq) return harness_wspr_tx_freq;
@@ -108,6 +109,8 @@ int32_t param_i_get(const void *p) {
     if (p == cfg_band_split) return 0;
     if (p == cfg_tx_filter_low) return 160;
     if (p == cfg_tx_filter_high) return 3000;
+    if (p == cfg_rit || p == cfg_xit || p == cfg_dnf) return 0;   /* the strip: NR NB lit, DNF dim */
+    if (p == cfg_mode_freq_step) return 100;
     return 1;
 }
 float param_f_get(const void *p) { return 10.0f; }

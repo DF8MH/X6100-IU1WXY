@@ -80,7 +80,7 @@
 #include <math.h>
 
 
-static uint16_t     spectrum_height = 76;   /* a little less than the 96 of upstream: more waterfall */
+static uint16_t     spectrum_height;        /* Settings > Display > Spectrum height, 76 by default */
 static uint16_t     freq_height = 36;
 static lv_coord_t   wf_y, spot_tag_y;    /* waterfall top without the spot tags */
 static lv_obj_t     *obj;
@@ -1790,6 +1790,7 @@ lv_obj_t * main_screen() {
      * invisible but still the key target, and the waterfall takes its place. */
     if (param_i_get(cfg_spectrum_show)) {
         y = FREQ_STRIP_Y + FREQ_STRIP_H;
+        spectrum_height = param_i_get(cfg_spectrum_height);
     } else {
         spectrum_height = FREQ_STRIP_Y + FREQ_STRIP_H + METER_ROW_H;
         lv_obj_set_style_opa(spectrum, LV_OPA_TRANSP, 0);
@@ -1829,6 +1830,7 @@ lv_obj_t * main_screen() {
     buttons_load_page(&buttons_page_vol_1);
 
     panel_init(obj);
+    panel_keep_below(wf_y - 8);   /* as with the 76 px spectrum: on the scale's bottom edge */
     msg = msg_init(obj);
     msg_tiny = msg_tiny_init(obj);
 

@@ -97,7 +97,9 @@ static void panel_draw_cb(lv_event_t *e) {
     lv_coord_t     y1       = o->coords.y1 + ROW_Y + 4;
 
     draw_bar(draw_ctx, x1, y1, min_pwr, max_pwr, pwr, false, theme_hex(TC_line));
-    draw_bar(draw_ctx, x1, y1 + ROW_STEP, min_swr, max_swr, vswr, true, theme_hex(TC_line));
+    /* SWR in its own colour (web Display page), else the theme's; after dl2zw's SWR colour, OpenX6100 */
+    int32_t swr_own = param_i_get(cfg_swr_color);
+    draw_bar(draw_ctx, x1, y1 + ROW_STEP, min_swr, max_swr, vswr, true, swr_own < 0 ? theme_hex(TC_line) : swr_own);
     draw_bar(draw_ctx, x1, y1 + 2 * ROW_STEP, 0.0f, 10.0f, alc, false, theme_hex(TC_alc));
 
     /* PWR scale under its bar */

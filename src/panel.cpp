@@ -26,6 +26,7 @@ static lv_obj_t    *info;
 static lv_anim_t    dim_anim;
 static char         buf[1024] = "";
 static char        *buf_write = buf;
+static uint8_t      max_line_count;
 static x6100_mode_t prev_mode;
 
 static void update_visibility_cb(Subject *subj, void *user_data);
@@ -33,29 +34,59 @@ static void on_freq_change(Subject *subj, void *user_data);
 
 static void set_opa(void * panel_obj, int32_t opa);
 
+/* As many lines as the panel holds in its font (from upstream panel.cpp) */
+static void update_line_count() {
+    const lv_font_t *font = lv_obj_get_style_text_font(obj, LV_PART_MAIN);
+    lv_coord_t       h = lv_obj_get_style_height(obj, 0) - lv_obj_get_style_pad_top(obj, 0)
+        - lv_obj_get_style_pad_bottom(obj, 0);
 
+    max_line_count = LV_MAX(1, h / font->line_height);
+}
+
+/* Cuts the first line when there is one too many (upstream truncate()) */
 static void check_lines() {
     char        *second_line = NULL;
     char        *ptr = buf;
-    uint16_t    count = 0;
+    uint16_t    count = 1;
 
     // Count lines, store start of 2nd in `second_line`
     while (*ptr) {
         if (*ptr == '\n') {
             count++;
 
-            if (count == 1) {
+            if (count == 2) {
                 second_line = ptr + 1;
             }
         }
         ptr++;
     }
-
+    if (ptr == buf) {
+        return;
+    }
+    // The last empty line, the next text goes there
+    if (*(ptr - 1) == '\n') {
+        count--;
+    }
     // Too long, cut first line
-    if (count > 7) {
+    if (count > max_line_count) {
         memmove(buf, second_line, strlen(second_line) + 1);
         buf_write = buf + strlen(buf);
     }
+}
+
+/* Settings > Display > Decoder text: Large (the stock sony_24) or Compact (sony_18, more lines).
+ * Follows the setting live; ported from SP2KMO's upstream c2fbe40c, with his fix 0736fa9c: every
+ * line that no longer fits goes, not one */
+static void text_size_cb(Subject *subj, void *user_data) {
+    size_t len;
+
+    lv_obj_set_style_text_font(obj, cfg_sm.p_digi_text_compact.get() ? &sony_18 : &sony_24, 0);
+    update_line_count();
+    do {
+        len = strlen(buf);
+        check_lines();
+    } while (strlen(buf) != len);
+    lv_label_set_text_static(obj, buf);
 }
 
 static void panel_update_text_cb(const char *text) {
@@ -73,7 +104,7 @@ static void panel_update_text_cb(const char *text) {
         if (strcmp(buf_write - 2, "\n\n") == 0) {
             *buf_write-- = '\0';
         } else {
-            lv_txt_get_size(&text_size, buf, &sony_24, 0, 0, LV_COORD_MAX, 0);
+            lv_txt_get_size(&text_size, buf, lv_obj_get_style_text_font(obj, 0), 0, 0, LV_COORD_MAX, 0);
             if (text_size.x > (lv_obj_get_width(obj) - 20)) {
                 *old_write = '\n';
                 buf_write = stpcpy(old_write + 1, text);
@@ -107,12 +138,24 @@ lv_obj_t * panel_init(lv_obj_t *parent) {
     cfg_sm.cp_cur_mode.subscribe_delayed(update_visibility_cb, NULL);
     cfg_sm.p_cw_decoder.subscribe_delayed_and_notify(update_visibility_cb, NULL);
     cfg_sm.cp_fg_freq.subscribe_delayed(on_freq_change, NULL);
+    cfg_sm.p_digi_text_compact.subscribe_delayed_and_notify(text_size_cb, NULL);
 
     info = lv_label_create(obj);
     lv_obj_add_style(info, &panel_info_style, 0);
     lv_label_set_text(info, "");
 
     return obj;
+}
+
+/* A taller spectrum: the panel starts under it, shorter (upstream panel_set_height()) */
+void panel_keep_below(lv_coord_t y) {
+    lv_coord_t bottom = lv_obj_get_style_y(obj, 0) + lv_obj_get_style_height(obj, 0);
+
+    if (y > lv_obj_get_style_y(obj, 0)) {
+        lv_obj_set_y(obj, y);
+        lv_obj_set_height(obj, bottom - y);
+        text_size_cb(NULL, NULL);
+    }
 }
 
 void panel_add_text(const char * text) {

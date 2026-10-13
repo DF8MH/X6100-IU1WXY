@@ -1359,6 +1359,31 @@ static uint8_t make_smeter_color(uint8_t row) {
     return row + 1;
 }
 
+static void digi_text_update_cb(lv_event_t *e) {
+    cfg_sm.p_digi_text_compact.set(lv_dropdown_get_selected(lv_event_get_target(e)));
+}
+
+/* CW / RTTY decoder text: Large or Compact (more lines), from SP2KMO's upstream c2fbe40c */
+static uint8_t make_digi_text(uint8_t row) {
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "Decoder text");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = lv_dropdown_create(grid);
+    dialog_item(&dialog, obj);
+    lv_obj_add_style(lv_dropdown_get_list(obj), &dialog_dropdown_list_style, 0);
+    lv_dropdown_set_options(obj, " Large \n Compact ");
+    lv_dropdown_set_symbol(obj, NULL);
+    lv_dropdown_set_selected(obj, cfg_sm.p_digi_text_compact.get());
+    lv_obj_add_event_cb(obj, digi_text_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_size(obj, SMALL_3, ROW_H);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+
+    return row + 1;
+}
+
 static uint8_t make_cluster_column(uint8_t row) {
     return make_switch_row(row, "Cluster column", cfg_sm.p_cluster_column);
 }
@@ -3449,6 +3474,7 @@ static param_slider_t snap_hold_slider = {&cfg_sm.p_spot_snap_hold, 0, 5, 1, "%i
 static param_slider_t snap_slow_slider = {&cfg_sm.p_spot_snap_slow, 1, 5, 1, "%i"};
 static param_slider_t accel_onset_slider = {&cfg_sm.p_freq_accel_onset, 1, 5, 1, "%i"};
 static param_slider_t wf_speed_slider = {&cfg_sm.p_waterfall_speed, 1, 5, 1, "%i"};
+static param_slider_t spectrum_height_slider = {&cfg_sm.p_spectrum_height, 60, 160, 4, "%i px"};
 
 static void param_slider_cb(lv_event_t *e) {
     lv_obj_t       *obj = lv_event_get_target(e);
@@ -3523,6 +3549,20 @@ static void smeter_cal_warn_cb(lv_event_t *e) {
     }
 }
 
+/* Spectrum height: the main screen is laid out at start, so the GUI restarts as for the spectrum
+ * switch, once the slider is let go (touch) or its editing ends (knob), not at each step */
+static int32_t spectrum_height_laid_out = -1;
+
+static void spectrum_height_done_cb(lv_event_t *e) {
+    if (lv_obj_has_state(lv_event_get_target(e), LV_STATE_EDITED) ||
+        cfg_sm.p_spectrum_height.get() == spectrum_height_laid_out) {
+        return;
+    }
+    params_flush();
+    cfg_api_flush_all();
+    exit(0);
+}
+
 static uint8_t make_param_slider(uint8_t row, const char *label, param_slider_t *p) {
     lv_obj_t *obj;
 
@@ -3539,6 +3579,11 @@ static uint8_t make_param_slider(uint8_t row, const char *label, param_slider_t 
     if (p == &smeter_cal_slider) {
         lv_obj_add_event_cb(obj, smeter_cal_warn_cb, LV_EVENT_PRESSED, NULL);
         lv_obj_add_event_cb(obj, smeter_cal_warn_cb, LV_EVENT_FOCUSED, NULL);
+    }
+    if (p == &spectrum_height_slider) {
+        lv_obj_add_event_cb(obj, spectrum_height_done_cb, LV_EVENT_RELEASED, NULL);
+        lv_obj_add_event_cb(obj, spectrum_height_done_cb, LV_EVENT_FOCUSED, NULL);
+        lv_obj_add_event_cb(obj, spectrum_height_done_cb, LV_EVENT_DEFOCUSED, NULL);
     }
 
     return row + 1;
@@ -3674,6 +3719,7 @@ static void make_general_page() {
     row = make_param_slider(row, "Accel. onset", &accel_onset_slider);
     row = make_charger(row);
     row = make_param_slider(row, "S-meter cal", &smeter_cal_slider);
+    row = make_walkie(row);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_SHUFFLE, "TRANSVERTERS");
@@ -3880,8 +3926,14 @@ static void make_display_page() {
 
     row = card_begin(LV_SYMBOL_IMAGE, "SPECTRUM");
     row = make_spectrum_show(row);
-    if (cfg_sm.p_spectrum_show.get()) row = make_spectrum_fill_peak(row);
-    row = make_walkie(row);
+    if (cfg_sm.p_spectrum_show.get()) {
+        row = make_spectrum_fill_peak(row);
+        row = make_param_switch(row, "Fill gradient", cfg_sm.p_spectrum_fill_gradient);
+        if (spectrum_height_laid_out < 0) {
+            spectrum_height_laid_out = cfg_sm.p_spectrum_height.get();   /* as the screen has it */
+        }
+        row = make_param_slider(row, "Height", &spectrum_height_slider);
+    }
     card_end(row);
 
     row = card_begin(LV_SYMBOL_DOWNLOAD, "WATERFALL");
@@ -3908,6 +3960,7 @@ static void make_display_page() {
     row = make_knob_info(row);
     row = make_theme(row);
     row = make_font(row);
+    row = make_digi_text(row);
     card_end(row);
 }
 

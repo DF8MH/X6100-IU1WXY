@@ -834,8 +834,13 @@ static const struct {
     {"wf_palette", &cfg_sm.p_wf_palette, 0, 6},
     {"spectrum_line_color", &cfg_sm.p_spectrum_line_color, -1, 0xffffff},
     {"spectrum_fill_color", &cfg_sm.p_spectrum_fill_color, -1, 0xffffff},
+    {"spectrum_fill_gradient", &cfg_sm.p_spectrum_fill_gradient, 0, 1},
+    {"smeter_bar_color", &cfg_sm.p_smeter_bar_color, -1, 0xffffff},
+    {"swr_color", &cfg_sm.p_swr_color, -1, 0xffffff},
     {"smeter_lamp", &cfg_sm.p_smeter_lamp, 0, 1},
     {"spectrum_show", &cfg_sm.p_spectrum_show, 0, 1},   /* the GUI restarts (disp_apply) */
+    {"spectrum_height", &cfg_sm.p_spectrum_height, 60, 160},   /* restarts with the spectrum on */
+    {"digi_text_compact", &cfg_sm.p_digi_text_compact, 0, 1},
     {"knob_info", &cfg_sm.p_knob_info, 0, 1},
     {"walkie", &cfg_sm.p_walkie, 0, 1},                 /* the GUI restarts (disp_apply) */
 };
@@ -888,7 +893,8 @@ static void disp_apply(void *arg) {
         backlight_tick();
     } else if (!strcmp(d->name, "bright_buttons")) {
         backlight_set_buttons((buttons_light_t)d->val);
-    } else if (!strcmp(d->name, "theme") || !strcmp(d->name, "spectrum_show") || !strcmp(d->name, "walkie")) {
+    } else if (!strcmp(d->name, "theme") || !strcmp(d->name, "spectrum_show") || !strcmp(d->name, "walkie") ||
+               (!strcmp(d->name, "spectrum_height") && cfg_sm.p_spectrum_show.get())) {
         /* as Settings: the GUI saves and starts again with it (x6100_daemon) */
         if (d->name[0] == 't') params_str_set(&params.theme_name, d->text);
         params_flush();

@@ -15,3 +15,6 @@ static int wspr_init = (cfg_wspr_tx_pct = &cfg_sm.p_wspr_tx_pct, cfg_wspr_tx_fre
 static int field_init = (cfg_field_boot = &cfg_sm.p_field_boot, 0);
 // SWR scan
 static int swr_init = (cfg_swrscan_linear = &cfg_sm.p_swrscan_linear, cfg_swrscan_span = &cfg_sm.p_swrscan_span, 0);
+// Frequency strip: step marker, NR NB DNF RIT XIT
+static int strip_init = (cfg_mode_freq_step = &cfg_sm.p_mode_freq_step, cfg_nr = &cfg_sm.p_nr, cfg_nb = &cfg_sm.p_nb,
+                         cfg_dnf = &cfg_sm.p_dnf, cfg_rit = &cfg_sm.p_rit, cfg_xit = &cfg_sm.p_xit, 0);

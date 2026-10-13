@@ -89,7 +89,7 @@ lv_obj_t * info_init(lv_obj_t * parent) {
     lv_obj_add_style(obj, &info_style, 0);
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(obj, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(obj, LV_FLEX_ALIGN_START, theme_shape.vision ? LV_FLEX_ALIGN_CENTER : LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
     /* Two rows on the same 6 column grid: radio state, then status icons */
     lv_coord_t col_w = lv_obj_get_style_width(obj, 0) - 2 * lv_obj_get_style_border_width(obj, 0)
@@ -103,7 +103,7 @@ lv_obj_t * info_init(lv_obj_t * parent) {
         if (i % 6 == 0) {
             row = lv_obj_create(obj);
             lv_obj_add_style(row, &info_row_style, 0);
-            lv_obj_set_size(row, col_w * cols - 1, theme_shape.vision ? 40 : i ? 28 : 38);
+            lv_obj_set_size(row, col_w * cols - 1, theme_shape.vision ? 40 : i ? 26 : 30);
             if (theme_shape.vision && i)
                 lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);   /* VISION: no status icons */
             lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);

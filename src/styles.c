@@ -143,11 +143,11 @@ void styles_init(void) {
     /* * */
     lv_style_t *style;
 
-    /* VISION: 48 + 80 = the 76 + 50 of the others, so the apps start at the same y; the buttons
+    /* VISION: 48 + 70 = the 66 + 50 of the others, so the apps start at the same y; the buttons
      * as tall as with DejaVu (the apps already fit them) */
     if (theme_shape.vision) {
         top_bar_h    = 48;
-        freq_strip_h = 80;
+        freq_strip_h = 70;
         clock_w      = 132;
         meter_row_h  = 50;
         buttons_h    = BUTTONS_H_MAX;

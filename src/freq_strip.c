@@ -4,14 +4,39 @@
  *  Frequency strip: band on the left, VFO frequency in the middle, then the
  *  locator and the mode on the right; over the locator the TX audio offset of
  *  FT8/FT4/WSPR (the big digits stay on the dial, as WSJT-X). Always shown; the app dialogs start
- *  below it.
+ *  below it. A line under the digit the tuning step changes, and NR NB DNF (RIT XIT when set)
+ *  over the locator, as upstream v1.0.0's step marker and indicators row.
  */
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+
+/* The character of text ("%i.%03i.%03i", the first frequency of a split) that a tuning step
+ * changes, -1 if none; *big when the step is 2-9 of that digit (a full mark), 1 a half one.
+ * The digit and mark size as Dyuldin's upstream freq_info.cpp fg_freq_post_draw_event_cb() */
+int freq_strip_step_char(const char *text, int32_t step, bool *big) {
+    int digit = 0;   /* 0 the Hz units */
+
+    while (step >= 10) {
+        step /= 10;
+        digit++;
+    }
+    *big = step > 1;
+
+    int pos = (int)strcspn(text, " ") - 1 - digit - digit / 3;   /* a dot every 3 digits */
+
+    return pos >= 0 && text[pos] >= '0' && text[pos] <= '9' ? pos : -1;
+}
+
+#ifndef FREQ_STRIP_STEP_ONLY   /* tests/test_freq_strip.cpp: the digit alone */
 
 #include "freq_strip.h"
 
 #include "cfg/cfg_api.h"
 #include "cluster/spots.h"
 #include "info.h"
+#include "main_screen.h"
 #include "params/params.h"
 #include "station.h"
 #include "styles.h"
@@ -24,9 +49,76 @@
 
 static char      app[16];
 static lv_obj_t *strip, *band_label, *freq_label, *mode_label, *qth_dot, *qth_label, *tx_label;
+static lv_obj_t *nr_label, *nb_label, *dnf_label, *rit_label, *xit_label;
 static char      note[64];
 static int32_t   note_freq;
 static int32_t   tx_offset = -1;
+
+/* The step marker, under the digit (in the label's own box, so it is redrawn with the text) */
+static void step_mark_draw_cb(lv_event_t *e) {
+    const char *text = lv_label_get_text(freq_label);
+    bool        big;
+    int         pos = freq_strip_step_char(text, param_i_get(cfg_mode_freq_step), &big);
+
+    if (pos < 0 || main_screen_freq_locked()) return;
+
+    const lv_font_t *font = lv_obj_get_style_text_font(freq_label, 0);
+    lv_area_t        a;
+    lv_point_t       p1, p2;
+
+    lv_obj_get_content_coords(freq_label, &a);
+    lv_label_get_letter_pos(freq_label, pos, &p1);
+    lv_label_get_letter_pos(freq_label, pos + 1, &p2);
+    p1.x += a.x1;
+    p2.x += a.x1;
+    p1.y = p2.y = a.y1 + p1.y + font->line_height - font->base_line + 2;
+    if (!big) {   /* a step of 1: half as wide */
+        lv_coord_t w = (p2.x - p1.x) / 2;
+
+        p1.x += w / 2;
+        p2.x = p1.x + w;
+    }
+
+    lv_draw_line_dsc_t dsc;
+
+    lv_draw_line_dsc_init(&dsc);
+    dsc.color = TC(ok);
+    dsc.width = 2;
+    lv_draw_line(lv_event_get_draw_ctx(e), &dsc, &p1, &p2);
+}
+
+static void step_change_cb(Subject *subj, void *user_data) {
+    lv_obj_invalidate(freq_label);
+}
+
+/* NR NB DNF lit when on, dim when off; RIT XIT only when set. Lit as PRE / ATT in the info box */
+static void ind_set(lv_obj_t *l, bool on) {
+    lv_obj_set_style_text_color(l, on ? TC(focus_text) : TC(text_mute), 0);
+    lv_obj_set_style_bg_color(l, TC(focus), 0);
+    lv_obj_set_style_bg_opa(l, on ? (theme_shape.focus_solid ? LV_OPA_COVER : LV_OPA_50) : LV_OPA_0, 0);
+}
+
+static void ind_update_cb(Subject *subj, void *user_data) {
+    ind_set(nr_label, param_i_get(cfg_nr));
+    ind_set(nb_label, param_i_get(cfg_nb));
+    ind_set(dnf_label, param_i_get(cfg_dnf));
+    ind_set(rit_label, true);
+    ind_set(xit_label, true);
+    if (param_i_get(cfg_rit)) lv_obj_clear_flag(rit_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(rit_label, LV_OBJ_FLAG_HIDDEN);
+    if (param_i_get(cfg_xit)) lv_obj_clear_flag(xit_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(xit_label, LV_OBJ_FLAG_HIDDEN);
+}
+
+static lv_obj_t *ind_create(lv_obj_t *parent, const char *text) {
+    lv_obj_t *l = lv_label_create(parent);
+
+    lv_obj_set_style_text_font(l, theme_shape.vision ? &sony_24 : &sony_18, 0);
+    lv_obj_set_style_pad_hor(l, 3, 0);
+    lv_obj_set_style_radius(l, 3, 0);
+    lv_label_set_text(l, text);
+    return l;
+}
 
 static void update_cb(Subject *subj, void *user_data) {
     (void)subj;
@@ -132,7 +224,27 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
     lv_obj_align(col, LV_ALIGN_RIGHT_MID, -14, 0);
-    tx_label = make_label(col, LV_ALIGN_DEFAULT, 0, v ? &sony_24 : &sony_20, theme_hex(TC_accent));
+
+    /* Over the locator: NR NB DNF RIT XIT, then the TX offset */
+    lv_obj_t *top = lv_obj_create(col);
+    lv_obj_remove_style_all(top);
+    lv_obj_set_size(top, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(top, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(top, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(top, 3, 0);
+    nr_label = ind_create(top, "NR");
+    nb_label = ind_create(top, "NB");
+    dnf_label = ind_create(top, "DNF");
+    rit_label = ind_create(top, "RIT");
+    xit_label = ind_create(top, "XIT");
+    subject_subscribe_delayed((Subject *)cfg_nr, ind_update_cb, NULL);
+    subject_subscribe_delayed((Subject *)cfg_nb, ind_update_cb, NULL);
+    subject_subscribe_delayed((Subject *)cfg_dnf, ind_update_cb, NULL);
+    subject_subscribe_delayed((Subject *)cfg_rit, ind_update_cb, NULL);
+    subject_subscribe_delayed((Subject *)cfg_xit, ind_update_cb, NULL);
+    ind_update_cb(NULL, NULL);
+
+    tx_label = make_label(top, LV_ALIGN_DEFAULT, 0, v ? &sony_24 : &sony_20, theme_hex(TC_accent));
     lv_obj_add_flag(tx_label, LV_OBJ_FLAG_HIDDEN);
 
     lv_obj_t *right = lv_obj_create(col);
@@ -154,6 +266,8 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     subject_subscribe_delayed((Subject *)cfg_bg_freq, update_cb, NULL);
     subject_subscribe_delayed((Subject *)cfg_band_split, update_cb, NULL);
     subject_subscribe_delayed((Subject *)cfg_cur_mode, update_cb, NULL);
+    subject_subscribe_delayed((Subject *)cfg_mode_freq_step, step_change_cb, NULL);
+    lv_obj_add_event_cb(freq_label, step_mark_draw_cb, LV_EVENT_DRAW_POST, NULL);
     update_cb(NULL, NULL);
     qth_update_cb(NULL);
     lv_timer_create(qth_update_cb, QTH_POLL_MS, NULL);
@@ -175,3 +289,5 @@ void freq_strip_set_offset(int32_t offset_hz) {
     tx_offset = offset_hz;
     if (strip) update_cb(NULL, NULL);
 }
+
+#endif

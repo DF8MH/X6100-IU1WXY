@@ -36,13 +36,17 @@ const CARDS = [
   ["meter", "S-meter", "The signal meter in the top bar", [
     ["smeter_needle", "S-meter type", "Bars, or a needle on a dial", "seg", ["Bars", "Needle"]],
     ["smeter_color", "Colours", "Theme as it is, or green → yellow → red along the scale or with the signal", "seg", ["Theme", "Scale", "Level"]],
-    ["smeter_lamp", "Needle lamp", "An amber dial lit from behind, as the old analog meters", "sw"]], "preview"],
+    ["smeter_lamp", "Needle lamp", "An amber dial lit from behind, as the old analog meters", "sw"],
+    ["smeter_bar_color", "Meter colour", "With the theme colours: the bars or the needle scale up to S9", "color", "Theme"],
+    ["swr_color", "SWR colour", "The SWR bar while transmitting; yellow and red above 2 and 3 stay", "color", "Theme"]], "preview"],
   ["wf", "Spectrum and waterfall", "How the waterfall moves and reads", [
     ["spectrum_show", "Spectrum", "The spectrum above the waterfall; the radio's screen restarts", "sw"],
     ["spectrum_filled", "Spectrum fill", "The area under the trace filled", "sw"],
     ["spectrum_peak", "Spectrum peaks", "The peaks held for a moment", "sw"],
+    ["spectrum_height", "Spectrum height", "Taller spectrum, shorter waterfall; the radio's screen restarts", "range", [60, 160, 4, 1, " px"]],
     ["spectrum_line_color", "Trace colour", "The theme's, or your own", "color", "Theme"],
     ["spectrum_fill_color", "Fill colour", "As the trace, or your own", "color", "As trace"],
+    ["spectrum_fill_gradient", "Fill gradient", "The fill fading to the background at the bottom", "sw"],
     ["wf_palette", "Waterfall colours", "The theme's, or one of these", "sel", ["Theme", "Classic", "Gauss", "Grey", "Fire", "Ice", "Rainbow"]],
     ["wf_mode", "Mode", "Centered keeps the VFO in the middle, Fixed keeps the span", "seg", ["Centered", "Fixed"]],
     ["wf_speed", "Speed", "Lines a second, slow to fast", "range", [1, 5, 1, 1, ""]],
@@ -62,6 +66,7 @@ const CARDS = [
     ["bright_buttons", "Button lights", "", "sel", ["Always off", "Always on", "Temporarily on"]]]],
   ["text", "Text and info", "What the screen shows bigger", [
     ["knob_info", "Knob info", "The value shown while a knob turns", "sw"],
+    ["digi_text_compact", "Decoder text", "CW and RTTY text: large, or compact with more lines", "seg", ["Large", "Compact"]],
     ["mag_freq", "Magnify frequency", "Big frequency while tuning", "sw"],
     ["mag_info", "Magnify info", "Big value of the control being changed", "sw"],
     ["mag_alc", "Magnify ALC", "Big ALC reading while transmitting", "sw"]]]
@@ -146,6 +151,7 @@ var control = function(o) {
 var preview = function() {
   const needle = D.smeter_needle === 1, lamp = needle && D.smeter_lamp === 1, col = lamp ? 0 : D.smeter_color || 0, lvl = 0.6;
   const ok = [136, 255, 136], warn = [255, 176, 64], tx = [255, 64, 64];
+  const own = D.smeter_bar_color >= 0 ? "#" + ("00000" + D.smeter_bar_color.toString(16)).slice(-6) : "#aaaaaa";
   const mix = function(a, b, t) { return "rgb(" + a.map(function(v, i) { return Math.round(v + (b[i] - v) * t); }) + ")"; };
   const ramp = function(u) { return u < .5 ? mix(ok, warn, u * 2) : mix(warn, tx, (u - .5) * 2); };
   let s = '<svg viewBox="0 0 260 70" role="img" aria-label="S-meter preview"><defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3f47"/><stop offset="1" stop-color="#23272d"/></linearGradient></defs><radialGradient id="pl" cx="50%" cy="110%" r="90%"><stop offset="0" stop-color="#ffe2a8"/><stop offset=".55" stop-color="#e0a048"/><stop offset="1" stop-color="#9a5e1c"/></radialGradient><rect width="260" height="70" fill="url(#' + (lamp ? "pl" : "pg") + ')"/>';
@@ -154,7 +160,7 @@ var preview = function() {
     const pt = function(a, r) { const t = a * Math.PI / 180; return [CX + r * Math.sin(t), CY - r * Math.cos(t)]; };
     for (let k = 0; k < 32; k++) {
       const u = (k + .5) / 32, a = A0 + 64 * k / 32, b = A0 + 64 * (k + 1) / 32, p = pt(a, R), q = pt(b, R);
-      const c = col === 1 ? ramp(u) : col === 2 ? (u <= lvl ? ramp(lvl) : "#555a62") : lamp ? (u < .7 ? "#1a1006" : "#b01e10") : (u < .7 ? "#aaaaaa" : "#e02020");
+      const c = col === 1 ? ramp(u) : col === 2 ? (u <= lvl ? ramp(lvl) : "#555a62") : lamp ? (u < .7 ? "#1a1006" : "#b01e10") : (u < .7 ? own : "#e02020");
       s += '<path d="M' + p[0] + ' ' + p[1] + ' A' + R + ' ' + R + ' 0 0 1 ' + q[0] + ' ' + q[1] + '" stroke="' + c + '" stroke-width="' + (u < .7 ? 3 : 5) + '" fill="none"/>';
     }
     [["S1", 0], ["3", .175], ["5", .35], ["7", .525], ["9", .7], ["+20", .85], ["+40", 1]].forEach(function(l) {
@@ -168,7 +174,7 @@ var preview = function() {
     for (let i = 0; i < n; i++) {
       const u = i / (n - 1);
       if (u > lvl) break;
-      const c = col === 1 ? ramp(u) : col === 2 ? ramp(lvl) : (u < .66 ? "#aaaaaa" : mix([32, 192, 64], [224, 32, 32], (u - .66) / .34));
+      const c = col === 1 ? ramp(u) : col === 2 ? ramp(lvl) : (u < .66 ? own : mix([32, 192, 64], [224, 32, 32], (u - .66) / .34));
       s += '<rect x="' + (16 + i * sw - bw / 2) + '" y="6" width="' + bw + '" height="37" fill="' + c + '"/>';
     }
     [["S1", 0], ["3", 4], ["5", 8], ["7", 12], ["9", 16], ["+20", 20], ["+40", 24]].forEach(function(l) {
@@ -181,8 +187,9 @@ var preview = function() {
 /* Rows that only matter with another option on */
 var refresh = function() {
   $("#row-auto_level_offset").toggleClass("off", !D.auto_level);
-  $("#row-spectrum_filled, #row-spectrum_peak, #row-spectrum_line_color").toggleClass("off", !D.spectrum_show);
-  $("#row-spectrum_fill_color").toggleClass("off", !D.spectrum_show || !D.spectrum_filled);
+  $("#row-spectrum_filled, #row-spectrum_peak, #row-spectrum_height, #row-spectrum_line_color").toggleClass("off", !D.spectrum_show);
+  $("#row-spectrum_fill_color, #row-spectrum_fill_gradient").toggleClass("off", !D.spectrum_show || !D.spectrum_filled);
+  $("#row-smeter_bar_color").toggleClass("off", D.smeter_color !== 0 || (D.smeter_needle === 1 && D.smeter_lamp === 1));
   $("#row-smeter_lamp").toggleClass("off", D.smeter_needle !== 1);
   $("#row-smeter_color").toggleClass("off", D.smeter_needle === 1 && D.smeter_lamp === 1);
   $("#prev").html(preview());
