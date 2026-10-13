@@ -56,6 +56,8 @@ class CwReceiver {
     float get_lock_freq() const;
     // A coherent tone is held there (see CoherentToneTracker::is_locked)
     bool  is_locked() const;
+    // The VFO moved by df Hz of audio: the lock follows (CoherentToneTracker::shift_freq)
+    void  shift_lock(float df) { tone_tracker_.shift_freq(df); }
     void  change_threshold(float db_val);
     void  change_hpf_hz(float hz);
     void  change_lpf_hz(float hz);

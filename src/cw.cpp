@@ -62,10 +62,13 @@ static std::array<float, 3> freq_hist;
 static size_t              freq_hist_w = 0;
 static size_t              freq_hist_n = 0;
 static uint8_t             frame_counter = 0;
+static std::atomic<float>  rx_shift{0.0f};   /* audio Hz the VFO moved, for the audio thread */
+static int32_t             last_freq;
 static int                 wpm_sent = 0;
 
 static void on_val_bool_change(Subject *subj, void *user_data);
 static void on_rx_param_change(Subject *subj, void *user_data);
+static void on_freq_change(Subject *subj, void *user_data);
 
 static void on_text(const char *text);
 static void on_keyed(bool on);
@@ -81,6 +84,8 @@ void cw_init() {
     cfg_sm.p_cw_peak_q.subscribe(on_rx_param_change);
     cfg_sm.cp_cur_filter_low.subscribe(on_rx_param_change);
     cfg_sm.cp_cur_filter_high.subscribe_and_notify(on_rx_param_change);
+    last_freq = cfg_sm.cp_fg_freq.get();
+    cfg_sm.cp_fg_freq.subscribe(on_freq_change);
     tone_freq = key_tone;
 
     receiver = new cw::CwReceiver(on_text, on_keyed, on_frame);
@@ -89,9 +94,31 @@ void cw_init() {
     ready = true;
 }
 
+/* The tone moves in the audio as the VFO turns: CW is the upper sideband (a higher
+ * VFO lowers the tone), CW-R the lower one. Big jumps (band, memory) are left to
+ * the tracker: the station is gone anyway. */
+static void on_freq_change(Subject *subj, void *user_data) {
+    int32_t freq = cfg_sm.cp_fg_freq.get();
+    int32_t d    = freq - last_freq;
+    int32_t mode = cfg_sm.cp_cur_mode.get();
+
+    last_freq = freq;
+    if ((mode == x6100_mode_cw || mode == x6100_mode_cwr) && d != 0 && d >= -1500 && d <= 1500) {
+        float s = rx_shift.load();
+        while (!rx_shift.compare_exchange_weak(s, s + (mode == x6100_mode_cw ? -d : d))) {}
+    }
+}
+
 static void apply_rx_params() {
     static bool  peak_on;
     static float peak_tone, peak_q;
+
+    float shift = rx_shift.exchange(0.0f);
+    if (shift != 0.0f) {
+        receiver->shift_lock(shift);
+        tone_freq += shift;
+        for (auto &f : freq_hist) f += shift;
+    }
 
     if (!rx_dirty.exchange(false)) {
         return;

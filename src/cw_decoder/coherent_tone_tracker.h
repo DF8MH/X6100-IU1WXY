@@ -170,6 +170,19 @@ class CoherentToneTracker {
         noise4_ = noise_integr * NOISE4_SCALE;
     }
 
+    // The VFO moved: the same tone is now df Hz away in the audio. Moves the NCO
+    // with it and keeps the lock (set_freq drops it, as for another station), so
+    // the tuning indicator follows the knob at once instead of waiting for a retune.
+    void shift_freq(float df) {
+        bool was_alive = was_alive_;
+        int  alive_age = alive_age_, alive_counter = alive_counter_;
+
+        set_freq(get_freq_hz() + df);
+        was_alive_     = was_alive;
+        alive_age_     = alive_age;
+        alive_counter_ = alive_counter;
+    }
+
     void set_freq(float freq) {
         if (!nco) {
             return;

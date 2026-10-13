@@ -427,6 +427,30 @@ TEST_CASE("cw receiver: the veto holds the NCO during a brief dip") {
     (void)out;
 }
 
+// Turning the VFO moves the same station in the audio: shift_lock moves the NCO
+// with it and keeps the lock, so the tuning indicator follows at once (without it
+// the veto held the old frequency for up to a second after each turn of the knob).
+TEST_CASE("cw receiver: the lock follows a VFO shift at once") {
+    reset_audio();
+    std::string    out;
+    cw::CwReceiver rx([&out](const char *text) { out += text; }, [](bool) {});
+    rx.change_hpf_hz(300.0f);
+    rx.change_lpf_hz(900.0f);
+    rx.change_threshold(5.0f);
+
+    feed_ms(rx, true, 600, ALT_TONE_BIN);
+    REQUIRE(rx.is_locked());
+
+    const float bin_hz = cw::CwReceiver::SAMPLE_RATE / static_cast<float>(cw::FFT_SIZE);
+    const float before = cw::CwReceiverDiagAccess::nco_hz(rx);
+    rx.shift_lock(3.0f * bin_hz);
+    feed_ms(rx, true, 64, ALT_TONE_BIN + 3);
+
+    REQUIRE(rx.is_locked());
+    REQUIRE(cw::CwReceiverDiagAccess::nco_hz(rx) == Approx(before + 3.0f * bin_hz).margin(bin_hz));
+    (void)out;
+}
+
 TEST_CASE("cw receiver: on_frame fires once per coherent integrator hop") {
     reset_audio();
     int            frames = 0;
