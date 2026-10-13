@@ -14,7 +14,7 @@ Settings. Button and option names are written as the radio shows them.
 - [Settings](#settings): [General](#general-tab), [Display](#display-tab), [Audio](#audio-tab), [Wireless](#wireless-tab), [Keys](#keys-tab), [Cluster](#cluster-tab), [TX Cal](#tx-cal-tab), [Info](#info-tab)
 - [Transmitting](#transmitting): [digital-mode TX level](#digital-mode-tx-level), [voice microphone gain](#voice-microphone-gain), [recording voice messages](#recording-voice-messages)
 - [Digital modes](#digital-modes): [opening a mode](#opening-a-mode), [FT8 and FT4](#ft8-and-ft4), [JS8](#js8), [WSPR](#wspr), [SSTV, WeFax and NavTex](#sstv-wefax-and-navtex), [RTTY and WeFax TX](#rtty-and-wefax-tx)
-- [CW](#cw): [CW decoder](#cw-decoder), [CW Keyboard](#cw-keyboard), [CW messages](#cw-messages)
+- [CW](#cw): [CW decoder](#cw-decoder), [CW Keyboard](#cw-keyboard), [CW messages](#cw-messages), [CW Trainer](#cw-trainer)
 - [Apps](#apps): [DX Cluster](#dx-cluster), [Field Ops (SOTA / POTA)](#field-ops-sota--pota), [Bands](#bands)
 - [Bluetooth](#bluetooth): [headphones](#bluetooth-headphones), [CAT](#bluetooth-cat)
 - [Themes](#themes)
@@ -651,6 +651,20 @@ The MSG > CW messages are sent with TX or as a beacon.
   beacons and when the message ends.
 - They also appear as buttons in the [CW Keyboard](#cw-keyboard) and as
   macros in the X6100 Link app's CW tab.
+### CW Trainer
+
+APP (page 2) > CW Trainer keys with the radio's own keyer, so it follows the
+KEY settings. While it is open the radio is in train mode: sidetone only, no TX.
+
+- KEY button, page KEY 2:2:
+  - Mode: Manual is a straight key, only one paddle contact works. Auto-L and
+    Auto-R are the iambic keyer for a paddle; L and R swap which side gives
+    dits and dahs.
+  - Iambic: A or B.
+  - QSK time and Ratio are on the same page.
+- With a paddle, set Mode to Auto-L or Auto-R before opening the trainer. On
+  Manual only one side of the paddle keys.
+
 
 ## Apps
 
