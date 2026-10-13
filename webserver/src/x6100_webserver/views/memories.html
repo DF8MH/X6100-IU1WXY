@@ -1,9 +1,10 @@
 % rebase('base.html', title='Memories')
-<h2>Memories</h2>
+<h2><svg class="i"><use href="#i-bookmark"/></svg>Memories</h2>
 <p class="sub">MEM slots are the radio's MEM 1-9 buttons (hold to save, tap to load). Channels are the named list in APP → Channels; the radio picks up changes within a few seconds, unless the Channels dialog is open.</p>
 
-<div class="card">
-<h3>MEM slots</h3>
+<section class="dp-card">
+<div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-bookmark"/></svg></span><div><h3>MEM slots</h3><p>The MEM 1-9 buttons: hold to save, tap to load</p></div></div>
+<div class="dp-body tbl">
 <div class="table-wrap">
 <table id="slots">
   <thead>
@@ -14,10 +15,11 @@
 </div>
 <div class="actions"><span class="status" id="status_slots"></span></div>
 </div>
+</section>
 
-<div class="card">
-<h3>Channels</h3>
-<div class="actions top"><button id="add" class="primary">Add</button></div>
+<section class="dp-card">
+<div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-list"/></svg></span><div><h3>Channels</h3><p>The named list in APP → Channels</p></div><div class="dp-x"><button id="add" class="primary"><svg class="i"><use href="#i-plus"/></svg>Add</button></div></div>
+<div class="dp-body tbl">
 <div class="table-wrap">
 <table id="channels">
   <thead>
@@ -28,6 +30,7 @@
 </div>
 <div class="actions"><span class="status" id="status_channels"></span></div>
 </div>
+</section>
 
 <script>
 // Same names as x6100_mode_t / x6100_agc_t

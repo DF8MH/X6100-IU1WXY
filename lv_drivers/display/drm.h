@@ -37,6 +37,9 @@ bool drm_init(void);
 /* true: the GUI is on the overlay plane and what it leaves transparent shows
  * the primary plane, where the waterfall is drawn (drm_wf_present) */
 bool drm_planes(void);
+/* LVGL renders portrait 480x800 from now on: areas are turned 180 (the knobs on
+ * top), not 90, and the waterfall plane is left black */
+void drm_set_portrait(void);
 /* flush_cb, partial rendering: area-sized color_p */
 void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p);
 /* A strip (waterfall, spectrum) into the primary plane: portrait columns

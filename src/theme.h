@@ -212,6 +212,9 @@ int theme_list(char names[][32], int max);
 
 const uint32_t *theme_waterfall(void);
 
+/* 256 waterfall colours from n stops (0xRRGGBB, weak to strong), in `steps` bands (0: smooth) */
+void theme_ramp_palette(const uint32_t *stops, int n, int steps, uint32_t *out);
+
 /* Surfaces a theme may draw with an image instead of its colours */
 typedef enum {
     TI_bg,          /* screen background */

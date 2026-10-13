@@ -1,12 +1,16 @@
 % rebase('base.html', title='File browser')
-<h2>Files</h2>
-<p class="sub">Download files from the DATA partition of the SD card (ADI log, screenshots, recordings, etc).</p>
-<div class="card files">
-<a href=".."><i class="si-folder"></i> ..</a>
+<h2><svg class="i"><use href="#i-sd"/></svg>Files</h2>
+<p class="sub">Download files from the DATA partition of the SD card (ADI log, screenshots, recordings, etc).
+A <code>params.db</code> downloaded while the radio writes it may come out damaged (the radio's copy is not touched): open it with any SQLite3 tool to check.</p>
+<section class="dp-card">
+<div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-folder"/></svg></span><div><h3>{{request.path}}</h3><p>{{len(dirs)}} folders · {{len(files)}} files</p></div></div>
+<div class="dp-body tbl files">
+<a href=".."><svg class="i"><use href="#i-folder"/></svg> ..</a>
 % for item in dirs:
-<a href="{{item}}/"><i class="si-folder"></i> {{item}}</a>
+<a href="{{item}}/"><svg class="i"><use href="#i-folder"/></svg> {{item}}</a>
 % end
 % for item in files:
-<a href="{{item}}" download><i class="si-file"></i> {{item}}</a>
+<a href="{{item}}" download><svg class="i"><use href="#i-file"/></svg> {{item}}</a>
 % end
 </div>
+</section>

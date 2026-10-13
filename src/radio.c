@@ -471,6 +471,17 @@ void radio_set_ptt(bool tx) {
     WITH_RADIO_LOCK(x6100_control_ptt_set(tx));
 }
 
+static int mic_override = -1;      /* the walkie screen's mic, cfg_mic stays as saved */
+
+void radio_set_mic_override(int mic) {
+    mic_override = mic;
+    WITH_RADIO_LOCK(x6100_control_mic_set(mic < 0 ? param_i_get(cfg_mic) : mic));
+}
+
+int radio_get_mic(void) {
+    return mic_override < 0 ? param_i_get(cfg_mic) : mic_override;
+}
+
 static bool modem_on;
 
 void radio_set_modem(bool tx) {

@@ -30,3 +30,8 @@ void dialog_channels_add_on_open(void);
  * Does nothing while the dialog is open.
  */
 void dialog_channels_poll(void);
+
+/*
+ * Index of the last recalled Channel Memory entry, -1 if none.
+ */
+int16_t dialog_channels_last_recalled_index(void);

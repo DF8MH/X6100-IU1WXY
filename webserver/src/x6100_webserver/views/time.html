@@ -1,45 +1,53 @@
 % rebase('base.html', title='Time Editor')
-<h2>Time</h2>
+<h2><svg class="i"><use href="#i-clock"/></svg>Time</h2>
 <p class="sub">Radio clock, timezone and time synchronisation.</p>
 
-<div class="card">
-    <h3>Time information</h3>
+<section class="dp-card">
+    <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-clock"/></svg></span><div><h3>Time information</h3><p>This browser's clock and the radio's</p></div></div>
+    <div class="dp-body">
     <div class="time-now">
         <section><label>Local time</label><div id="local-time">Loading Local Time...</div></section>
         <section><label>Server time</label><div id="server-time">Fetching Server Time...</div></section>
         <section><label>Server timezone</label><div id="server-timezone">Fetching Server Timezone...</div></section>
     </div>
-    <div class="actions"><button id="sync-local-time-btn" class="primary">Sync Local Time to Server</button></div>
-</div>
+    <div class="actions"><button id="sync-local-time-btn" class="primary"><svg class="i"><use href="#i-sync"/></svg>Sync Local Time to Server</button></div>
+    </div>
+</section>
 
-<div class="card">
-    <h3>Manually update server time</h3>
+<section class="dp-card">
+    <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-edit"/></svg></span><div><h3>Manually update server time</h3><p>Sets the radio clock to the date and time you type</p></div></div>
+    <div class="dp-body">
     <label for="manual-time">Input time (format: YYYY-MM-DD HH:MM:SS)</label>
     <div class="row">
         <input id="manual-time" type="text" placeholder="Input Time">
         <button id="manual-update-btn">Manually Update Time</button>
     </div>
-</div>
+    </div>
+</section>
 
-<div class="card">
-    <h3>Update server time by NTP</h3>
+<section class="dp-card">
+    <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-sync"/></svg></span><div><h3>Update server time by NTP</h3><p>Needs internet on the radio</p></div></div>
+    <div class="dp-body">
     <label for="ntp-servers">Select or input NTP server</label>
     <div class="row">
         <select id="ntp-servers"></select>
         <input id="custom-ntp" type="text" placeholder="Input Custom NTP Server Address" style="display: none;">
         <button id="update-time-btn">Update Time</button>
     </div>
-</div>
+    </div>
+</section>
 
-<div class="card">
-    <h3>Set server timezone</h3>
+<section class="dp-card">
+    <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-globe"/></svg></span><div><h3>Set server timezone</h3><p>The radio's local time zone</p></div></div>
+    <div class="dp-body">
     <label for="timezone-select">Select timezone or input custom timezone</label>
     <div class="row">
         <select id="timezone-select"></select>
         <input id="custom-timezone" type="text" placeholder="e.g., Asia/Shanghai" style="display: none;">
         <button id="set-timezone-btn">Set Timezone</button>
     </div>
-</div>
+    </div>
+</section>
 
 <script>
     // Some Constants

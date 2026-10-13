@@ -1,9 +1,10 @@
 % rebase('base.html', title='CW messages')
-<h2>CW messages</h2>
+<h2><svg class="i"><use href="#i-cw"/></svg>CW messages</h2>
 <p class="sub">The messages of MSG &rarr; CW on the radio, sent with TX or as a beacon. Up to 64 characters each; the radio shows the changes the next time MSG &rarr; CW opens.</p>
 
-<div class="card">
-<div class="actions top"><button id="add" class="primary">Add</button></div>
+<section class="dp-card">
+<div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-cw"/></svg></span><div><h3>Messages</h3><p>Up to 64 characters each</p></div><div class="dp-x"><button id="add" class="primary"><svg class="i"><use href="#i-plus"/></svg>Add</button></div></div>
+<div class="dp-body tbl">
 <div class="table-wrap">
 <table id="messages">
   <thead>
@@ -14,6 +15,7 @@
 </div>
 <div class="actions"><span class="status" id="status"></span></div>
 </div>
+</section>
 
 <script>
 let max = 64;

@@ -541,3 +541,11 @@ void styles_apply(void) {
     lv_gradient_set_cache_size(LV_GRAD_CACHE_DEF_SIZE);
     lv_obj_invalidate(lv_scr_act());
 }
+
+/* For screens laid out elsewhere (walkie.c): a box of the theme, its image at w x h */
+void styles_theme_box(lv_style_t *s, theme_color_t top, theme_color_t bottom, theme_color_t border, int radius,
+                      theme_image_t img, lv_coord_t w, lv_coord_t h) {
+    lv_style_init(s);
+    box(s, top, bottom, border, radius);
+    surface_img(s, img, w, h);
+}

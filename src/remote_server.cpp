@@ -831,9 +831,13 @@ static const struct {
     {"cluster_column", &cfg_sm.p_cluster_column, 0, 1},
     {"smeter_needle", &cfg_sm.p_smeter_needle, 0, 1},
     {"smeter_color", &cfg_sm.p_smeter_color, 0, 2},
+    {"wf_palette", &cfg_sm.p_wf_palette, 0, 6},
+    {"spectrum_line_color", &cfg_sm.p_spectrum_line_color, -1, 0xffffff},
+    {"spectrum_fill_color", &cfg_sm.p_spectrum_fill_color, -1, 0xffffff},
     {"smeter_lamp", &cfg_sm.p_smeter_lamp, 0, 1},
     {"spectrum_show", &cfg_sm.p_spectrum_show, 0, 1},   /* the GUI restarts (disp_apply) */
     {"knob_info", &cfg_sm.p_knob_info, 0, 1},
+    {"walkie", &cfg_sm.p_walkie, 0, 1},                 /* the GUI restarts (disp_apply) */
 };
 
 static const struct {
@@ -884,7 +888,7 @@ static void disp_apply(void *arg) {
         backlight_tick();
     } else if (!strcmp(d->name, "bright_buttons")) {
         backlight_set_buttons((buttons_light_t)d->val);
-    } else if (!strcmp(d->name, "theme") || !strcmp(d->name, "spectrum_show")) {
+    } else if (!strcmp(d->name, "theme") || !strcmp(d->name, "spectrum_show") || !strcmp(d->name, "walkie")) {
         /* as Settings: the GUI saves and starts again with it (x6100_daemon) */
         if (d->name[0] == 't') params_str_set(&params.theme_name, d->text);
         params_flush();

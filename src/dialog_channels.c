@@ -1832,3 +1832,9 @@ static void construct_cb(lv_obj_t *parent) {
         );
     }
 }
+
+
+int16_t dialog_channels_last_recalled_index(void) {
+
+    return last_recalled_row < channels_count() ? last_recalled_row : -1;
+}

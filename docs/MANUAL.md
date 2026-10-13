@@ -10,9 +10,9 @@ Settings. Button and option names are written as the radio shows them.
 ## Contents
 
 - [Getting started](#getting-started): [first steps](#first-steps), [buttons and knobs](#buttons-and-knobs)
-- [Main screen](#main-screen): [status bar](#status-bar), [S-meter](#s-meter), [waterfall](#waterfall), [screen recording](#screen-recording)
+- [Main screen](#main-screen): [status bar](#status-bar), [S-meter](#s-meter), [waterfall](#waterfall), [screen recording](#screen-recording), [Walkie Talkie](#walkie-talkie-mode)
 - [Settings](#settings): [General](#general-tab), [Display](#display-tab), [Audio](#audio-tab), [Wireless](#wireless-tab), [Keys](#keys-tab), [Cluster](#cluster-tab), [TX Cal](#tx-cal-tab), [Info](#info-tab)
-- [Transmitting](#transmitting): [digital-mode TX level](#digital-mode-tx-level), [voice microphone gain](#voice-microphone-gain)
+- [Transmitting](#transmitting): [digital-mode TX level](#digital-mode-tx-level), [voice microphone gain](#voice-microphone-gain), [recording voice messages](#recording-voice-messages)
 - [Digital modes](#digital-modes): [opening a mode](#opening-a-mode), [FT8 and FT4](#ft8-and-ft4), [JS8](#js8), [WSPR](#wspr), [SSTV, WeFax and NavTex](#sstv-wefax-and-navtex), [RTTY and WeFax TX](#rtty-and-wefax-tx)
 - [CW](#cw): [CW decoder](#cw-decoder), [CW Keyboard](#cw-keyboard), [CW messages](#cw-messages)
 - [Apps](#apps): [DX Cluster](#dx-cluster), [Field Ops (SOTA / POTA)](#field-ops-sota--pota), [Bands](#bands)
@@ -110,7 +110,7 @@ Display page).
 | Option | Values | What it does |
 |---|---|---|
 | S-meter type | Bars, Needle | Bars: thin bars along the scale (default). Needle: a wide, low dial with a needle, in the theme's colours; the dB value is under the dial. |
-| S-meter colours | Theme, Scale, Level | Theme: as the theme draws it. Scale: green, yellow and red along the scale. Level: all the lit bars in the colour of the signal level. |
+| S-meter colours | Theme, Scale, Level | Theme: as the theme draws it. Scale: green, yellow and red along the scale. Level: the lit bars (on the needle, the arc up to the signal) in the colour of the signal level. |
 | Needle lamp | on, off | An amber dial lit from behind, with dark marks and a red zone over S9. Needle only; it replaces the colours. |
 
 The VISION theme always uses bars.
@@ -142,7 +142,18 @@ Over the waterfall. Where: Settings > Display > MAIN SCREEN.
 | Cluster spots | the DX cluster calls at their frequencies (see [DX Cluster](#dx-cluster)) |
 | Cluster column | the spot list in a box on the right |
 
-The spectrum is always off; the waterfall uses its space.
+Spectrum. Where: Settings > Display > SPECTRUM (off by default; the screen
+restarts to lay it out). Fill: the area under the trace filled. Peaks: the
+peaks held for a moment. The band plan and the cluster spots stay at the top
+of the waterfall.
+
+Colours, on the web configurator's Display page:
+
+| Option | Values |
+|---|---|
+| Waterfall colours | Theme (default), Classic, Gauss, Grey, Fire, Ice, Rainbow |
+| Trace colour | Theme, or your own |
+| Fill colour | As trace, or your own (the trace is then drawn over it) |
 
 ### Screen recording
 
@@ -157,6 +168,35 @@ Records the screen and the audio to an AVI file (MJPEG video, 800x480,
   transmitted voice is recorded too. Your monitor setting comes back when the
   recording stops.
 - It needs the SD card and 50 MB free ("Screen rec: no SD card", "Disk full").
+
+### Walkie Talkie mode
+
+The radio held upright, the knobs on top, with a plain screen: VFO or memory,
+RX/TX, frequency, mode, S-meter, and the VOL, SQL and PWR bars. It follows the
+theme.
+
+Where: Settings > Display > SPECTRUM > Walkie Talkie (also on the web
+configurator's Display page). The screen restarts in portrait.
+
+- PTT: the PTT key on the side of the radio. It transmits with the built-in
+  microphone; the border turns red and the S-meter shows the power and SWR.
+- VOL knob: always the volume. The buttons that set a value use the MFK.
+- F1-F5 run down the left edge, with the buttons next to them. APP opens the
+  walkie pages:
+
+| Page | Buttons |
+|---|---|
+| WLK 1 | MEM/VFO, Band +, Band -, TX power |
+| WLK 2 | AM/FM, SSB (held: DIG), ATU (held: tune, it transmits), PRE (held: ATT) |
+| WLK 3 | AGC (held: split), A/B (held: copy), Step (held: back), Lock |
+| WLK 4 | Vol Sql RF Pwr (the levels page), Exit (held) |
+
+- GEN, KEY, DFN, DFL and VM open their pages as on the main screen.
+- MEM: the main knob steps through the memories; the number and name are on
+  top.
+- Exit: WLK 4, hold Exit. The radio restarts in landscape.
+- Not in walkie mode: the apps, Settings and the hand mic keys. Leave walkie
+  mode to use them.
 
 ## Settings
 
@@ -198,6 +238,7 @@ S-meter cal: see [S-meter](#s-meter). WFVIEW SERVER: see
 | Card | Options |
 |---|---|
 | BACKLIGHT | timeout and brightness, buttons brightness (Always Off, Always On, Temporarily On) |
+| SPECTRUM | Spectrum, Fill, Peaks (see [Waterfall](#waterfall)), Walkie Talkie (see [Walkie Talkie mode](#walkie-talkie-mode)) |
 | WATERFALL | see [Waterfall](#waterfall) |
 | MAIN SCREEN | Band plan, Cluster spots, Cluster column, S-meter type, S-meter colours, Needle lamp |
 | INTERFACE | Popups Freq/Info/ALC, Knob info, Theme, Font |
@@ -291,11 +332,11 @@ only by IU1WXY and deleted within 90 days.
 The apps that transmit from the radio (FT8/FT4, JS8, WSPR, SSTV, RTTY,
 WeFax) set their audio level by themselves.
 
-- The level settles where the ALC stops, with the power at the setting. An
-  ALC reading of 0 is correct in the digital modes.
+- The level settles with the ALC working a little (about 1), with the power
+  at the setting.
 - In the first second or so of a transmission nothing changes. Then, while
-  the ALC reads 0 and the power is short of the setting, the level goes up
-  slowly; when the ALC moves or the power is over the setting, it comes down.
+  the ALC reads under 1, the level goes up slowly and stops there; when the
+  ALC goes over 3 or the power is well over the setting, it comes down.
 - The level found is kept for the next transmission.
 
 TX power while a digital app is open:
@@ -312,11 +353,26 @@ There is no setting for it.
 
 - When the ALC stays high (not just on the peaks), the gain goes down 2 steps
   every 2 seconds or so, at most 6 steps in one transmission.
-- After a transmission of at least 4 seconds where the ALC never moved and
-  the peaks stayed well short of the power setting, the gain goes up 1 step.
-- A steady carrier (tune) is left alone.
+- After a transmission of at least 4 seconds of talking where the ALC never
+  reached 1, the gain goes up 2 steps, so the ALC works a little on the peaks.
+- A steady carrier (tune) or a silent microphone is left alone.
 - It changes the gain of the microphone in use (both with Input = Auto),
   between 4 and 50. Where: Settings > Audio > MICROPHONE.
+
+### Recording voice messages
+
+**Voice messages can be recorded only from the hand mic.** The built-in
+microphone cannot record them. This is a limit of the radio's baseband, not
+of this firmware: the baseband keeps the built-in microphone off while
+receiving and turns it on only when transmitting.
+
+- It applies to MSG > Voice (Rec) and to the Field Ops voice CQ (Rec CQ).
+- With no hand mic, after 3 seconds the radio says "No audio: recording uses
+  the hand mic".
+- Transmitting with the built-in microphone works as usual (Settings > Audio
+  > MICROPHONE), also in Walkie Talkie mode.
+- The recording keeps 250-3000 Hz, what SSB sends, without the radio's own
+  hum and whistles.
 
 ## Digital modes
 
@@ -726,7 +782,8 @@ the start and the last call.
 
 - CQ sends `CQ CQ SOTA DE <call> <call> K` in CW (POTA in a park). In SSB it
   sends your voice CQ: record it once with Rec CQ (page 2, before or during
-  the activation): press, speak, Stop rec (60 s at most). It is `CQ SOTA` /
+  the activation): press, speak, Stop rec (60 s at most). It records from the
+  hand mic only (see [recording voice messages](#recording-voice-messages)). It is `CQ SOTA` /
   `CQ POTA` in `/mnt/msg`, so MSG > Voice lists it too. CQ again while it is
   on air stops it.
 - Log QSO: type `CALL`, or `CALL rst_rcvd rst_sent` (default 599 in CW, 59
@@ -1016,10 +1073,15 @@ waterfall.
 Check the clock: FT8 and JS8 need it within about 2 s, WSPR within about a
 second. WiFi (NTP) or GPS sets it. FT8 and JS8 also have Time Sync.
 
-#### The ALC reads 0 in FT8 or JS8. Is the level too low?
+#### The ALC reads about 1 in FT8 or JS8. Is it too high?
 
-No. The TX level settles where the ALC stops, with the power at the setting:
-0 is correct. See [Digital-mode TX level](#digital-mode-tx-level).
+No. The TX level settles with the ALC working a little, with the power at the
+setting. It comes down by itself over 3. See [Digital-mode TX level](#digital-mode-tx-level).
+
+#### I can't record a voice message with the built-in microphone
+
+The radio's baseband records only from the hand mic: plug it in to record. See
+[recording voice messages](#recording-voice-messages).
 
 #### The power drops to 7 W when I open a digital app
 
@@ -1028,8 +1090,8 @@ the app.
 
 #### My microphone gain changed by itself
 
-In voice modes it follows the ALC: down when the ALC stays high, up a little
-when it never moves. See [voice microphone gain](#voice-microphone-gain).
+In voice modes it follows the ALC: down when the ALC stays high, up when it
+hardly moves. See [voice microphone gain](#voice-microphone-gain).
 
 #### The DX Cluster shows no spots
 

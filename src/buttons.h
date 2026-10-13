@@ -72,6 +72,7 @@ extern buttons_page_t buttons_page_msg_cw_2;
 
 extern buttons_page_t buttons_page_rtty;
 extern button_data_t  btn_dig_pwr;   /* TX power steps for the digital apps */
+extern button_data_t  btn_tx_pwr;    /* TX power on the knob (walkie.c too) */
 
 extern buttons_group_t buttons_group_gen;
 extern buttons_group_t buttons_group_app;
@@ -85,6 +86,8 @@ extern buttons_group_t buttons_group_msg_cw;
 extern buttons_group_t buttons_group_msg_voice;
 
 void            buttons_init(lv_obj_t *parent);
+/* The five buttons to parent in a column, w x h each, F1 on top (the walkie screen) */
+void            buttons_vertical(lv_obj_t *parent, lv_coord_t w, lv_coord_t h);
 void            buttons_refresh(button_data_t *data);
 void            buttons_refresh_marks();
 void            buttons_screen_rec_update();

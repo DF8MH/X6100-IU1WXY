@@ -21,7 +21,7 @@
 static char         file_str[64];
 static char         time_str[64];
 static lv_img_dsc_t snapshot;
-static uint8_t      *rows[480];
+static uint8_t      *rows[800];     /* 480 landscape, 800 portrait (walkie) */
 static uint8_t      *buf;
 
 static void * screenshot_thread(void *arg) {
@@ -61,17 +61,17 @@ static void * screenshot_thread(void *arg) {
 
     png_set_IHDR(
         png_ptr, png_info,
-        800, 480,
+        snapshot.header.w, snapshot.header.h,
         8, PNG_COLOR_TYPE_RGB,
         PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
         PNG_FILTER_TYPE_DEFAULT);
 
-    for (uint16_t y = 0; y < 480; y++) {
-        rows[y] = (uint8_t *) malloc(800 * 3);
+    for (uint16_t y = 0; y < snapshot.header.h; y++) {
+        rows[y] = (uint8_t *) malloc(snapshot.header.w * 3);
 
-        for (uint16_t x = 0; x < 800; x++) {
+        for (uint16_t x = 0; x < snapshot.header.w; x++) {
             uint32_t    to = x * 3;
-            uint32_t    from = (y * 800 + x) * 4 + 2;
+            uint32_t    from = (y * snapshot.header.w + x) * 4 + 2;
 
             rows[y][to++] = buf[from--];
             rows[y][to++] = buf[from--];
@@ -83,7 +83,7 @@ static void * screenshot_thread(void *arg) {
     png_write_png(png_ptr, png_info, PNG_TRANSFORM_IDENTITY, NULL);
     png_write_end(png_ptr, png_info);
 
-    for (uint16_t y = 0; y < 480; y++) {
+    for (uint16_t y = 0; y < snapshot.header.h; y++) {
         free(rows[y]);
     }
 

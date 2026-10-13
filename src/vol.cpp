@@ -18,6 +18,7 @@ extern "C" {
     #include "radio.h"
     #include "main.h"
     #include "params/params.h"
+    #include "walkie.h"
 }
 
 static cfg_ctrl_t   vol_ctrl = CTRL_VOL;
@@ -46,6 +47,7 @@ void vol_change_ctrl(int16_t dir) {
         LV_LOG_ERROR("Unknown direction for change control (0)");
         return;
     }
+    if (walkie_on()) return;
     vol_ctrl = controls_encoder_get_next(ENCODER_BIND_VOL, vol_ctrl, dir);
     knobs_set_vol_param(vol_ctrl);
     vol_update(0);

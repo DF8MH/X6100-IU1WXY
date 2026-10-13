@@ -76,6 +76,10 @@ void radio_stop_swrscan();
 
 void radio_poweroff();
 void radio_set_ptt(bool tx);
+/* The mic of the baseband without saving it (x6100_mic_sel_t), -1: back to cfg_mic */
+void radio_set_mic_override(int mic);
+/* The mic in use: the override, else cfg_mic */
+int radio_get_mic(void);
 void radio_set_modem(bool tx);
 bool radio_get_modem(void);   /* the TX audio from the GUI (apps, recordings), not the mic */
 /* The base plays this app's audio on the speaker (as voice prompts and the

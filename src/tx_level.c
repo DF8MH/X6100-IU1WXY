@@ -8,9 +8,6 @@
 
 #include <math.h>
 
-/* Below the setting by less than this (or reading it): there. */
-#define NEAR_W 0.05f
-
 void tx_level_start(tx_level_t *l, float target_w) {
     *l          = (tx_level_t){0};
     l->target_w = target_w;
@@ -53,11 +50,11 @@ static float tx_level_decide(tx_level_t *l) {
         if (d < -TX_LEVEL_DOWN_MAX_DB) d = -TX_LEVEL_DOWN_MAX_DB;
         l->held = true;
     } else if (!l->held) {
-        if (a >= TX_LEVEL_ALC_SHOWS || (l->target_w > 0.0f && p >= l->target_w - NEAR_W)) {
-            l->held = true; /* there: the ALC holds the power at the setting */
+        if (a >= TX_LEVEL_ALC_SHOWS || (l->target_w > 0.0f && p > l->target_w + TX_LEVEL_PWR_STEP_W)) {
+            l->held = true; /* there: the ALC holds the power at the setting (or nothing holds it) */
         } else if (l->up_db < TX_LEVEL_UP_MAX_DB) {
-            /* The ALC at zero: up, faster while far short (under half the
-             * setting), then gently into the ALC's onset. */
+            /* The ALC under 1: up, faster while far short (under half the
+             * setting), then gently into the ALC. */
             d = l->target_w > 0.0f && p < l->target_w * 0.5f ? TX_LEVEL_UP_FAST_DB : TX_LEVEL_UP_SLOW_DB;
             if (l->up_db + d > TX_LEVEL_UP_MAX_DB) d = TX_LEVEL_UP_MAX_DB - l->up_db;
             l->up_db += d;

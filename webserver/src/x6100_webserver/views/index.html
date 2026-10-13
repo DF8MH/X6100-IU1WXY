@@ -1,45 +1,25 @@
 % rebase('base.html', title='Main Page')
-<h2>General</h2>
-<section class="card">
-    <h3><a href="/bands">Bands editor</a></h3>
-    <p>Allows to add/change/remove bands. Active column is to bind band to up/down buttons.</p>
-</section>
-<section class="card">
-    <h3><a href="/digital_modes">Digital modes editor</a></h3>
-    <p>Allows to add/change/remove frequencies for FT8/FT4 and JS8</p>
-</section>
-<section class="card">
-    <h3><a href="/cluster">DX Cluster</a></h3>
-    <p>Telnet DX cluster server used by the Cluster app on the radio.</p>
-</section>
-<section class="card">
-    <h3><a href="/wfview">wfview server</a></h3>
-    <p>Icom LAN server for wfview: enable it and set the login user and password.</p>
-</section>
-<section class="card">
-    <h3><a href="/memories">Memories</a></h3>
-    <p>Reads, edits and clears the MEM button slots and the named channels.</p>
-</section>
-<section class="card">
-    <h3><a href="/files/">File browser</a></h3>
-    <p>Allows to download files from the DATA partition of the SD card (ADI file, screenshoots, recordings, etc).</p>
-    <p><b>Note:</b> there is a small probability, that <code>params.db</code> might be changed during downloading
-        and downloaded version might be corrupted. This will not affect <code>params.db</code> on the radio.
-        You can check downloaded file with opening it using any SQLite3 tool.</p>
-</section>
-<section class="card">
-    <h3><a href="/gallery">Gallery</a></h3>
-    <p>Screen recordings, RX audio recordings and screenshots with thumbnails. Screen recordings (AVI) can be converted to MP4 in your browser.</p>
-</section>
-<section class="card">
-    <h3><a href="/remote">Remote</a></h3>
-    <p>Tunes the radio from the browser with its spectrum and waterfall, and plays the RX audio (receive only).</p>
-</section>
-<section class="card">
-    <h3><a href="/backup">Backup</a></h3>
-    <p>Saves the radio settings, memories, QSO log and more to your computer, and puts them back after flashing a new image.</p>
-</section>
-<section class="card">
-    <h3><a href="/time">Time editor</a></h3>
-    <p>Shows the radio clock and sets it manually, by NTP, or its timezone.</p>
-</section>
+<h2><svg class="i"><use href="#i-home"/></svg>General</h2>
+<p class="sub">Everything the configurator can change on the radio.</p>
+<div class="tiles">
+  <a class="tile" href="/bands"><span class="dp-ico"><svg class="i"><use href="#i-bands"/></svg></span>
+    <div><b>Bands editor</b><span>Adds, changes and removes bands; Active binds a band to the up/down keys.</span></div></a>
+  <a class="tile" href="/digital_modes"><span class="dp-ico"><svg class="i"><use href="#i-pulse"/></svg></span>
+    <div><b>Digital modes editor</b><span>Adds, changes and removes the FT8/FT4 and JS8 frequencies.</span></div></a>
+  <a class="tile" href="/cluster"><span class="dp-ico"><svg class="i"><use href="#i-globe"/></svg></span>
+    <div><b>DX Cluster</b><span>The telnet DX cluster server used by the Cluster app.</span></div></a>
+  <a class="tile" href="/wfview"><span class="dp-ico"><svg class="i"><use href="#i-network"/></svg></span>
+    <div><b>wfview server</b><span>Icom LAN server for wfview: turn it on and set its login.</span></div></a>
+  <a class="tile" href="/memories"><span class="dp-ico"><svg class="i"><use href="#i-bookmark"/></svg></span>
+    <div><b>Memories</b><span>Reads, edits and clears the MEM slots and the named channels.</span></div></a>
+  <a class="tile" href="/files/"><span class="dp-ico"><svg class="i"><use href="#i-sd"/></svg></span>
+    <div><b>File browser</b><span>Downloads files from the SD card: ADIF log, screenshots, recordings.</span></div></a>
+  <a class="tile" href="/gallery"><span class="dp-ico"><svg class="i"><use href="#i-image"/></svg></span>
+    <div><b>Gallery</b><span>Screen and RX recordings and screenshots, with thumbnails; AVI to MP4 in the browser.</span></div></a>
+  <a class="tile" href="/remote"><span class="dp-ico"><svg class="i"><use href="#i-knob"/></svg></span>
+    <div><b>Remote</b><span>Tunes the radio from the browser with spectrum, waterfall and RX audio.</span></div></a>
+  <a class="tile" href="/backup"><span class="dp-ico"><svg class="i"><use href="#i-archive"/></svg></span>
+    <div><b>Backup</b><span>Saves settings, memories, QSO log and more, and restores them after a new image.</span></div></a>
+  <a class="tile" href="/time"><span class="dp-ico"><svg class="i"><use href="#i-clock"/></svg></span>
+    <div><b>Time editor</b><span>Shows the radio clock and sets it by hand, by NTP or by timezone.</span></div></a>
+</div>

@@ -1,5 +1,5 @@
 % rebase('base.html', title='Gallery')
-<h2>Gallery</h2>
+<h2><svg class="i"><use href="#i-image"/></svg>Gallery</h2>
 <p class="sub">Screen recordings (AVI), RX audio recordings, screenshots, SSTV and WeFax pictures stored on the radio. Tap files to select them, then download them as a ZIP or delete them together. Screen recordings can be converted to MP4 in this browser.</p>
 <div class="card" id="httpsnote" hidden><span class="meta">In-browser conversion needs a secure page. Open <a id="httpslink" href="#">the HTTPS version of this page</a>: the radio uses a self-signed certificate, so the browser shows a warning once. Accept it (Advanced, then Proceed) and the option appears.</span></div>
 
@@ -8,7 +8,7 @@
 <div id="folderview" hidden>
   <div class="crumb"><a href="#">Gallery</a> › <span id="crumbname"></span></div>
   <div class="card upload" id="upload" hidden>
-    <div class="drop" id="drop">Drop pictures here or <button class="primary" id="pickbtn">Choose files</button></div>
+    <div class="drop" id="drop">Drop pictures here or <button class="primary" id="pickbtn"><svg class="i"><use href="#i-upload"/></svg>Choose files</button></div>
     <input type="file" id="pickfiles" accept="image/*" multiple hidden>
     <p class="meta">PNG files up to 4 MB are sent as they are; JPEG and other pictures are converted to PNG in this browser. A file with the same name is kept: the new one gets -1, -2... at the end.</p>
     <div id="uploads"></div>
@@ -17,7 +17,7 @@
     <button id="selall">Select all</button>
     <button id="selnone">None</button>
     <span class="meta" id="selinfo"></span>
-    <button class="primary" id="selzip">Download ZIP</button>
+    <button class="primary" id="selzip"><svg class="i"><use href="#i-download"/></svg>Download ZIP</button>
     <button class="remove" id="seldel">Delete</button>
     <span class="status" id="status_gallery"></span>
   </div>
@@ -31,6 +31,8 @@ const KIND_LABEL = {screenrec: "Screen recording", rec: "RX recording", shots: "
                     wefax: "WeFax received", wefax_tx: "WeFax to send"};
 const FOLDER_LABEL = {all: "All files", shots: "Screenshots", screenrec: "Screen recordings", rec: "RX recordings", sstv: "SSTV received",
                       sstv_tx: "SSTV to send", wefax: "WeFax received", wefax_tx: "WeFax to send"};
+const FOLDER_ICON = {all: "folder", shots: "image", screenrec: "monitor", rec: "speaker", sstv: "image", sstv_tx: "upload",
+                     wefax: "file", wefax_tx: "upload"};
 const UPLOAD_URL = {sstv_tx: "/api/sstv/tx_pics", wefax_tx: "/api/wefax/tx_pics"};
 const UPLOAD_FIT = {sstv_tx: [800, 640], wefax_tx: [1809, 4000]};   // largest size of a converted picture (the radio fits it)
 const UPLOAD_MAX = 4 * 1024 * 1024;
@@ -390,7 +392,8 @@ const render = function() {
     Object.keys(FOLDER_LABEL).forEach(function(k) {
       const list = k == "all" ? all : all.filter(function(x) { return x.kind == k; });
       $("#folders").append($("<a class='card folder'>").attr("href", "#" + k)
-        .append($("<b>").text(FOLDER_LABEL[k]), $("<span class='meta'>").text(filesText(list))));
+        .append($("<span class='dp-ico'>").html('<svg class="i"><use href="#i-' + FOLDER_ICON[k] + '"/></svg>'),
+                $("<div>").append($("<b>").text(FOLDER_LABEL[k]), $("<span class='meta'>").text(filesText(list)))));
     });
     return;
   }

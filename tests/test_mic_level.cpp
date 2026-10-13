@@ -25,9 +25,13 @@ TEST_CASE("mic level: the ALC only on the peaks is left as it is", "[mic]") {
     CHECK(mic_level_end(&l) == 0);
 }
 
-TEST_CASE("mic level: a quiet transmission, the ALC never moving and the peaks short, takes it up one", "[mic]") {
+TEST_CASE("mic level: talking with the ALC never reaching 1 takes it up, a silent mic does not", "[mic]") {
     mic_level_t l;
     mic_level_start(&l, 5.0f);
-    for (int i = 0; i < 12; i++) CHECK(mic_level_reading(&l, 0.0f, i % 2 ? 2.0f : 0.5f) == 0);
-    CHECK(mic_level_end(&l) == 1);
+    for (int i = 0; i < 12; i++) CHECK(mic_level_reading(&l, i % 3 ? 0.0f : 0.6f, i % 2 ? 5.0f : 0.5f) == 0);
+    CHECK(mic_level_end(&l) == MIC_LEVEL_UP); // the power reaches the setting, the ALC hardly shows
+
+    mic_level_start(&l, 5.0f);
+    for (int i = 0; i < 12; i++) mic_level_reading(&l, 0.0f, 0.0f); // nothing from the mic
+    CHECK(mic_level_end(&l) == 0);
 }

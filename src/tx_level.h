@@ -12,11 +12,12 @@
  *  XPA125B behind it went 18-35 W and back every two seconds).
  *
  *  Now, with readings averaged over half a second: while the ALC reads
- *  zero the drive ramps up, one way only (1 dB a second while the power is
- *  under half the setting, then 0.5 dB a second), and stops for the rest
- *  of the transmission once the ALC shows (it then holds the power at the
- *  setting, whatever the 0.1 W reading says) or the power reads the
- *  setting. Overdrive (ALC over 0.5) brings it down a little. The level
+ *  under 1 the drive ramps up, one way only (1 dB a second while the power
+ *  is under half the setting, then 0.5 dB a second), and stops for the rest
+ *  of the transmission once the ALC reads 1 (it then holds the power at the
+ *  setting, whatever the 0.1 W reading says, and the meter shows it at
+ *  work) or the power reads over the setting (a base whose ALC does not
+ *  hold it). Overdrive (ALC over 3) brings it down a little. The level
  *  found is kept (tx_player.c), so the next transmission starts there and
  *  stays steady. Pure arithmetic: tests/test_js8.cpp runs it against a
  *  model radio.
@@ -32,8 +33,8 @@ extern "C" {
 
 #define TX_LEVEL_SETTLE_BLOCKS 30    /* about 1.3 s: the PA and the ALC settle first */
 #define TX_LEVEL_WINDOW_BLOCKS 12    /* about 0.5 s of blocks per decision */
-#define TX_LEVEL_ALC_HIGH      0.5f  /* the radio's ALC (0-10) above this: overdriven */
-#define TX_LEVEL_ALC_SHOWS     0.1f  /* from this the ALC is working: hold there */
+#define TX_LEVEL_ALC_HIGH      3.0f  /* the radio's ALC (0-10) above this: overdriven */
+#define TX_LEVEL_ALC_SHOWS     1.0f  /* from this the ALC is working (and seen to): hold there */
 #define TX_LEVEL_DOWN_MAX_DB   0.75f /* the most the drive drops in one window */
 #define TX_LEVEL_UP_FAST_DB    0.5f  /* up a window while far short (1 dB a second) */
 #define TX_LEVEL_UP_SLOW_DB    0.25f /* up a window when near (0.5 dB a second) */

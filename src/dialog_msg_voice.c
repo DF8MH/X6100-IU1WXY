@@ -21,6 +21,7 @@
 #include <sndfile.h>
 #include <dirent.h>
 #include <pthread.h>
+#include <math.h>
 
 #include <aether_radio/x6100_control/control.h>
 
@@ -83,6 +84,53 @@ static SNDFILE        *rec_file;
 static char            rec_name[NAME_LEN + 1];
 static volatile long   rec_frames;
 static volatile int    rec_peak;
+static volatile int    rec_max;         /* the loudest so far: none means no hand mic */
+static bool            rec_warned;
+
+/* The hand mic input carries the radio's own hum (multiples of 33-40 Hz) and two whistles,
+ * 781 Hz and 9.6 kHz (SQ7ACP; measured on an idle input): the message keeps 250-3000 Hz, all
+ * that SSB sends, with a narrow notch at 781 Hz */
+typedef struct { float b0, b1, b2, a1, a2, z1, z2; } biquad_t;
+
+#define REC_HP       0
+#define REC_LP       2
+#define REC_NOTCH    4
+#define REC_STAGES   5
+static biquad_t rec_filter[REC_STAGES];
+
+/* RBJ cookbook: 0 high pass, 1 low pass, 2 notch */
+static void biquad_set(biquad_t *f, int kind, float hz, float q) {
+    float w = 2.0f * (float)M_PI * hz / AUDIO_CAPTURE_RATE, c = cosf(w), a = sinf(w) / (2.0f * q);
+    float a0 = 1.0f + a;
+
+    if (kind == 0) {
+        f->b0 = (1.0f + c) / 2.0f; f->b1 = -(1.0f + c); f->b2 = f->b0;
+    } else if (kind == 1) {
+        f->b0 = (1.0f - c) / 2.0f; f->b1 = 1.0f - c; f->b2 = f->b0;
+    } else {
+        f->b0 = 1.0f; f->b1 = -2.0f * c; f->b2 = 1.0f;
+    }
+    f->b0 /= a0; f->b1 /= a0; f->b2 /= a0;
+    f->a1 = -2.0f * c / a0;
+    f->a2 = (1.0f - a) / a0;
+    f->z1 = f->z2 = 0.0f;
+}
+
+static float biquad_run(biquad_t *f, float x) {
+    float y = f->b0 * x + f->z1;
+
+    f->z1 = f->b1 * x - f->a1 * y + f->z2;
+    f->z2 = f->b2 * x - f->a2 * y;
+    return y;
+}
+
+static void rec_filter_init(void) {
+    for (int i = 0; i < 2; i++) {
+        biquad_set(&rec_filter[REC_HP + i], 0, 250.0f, 0.707f);
+        biquad_set(&rec_filter[REC_LP + i], 1, 3000.0f, 0.707f);
+    }
+    biquad_set(&rec_filter[REC_NOTCH], 2, 781.0f, 10.0f);
+}
 
 /* Playback worker: listen locally, or send on air (once or as an auto call) */
 static pthread_t     worker;
@@ -343,9 +391,12 @@ static void start_rec(const char *name) {
     }
     audio_set_play_mode(AUDIO_PLAY_VOICE_REC);
     pthread_mutex_lock(&rec_mutex);
+    rec_filter_init();
     rec_file   = f;
     rec_frames = 0;
     rec_peak   = 0;
+    rec_max    = 0;
+    rec_warned = false;
     state      = MSG_VOICE_RECORD;
     pthread_mutex_unlock(&rec_mutex);
 }
@@ -362,18 +413,30 @@ static void stop_rec(void) {
 
 /* Called from the audio thread while recording */
 void dialog_msg_voice_put_audio_samples(size_t nsamples, int16_t *samples) {
-    int peak = 0;
-    for (size_t i = 0; i < nsamples; i++) {
-        int x = abs(samples[i]);
-        if (x > peak) peak = x;
-    }
+    int16_t out[nsamples];
+    int     peak = 0;
+
     pthread_mutex_lock(&rec_mutex);
     if (state == MSG_VOICE_RECORD && rec_file) {
-        sf_write_short(rec_file, samples, nsamples);
+        for (size_t i = 0; i < nsamples; i++) {
+            float y = samples[i];
+            for (int k = 0; k < REC_STAGES; k++) y = biquad_run(&rec_filter[k], y);
+            out[i] = (int16_t)LV_CLAMP(-32767.0f, y, 32767.0f);
+            if (abs(out[i]) > peak) peak = abs(out[i]);
+        }
+        sf_write_short(rec_file, out, nsamples);
         rec_frames += nsamples;
         rec_peak = peak;
+        if (rec_frames > AUDIO_CAPTURE_RATE / 2 && peak > rec_max) rec_max = peak;   /* past the switch click */
     }
     pthread_mutex_unlock(&rec_mutex);
+}
+
+/* 3 s of almost nothing (under -40 dBFS): the radio records only from the hand mic */
+static void rec_check_quiet(void) {
+    if (state != MSG_VOICE_RECORD || rec_warned || rec_frames < 3L * AUDIO_CAPTURE_RATE) return;
+    rec_warned = true;
+    if (rec_max < 330) msg_update_text_fmt("No audio: recording uses the hand mic");
 }
 
 msg_voice_state_t dialog_msg_voice_get_state() {
@@ -412,6 +475,7 @@ bool msg_voice_exists(const char *name) {
 }
 
 void msg_voice_poll(bool closing) {
+    rec_check_quiet();
     if (state == MSG_VOICE_RECORD && (closing || rec_frames >= (long)REC_MAX_S * AUDIO_CAPTURE_RATE)) stop_rec();
     reap_worker(closing);
 }
@@ -546,6 +610,7 @@ static void update_status(void) {
 static void timer_cb(lv_timer_t *t) {
     (void)t;
     reap_worker(false);
+    rec_check_quiet();
     if (state == MSG_VOICE_RECORD && rec_frames >= (long)REC_MAX_S * AUDIO_CAPTURE_RATE) stop_rec();
     if (delete_armed && lv_tick_elaps(delete_armed) > CONFIRM_MS) delete_armed = 0;
     if (adjusting && buttons_get_cur_page() != &page_2) adjusting = false;

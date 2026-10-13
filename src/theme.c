@@ -327,7 +327,7 @@ static struct {
     theme_image_t img;
     lv_coord_t    w, h;
     lv_img_dsc_t  dsc;
-} cache[16];
+} cache[24];         /* the main screen uses about 12, the walkie screen 8 more */
 static int cached;
 
 const lv_img_dsc_t *theme_image(theme_image_t img, lv_coord_t w, lv_coord_t h) {
@@ -337,7 +337,7 @@ const lv_img_dsc_t *theme_image(theme_image_t img, lv_coord_t w, lv_coord_t h) {
     for (int i = 0; i < cached; i++) {
         if (cache[i].img == img && cache[i].w == w && cache[i].h == h) return &cache[i].dsc;
     }
-    if (cached == 16) return NULL;
+    if (cached == (int)(sizeof(cache) / sizeof(cache[0]))) return NULL;
 
     uint8_t *src = load_png(images[img].path, &sw, &sh);
     uint8_t *dst = src ? malloc((size_t)w * h * 4) : NULL;
@@ -396,10 +396,7 @@ const lv_img_dsc_t *theme_png(const char *path) {
 }
 
 /* 256 colours through the stops, smooth or in flat bands */
-static void make_palette(void) {
-    const uint32_t *s = theme_shape.waterfall;
-    int             n = theme_shape.waterfall_n, steps = theme_shape.waterfall_steps;
-
+void theme_ramp_palette(const uint32_t *s, int n, int steps, uint32_t *out) {
     for (int i = 0; i < 256; i++) {
         int lvl = steps > 1 ? (i * steps / 256) * 255 / (steps - 1) : i;   /* 0..255 */
         int pos = lvl * (n - 1), seg = pos / 255, t = pos % 255;
@@ -413,8 +410,12 @@ static void make_palette(void) {
             int a = (s[seg] >> sh) & 0xff, b = (s[seg + 1] >> sh) & 0xff;
             c |= (uint32_t)(a + (b - a) * t / 255) << sh;
         }
-        palette[i] = c;
+        out[i] = c;
     }
+}
+
+static void make_palette(void) {
+    theme_ramp_palette(theme_shape.waterfall, theme_shape.waterfall_n, theme_shape.waterfall_steps, palette);
 }
 
 void theme_init(const char *name) {

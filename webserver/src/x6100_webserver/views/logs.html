@@ -1,8 +1,10 @@
 % rebase('base.html', title='Logs')
-<h2>Logs</h2>
+<h2><svg class="i"><use href="#i-book"/></svg>Logs</h2>
 <p class="sub">Every QSO on the radio, day by day: the day's logs (FT8, FT4, JS8 and the phone's logger) and the POTA/SOTA activations. Edit a QSO in place, delete QSOs or whole days, export what the filter shows as ADIF or CSV.</p>
 
-<div class="card">
+<section class="dp-card">
+  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-search"/></svg></span><div><h3>Filter and export</h3><p>Export, and Delete shown, work on the QSOs the filter shows</p></div></div>
+  <div class="dp-body">
   <div class="log-filters">
     <input id="f-text" placeholder="Call, name, QTH, grid, reference…" autocomplete="off">
     <select id="f-band"><option value="">All bands</option></select>
@@ -11,12 +13,13 @@
     <input id="f-to" type="date" title="To">
   </div>
   <div class="actions">
-    <button type="button" class="primary" id="exp-adi">Export ADIF</button>
-    <button type="button" id="exp-csv">Export CSV</button>
+    <button type="button" class="primary" id="exp-adi"><svg class="i"><use href="#i-download"/></svg>Export ADIF</button>
+    <button type="button" id="exp-csv"><svg class="i"><use href="#i-download"/></svg>Export CSV</button>
     <button type="button" id="del-shown" class="remove">Delete shown</button>
     <span class="status" id="status"></span>
   </div>
-</div>
+  </div>
+</section>
 
 <div id="days"></div>
 
@@ -69,20 +72,20 @@ var render = function() {
   const days = {};
   list.forEach(q => (days[day(q)] = days[day(q)] || []).push(q));
   const box = $("#days").empty();
-  if (!list.length) box.append($("<div class='card'>").append($("<p class='sub'>").text(qsos.length ? "No QSO matches the filter" : "No QSOs yet")));
+  if (!list.length) box.append($("<section class='dp-card'>").append($("<div class='dp-body'>").append($("<p class='sub' style='margin:0'>").text(qsos.length ? "No QSO matches the filter" : "No QSOs yet"))));
   Object.keys(days).sort().reverse().forEach(function(d) {
     const rows = days[d];
     const files = [...new Set(rows.map(q => q.file))];
     const head = $("<h3>").text(d || "No date").append($("<span class='tag'>").text(rows.length + " QSO" + (rows.length == 1 ? "" : "s")));
     files.forEach(f => head.append($("<a class='tag' download>").attr("href", "/field/logs/" + encodeURIComponent(f)).attr("title", "Download the file").text(f)));
     const del = button("remove", "si-trash", "Delete this day's QSOs shown").on("click", () => deleteQsos(rows, `all ${rows.length} QSOs of ${d}`));
-    head.append($("<span style='margin-left:auto'>").append(del));
     const tbody = $("<tbody>");
     rows.forEach(q => tbody.append(makeRow(q)));
     const thead = $("<tr>");
     COLS.forEach(c => thead.append($("<th>").text(c[1])));
     thead.append($("<th>"));
-    box.append($("<div class='card'>").append(head, $("<div class='table-wrap'>").append($("<table class='log'>").append($("<thead>").append(thead), tbody))));
+    const top = $("<div class='dp-head'>").append($("<span class='dp-ico'>").html('<svg class="i"><use href="#i-book"/></svg>'), $("<div>").append(head), $("<div class='dp-x'>").append(del));
+    box.append($("<section class='dp-card'>").append(top, $("<div class='dp-body tbl'>").append($("<div class='table-wrap'>").append($("<table class='log'>").append($("<thead>").append(thead), tbody)))));
   });
   showStatus(`${list.length} of ${qsos.length} QSOs shown`);
 }

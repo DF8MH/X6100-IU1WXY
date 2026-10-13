@@ -1,29 +1,34 @@
 % rebase('base.html', title='Field')
-<h2>Field Ops</h2>
+<h2><svg class="i"><use href="#i-mountain"/></svg>Field Ops</h2>
 <p class="sub">POTA and SOTA portable operation: park and summit lists for the radio, QRZ Logbook upload, activation logs.</p>
 
-<form class="card" id="qrz">
-  <h3>QRZ Logbook</h3>
-  <p class="sub">API key from your QRZ Logbook settings. Key: <b id="key-state"></b></p>
-  <label for="key">API key</label>
-  <input id="key" type="password" autocomplete="off" maxlength="64" placeholder="New key (empty = remove)">
-  <div class="actions">
-    <button type="submit" class="primary">Save</button>
-    <span class="status" id="status"></span>
+<form class="dp-card" id="qrz">
+  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-key"/></svg></span><div><h3>QRZ Logbook</h3><p>API key from your QRZ Logbook settings. Key: <b id="key-state"></b></p></div></div>
+  <div class="dp-row">
+    <div class="dp-lbl"><label for="key"><b>API key</b></label><span>Empty = remove the key</span></div>
+    <div class="dp-ctl"><input id="key" type="password" autocomplete="off" maxlength="64" placeholder="New key (empty = remove)"></div>
+  </div>
+  <div class="dp-body" style="border-top:1px solid #1a283c">
+    <div class="actions" style="margin-top:0">
+      <button type="submit" class="primary">Save</button>
+      <span class="status" id="status"></span>
+    </div>
   </div>
 </form>
 
-<div class="card">
-  <h3>Parks and summits</h3>
-  <p class="sub" id="refs"></p>
-  <div class="actions">
-    <button type="button" class="primary" id="update">Update parks and summits</button>
-    <span class="status" id="ustatus"></span>
+<section class="dp-card">
+  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-pin"/></svg></span><div><h3>Parks and summits</h3><p id="refs"></p></div></div>
+  <div class="dp-body">
+    <div class="actions" style="margin-top:0">
+      <button type="button" class="primary" id="update"><svg class="i"><use href="#i-sync"/></svg>Update parks and summits</button>
+      <span class="status" id="ustatus"></span>
+    </div>
   </div>
-</div>
+</section>
 
-<div class="card">
-  <h3>Activation logs</h3>
+<section class="dp-card">
+  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-file"/></svg></span><div><h3>Activation logs</h3><p>Download or delete the logs of the activations</p></div></div>
+  <div class="dp-body tbl">
   <div class="table-wrap">
   <table id="logs">
     <thead>
@@ -33,7 +38,8 @@
   </table>
   </div>
   <div class="actions"><span class="status" id="lstatus"></span></div>
-</div>
+  </div>
+</section>
 
 <script>
 var showStatus = function(id, text, error=false) {

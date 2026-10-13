@@ -12,6 +12,7 @@
 
 #include <unistd.h>
 #include "lvgl/lvgl.h"
+#include "theme.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -129,6 +130,9 @@ void styles_init(void);
 
 /* Again after another theme_init() (the UI harness switches themes) */
 void styles_apply(void);
+/* A box of the theme (colour, gradient, border, radius) with its image at w x h, if it has one */
+void styles_theme_box(lv_style_t *s, theme_color_t top, theme_color_t bottom, theme_color_t border, int radius,
+                      theme_image_t img, lv_coord_t w, lv_coord_t h);
 
 #ifdef __cplusplus
 }

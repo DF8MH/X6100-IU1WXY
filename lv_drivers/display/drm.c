@@ -95,6 +95,7 @@ static uint32_t             *shadow;        /* portrait copy of the GUI, cached 
 static uint32_t             *wf_shadow;     /* portrait copy of the primary plane (screen dump) */
 static rects_t              frame[2];       /* this frame, previous frame */
 static int                  cur;
+static bool                 portrait_mode;  /* LVGL renders 480x800: turned 180, not 90 */
 
 /**********************
  *   STATIC FUNCTIONS
@@ -462,8 +463,28 @@ bool drm_planes(void) {
     return planes;
 }
 
+void drm_set_portrait(void) {
+    portrait_mode = true;
+}
+
 void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p) {
-    if (area->x1 >= 0 && area->y1 >= 0 && area->x2 < LAND_W && area->y2 < LAND_H) {
+    if (portrait_mode) {
+        /* Turned 180: the panel's native top is the side away from the knobs */
+        if (area->x1 >= 0 && area->y1 >= 0 && area->x2 < PANEL_W && area->y2 < PANEL_H) {
+            lv_area_t      p = { PANEL_W - 1 - area->x2, PANEL_H - 1 - area->y2,
+                                 PANEL_W - 1 - area->x1, PANEL_H - 1 - area->y1 };
+            const uint32_t *src = (const uint32_t *) color_p;
+
+            for (int32_t y = area->y1; y <= area->y2; y++) {
+                uint32_t *d = shadow + (PANEL_H - 1 - y) * PANEL_W + PANEL_W - 1 - area->x1;
+
+                for (int32_t x = area->x1; x <= area->x2; x++) {
+                    *d-- = *src++;
+                }
+            }
+            rects_add(&frame[cur], &p);
+        }
+    } else if (area->x1 >= 0 && area->y1 >= 0 && area->x2 < LAND_W && area->y2 < LAND_H) {
         lv_area_t p = { area->y1, LAND_W - 1 - area->x2, area->y2, LAND_W - 1 - area->x1 };
 
         rotate_area(area, (const uint32_t *) color_p);
@@ -503,7 +524,8 @@ static void copy_cols(struct drm_buffer *buf, int32_t x, int32_t w) {
 void drm_wf_present_ring(const uint32_t *src, int32_t x, int32_t w, int32_t head) {
     int i, b;
 
-    if (!planes || x < 0 || w <= 0 || x + w > PANEL_W) {
+    /* Portrait: no waterfall on the screen, the primary plane stays black */
+    if (!planes || portrait_mode || x < 0 || w <= 0 || x + w > PANEL_W) {
         return;
     }
     for (int32_t y = 0; y < PANEL_H; y++) {

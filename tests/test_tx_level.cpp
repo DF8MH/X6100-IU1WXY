@@ -114,7 +114,8 @@ TEST_CASE("drive level at 0.3 W into an amplifier: steady within a frame, not sw
                       << "-" << new_f[f].max_w << " W (mean " << new_f[f].mean_w << ", ALC " << new_f[f].mean_alc
                       << ")");
         CHECK(new_f[f].mean_w >= 0.3f * 0.7f); // within 1.5 dB of the setting
-        CHECK(new_f[f].mean_alc <= 1.0f);      // not driven into the ALC
+        CHECK(new_f[f].mean_alc >= 0.5f);      // the ALC seen at work
+        CHECK(new_f[f].mean_alc <= 3.0f);      // not driven hard into it
         CHECK(new_f[f].turns <= 1);            // no see-saw
     }
     std::printf("[txlevel] 0.3 W: within-frame swing old %.1f dB, new %.2f dB\n", old_swing, new_swing);
@@ -131,7 +132,7 @@ TEST_CASE("drive level: starting far too low or too hot, it settles within two t
         CHECK(low[0].turns <= 1); // a ramp, not a see-saw
         for (int f = 1; f < 6; f++) {
             CHECK(low[f].mean_w >= set * 0.7f);
-            CHECK(low[f].mean_alc <= 1.0f);
+            CHECK(low[f].mean_alc <= 3.0f);
             CHECK(swing_db(low[f]) < 0.8f);
         }
         // 10 dB too low: there by the second transmission (8 dB a transmission at most).
@@ -140,14 +141,14 @@ TEST_CASE("drive level: starting far too low or too hot, it settles within two t
         for (int f = 2; f < 6; f++) CHECK(swing_db(far[f]) < 0.8f);
         // 10 dB too hot: down within the first two, steady after.
         auto hot = run_frames(false, set, -14.0f, -4.0f, 10);
-        CHECK(hot[0].mean_alc > 1.0f);
-        CHECK(hot[2].mean_alc <= 1.0f);
+        CHECK(hot[0].mean_alc > 3.0f);
+        CHECK(hot[2].mean_alc <= 3.0f);
         CHECK(hot[9].mean_w >= set * 0.7f);
         CHECK(swing_db(hot[9]) < 0.8f);
     }
 }
 
-TEST_CASE("drive level: ramps up while the ALC reads zero, holds once it shows", "[js8][txlevel]") {
+TEST_CASE("drive level: ramps up while the ALC reads under 1, holds once it works", "[js8][txlevel]") {
     tx_level_t l;
     tx_level_start(&l, 0.3f);
     for (int b = 0; b < TX_LEVEL_SETTLE_BLOCKS; b++) CHECK(tx_level_block(&l, true, 0.0f, 0.0f) == 0.0f); // settling
@@ -164,12 +165,16 @@ TEST_CASE("drive level: ramps up while the ALC reads zero, holds once it shows",
     CHECK(total == 0.0f); // it had to come down: no ramping up after, this transmission
     tx_level_start(&l, 0.3f);
     total = 0;
-    for (int b = 0; b < 200; b++) total += tx_level_block(&l, true, 0.2f, 0.2f); // the ALC shows a little
+    for (int b = 0; b < 200; b++) total += tx_level_block(&l, true, 0.3f, 1.2f); // the ALC at work
     CHECK(total == 0.0f); // there: held
     tx_level_start(&l, 0.3f);
     total = 0;
-    for (int b = 0; b < 200; b++) total += tx_level_block(&l, true, 0.3f, 0.0f); // reads the setting
+    for (int b = 0; b < 200; b++) total += tx_level_block(&l, true, 0.45f, 0.0f); // over, nothing holds it
     CHECK(total == 0.0f);
+    tx_level_start(&l, 0.3f);
+    total = 0;
+    for (int b = 0; b < 30 + 2 * TX_LEVEL_WINDOW_BLOCKS; b++) total += tx_level_block(&l, true, 0.3f, 0.4f);
+    CHECK(total == Catch::Approx(2 * TX_LEVEL_UP_SLOW_DB)); // at the setting, the ALC hardly showing: on into it
     tx_level_start(&l, 0.3f);
     total = 0;
     for (int b = 0; b < 30 + 2 * TX_LEVEL_WINDOW_BLOCKS; b++) total += tx_level_block(&l, true, 0.2f, 0.0f); // near
@@ -193,7 +198,7 @@ TEST_CASE("drive level: steady whatever the meter's lag and rounding", "[js8][tx
                     for (int i = 3; i < 8; i++) {
                         CHECK(swing_db(f[i]) < 0.8f);
                         CHECK(f[i].mean_w >= 0.3f * 0.7f);
-                        CHECK(f[i].mean_alc <= 1.0f);
+                        CHECK(f[i].mean_alc <= 3.0f);
                     }
                 }
 }
@@ -209,7 +214,7 @@ TEST_CASE("drive level: just short with the ALC at zero, there in the first tran
     for (int i = 1; i < 6; i++) { // steady from the second
         CHECK(swing_db(f[i]) < 0.8f);
         CHECK(f[i].mean_w >= 0.28f);
-        CHECK(f[i].mean_alc <= 1.0f);
+        CHECK(f[i].mean_alc <= 3.0f);
     }
 }
 

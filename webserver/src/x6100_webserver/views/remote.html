@@ -1,8 +1,10 @@
 % rebase('base.html', title='Remote')
-<h2>Remote</h2>
+<h2><svg class="i"><use href="#i-knob"/></svg>Remote</h2>
 <p class="sub">Tunes the radio and plays its RX audio in this browser. Receive only: there is no transmit from the web in this version.</p>
 
-<section class="card">
+<section class="dp-card">
+  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-knob"/></svg></span><div><h3>Tuning</h3><p>Frequency, mode and band of the radio</p></div></div>
+  <div class="dp-body">
   <div class="rm-top">
     <div>
       <div class="rm-dim" id="rm-vfo">VFO-A</div>
@@ -29,14 +31,18 @@
   </div>
   <div class="rm-row" id="rm-modes"><span class="rm-dim">Mode</span></div>
   <div class="rm-row" id="rm-bands"><span class="rm-dim">Band</span></div>
+  </div>
 </section>
 
-<section class="card rm-scope">
+<section class="dp-card rm-scope">
+  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-waterfall"/></svg></span><div><h3>Spectrum and waterfall</h3><p>Scroll on the waterfall to tune</p></div></div>
   <canvas id="rm-sp"></canvas>
   <canvas id="rm-wf"></canvas>
 </section>
 
-<section class="card">
+<section class="dp-card">
+  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-speaker"/></svg></span><div><h3>Audio and receiver</h3><p>RX audio in this browser, receive only</p></div></div>
+  <div class="dp-body">
   <div class="rm-audio">
     <button class="primary" id="rm-listen">🔊 Listen</button>
     <div><label for="rm-vol">Browser volume</label><input type="range" id="rm-vol" min="0" max="200" value="100"></div>
@@ -54,6 +60,7 @@
   <p class="rm-dim" style="margin-top:12px">Audio delay ~0.5 s · 1 listener at a time</p>
   <p class="rm-dim" id="rm-https" hidden>Audio needs <a id="rm-https-link" href="#"></a> (the radio's certificate is self-signed: accept it once in the browser).</p>
   <div class="actions"><span class="status" id="rm-status"></span></div>
+  </div>
 </section>
 
 <script>

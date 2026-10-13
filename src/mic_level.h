@@ -6,8 +6,9 @@
  *  As tx_level.c does for the digital modes: on baseband r13 the ALC holds the power at the
  *  setting and reads 8-10 when the drive is far too hot. While talking, over two seconds at a
  *  time, an ALC that stays high (not just on the peaks) takes the microphone gain down 2 steps;
- *  a whole transmission with the ALC at zero and the power well short of the setting takes it
- *  up 1. A steady carrier (no voice: the power and ALC do not move) is left alone.
+ *  a whole transmission of talking with the ALC never reaching 1 takes it up 2, so the ALC is
+ *  seen at work on the peaks. A steady carrier or a silent mic (the power and ALC do not move)
+ *  is left alone.
  */
 
 #pragma once
@@ -25,7 +26,7 @@ typedef struct {
     float   sum_alc, min_alc, max_alc, min_w, max_w;
     int     down;       /* steps taken down this transmission */
     int     tx_n;       /* readings this transmission */
-    float   tx_max_alc, tx_max_w;
+    float   tx_max_alc;
     bool    tx_voice;   /* the power moved at some point: someone talked */
 } mic_level_t;
 
@@ -34,13 +35,15 @@ typedef struct {
 #define MIC_LEVEL_DOWN      2       /* gain steps down per decision */
 #define MIC_LEVEL_DOWN_MAX  6       /* at most this many down in one transmission */
 #define MIC_LEVEL_MIN_GAIN  4
+#define MIC_LEVEL_UP        2       /* gain steps up after a transmission the ALC never reached 1 */
+#define MIC_LEVEL_ALC_PEAK  1.0f
 
 void mic_level_start(mic_level_t *l, float target_w);
 
 /* One reading (ALC 0-10, power in W): the gain change to make now (0, -2) */
 int mic_level_reading(mic_level_t *l, float alc, float pwr_w);
 
-/* The transmission is over: the gain change to make (0, +1) */
+/* The transmission is over: the gain change to make (0, +2) */
 int mic_level_end(mic_level_t *l);
 
 /* Called by tx_info.c with every TX reading in a voice mode */

@@ -127,11 +127,28 @@ static void levels_get(float *min, float *max) {
     }
 }
 
+/* Settings (web Display page): the trace and the fill in their own colours, else the theme's */
+static lv_color_t trace_color(void) {
+    int32_t c = param_i_get(cfg_spectrum_line_color);
+    return c < 0 ? TC(line) : lv_color_hex(c);
+}
+
+/* The fill in its own colour: the trace is drawn over it */
+static bool fill_own(void) {
+    return params.spectrum_filled.x && param_i_get(cfg_spectrum_fill_color) >= 0;
+}
+
+static lv_color_t fill_color(void) {
+    return fill_own() ? lv_color_hex(param_i_get(cfg_spectrum_fill_color)) : trace_color();
+}
+
 static void spectrum_draw_cb(lv_event_t *e) {
     lv_obj_t          *obj      = lv_event_get_target(e);
     lv_draw_ctx_t     *draw_ctx = lv_event_get_draw_ctx(e);
     lv_draw_line_dsc_t main_line_dsc;
     lv_draw_line_dsc_t peak_line_dsc;
+    lv_draw_line_dsc_t trace_dsc;
+    lv_point_t         trace_prev = {0, 0};
 
     float min, max;
     levels_get(&min, &max);
@@ -140,8 +157,11 @@ static void spectrum_draw_cb(lv_event_t *e) {
 
     lv_draw_line_dsc_init(&main_line_dsc);
 
-    main_line_dsc.color = TC(line);
+    main_line_dsc.color = params.spectrum_filled.x ? fill_color() : trace_color();
     main_line_dsc.width = 1;
+    lv_draw_line_dsc_init(&trace_dsc);
+    trace_dsc.color = trace_color();
+    trace_dsc.width = 1;
 
     lv_draw_line_dsc_init(&peak_line_dsc);
 
@@ -197,6 +217,10 @@ static void spectrum_draw_cb(lv_event_t *e) {
         }
 
         lv_draw_line(draw_ctx, &main_line_dsc, &main_a, &main_b);
+        if (fill_own()) {
+            if (i) lv_draw_line(draw_ctx, &trace_dsc, &trace_prev, &main_a);
+            trace_prev = main_a;
+        }
 
         if (!params.spectrum_filled.x) {
             main_b = main_a;
@@ -455,7 +479,8 @@ static void direct_render(void) {
         }
     }
     uint32_t bg = TC(panel).full | 0xff000000u;
-    uint32_t line = TC(line).full | 0xff000000u;
+    uint32_t line = trace_color().full | 0xff000000u;
+    uint32_t fill = fill_color().full | 0xff000000u;
 
     for (int32_t i = 0; i < SPECTRUM_SIZE * h; i++) {
         sbuf[i] = bg;
@@ -486,9 +511,10 @@ static void direct_render(void) {
             uint32_t *p = &sbuf[(SPECTRUM_SIZE - 1 - x) * h];
 
             for (int y = LV_MAX(top, 0); y < h; y++) {
-                p[y] = line;
+                p[y] = fill;
             }
         }
+        if (fill_own()) polyline(spectrum_buf, min, max, offset, line);
     } else {
         polyline(spectrum_buf, min, max, offset, line);
     }

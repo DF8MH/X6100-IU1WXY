@@ -115,7 +115,21 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_cluster_spots_wf{"cluster_spots_wf", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Walkie Talkie: a portrait screen instead of the main one (read at start, the GUI restarts)
+    Parameter<int32_t> p_walkie{"walkie", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Walkie Talkie: the main knob steps through the channel memories instead of the frequency
+    Parameter<int32_t> p_walkie_mem{"walkie_mem", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     // S-meter drawn as a needle on a dial instead of the bars
+    // Waterfall colours: 0 the theme's, then classic, gauss, grey, fire, ice, rainbow (theme.c)
+    Parameter<int32_t> p_wf_palette{"wf_palette", 0, 0, 6,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Spectrum trace and fill: 0xRRGGBB, -1 the theme's (the fill: as the trace)
+    Parameter<int32_t> p_spectrum_line_color{"spectrum_line_color", -1, -1, 0xffffff,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_spectrum_fill_color{"spectrum_fill_color", -1, -1, 0xffffff,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     // S-meter colours: 0 the theme, 1 the scale (green, yellow, red along it), 2 the level (all lit bars)
     Parameter<int32_t> p_smeter_color{"smeter_color", 0, 0, 2,
         StorageType::GLOBAL, pending_writes_, &global_params_};

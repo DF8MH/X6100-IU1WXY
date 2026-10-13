@@ -27,4 +27,6 @@
 lv_obj_t * meter_init(lv_obj_t * parent);
 void meter_update(float db, float beta);
 void meter_set_noise(float val);
+/* The needle dial on any box (the walkie screen), at the current reading */
+void meter_needle_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx);
 int16_t meter_get_raw_db();

@@ -31,6 +31,7 @@ extern "C" {
     #include "panel.h"
     #include "params/params.h"
     #include "pubsub_ids.h"
+    #include "walkie.h"
 }
 
 #define STATE_ASSIGNED LV_STATE_USER_1
@@ -197,7 +198,7 @@ static void dig_pwr_cb(button_data_t *data) {
 button_data_t btn_dig_pwr = {
     .type = BTN_TEXT_FN, .label_fn = dig_pwr_label, .press = dig_pwr_cb, .subj = (Subject *)&cfg_sm.p_pwr};
 
-static button_data_t btn_tx_pwr = make_encoder_btn(tx_power_label_getter, CTRL_PWR, (Subject*)&cfg_sm.p_pwr);
+button_data_t btn_tx_pwr = make_encoder_btn(tx_power_label_getter, CTRL_PWR, (Subject*)&cfg_sm.p_pwr);
 static button_data_t btn_flt_low  = make_encoder_btn(filter_low_label_getter, CTRL_FILTER_LOW, (Subject*)&cfg_sm.cp_cur_filter_low);
 static button_data_t btn_flt_high = make_encoder_btn(filter_high_label_getter, CTRL_FILTER_HIGH, (Subject*)&cfg_sm.cp_cur_filter_high);
 static button_data_t btn_flt_bw   = make_encoder_btn(filter_bw_label_getter, CTRL_FILTER_BW, (Subject*)&cfg_sm.cp_cur_filter_bw);
@@ -663,6 +664,23 @@ void buttons_init(lv_obj_t *parent) {
     cfg_sm.p_encoder_bind.subscribe_delayed_and_notify(encoder_binds_change_cb, NULL);
 }
 
+void buttons_vertical(lv_obj_t *parent, lv_coord_t w, lv_coord_t h) {
+    lv_coord_t bw = w - 2 * BTN_INSET, bh = h - 2 * BTN_INSET;
+
+    for (uint8_t i = 0; i < BUTTONS; i++) {
+        lv_obj_t           *f = disp_btns[i].parent;
+        const lv_img_dsc_t *img;
+
+        lv_obj_set_parent(f, parent);
+        lv_obj_set_pos(f, BTN_INSET, i * h + BTN_INSET);
+        lv_obj_set_size(f, bw, bh);
+        /* the state images at this size too (the normal one is set with the text) */
+        if ((img = theme_image(TI_btn_active, bw, bh))) lv_obj_set_style_bg_img_src(f, img, LV_STATE_CHECKED);
+        if ((img = theme_image(TI_btn_off, bw, bh))) lv_obj_set_style_bg_img_src(f, img, LV_STATE_DISABLED);
+        if (disp_btns[i].data) disp_btn_refresh(&disp_btns[i]);
+    }
+}
+
 void buttons_refresh(button_data_t *data) {
     if (data->disp_btn) {
         disp_btn_refresh(data->disp_btn);
@@ -771,6 +789,7 @@ static void button_encoder_update_cb(button_data_t *data) {
     } else {
         set_fn = mfk_set_ctrl;
     }
+    if (walkie_on()) set_fn = mfk_set_ctrl;    /* the VOL knob stays the volume */
     if (set_fn) {
         set_fn(ctrl);
     }
@@ -1141,9 +1160,22 @@ static void encoder_binds_change_cb(Subject *subj, void *user_data) {
 /* "Name:\nvalue" shows a small name over a large value; "(PAGE 1:2)" is a
  * page button, drawn darker; anything else is an action, centred. */
 /* VISION: the biggest size the label fits in, on one line or two ("Start\nAuto RX") */
-static const lv_font_t *vision_label_font(const char *text) {
+/* The button's size as set (the walkie screen's are narrower and taller) */
+static lv_coord_t btn_w(disp_btn_t *b) {
+    return lv_obj_get_style_width(b->parent, 0);
+}
+
+static lv_coord_t btn_h(disp_btn_t *b) {
+    return lv_obj_get_style_height(b->parent, 0);
+}
+
+static bool btn_narrow(disp_btn_t *b) {
+    return btn_w(b) < BTN_WIDTH - 2 * BTN_INSET;
+}
+
+static const lv_font_t *vision_label_font(disp_btn_t *b, const char *text) {
     static const lv_font_t *const sizes[] = {&sony_28, &sony_24, &sony_20, &sony_16, &sony_14};
-    lv_coord_t                    w = BTN_WIDTH - 2 * BTN_INSET - 8, h = BTN_HEIGHT - 2 * BTN_INSET;
+    lv_coord_t                    w = btn_w(b) - 8, h = btn_h(b);
     lv_point_t                    size;
 
     for (const lv_font_t *f : sizes) {
@@ -1151,6 +1183,18 @@ static const lv_font_t *vision_label_font(const char *text) {
         if (size.x <= w && size.y <= h) return f;
     }
     return &sony_14;
+}
+
+/* The value in a narrow button (walkie): the biggest size that fits its width ("3200 Hz") */
+static const lv_font_t *narrow_value_font(disp_btn_t *b, const char *text) {
+    static const lv_font_t *const sizes[] = {&sony_32, &sony_28, &sony_24, &sony_20};
+    lv_point_t                    size;
+
+    for (const lv_font_t *f : sizes) {
+        lv_txt_get_size(&size, text, f, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        if (size.x <= btn_w(b) - 8) return f;
+    }
+    return &sony_18;
 }
 
 static void set_btn_text(disp_btn_t *b, const char *text) {
@@ -1161,13 +1205,15 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
         snprintf(name, sizeof(name), "%.*s", (int)(nl - text - 1), text);
         /* Name over value; one size smaller when the two lines don't fit (taller fonts, btn_gap) */
         bool fit = lv_font_get_line_height(&sony_22) + lv_font_get_line_height(&sony_32) + 9
-                   <= BTN_HEIGHT - 2 * BTN_INSET;
+                   <= btn_h(b);
         lv_label_set_text(b->label, name);
-        lv_obj_set_style_text_font(b->label, theme_shape.vision ? &sony_18 : fit ? &sony_22 : &sony_20, 0);
+        lv_obj_set_style_text_font(b->label, theme_shape.vision || btn_narrow(b) ? &sony_18 : fit ? &sony_22 : &sony_20, 0);
         lv_obj_set_style_text_color(b->label, TC(text_head), 0);
         lv_obj_align(b->label, LV_ALIGN_TOP_MID, 0, theme_shape.vision ? 0 : fit ? 4 : 2);
         /* VISION: the value as big as the button takes, the name over it (capitals and digits: no overlap) */
-        lv_obj_set_style_text_font(b->value, theme_shape.vision ? &sony_30 : fit ? &sony_32 : &sony_28, 0);
+        lv_obj_set_style_text_font(b->value, btn_narrow(b)        ? narrow_value_font(b, nl + 1)
+                                             : theme_shape.vision ? &sony_30
+                                             : fit                ? &sony_32 : &sony_28, 0);
         lv_obj_align(b->value, LV_ALIGN_BOTTOM_MID, 0, theme_shape.vision ? 0 : fit ? -5 : -2);
         lv_label_set_text(b->value, nl + 1);
         lv_obj_clear_flag(b->value, LV_OBJ_FLAG_HIDDEN);
@@ -1186,16 +1232,16 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
     } else {
         lv_label_set_text(b->label, text);
     }
-    lv_obj_set_style_text_font(b->label, theme_shape.vision ? vision_label_font(lv_label_get_text(b->label))
-                                                             : page ? &sony_28 : &sony_30, 0);
+    lv_obj_set_style_text_font(b->label, theme_shape.vision || btn_narrow(b) ? vision_label_font(b, lv_label_get_text(b->label))
+                                                                              : page ? &sony_28 : &sony_30, 0);
     if (page) lv_obj_set_style_text_color(b->label, TC(btn_page_text), 0);
     else lv_obj_remove_local_style_prop(b->label, LV_STYLE_TEXT_COLOR, 0);   /* the button's: btn_text, btn_active_text, btn_off_text */
     lv_obj_center(b->label);
     lv_obj_add_flag(b->value, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_style_bg_color(b->parent, page ? TC(btn_page) : TC(btn), 0);
     /* Themes with images: the page button's own, else the button's */
-    const lv_img_dsc_t *img = page ? theme_image(TI_btn_page, BTN_WIDTH - 2 * BTN_INSET, BTN_HEIGHT - 2 * BTN_INSET) : NULL;
-    if (!img) img = theme_image(TI_btn, BTN_WIDTH - 2 * BTN_INSET, BTN_HEIGHT - 2 * BTN_INSET);
+    const lv_img_dsc_t *img = page ? theme_image(TI_btn_page, btn_w(b), btn_h(b)) : NULL;
+    if (!img) img = theme_image(TI_btn, btn_w(b), btn_h(b));
     if (img) lv_obj_set_style_bg_img_src(b->parent, img, 0);
 }
 

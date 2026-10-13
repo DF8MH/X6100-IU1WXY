@@ -1206,6 +1206,27 @@ static uint8_t make_spectrum_show(uint8_t row) {
     return row + 1;
 }
 
+/* Walkie Talkie portrait screen: laid out at start as well, the same restart */
+static uint8_t make_walkie(uint8_t row) {
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "Walkie Talkie");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = lv_obj_create(grid);
+    lv_obj_set_size(obj, SMALL_3, ROW_H);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(obj);
+    obj = switch_bool(obj, cfg_sm.p_walkie);
+    lv_obj_add_event_cb(obj, spectrum_show_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_width(obj, SMALL_3 - 30);
+
+    return row + 1;
+}
+
 /* Spectrum fill, peaks */
 static uint8_t make_spectrum_fill_peak(uint8_t row) {
     lv_obj_t *obj;
@@ -3860,6 +3881,7 @@ static void make_display_page() {
     row = card_begin(LV_SYMBOL_IMAGE, "SPECTRUM");
     row = make_spectrum_show(row);
     if (cfg_sm.p_spectrum_show.get()) row = make_spectrum_fill_peak(row);
+    row = make_walkie(row);
     card_end(row);
 
     row = card_begin(LV_SYMBOL_DOWNLOAD, "WATERFALL");

@@ -53,6 +53,7 @@
 #include "dialog_cluster.h"
 #include "sstv_resources.h"
 #include "theme.h"
+#include "walkie.h"
 
 #define DISP_BUF_SIZE (800 * 480 * 4)
 
@@ -63,6 +64,7 @@ static lv_color_t           buf1[DISP_BUF_SIZE];
 static lv_color_t           buf2[DISP_BUF_SIZE];
 static lv_disp_draw_buf_t   disp_buf;
 static lv_disp_drv_t        disp_drv;
+static bool                 walkie;     /* the portrait screen (Settings), DRM only */
 
 void * tick_thread (void *args);
 
@@ -169,6 +171,16 @@ int main(void) {
     params_init();
     sstv_resources_init();
     display_settings_check();
+#if USE_DRM
+    /* The panel is portrait: the walkie screen goes to it turned 180, not 90 */
+    walkie = screen_rec_out == drm_flush && param_i_get(cfg_walkie);
+    if (walkie) {
+        drm_set_portrait();
+        disp_drv.hor_res = 480;
+        disp_drv.ver_res = 800;
+        lv_disp_drv_update(lv_disp_get_default(), &disp_drv);
+    }
+#endif
     audio_set_play_vol(params.play_gain_db_f.x);
     audio_set_rec_vol(params.rec_gain_db_f.x);
     mfk_init();
@@ -211,8 +223,8 @@ int main(void) {
     pthread_create(&thread, NULL, tick_thread, NULL);
     pthread_detach(thread);
 
-    lv_scr_load(main_obj);
-    if (param_i_get(cfg_field_boot)) {
+    lv_scr_load(walkie ? walkie_screen(main_obj) : main_obj);
+    if (!walkie && param_i_get(cfg_field_boot)) {
         main_screen_start_app(ACTION_APP_FIELD);
     }
 

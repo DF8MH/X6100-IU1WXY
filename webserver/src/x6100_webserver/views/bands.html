@@ -1,9 +1,10 @@
 % rebase('base.html', title='Bands editor')
-<h2>Bands</h2>
+<h2><svg class="i"><use href="#i-bands"/></svg>Bands</h2>
 <p class="sub">Band edges and default modes shown on the radio. Active bands are reached with the band up/down buttons.</p>
 
-<div class="card">
-<div class="actions top"><button id="add_band" class="primary">Add band</button></div>
+<section class="dp-card">
+<div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-bands"/></svg></span><div><h3>Band list</h3><p>Name, edges, default mode and the Active flag</p></div><div class="dp-x"><button id="add_band" class="primary"><svg class="i"><use href="#i-plus"/></svg>Add band</button></div></div>
+<div class="dp-body tbl">
 <div class="table-wrap">
 <table id="bands">
   <thead>
@@ -20,6 +21,7 @@
 </table>
 </div>
 </div>
+</section>
 
 <template id="row-tpl">
   <tr>

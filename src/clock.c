@@ -196,3 +196,7 @@ void clock_tz_set(const char *posix) {
         show_time();
     }
 }
+
+float clock_battery_volts(void) {
+    return v_bat;
+}

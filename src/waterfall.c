@@ -101,6 +101,27 @@ static void on_grid_min_change(Subject *subj, void *user_data);
 static void on_grid_max_change(Subject *subj, void *user_data);
 
 
+/* Settings (web Display page): the theme's colours or one of these */
+static void on_palette_change(Subject *subj, void *user_data) {
+    extern const uint32_t wf_palette_legacy[256], wf_palette_gauss[256];   /* styles.c */
+    static const uint32_t grey[]    = {0x000000, 0xffffff};
+    static const uint32_t fire[]    = {0x000000, 0x400000, 0xa00000, 0xff4000, 0xffa000, 0xffff60, 0xffffff};
+    static const uint32_t ice[]     = {0x000000, 0x001040, 0x0040a0, 0x0090ff, 0x40e0ff, 0xffffff};
+    static const uint32_t rainbow[] = {0x000000, 0x0000a0, 0x0080ff, 0x00e0a0, 0x80ff00, 0xffe000, 0xff4000, 0xff0000};
+    static uint32_t       preset[256];
+
+    switch (param_i_get(cfg_wf_palette)) {
+        case 1: wf_palette = wf_palette_legacy; return;
+        case 2: wf_palette = wf_palette_gauss; return;
+        case 3: theme_ramp_palette(grey, 2, 0, preset); break;
+        case 4: theme_ramp_palette(fire, 7, 0, preset); break;
+        case 5: theme_ramp_palette(ice, 6, 0, preset); break;
+        case 6: theme_ramp_palette(rainbow, 8, 0, preset); break;
+        default: wf_palette = theme_waterfall(); return;
+    }
+    wf_palette = preset;
+}
+
 lv_obj_t * waterfall_init(lv_obj_t * parent) {
     subject_subscribe_and_notify((Subject*)cfg_fg_freq, on_fg_freq_change, NULL);
     wf_center_freq = radio_center_freq;
@@ -140,6 +161,7 @@ lv_obj_t * waterfall_init(lv_obj_t * parent) {
 
     subject_subscribe_delayed((Subject*)cfg_fg_freq, on_view_changed, NULL);
     subject_subscribe_delayed((Subject*)cfg_wf_mode, on_view_changed, NULL);
+    subject_subscribe_delayed_and_notify((Subject*)cfg_wf_palette, on_palette_change, NULL);
 
     subject_subscribe_and_notify((Subject*)cfg_mode_lo_offset, on_mode_lo_offset_change, NULL);
     subject_subscribe((Subject*)cfg_auto_level_enabled, on_grid_min_change, NULL);

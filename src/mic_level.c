@@ -26,7 +26,6 @@ int mic_level_reading(mic_level_t *l, float alc, float pwr_w) {
     if (pwr_w > l->max_w) l->max_w = pwr_w;
     l->tx_n++;
     if (alc > l->tx_max_alc) l->tx_max_alc = alc;
-    if (pwr_w > l->tx_max_w) l->tx_max_w = pwr_w;
     if (l->n < MIC_LEVEL_WINDOW) return 0;
 
     /* Voice moves the power and the ALC; a carrier (TUNE) does not */
@@ -43,9 +42,9 @@ int mic_level_reading(mic_level_t *l, float alc, float pwr_w) {
 }
 
 int mic_level_end(mic_level_t *l) {
-    /* At least 4 s of talking, the ALC never moved and the peaks well short: up one */
-    if (l->tx_voice && l->tx_n >= 2 * MIC_LEVEL_WINDOW && l->tx_max_alc < 0.1f && l->tx_max_w < 0.6f * l->target_w)
-        return 1;
+    /* At least 4 s of talking and the ALC never reached 1: up, so it works on the peaks */
+    if (l->tx_voice && l->tx_n >= 2 * MIC_LEVEL_WINDOW && l->tx_max_alc < MIC_LEVEL_ALC_PEAK)
+        return MIC_LEVEL_UP;
     return 0;
 }
 
@@ -59,7 +58,7 @@ int mic_level_end(mic_level_t *l) {
  * the other one just follows). ponytail: the radio does not say which mic is plugged */
 static void gain_step(void *arg) {
     int d   = *(int *)arg;
-    int mic = param_i_get(cfg_mic);
+    int mic = radio_get_mic();      /* the walkie screen may use another than cfg_mic */
 
     if (mic != 0) param_i_set(cfg_hmic, LV_CLAMP(MIC_LEVEL_MIN_GAIN, param_i_get(cfg_hmic) + d, 50));
     if (mic != 1) param_i_set(cfg_imic, LV_CLAMP(MIC_LEVEL_MIN_GAIN, param_i_get(cfg_imic) + d, 50));

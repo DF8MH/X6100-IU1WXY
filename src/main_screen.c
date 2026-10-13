@@ -66,6 +66,7 @@
 #include "recorder.h"
 #include "pubsub_ids.h"
 #include "cfg/cfg_api.h"
+#include "walkie.h"
 #include "cfg/memory.h"
 #include "knobs.h"
 #include "dialog_channels.h"
@@ -1492,6 +1493,7 @@ static void main_screen_rotary_cb(lv_event_t * e) {
 
 /* VOL press: turning changes the value, or chooses what VOL controls */
 void main_screen_vol_press(void) {
+    if (walkie_on()) return;    /* the volume, always */
     switch (vol->state) {
         case VOL_STATE_EDIT:
             vol->state = VOL_STATE_SELECT;

@@ -110,11 +110,8 @@ static lv_color_t ramp(float u) {
 static lv_color_t bar_color(int16_t db, uint8_t i, uint8_t n) {
     int32_t colors = param_i_get(cfg_smeter_color);
 
-    if (colors) {
-        if (db <= noise_level)
-            return TC(text_mute);
+    if (colors)     /* every lit bar coloured, also under the noise level (else weak signals stay grey) */
         return ramp(needle_u(colors == 1 ? db : meter_db));   /* 1 scale, 2 level */
-    }
     if (theme_shape.meter_gradient) {
         return lv_color_mix(TC(meter_high), TC(meter_weak), i * 255 / (n - 1));
     }
@@ -181,17 +178,20 @@ static void lamp_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx) {
     }
 }
 
-static void needle_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx) {
+void meter_needle_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx) {
     lv_coord_t          w = lv_obj_get_width(obj);
-    lv_coord_t          r = w * 76 / 100;                  /* wide and flat: 198 px on the 260 px box */
-    lv_point_t          c = {obj->coords.x1 + w / 2, obj->coords.y1 + 24 + r};   /* the arc top 24 px down */
+    lv_coord_t          big = lv_obj_get_height(obj) > 120 ? 8 : 0;    /* the walkie screen: bigger labels, rounder arc */
+    lv_coord_t          r = w * (big ? 62 : 76) / 100;     /* wide and flat: 198 px on the 260 px box */
+    lv_point_t          c = {obj->coords.x1 + w / 2, obj->coords.y1 + 24 + 3 * big + r};   /* the arc top 24 px down */
     lv_draw_arc_dsc_t   arc_dsc;
     lv_draw_line_dsc_t  line_dsc;
     lv_draw_label_dsc_t label_dsc;
     float               span = NEEDLE_A1 - NEEDLE_A0;
 
     bool                lamp    = param_i_get(cfg_smeter_lamp);         /* amber dial, dark ink, red zone */
-    bool                colored = !lamp && param_i_get(cfg_smeter_color) != 0;   /* the arc green to red, the needle in text */
+    int32_t             colors  = lamp ? 0 : param_i_get(cfg_smeter_color);
+    bool                colored = colors != 0;      /* the needle in text; 1 the arc green to red, 2 lit to the level */
+    float               level_u = needle_u(meter_db);
     lv_color_t          ink     = lamp ? LAMP_INK : TC(text);
     lv_color_t          scale   = lamp ? LAMP_INK : TC(meter_bar);
     lv_color_t          high    = lamp ? LAMP_RED : TC(meter_high);
@@ -206,7 +206,7 @@ static void needle_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx) {
         for (int k = 0; k < (int)span; k++) {      /* a degree a segment, each in its colour */
             float u = (k + 0.5f) / span;
 
-            arc_dsc.color = ramp(u);
+            arc_dsc.color = colors == 1 ? ramp(u) : u <= level_u ? ramp(level_u) : TC(text_mute);
             arc_dsc.width = u < NEEDLE_S9_U ? 3 : 5;
             lv_draw_arc(draw_ctx, &arc_dsc, &c, r + (u < NEEDLE_S9_U ? 0 : 2), 270 + NEEDLE_A0 + k, 270 + NEEDLE_A0 + k + 1);
         }
@@ -221,19 +221,19 @@ static void needle_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx) {
 
     lv_draw_line_dsc_init(&line_dsc);
     lv_draw_label_dsc_init(&label_dsc);
-    label_dsc.font = &sony_22;
+    label_dsc.font = big ? &sony_32 : &sony_22;
 
     for (int s = 1; s <= 9; s++) {      /* a tick a S unit, long ones and numbers on the odd */
         float      a   = NEEDLE_A0 + span * needle_u(S1 + (s - 1) * 6);
         bool       big = s % 2;
         lv_point_t p1  = needle_pt(c, a, r), p2 = needle_pt(c, a, r - (big ? 9 : 5));
 
-        line_dsc.color = colored ? ramp(needle_u(S1 + (s - 1) * 6)) : scale;
+        line_dsc.color = colors == 1 ? ramp(needle_u(S1 + (s - 1) * 6)) : scale;
         line_dsc.width = big ? 2 : 1;
         lv_draw_line(draw_ctx, &line_dsc, &p1, &p2);
         if (big) {
             char       txt[4];
-            lv_point_t sz, l = needle_pt(c, a, r + 13);
+            lv_point_t sz, l = needle_pt(c, a, r + 13 + 2 * big);
             lv_area_t  area;
 
             snprintf(txt, sizeof(txt), s == 1 ? "S1" : "%d", s);
@@ -251,12 +251,12 @@ static void needle_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx) {
         bool       big = d % 20 == 0;
         lv_point_t p1  = needle_pt(c, a, r + 2), p2 = needle_pt(c, a, r - (big ? 10 : 6));
 
-        line_dsc.color = colored ? ramp(needle_u(S9 + d)) : high;
+        line_dsc.color = colors == 1 ? ramp(needle_u(S9 + d)) : high;
         line_dsc.width = big ? 2 : 1;
         lv_draw_line(draw_ctx, &line_dsc, &p1, &p2);
         if (big) {
             char       txt[4];
-            lv_point_t sz, l = needle_pt(c, a, r + 14);
+            lv_point_t sz, l = needle_pt(c, a, r + 14 + 2 * big);
             lv_area_t  area;
 
             snprintf(txt, sizeof(txt), "+%d", d);
@@ -287,7 +287,7 @@ static void meter_draw_cb(lv_event_t * e) {
     lv_area_t           area;
 
     if (needle_on()) {
-        needle_draw(obj, draw_ctx);
+        meter_needle_draw(obj, draw_ctx);
         return;
     }
 
@@ -337,7 +337,7 @@ static void meter_draw_cb(lv_event_t * e) {
         area.x1 = x1 + 30 - slice_w / 2 + slice_w * peak_i + slice_spacing / 2;
         area.x2 = area.x1 + slice_w - slice_spacing;
         rect_dsc.bg_opa = LV_OPA_COVER;    /* bright: gradient colour from S9, white below */
-        rect_dsc.bg_color = bar_db[peak_i] >= S9 || theme_shape.meter_gradient ? bar_color(bar_db[peak_i], peak_i, slices_total)
+        rect_dsc.bg_color = bar_db[peak_i] >= S9 || theme_shape.meter_gradient || param_i_get(cfg_smeter_color) ? bar_color(bar_db[peak_i], peak_i, slices_total)
                                                                              : TC(text);
         lv_draw_rect(draw_ctx, &rect_dsc, &area);
     }
