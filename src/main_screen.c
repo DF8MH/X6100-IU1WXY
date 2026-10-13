@@ -79,7 +79,7 @@
 #include <math.h>
 
 
-static uint16_t     spectrum_height = 96;
+static uint16_t     spectrum_height = 76;   /* a little less than the 96 of upstream: more waterfall */
 static uint16_t     freq_height = 36;
 static lv_coord_t   wf_y, spot_tag_y;    /* waterfall top without the spot tags */
 static lv_obj_t     *obj;
@@ -1716,22 +1716,20 @@ void main_screen_set_freq(uint64_t freq) {
     cparam_i_set(cfg_fg_freq, freq);
     event_send(lv_scr_act(), EVENT_SCREEN_UPDATE, NULL);
 }
-/* The cluster spots go on the waterfall itself, a short line at its top (across
- * the band plan strip when it is there) and the call under it; the waterfall
- * stays where it is. With the spectrum on, the band plan is at the bottom of the
- * spectrum: no strip on the waterfall (a band of their own for the tags was a
- * tall grey bar that took the waterfall's room). */
+/* With or without the spectrum, the band plan is a strip at the top of the
+ * waterfall and the cluster spots go on the waterfall itself, a short line at
+ * its top (across the strip) and the call under it; the waterfall stays where it
+ * is (a band of their own for the tags was a tall grey bar that took its room). */
 #define SPOT_LINE_H 8
 
 static void on_cluster_spots_wf_change(Subject *subj, void *user_data) {
     lv_coord_t y = wf_y;
 
-    bool       spectrum = param_i_get(cfg_spectrum_show);
-    lv_coord_t strip    = !spectrum && param_i_get(cfg_band_plan) ? BAND_PLAN_H : 0;
+    lv_coord_t strip = param_i_get(cfg_band_plan) ? BAND_PLAN_H : 0;
 
     lv_obj_set_y(waterfall, y);
     freq_scale_lines_set_y(y);
-    if (!spectrum) band_plan_set_y(y);
+    band_plan_set_y(y);
     spot_marks_layout(y, y + strip + SPOT_LINE_H);
     /* The cluster column starts under the band plan strip, not over it */
     y += strip;
@@ -1813,8 +1811,7 @@ lv_obj_t * main_screen() {
 
     lv_obj_set_y(waterfall, y);
     waterfall_set_height(480 - y);
-    /* Band plan: the last rows of the spectrum, or the top of the waterfall when it is off */
-    band_plan_init(obj, param_i_get(cfg_spectrum_show) ? wf_y - freq_height - BAND_PLAN_H : y);
+    band_plan_init(obj, y);   /* the top of the waterfall */
     freq_scale_lines_init(obj, y, 480 - y);
     /* Cluster spots: tags under the frequency labels, lines at the bottom of
      * the spectrum, or at the top of the waterfall when it is off */
