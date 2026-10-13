@@ -350,7 +350,7 @@ The firmware **sends no data to the author**. It contacts external services only
 - **WSPRnet**, if enabled: received spots go to wsprnet.org with callsign and locator.
 - **DX Cluster** and **Reverse Beacon Network**: they receive your callsign to log you in.
 
-The app and the radio contact the x6100-link.it server to check for updates. Every 5 minutes the app and the radio send an anonymous signal with the version and the QTH set on the radio, to show the map on the website and update the real-time counter. The data is anonymised and NOT linked to accounts of any kind.
+The app and the radio contact the x6100-link.it server to check for updates. Every 5 minutes the app and the radio send the site some technical data, including version, QTH, callsign and device codes. I use them for the map, the counter and to manage the devices associated with users. I don't share them with anyone. For any request, write to me.
 
 Everything else (settings, logs, pictures) stays on the SD card. Full notice, website included:
 [x6100-link.it/privacy.php](https://x6100-link.it/privacy.php).
