@@ -19,6 +19,8 @@
 static lv_obj_t *edges[2];
 static lv_obj_t *refs[MAX_REFS];
 static lv_obj_t *lines[MAX_REFS];  /* dashed, down the waterfall */
+static lv_point_t line_pts[2];     /* theirs: from the top of the waterfall to lines_bottom */
+static lv_coord_t lines_bottom;
 
 static lv_obj_t *make_label(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
     lv_obj_t *l = lv_label_create(parent);
@@ -50,13 +52,20 @@ void freq_scale_init(lv_obj_t *parent, lv_coord_t y) {
     }
 }
 
-void freq_scale_lines_init(lv_obj_t *parent, lv_coord_t y, lv_coord_t h) {
-    static lv_point_t pts[2];
+void freq_scale_set_y(lv_coord_t y) {
+    lv_obj_set_y(edges[0], y);
+    lv_obj_set_y(edges[1], y);
+    for (int i = 0; i < MAX_REFS; i++) {
+        lv_obj_set_y(refs[i], y);
+    }
+}
 
-    pts[1].y = h;
+void freq_scale_lines_init(lv_obj_t *parent, lv_coord_t y, lv_coord_t h) {
+    line_pts[1].y = h;
+    lines_bottom = y + h;
     for (int i = 0; i < MAX_REFS; i++) {
         lines[i] = lv_line_create(parent);
-        lv_line_set_points(lines[i], pts, 2);
+        lv_line_set_points(lines[i], line_pts, 2);
         lv_obj_set_style_line_color(lines[i], TC(text), 0);
         lv_obj_set_style_line_opa(lines[i], LV_OPA_40, 0);
         lv_obj_set_style_line_width(lines[i], 1, 0);
@@ -69,9 +78,11 @@ void freq_scale_lines_init(lv_obj_t *parent, lv_coord_t y, lv_coord_t h) {
 }
 
 void freq_scale_lines_set_y(lv_coord_t y) {
+    line_pts[1].y = lines_bottom - y;   /* the bottom stays */
     for (int i = 0; i < MAX_REFS; i++) {
         if (lines[i]) {
             lv_obj_set_y(lines[i], y);
+            lv_line_set_points(lines[i], line_pts, 2);
         }
     }
 }

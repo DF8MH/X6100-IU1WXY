@@ -149,6 +149,11 @@ lv_obj_t * panel_init(lv_obj_t *parent) {
 
 /* A taller spectrum: the panel starts under it, shorter (upstream panel_set_height()) */
 void panel_keep_below(lv_coord_t y) {
+    /* From the style's place: the spectrum may have got shorter (live) */
+    lv_obj_remove_local_style_prop(obj, LV_STYLE_Y, 0);
+    lv_obj_remove_local_style_prop(obj, LV_STYLE_HEIGHT, 0);
+    text_size_cb(NULL, NULL);
+
     lv_coord_t bottom = lv_obj_get_style_y(obj, 0) + lv_obj_get_style_height(obj, 0);
 
     if (y > lv_obj_get_style_y(obj, 0)) {

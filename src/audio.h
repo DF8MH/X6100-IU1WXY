@@ -31,6 +31,10 @@ void audio_play_wait();
 void audio_play_flush();
 void audio_set_play_mode(audio_play_mode_t mode);
 
+/* Local playback on the Bluetooth headphones, from the playing thread (see audio.c) */
+bool audio_play_bt_begin(void);
+void audio_play_bt_end(void);
+
 void audio_gain_db(int16_t *buf, size_t samples, float gain, int16_t *out);
 void audio_gain_db_transition(int16_t *buf, size_t samples, float gain1, float gain2, int16_t *out);
 

@@ -68,12 +68,17 @@ void mfk_change_ctrl(int16_t dir) {
     mfk_update(0);
 }
 
-void mfk_set_ctrl(cfg_ctrl_t ctrl) {
+/* Without the popup: a control the screen takes and gives back, not one the user chose */
+void mfk_set_ctrl_quiet(cfg_ctrl_t ctrl) {
     mfk_ctrl = ctrl;
     mfk_state = MFK_STATE_EDIT;
     knobs_set_mfk_state(true);
     knobs_set_mfk_param(mfk_ctrl);
     cluster_column_set_active(mfk_ctrl == CTRL_CLUSTER);
+}
+
+void mfk_set_ctrl(cfg_ctrl_t ctrl) {
+    mfk_set_ctrl_quiet(ctrl);
     mfk_update(0);
 }
 

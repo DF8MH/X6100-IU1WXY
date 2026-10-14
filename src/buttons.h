@@ -88,6 +88,8 @@ extern buttons_group_t buttons_group_msg_voice;
 void            buttons_init(lv_obj_t *parent);
 /* The five buttons to parent in a column, w x h each, F1 on top (the walkie screen) */
 void            buttons_vertical(lv_obj_t *parent, lv_coord_t w, lv_coord_t h);
+/* Back in a row at the bottom of parent, where they were (the main screen) */
+void            buttons_horizontal(lv_obj_t *parent);
 void            buttons_refresh(button_data_t *data);
 void            buttons_refresh_marks();
 void            buttons_screen_rec_update();

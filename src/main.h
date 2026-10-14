@@ -11,8 +11,11 @@
 #include "rotary.h"
 #include "encoder.h"
 
-#define VERSION "x6100 IU1WXY firmware - v0.122"
+#define VERSION "x6100 IU1WXY firmware - v0.123"
 
 
 extern rotary_t     *vol;
 extern encoder_t    *mfk;
+
+/* LVGL and the panel portrait (480x800, the walkie screen) or landscape; false without DRM */
+bool main_display_portrait(bool on);

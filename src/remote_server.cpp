@@ -20,6 +20,7 @@
  */
 
 #include "remote_server.h"
+#include "cw_field.h"
 
 #include "cfg/db.h"
 #include "cfg/settings_manager.h"
@@ -165,6 +166,12 @@ static const struct {
     {"cw_stop",     "CW",     dialog_cw_kbd_remote, 1, 0,         INT32_MAX},
     {"cw_wpm",      "CW",     dialog_cw_kbd_remote, 5, 60,        INT32_MIN},
     {"cw_dec",      "CW",     dialog_cw_kbd_remote, 0, 1,         INT32_MIN},
+    /* With the CW Keyboard app closed: the main screen's CW line (cw_field.c); "" matches any app */
+    {"cw_send",     "",       cw_field_remote,      1, 0,         INT32_MAX},
+    {"cw_stop",     "",       cw_field_remote,      1, 0,         INT32_MAX},
+    {"cw_wpm",      "",       cw_field_remote,      5, 60,        INT32_MIN},
+    {"cw_dec",      "",       cw_field_remote,      0, 1,         INT32_MIN},
+    {"cw_clear",    "",       cw_field_remote,      1, 0,         INT32_MIN},
     {"field_screen", "Field", dialog_field_remote,  1, 0,         INT32_MIN},
     {"field_ref",   "Field",  dialog_field_remote,  1, 0,         INT32_MIN},
     {"field_start", "Field",  dialog_field_remote,  1, 0,         INT32_MIN},
@@ -546,6 +553,8 @@ static int state_line(char *buf, size_t size) {
             l = app_states[i].fn(ax, sizeof(ax));
             break;
         }
+    if (!app[0])
+        l = cw_field_remote_state(ax, sizeof(ax));   /* the main screen's CW line (the Link CW tab) */
     if (l <= 0 || (size_t)l >= sizeof(ax))
         strcpy(ax, "{}");
 
@@ -838,11 +847,11 @@ static const struct {
     {"smeter_bar_color", &cfg_sm.p_smeter_bar_color, -1, 0xffffff},
     {"swr_color", &cfg_sm.p_swr_color, -1, 0xffffff},
     {"smeter_lamp", &cfg_sm.p_smeter_lamp, 0, 1},
-    {"spectrum_show", &cfg_sm.p_spectrum_show, 0, 1},   /* the GUI restarts (disp_apply) */
-    {"spectrum_height", &cfg_sm.p_spectrum_height, 60, 160},   /* restarts with the spectrum on */
+    {"spectrum_show", &cfg_sm.p_spectrum_show, 0, 1},   /* live: main_screen.c follows them */
+    {"spectrum_height", &cfg_sm.p_spectrum_height, 60, 160},
     {"digi_text_compact", &cfg_sm.p_digi_text_compact, 0, 1},
     {"knob_info", &cfg_sm.p_knob_info, 0, 1},
-    {"walkie", &cfg_sm.p_walkie, 0, 1},                 /* the GUI restarts (disp_apply) */
+    {"walkie", &cfg_sm.p_walkie, 0, 1},                 /* live: walkie.c follows it */
 };
 
 static const struct {
@@ -893,10 +902,9 @@ static void disp_apply(void *arg) {
         backlight_tick();
     } else if (!strcmp(d->name, "bright_buttons")) {
         backlight_set_buttons((buttons_light_t)d->val);
-    } else if (!strcmp(d->name, "theme") || !strcmp(d->name, "spectrum_show") || !strcmp(d->name, "walkie") ||
-               (!strcmp(d->name, "spectrum_height") && cfg_sm.p_spectrum_show.get())) {
+    } else if (!strcmp(d->name, "theme")) {
         /* as Settings: the GUI saves and starts again with it (x6100_daemon) */
-        if (d->name[0] == 't') params_str_set(&params.theme_name, d->text);
+        params_str_set(&params.theme_name, d->text);
         params_flush();
         cfg_api_flush_all();
         exit(0);

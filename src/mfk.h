@@ -31,6 +31,7 @@ void mfk_init();
 void mfk_update(int16_t diff);
 void mfk_change_ctrl(int16_t dir);
 void mfk_set_ctrl(cfg_ctrl_t mode);
+void mfk_set_ctrl_quiet(cfg_ctrl_t mode);
 void mfk_cluster_gone();
 
 #ifdef __cplusplus

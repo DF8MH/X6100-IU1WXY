@@ -38,6 +38,11 @@
 #include "pubsub_ids.h"
 #include "scheduler.h"
 #include "backlight.h"
+#include "swr_guard.h"
+#include "paddle_keyer.h"
+#include "cw_encoder.h"
+#include "dialog_msg_voice.h"
+#include "msg.h"
 
 /*********************
  *      DEFINES
@@ -91,6 +96,7 @@ static void radio_unlock();
 static void on_vfo_freq_change(Subject *subj, void *user_data);
 static void on_vfo_mode_change(Subject *subj, void *user_data);
 static void on_vfo_agc_change(Subject *subj, void *user_data);
+static void on_cw_agc_cond_change(Subject *subj, void *user_data);
 static void on_vfo_att_change(Subject *subj, void *user_data);
 static void on_vfo_pre_change(Subject *subj, void *user_data);
 static void on_low_filter_change(Subject *subj, void *user_data);
@@ -199,6 +205,9 @@ void radio_start() {
 
     subject_subscribe_and_notify((Subject*)cfg_band_vfoa_agc, on_vfo_agc_change, (void*)X6100_VFO_A);
     subject_subscribe_and_notify((Subject*)cfg_band_vfob_agc, on_vfo_agc_change, (void*)X6100_VFO_B);
+    subject_subscribe((Subject*)cfg_band_vfoa_mode, on_cw_agc_cond_change, NULL);
+    subject_subscribe((Subject*)cfg_band_vfob_mode, on_cw_agc_cond_change, NULL);
+    subject_subscribe((Subject*)cfg_cw_decoder, on_cw_agc_cond_change, NULL);
 
     subject_subscribe_and_notify((Subject*)cfg_band_vfoa_att, on_vfo_att_change, (void*)X6100_VFO_A);
     subject_subscribe_and_notify((Subject*)cfg_band_vfob_att, on_vfo_att_change, (void*)X6100_VFO_B);
@@ -602,11 +611,30 @@ static void on_vfo_mode_change(Subject *subj, void *user_data) {
     LV_LOG_USER("Radio set vfo %i mode=%i", vfo, new_val);;
 }
 
+/* AGC AUTO in CW with the decoder on goes FAST: as AUTO recovers after a station stops, the rising
+ * noise keys the decoder and prints Ts and Es between its overs (40 m, 2026-10-14). Only the
+ * radio gets FAST: the setting stays AUTO, and an explicit OFF / SLOW / FAST is left alone. */
+static void apply_vfo_agc(x6100_vfo_t vfo) {
+    int32_t agc  = subject_i_get((SubjectInt*)(vfo == X6100_VFO_A ? cfg_band_vfoa_agc : cfg_band_vfob_agc));
+    int32_t mode = subject_i_get((SubjectInt*)(vfo == X6100_VFO_A ? cfg_band_vfoa_mode : cfg_band_vfob_mode));
+
+    if (agc == x6100_agc_auto && (mode == x6100_mode_cw || mode == x6100_mode_cwr) && subject_i_get((SubjectInt*)cfg_cw_decoder)) {
+        agc = x6100_agc_fast;
+    }
+    WITH_RADIO_LOCK(x6100_control_vfo_agc_set(vfo, agc));
+    LV_LOG_USER("Radio set vfo %i agc=%i", vfo, agc);
+}
+
 static void on_vfo_agc_change(Subject *subj, void *user_data) {
-    x6100_vfo_t vfo = (x6100_vfo_t )user_data;
-    int32_t new_val = subject_i_get((SubjectInt*)subj);
-    WITH_RADIO_LOCK(x6100_control_vfo_agc_set(vfo, new_val));
-    LV_LOG_USER("Radio set vfo %i agc=%i", vfo, new_val);
+    (void)subj;
+    apply_vfo_agc((x6100_vfo_t)user_data);
+}
+
+static void on_cw_agc_cond_change(Subject *subj, void *user_data) {
+    (void)subj;
+    (void)user_data;
+    apply_vfo_agc(X6100_VFO_A);
+    apply_vfo_agc(X6100_VFO_B);
 }
 
 static void update_agc_time(Subject *subj, void *user_data) {
@@ -846,6 +874,20 @@ static void battery_log(const x6100_flow_t *p) {
     fclose(f);
 }
 
+static swr_guard_t swr_guard;
+
+/* SWR protection, on the GUI thread: what the GUI keys lets go (a PTT held on the radio or the
+ * mic, VOX and the radio's own keyer are the base's: they may key again) */
+static void swr_trip_cb(void *arg) {
+    cw_encoder_stop();
+    paddle_keyer_stop();
+    dialog_msg_voice_ptt_pressed();
+    radio_set_morse_key(false);
+    radio_set_modem(false);     /* the digital apps see it and stop (tx_player.c) */
+    radio_set_ptt(false);
+    msg_schedule_text_fmt("TX stopped: SWR %.1f", *(float *)arg);
+}
+
 static bool radio_tick() {
     if (now_time < prev_time) {
         prev_time = now_time;
@@ -951,6 +993,11 @@ static bool radio_tick() {
                 } else {
                     // printf("%d, %d\n", pack->tx_power, pack->alc_level);
                     tx_info_update(pack->tx_power * 0.1f, pack->vswr * 0.1f, pack->alc_level * 0.1f);
+
+                    float swr = pack->vswr * 0.1f;
+                    if (swr_guard_check(&swr_guard, pack->tx_power * 0.1f, swr, param_i_get(cfg_swr_protect) * 0.1f, now_time)) {
+                        scheduler_put(swr_trip_cb, &swr, sizeof(swr));
+                    }
                 }
                 break;
 

@@ -430,14 +430,21 @@ static void draw_part_end_cb(lv_event_t *e) {
     lv_coord_t right    = area.x1 - 10;
     lv_coord_t text_end = dsc->draw_area->x1 + lv_obj_get_style_pad_left(obj, LV_PART_ITEMS) +
                           text_width(cd->text, dsc->label_dsc);
-    if (cd->dist > 0) {
+    /* Settings > FT8/FT4 info: 0 km, 1 mi, 2 country, 3 country + km, 4 country + mi (from SP2KMO's upstream 3074180e) */
+    int32_t info = param_i_get(cfg_ft8_info);
+
+    if (info != 2 && cd->dist > 0) {
         area.x2 = area.x1 - 10;
         area.x1 = area.x2 - 200;
-        snprintf(buf, sizeof(buf), "%i km", cd->dist);
+        if (info == 1 || info == 4)
+            snprintf(buf, sizeof(buf), "%i mi", (int)(cd->dist * 0.621371f + 0.5f));
+        else
+            snprintf(buf, sizeof(buf), "%i km", cd->dist);
         lv_draw_label(dsc->draw_ctx, dsc->label_dsc, &area, buf, NULL);
         right = area.x2 - text_width(buf, dsc->label_dsc) - 16;
     }
-    draw_country(dsc, cd, &area, right, text_end);
+    if (info >= 2)
+        draw_country(dsc, cd, &area, right, text_end);
 }
 
 static void cell_press_cb(lv_event_t *e) {

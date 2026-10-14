@@ -165,3 +165,16 @@ void btaudio_mute_set(bool on) {
 bool btaudio_speaker_muted(void) {
     return hp_on && mute_on;
 }
+
+/* The headphone sink (first line btaudio-ctl writes to HP_STATE) while
+ * the speaker is silenced for them; false otherwise. Any thread. */
+bool btaudio_hp_sink(char *buf, size_t size) {
+    if (!btaudio_speaker_muted()) return false;
+    FILE *fp = fopen(HP_STATE, "r");
+    if (!fp) return false;
+    bool ok = fgets(buf, size, fp) != NULL;
+    fclose(fp);
+    if (!ok) return false;
+    buf[strcspn(buf, "\n")] = '\0';
+    return buf[0] != '\0';
+}

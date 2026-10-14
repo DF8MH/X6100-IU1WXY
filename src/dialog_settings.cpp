@@ -11,6 +11,7 @@
 #include "dsp.h"
 #include "wifi.h"
 #include "btaudio.h"
+#include "bt_dev.h"
 #include "cfg/settings_manager.h"
 #include "cfg/settings_manager_api.h"
 #include <vector>
@@ -821,7 +822,6 @@ static action_items_t long_action_items[] = {
     /* Tools */
     { .label = " APP Cluster ", .action = ACTION_APP_CLUSTER },
     { .label = " APP CW Trainer ", .action = ACTION_APP_CWTRAINER },
-    { .label = " APP CW Keyboard ", .action = ACTION_APP_CW_KBD },
     { .label = " APP Field Ops ", .action = ACTION_APP_FIELD },
     { .label = " APP Bands ", .action = ACTION_APP_BANDS },
     { .label = " APP RX recorder ", .action = ACTION_APP_RECORDER },
@@ -1178,12 +1178,20 @@ static uint8_t make_transverter(uint8_t row, ParamInt &from, ParamInt &to, Param
 
 /* Spectrum above the waterfall on/off; the waterfall takes its place */
 
-/* The main screen is laid out at start: the GUI saves and restarts at once (x6100_daemon starts it
- * again), as for the theme. Runs after switch_bool's own callback has set the value */
+/* The main screen follows it live (main_screen.c); the page again, with or without the spectrum
+ * rows, after the event: the switch that got it is deleted */
+static lv_obj_t *spectrum_show_sw;
+
+static void spectrum_show_page(void *arg) {
+    if (!page) {
+        return;
+    }
+    make_display_page();
+    lv_group_focus_obj(spectrum_show_sw);
+}
+
 static void spectrum_show_cb(lv_event_t *e) {
-    params_flush();
-    cfg_api_flush_all();
-    exit(0);
+    lv_async_call(spectrum_show_page, NULL);
 }
 
 static uint8_t make_spectrum_show(uint8_t row) {
@@ -1200,13 +1208,14 @@ static uint8_t make_spectrum_show(uint8_t row) {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_center(obj);
     obj = switch_bool(obj, cfg_sm.p_spectrum_show);
+    spectrum_show_sw = obj;
     lv_obj_add_event_cb(obj, spectrum_show_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_set_width(obj, SMALL_3 - 30);
 
     return row + 1;
 }
 
-/* Walkie Talkie portrait screen: laid out at start as well, the same restart */
+/* Walkie Talkie portrait screen: on at once (walkie.c follows the setting), Settings closes */
 static uint8_t make_walkie(uint8_t row) {
     lv_obj_t *obj;
 
@@ -1221,7 +1230,6 @@ static uint8_t make_walkie(uint8_t row) {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_center(obj);
     obj = switch_bool(obj, cfg_sm.p_walkie);
-    lv_obj_add_event_cb(obj, spectrum_show_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_set_width(obj, SMALL_3 - 30);
 
     return row + 1;
@@ -1378,6 +1386,31 @@ static uint8_t make_digi_text(uint8_t row) {
     lv_dropdown_set_symbol(obj, NULL);
     lv_dropdown_set_selected(obj, cfg_sm.p_digi_text_compact.get());
     lv_obj_add_event_cb(obj, digi_text_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_size(obj, SMALL_3, ROW_H);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
+
+    return row + 1;
+}
+
+static void ft8_info_update_cb(lv_event_t *e) {
+    cfg_sm.p_ft8_info.set(lv_dropdown_get_selected(lv_event_get_target(e)));
+}
+
+/* FT8/FT4 table: distance, country or both, from SP2KMO's upstream 3074180e */
+static uint8_t make_ft8_info(uint8_t row) {
+    lv_obj_t *obj;
+
+    obj = lv_label_create(grid);
+    lv_label_set_text(obj, "FT8/FT4 info");
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
+
+    obj = lv_dropdown_create(grid);
+    dialog_item(&dialog, obj);
+    lv_obj_add_style(lv_dropdown_get_list(obj), &dialog_dropdown_list_style, 0);
+    lv_dropdown_set_options(obj, " km \n mi \n Country \n Country + km \n Country + mi ");
+    lv_dropdown_set_symbol(obj, NULL);
+    lv_dropdown_set_selected(obj, cfg_sm.p_ft8_info.get());
+    lv_obj_add_event_cb(obj, ft8_info_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_set_size(obj, SMALL_3, ROW_H);
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 3, LV_GRID_ALIGN_CENTER, row, 1);
 
@@ -2008,6 +2041,9 @@ uint8_t make_cessb(uint8_t row) {
 #define BTCAT_CTL "/usr/sbin/btcat-ctl"
 
 static lv_obj_t *bt_visible_sw = NULL;
+static lv_obj_t *bt_visible_label;
+static lv_timer_t *bt_visible_timer;
+static uint32_t bt_visible_tick;     /* last tap: btcat-ctl gets 3 s to write the state */
 
 static bool btcat_read(const char *key, bool def) {
     const char *files[] = { "/etc/default/btcat", "/mnt/btcat.conf" };
@@ -2049,10 +2085,35 @@ static void bt_power_update_cb(lv_event_t * e) {
 static void bt_visible_update_cb(lv_event_t * e) {
     lv_obj_t *obj = lv_event_get_target(e);
     btcat_run("discoverable", lv_obj_has_state(obj, LV_STATE_CHECKED));
+    bt_visible_tick = lv_tick_get();
+}
+
+/* The pairing window (3 min) as it really is: btcat-ctl keeps its end, in s
+ * of uptime, in /tmp/btcat-pairing while it is open */
+static void bt_visible_timer_cb(lv_timer_t *t) {
+    long     end = 0;
+    timespec now;
+    FILE    *f = fopen("/tmp/btcat-pairing", "r");
+
+    if (lv_tick_elaps(bt_visible_tick) < 3000) return;
+    if (f) {
+        if (fscanf(f, "%ld", &end) != 1) end = 0;
+        fclose(f);
+    }
+    clock_gettime(CLOCK_BOOTTIME, &now);
+    long left = end - now.tv_sec;
+    if (left > 0) {
+        lv_label_set_text_fmt(bt_visible_label, "Pairing %ld:%02ld", left / 60, left % 60);
+        lv_obj_add_state(bt_visible_sw, LV_STATE_CHECKED);
+    } else {
+        lv_label_set_text(bt_visible_label, "Pairing (3 min)");
+        lv_obj_clear_state(bt_visible_sw, LV_STATE_CHECKED);
+    }
 }
 
 static void bt_visible_delete_cb(lv_event_t * e) {
     bt_visible_sw = NULL;
+    lv_timer_del(bt_visible_timer);
 }
 
 static lv_obj_t * bt_switch_cell(uint8_t row, uint8_t col, bool state, lv_event_cb_t cb) {
@@ -2082,10 +2143,13 @@ static uint8_t make_bluetooth(uint8_t row) {
     row++;
 
     obj = lv_label_create(grid);
-    lv_label_set_text(obj, "Discoverable (CAT)");
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
-    bt_visible_sw = bt_switch_cell(row, 1, btcat_read("BTCAT_DISCOVERABLE", true), bt_visible_update_cb);
+    bt_visible_label = obj;
+    bt_visible_sw = bt_switch_cell(row, 1, false, bt_visible_update_cb);
     lv_obj_add_event_cb(bt_visible_sw, bt_visible_delete_cb, LV_EVENT_DELETE, NULL);
+    bt_visible_tick = lv_tick_get() - 3000;
+    bt_visible_timer = lv_timer_create(bt_visible_timer_cb, 1000, NULL);
+    bt_visible_timer_cb(bt_visible_timer);
     if (!power) lv_obj_add_state(bt_visible_sw, LV_STATE_DISABLED);
 
     return row + 1;
@@ -2203,16 +2267,6 @@ typedef struct {
     std::function<void()> fn;
 } wl_item_t;
 
-typedef struct {
-    std::string mac;
-    std::string name;
-    bool        connected;
-    bool        hp;
-    bool        autoconn;
-    bool        is_new;
-    bool        kbd;
-} bt_dev_t;
-
 static int                    wl_gen;       /* results for a deleted page are dropped */
 static lv_timer_t            *wl_timer;
 static int                    wl_ticks;
@@ -2245,10 +2299,9 @@ static struct {
     lv_obj_t             *mute;
     wl_row_t              rows[BT_ROWS];
     std::vector<bt_dev_t> devs;
-    std::vector<bt_dev_t> found;    /* last "Scan headphones" */
-    bool                  listing;
-    bool                  scanning;
-    bool                  busy;
+    std::vector<bt_dev_t> found;    /* not paired, seen since the last Scan */
+    std::string           note;     /* after a scan that found nothing */
+    bool                  was_scanning;
     int                   vol_pending = -1;
     bool                  vol_busy;
 } bt;
@@ -2888,7 +2941,7 @@ static uint8_t make_wifi(uint8_t row) {
     return row + 1;
 }
 
-/* Bluetooth devices and headphones (btaudio-ctl) */
+/* Bluetooth devices (bt_dev.c) and headphones (btaudio-ctl) */
 
 static std::vector<std::string> split(const std::string &s, char sep) {
     std::vector<std::string> out;
@@ -2917,18 +2970,18 @@ static void bt_update_view() {
         }
         bt_dev_t *d = &bt.devs[i];
 
-        lv_label_set_text(r->name, d->name.empty() ? d->mac.c_str() : d->name.c_str());
-        if (d->is_new) {
+        lv_label_set_text(r->name, d->name);
+        if (!d->paired) {
             wl_pill(r->pill_1, PILL_NEW);
-        } else if (d->hp) {
+        } else if (d->audio) {
             wl_pill(r->pill_1, PILL_HP);
-        } else if (d->kbd) {
+        } else if (d->input) {
             wl_pill(r->pill_1, PILL_KBD);
         } else {
             wl_pill(r->pill_1, PILL_CAT);
         }
         wl_pill(r->pill_2, d->connected ? "connected" : NULL, theme_hex(TC_ok_bg), theme_hex(TC_ok));
-        if (d->is_new) {
+        if (!d->paired) {
             lv_label_set_text(r->note, "press to pair");
         } else if (!d->connected) {
             lv_label_set_text(r->note, "not connected");
@@ -2939,21 +2992,15 @@ static void bt_update_view() {
     }
 }
 
-static void bt_refresh();
-
-static void bt_list_done(const char *out, int status, void *user) {
+/* Audio page: headphone volume and RX switch */
+static void bt_status_done(const char *out, int status, void *user) {
     if ((intptr_t)user != wl_gen) {
         return;
     }
-    bt.listing = false;
-    bt.devs.clear();
-
     for (auto &line : split(out, '\n')) {
         auto f = split(line, '\t');
 
-        if (f[0] == "DEV" && f.size() >= 6) {
-            bt.devs.push_back({f[1], f[5], f[2] == "1", f[3] == "hp", f[4] == "1", false, f[3] == "kbd"});
-        } else if (f[0] == "HP" && f.size() >= 3) {
+        if (f[0] == "HP" && f.size() >= 3) {
             int vol = atoi(f[2].c_str());
 
             if (bt.vol && vol >= 0 && bt.vol_pending < 0 && !bt.vol_busy && !lv_obj_has_state(bt.vol, LV_STATE_EDITED)) {
@@ -2968,134 +3015,105 @@ static void bt_list_done(const char *out, int status, void *user) {
             }
         }
     }
-    for (auto &d : bt.found) {
-        bool paired = false;
+}
+
+/* Wireless page, every second: the list and what the worker does (bt_dev.c).
+ * The note shows its activity, a keyboard's code to type included. */
+static void bt_update() {
+    bt_dev_t d;
+    char     activity[48];
+    bool     scanning = bt_dev_scanning();
+
+    bt.devs.clear();
+    for (int i = 0; bt_dev_get(i, &d); i++) {
+        bt.devs.push_back(d);
+    }
+    /* bluez forgets a scanned device ~30 s after the scan: it stays here until the next Scan */
+    for (auto &f : bt.found) {
+        bool listed = false;
 
         for (auto &p : bt.devs) {
-            paired |= p.mac == d.mac;
+            listed |= strcmp(p.addr, f.addr) == 0;
         }
-        if (!paired) {
-            bt.devs.push_back(d);
+        if (!listed) {
+            bt.devs.push_back(f);
         }
+    }
+    bt.found.clear();
+    for (auto &p : bt.devs) {
+        if (!p.paired) {
+            bt.found.push_back(p);
+        }
+    }
+    if (bt.was_scanning && !scanning && bt.found.empty()) {
+        bt.note = "no headphones or keyboards found";
+    }
+    bt.was_scanning = scanning;
+
+    bt_dev_activity(activity, sizeof(activity));
+    if (bt.scan_note) {
+        lv_label_set_text(bt.scan_note, activity[0] ? activity : bt.note.c_str());
     }
     bt_update_view();
 }
 
-static void bt_refresh() {
-    if (bt.listing || bt.scanning || bt.busy) {
+static void bt_scan_cb(lv_event_t *e) {
+    if (bt_dev_busy() || bt_dev_scanning()) {
         return;
     }
-    bt.listing = true;
-    btaudio_run("list", bt_list_done, (void *)(intptr_t)wl_gen);
-}
-
-/* While pairing: the code a keyboard wants typed on it (btaudio-ctl writes /tmp/bt_passkey) */
-static lv_timer_t *bt_passkey_timer;
-
-static void bt_passkey_cb(lv_timer_t *t) {
-    char  code[16] = "";
-    FILE *f = fopen("/tmp/bt_passkey", "r");
-
-    (void)t;
-    if (!f) return;
-    if (fgets(code, sizeof(code), f) && bt.scan_note) {
-        code[strcspn(code, "\r\n")] = 0;
-        lv_label_set_text_fmt(bt.scan_note, "type %s and Enter on the keyboard", code);
-    }
-    fclose(f);
-}
-
-static void bt_action_done(const char *out, int status, void *user) {
-    if (bt_passkey_timer) {
-        lv_timer_del(bt_passkey_timer);
-        bt_passkey_timer = NULL;
-    }
-    if ((intptr_t)user != wl_gen) {
-        return;
-    }
-    bt.busy = false;
-    if (bt.scan_note) {
-        lv_label_set_text(bt.scan_note, "");
-    }
-    if (status != 0 && *out) {
-        msg_update_text_fmt("%s", split(out, '\n')[0].c_str());
-    }
-    bt_refresh();
-}
-
-static void bt_action(const std::string &args, const std::string &note) {
-    if (bt.busy || bt.scanning) {
-        return;
-    }
-    bt.busy = true;
-    if (bt.scan_note) {
-        lv_label_set_text(bt.scan_note, note.c_str());
-    }
-    if (args.rfind("pair ", 0) == 0 && !bt_passkey_timer) {
-        bt_passkey_timer = lv_timer_create(bt_passkey_cb, 500, NULL);
-    }
-    btaudio_run(args.c_str(), bt_action_done, (void *)(intptr_t)wl_gen);
-}
-
-static void bt_scan_done(const char *out, int status, void *user) {
-    if ((intptr_t)user != wl_gen) {
-        return;
-    }
-    bt.scanning = false;
     bt.found.clear();
-    for (auto &line : split(out, '\n')) {
-        auto f = split(line, '\t');
+    bt.note.clear();
+    bt_dev_scan();
+}
 
-        if (f[0] == "NEW" && f.size() >= 3) {
-            bool kbd = f.size() >= 4 && f[3] == "kbd";
+/* "Connect at startup" list, kept by btaudio-ctl */
+static bool bt_autoconn(const char *addr) {
+    char  line[512];
+    bool  on = false;
+    FILE *f = fopen("/mnt/btaudio.conf", "r");
 
-            bt.found.push_back({f[1], f[2], false, !kbd, false, true, kbd});
+    if (!f) {
+        return false;
+    }
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "BTAUDIO_AUTOCONNECT=", 20) == 0) {
+            on = strstr(line, addr) != NULL;
         }
     }
-    if (bt.scan_note) {
-        lv_label_set_text(bt.scan_note, bt.found.empty() ? "no headphones or keyboards found" : "");
-    }
-    bt_refresh();
-}
-
-static void bt_scan_cb(lv_event_t *e) {
-    if (bt.busy || bt.scanning) {
-        return;
-    }
-    bt.scanning = true;
-    if (bt.scan_note) {
-        lv_label_set_text(bt.scan_note, "scanning 15 s, put the headphones or keyboard in pairing");
-    }
-    btaudio_run("scan", bt_scan_done, (void *)(intptr_t)wl_gen);
+    fclose(f);
+    return on;
 }
 
 static void bt_row_cb(lv_event_t *e) {
     size_t i = (intptr_t)lv_event_get_user_data(e);
 
-    if (i >= bt.devs.size()) {
+    if (i >= bt.devs.size() || bt_dev_busy()) {
         return;
     }
-    bt_dev_t    d = bt.devs[i];
-    std::string name = d.name.empty() ? d.mac : d.name;
+    bt_dev_t d = bt.devs[i];
 
-    if (d.is_new) {
-        bt_action("pair " + d.mac, "pairing " + name + "...");
+    bt.note.clear();
+    if (!d.paired) {
+        bt_dev_connect(d.addr);     /* pairs first */
         return;
     }
 
     std::vector<wl_item_t> items;
 
     if (d.connected) {
-        items.push_back({"Disconnect", "", [d, name] { bt_action("disconnect " + d.mac, "disconnecting..."); }});
-    } else if (d.hp || d.kbd) {
-        items.push_back({"Connect", "", [d, name] { bt_action("connect " + d.mac, "connecting " + name + "..."); }});
+        items.push_back({"Disconnect", "", [d] { bt_dev_disconnect(d.addr); }});
+    } else if (d.audio || d.input) {
+        items.push_back({"Connect", "", [d] { bt_dev_connect(d.addr); }});
     }
-    if (d.hp) {
-        items.push_back({"Connect at startup", d.autoconn ? "on" : "off",
-                         [d] { bt_action("autoconnect " + d.mac + (d.autoconn ? " off" : " on"), ""); }});
+    if (d.audio) {
+        bool on = bt_autoconn(d.addr);
+
+        items.push_back({"Connect at startup", on ? "on" : "off", [d, on] {
+            btaudio_run((std::string("autoconnect ") + d.addr + (on ? " off" : " on")).c_str(), NULL, NULL);
+        }});
     }
-    items.push_back({"Remove", "", [d] { bt_action("remove " + d.mac, "removing..."); }});
-    wl_menu_open(name + " - " + d.mac, items);
+    items.push_back({"Remove", "", [d] { bt_dev_forget(d.addr); }});
+    wl_menu_open(std::string(d.name) + " - " + d.addr, items);
 }
 
 static void bt_rx_cb(lv_event_t *e) {
@@ -3292,8 +3310,9 @@ static uint8_t make_wfview(uint8_t row) {
 
 static void wl_timer_cb(lv_timer_t *t) {
     wifi_update();
-    if (++wl_ticks % 5 == 0) {
-        bt_refresh();
+    bt_update();
+    if (++wl_ticks % 2 == 0) {
+        bt_dev_refresh();
     }
 }
 
@@ -3549,20 +3568,6 @@ static void smeter_cal_warn_cb(lv_event_t *e) {
     }
 }
 
-/* Spectrum height: the main screen is laid out at start, so the GUI restarts as for the spectrum
- * switch, once the slider is let go (touch) or its editing ends (knob), not at each step */
-static int32_t spectrum_height_laid_out = -1;
-
-static void spectrum_height_done_cb(lv_event_t *e) {
-    if (lv_obj_has_state(lv_event_get_target(e), LV_STATE_EDITED) ||
-        cfg_sm.p_spectrum_height.get() == spectrum_height_laid_out) {
-        return;
-    }
-    params_flush();
-    cfg_api_flush_all();
-    exit(0);
-}
-
 static uint8_t make_param_slider(uint8_t row, const char *label, param_slider_t *p) {
     lv_obj_t *obj;
 
@@ -3579,11 +3584,6 @@ static uint8_t make_param_slider(uint8_t row, const char *label, param_slider_t 
     if (p == &smeter_cal_slider) {
         lv_obj_add_event_cb(obj, smeter_cal_warn_cb, LV_EVENT_PRESSED, NULL);
         lv_obj_add_event_cb(obj, smeter_cal_warn_cb, LV_EVENT_FOCUSED, NULL);
-    }
-    if (p == &spectrum_height_slider) {
-        lv_obj_add_event_cb(obj, spectrum_height_done_cb, LV_EVENT_RELEASED, NULL);
-        lv_obj_add_event_cb(obj, spectrum_height_done_cb, LV_EVENT_FOCUSED, NULL);
-        lv_obj_add_event_cb(obj, spectrum_height_done_cb, LV_EVENT_DEFOCUSED, NULL);
     }
 
     return row + 1;
@@ -3890,6 +3890,37 @@ static void make_cluster_page() {
     card_end(row);
 }
 
+/* SWR protection: the most SWR a transmission keeps (tenths), 1.0 off; steps of 0.5 */
+static void swr_protect_cb(lv_event_t *e) {
+    lv_obj_t *obj   = lv_event_get_target(e);
+    lv_obj_t *label = (lv_obj_t *)lv_obj_get_user_data(obj);
+    int32_t   val   = lv_slider_get_value(obj) * 5;
+
+    if (val <= 10) {
+        lv_label_set_text(label, "Off");
+    } else {
+        lv_label_set_text_fmt(label, "%i.%i", val / 10, val % 10);
+    }
+    cfg_sm.p_swr_protect.set(val);
+}
+
+static uint8_t make_swr_protect(uint8_t row) {
+    lv_obj_t *obj;
+
+    wl_row_label(row, "SWR protection");
+
+    obj = lv_obj_create(grid);
+    lv_obj_set_size(obj, SMALL_3, ROW_H);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 4, 3, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(obj);
+    obj = slider_with_text(obj, cfg_sm.p_swr_protect.get(), 10, 50, 5, SMALL_3 - 120, "%i", swr_protect_cb);
+    lv_event_send(obj, LV_EVENT_VALUE_CHANGED, NULL);   /* the label as 2.5 / Off */
+
+    return row + 1;
+}
+
 /* TX CAL: the transmitter's calibration and CESSB, per band where the base keeps them per band */
 static void make_txcal_page() {
     grid_delete();
@@ -3913,6 +3944,10 @@ static void make_txcal_page() {
         row = make_cessb(row);
         card_end(row);
     }
+
+    row = card_begin(LV_SYMBOL_WARNING, "TX PROTECTION");
+    row = make_swr_protect(row);
+    card_end(row);
 }
 
 static void make_display_page() {
@@ -3929,10 +3964,7 @@ static void make_display_page() {
     if (cfg_sm.p_spectrum_show.get()) {
         row = make_spectrum_fill_peak(row);
         row = make_param_switch(row, "Fill gradient", cfg_sm.p_spectrum_fill_gradient);
-        if (spectrum_height_laid_out < 0) {
-            spectrum_height_laid_out = cfg_sm.p_spectrum_height.get();   /* as the screen has it */
-        }
-        row = make_param_slider(row, "Height", &spectrum_height_slider);
+        row = make_param_slider(row, "Height", &spectrum_height_slider);   /* live, at each step */
     }
     card_end(row);
 
@@ -3961,6 +3993,7 @@ static void make_display_page() {
     row = make_theme(row);
     row = make_font(row);
     row = make_digi_text(row);
+    row = make_ft8_info(row);
     card_end(row);
 }
 
@@ -4016,10 +4049,7 @@ static void make_audio_page() {
 
     /* Current state once; wl_gen drops the answer if the page is left */
     lv_obj_add_event_cb(grid, bt_audio_delete_cb, LV_EVENT_DELETE, NULL);
-    bt.listing = bt.scanning = bt.busy = false;
-    bt.devs.clear();
-    bt.listing = true;
-    btaudio_run("list", bt_list_done, (void *)(intptr_t)wl_gen);
+    btaudio_run("status", bt_status_done, (void *)(intptr_t)wl_gen);
 }
 
 static void make_wireless_page() {
@@ -4027,10 +4057,9 @@ static void make_wireless_page() {
     grid_create();
     uint8_t row;
 
-    bt.listing = false;
-    bt.scanning = false;
-    bt.busy = false;
-    bt.devs.clear();
+    bt.found.clear();
+    bt.note.clear();
+    bt.was_scanning = false;
 
     row = card_begin(LV_SYMBOL_WIFI, "WIFI");
     row = make_wifi(row);
@@ -4045,8 +4074,8 @@ static void make_wireless_page() {
     wl_ticks = 0;
     wl_timer = lv_timer_create(wl_timer_cb, 1000, NULL);
     wifi_update();
-    bt_update_view();
-    bt_refresh();
+    bt_dev_refresh();
+    bt_update();
 }
 
 static uint8_t info_row(uint8_t row, const char *label, const char *val) {

@@ -1,10 +1,10 @@
 #!/bin/sh
-# Bluetooth headphones (A2DP) for the RX audio. Used by Settings -> Wireless.
+# Bluetooth headphones (A2DP) for the RX audio. Used by Settings -> Wireless
+# and Audio. Scan, pair, connect and remove are in the GUI (bt_dev.c, BlueZ
+# over D-Bus); this script keeps the audio side.
 #
-#   btaudio-ctl list                     paired devices + audio state (tab separated)
-#   btaudio-ctl scan                     15 s scan, prints the new headphones and keyboards found
-#   btaudio-ctl pair MAC                 pair + trust + connect
-#   btaudio-ctl connect|disconnect|remove MAC
+#   btaudio-ctl status                   headphone audio state (tab separated)
+#   btaudio-ctl save                     copy the pairings to /mnt
 #   btaudio-ctl autoconnect MAC on|off   connect at startup
 #   btaudio-ctl rx on|off                RX audio to the headphones (loopback)
 #   btaudio-ctl volume N                 headphone volume, 0..100 %
@@ -39,27 +39,6 @@ set_kv() {
 
 yn() { [ "$1" = "on" ] && echo yes || echo no; }
 
-devices() { bluetoothctl devices 2>/dev/null | awk '$1 == "Device" {print $2}'; }
-
-has() { echo "$2" | grep -q "$1: yes"; }
-
-name() { echo "$1" | sed -n 's/^[[:space:]]*Alias: //p' | head -n 1; }
-
-# Role from `bluetoothctl info`: hp = A2DP headphones, kbd = keyboard (CW
-# keyboard app), cat = phone/tablet (SPP)
-role() {
-	# a Low Energy keyboard may show no icon, only the HID services (HOGP 1812, HID 1124)
-	if echo "$1" | grep -q -e "Icon: input-keyboard" -e "00001812-" -e "00001124-"; then
-		echo kbd
-	elif echo "$1" | grep -q "Icon: audio-"; then
-		echo hp
-	elif echo "$1" | grep -q "0000110b-" && ! echo "$1" | grep -q "0000111f-"; then
-		echo hp
-	else
-		echo cat
-	fi
-}
-
 hp_sinks() { pactl list short sinks 2>/dev/null | awk '$2 ~ /^bluez_sink\..*a2dp_sink$/ {print $2}'; }
 
 # Never HFP/HSP: put every headphone card that is not on a2dp_sink back on it
@@ -89,7 +68,12 @@ apply_rx() {
 			# A2DP/SBC encoding and the headphones add their own delay after this.
 			card=bluez_card.${s#bluez_sink.}; card=${card%.a2dp_sink}
 			pactl set-port-latency-offset "$card" headphone-output 0 2>/dev/null
+			# - max_latency_msec / fast_adjust_threshold_msec: every underrun raises
+			#   the loopback latency and it never comes down (seen growing to 2 s);
+			#   cap it at target + 200 ms and drop the excess at once. Values from
+			#   openx6100's bt_audio.c (LOOP_MAX_EXTRA_MS, LOOP_FAST_ADJUST_MS).
 			pactl load-module module-loopback source=$SOURCE sink="$s" latency_msec=10 adjust_time=1 \
+				max_latency_msec=210 fast_adjust_threshold_msec=200 \
 				source_dont_move=true sink_dont_move=true >/dev/null
 		done
 	else
@@ -116,14 +100,7 @@ short_lst() {
 
 sync_audio() { force_a2dp; short_lst; apply_rx; }
 
-list() {
-	for mac in $(devices); do
-		info=$(bluetoothctl info "$mac" 2>/dev/null)
-		has Paired "$info" || continue
-		con=0; has Connected "$info" && con=1
-		auto=0; case " $BTAUDIO_AUTOCONNECT " in *" $mac "*) auto=1;; esac
-		printf 'DEV\t%s\t%s\t%s\t%s\t%s\n' "$mac" "$con" "$(role "$info")" "$auto" "$(name "$info")"
-	done
+status() {
 	hp=0; vol=-1
 	s=$(hp_sinks | head -n 1)
 	if [ -n "$s" ]; then
@@ -131,68 +108,6 @@ list() {
 		vol=$(pactl get-sink-volume "$s" 2>/dev/null | sed -n 's|^Volume:[^/]*/ *\([0-9]*\)%.*|\1|p')
 	fi
 	printf 'HP\t%s\t%s\nRX\t%s\nMUTE\t%s\n' "$hp" "${vol:--1}" "$BTAUDIO_RX" "$BTAUDIO_MUTE"
-}
-
-scan() {
-	bluetoothctl --timeout 15 scan on >/dev/null 2>&1
-	for mac in $(devices); do
-		info=$(bluetoothctl info "$mac" 2>/dev/null)
-		has Paired "$info" && continue
-		r=$(role "$info")
-		[ "$r" = hp ] || [ "$r" = kbd ] || continue
-		printf 'NEW\t%s\t%s\t%s\n' "$mac" "$(name "$info")" "$r"
-	done
-}
-
-connect() {
-	bluetoothctl connect "$1" >/dev/null 2>&1
-	# a keyboard has no audio: connected is enough
-	if [ "$(role "$(bluetoothctl info "$1" 2>/dev/null)")" = kbd ]; then
-		sleep 2
-		bluetoothctl info "$1" 2>/dev/null | grep -q "Connected: yes" || { echo "Connection failed"; return 1; }
-		return 0
-	fi
-	# the A2DP sink shows up a moment after the link
-	for _ in 1 2 3 4 5 6 7 8 9 10; do
-		sync_audio
-		hp_sinks | grep -q "$(echo "$1" | tr : _)" && return 0
-		sleep 1
-	done
-	bluetoothctl info "$1" 2>/dev/null | grep -q "Connected: yes" || { echo "Connection failed"; return 1; }
-}
-
-pair() {
-	# One bluetoothctl session with an agent: a one-shot "bluetoothctl pair"
-	# exits before the headphones answer and the pairing is dropped.
-	# Scanning keeps the device known (bluez forgets it ~30 s after a scan).
-	# KeyboardDisplay: a keyboard asks for a code to type on it (passkey or
-	# legacy PIN), written to /tmp/bt_passkey for the GUI; a confirmation is
-	# answered yes. Headphones pair without any of it, as before.
-	rm -f /tmp/bt_passkey /tmp/bt_pair.log
-	{
-		echo "agent off"; echo "agent KeyboardDisplay"; echo default-agent
-		echo "scan on"
-		# the pair command is lost if the device was not seen yet: wait for it (30 s at most)
-		for _ in $(seq 1 30); do
-			sleep 1
-			grep -q "$1" /tmp/bt_pair.log 2>/dev/null && break
-		done
-		sleep 1
-		echo "pair $1"
-		for _ in $(seq 1 40); do
-			sleep 1
-			code=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/bt_pair.log 2>/dev/null | grep -o -E "(Passkey|PIN code):? *[0-9]+" | tail -1 | grep -o -E "[0-9]+$")
-			[ -n "$code" ] && [ ! -f /tmp/bt_passkey ] && echo "$code" > /tmp/bt_passkey
-			grep -q "Confirm passkey" /tmp/bt_pair.log 2>/dev/null && ! grep -q "^yes$" /tmp/bt_pair.ans 2>/dev/null && { echo yes; echo yes > /tmp/bt_pair.ans; }
-			bluetoothctl info "$1" 2>/dev/null | grep -q "Paired: yes" && break
-		done
-		echo "scan off"; echo quit
-	} | bluetoothctl > /tmp/bt_pair.log 2>&1
-	rm -f /tmp/bt_passkey /tmp/bt_pair.ans
-	bluetoothctl info "$1" 2>/dev/null | grep -q "Paired: yes" || { echo "Pairing failed"; return 1; }
-	bluetoothctl trust "$1" >/dev/null 2>&1
-	save_pairings
-	connect "$1"
 }
 
 # /var/lib/bluetooth is on the rootfs, which a new image replaces: keep a copy
@@ -237,17 +152,13 @@ boot() {
 }
 
 case "$1" in
-	list)        list;;
-	scan)        scan;;
-	pair)        pair "$2";;
-	connect)     connect "$2";;
-	disconnect)  bluetoothctl disconnect "$2" >/dev/null 2>&1; sleep 1; apply_rx;;
-	remove)      autoconnect "$2" off; bluetoothctl remove "$2" >/dev/null 2>&1; save_pairings; sleep 1; apply_rx;;
+	status)      status;;
+	save)        save_pairings;;
 	autoconnect) autoconnect "$2" "$3";;
 	rx)          set_kv BTAUDIO_RX "$(yn "$2")"; apply_rx;;
 	volume)      for s in $(hp_sinks); do pactl set-sink-volume "$s" "$2%"; done;;
 	mute)        set_kv BTAUDIO_MUTE "$(yn "$2")";;
 	boot)        boot;;
 	monitor)     monitor;;
-	*) echo "Usage: $0 {list|scan|pair MAC|connect MAC|disconnect MAC|remove MAC|autoconnect MAC on|off|rx on|off|volume N|mute on|off|boot|monitor}"; exit 1;;
+	*) echo "Usage: $0 {status|save|autoconnect MAC on|off|rx on|off|volume N|mute on|off|boot|monitor}"; exit 1;;
 esac

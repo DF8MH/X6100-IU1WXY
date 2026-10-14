@@ -113,7 +113,7 @@ bool tx_player_stream(tx_fill_fn_t  fill,
         if (part == 0) {
             break;
         }
-        if (abort_check && abort_check(abort_check_ctx)) {
+        if ((abort_check && abort_check(abort_check_ctx)) || !radio_get_modem()) {   /* or SWR protection (radio.c) */
             aborted = true;
             break;
         }

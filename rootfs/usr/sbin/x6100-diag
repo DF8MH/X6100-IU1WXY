@@ -16,6 +16,7 @@ collect() {
 		echo
 		echo "== Bluetooth controller"
 		bluetoothctl show 2>&1 | grep -v -e "^\s*UUID:" -e "Modalias"
+		/usr/sbin/btcat-ctl status 2>&1
 		echo
 		echo "== Bluetooth devices"
 		for mac in $(bluetoothctl devices 2>/dev/null | awk '{print $2}'); do

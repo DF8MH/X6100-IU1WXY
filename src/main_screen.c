@@ -60,6 +60,7 @@
 #include "freq_scale.h"
 #include "spot_marks.h"
 #include "band_plan.h"
+#include "cw_field.h"
 #include "cluster_column.h"
 #include "backlight.h"
 #include "buttons.h"
@@ -1377,6 +1378,36 @@ case HKEY_VM:
             break;
 */
 
+        /* Hand mic FIL: the front DFL key (filter pages; long press is its action) */
+        case HKEY_FIL:
+            if (hkey->state == HKEY_RELEASE) {
+                apps_disable();
+                buttons_load_page_group(buttons_group_dfl);
+            } else if (hkey->state == HKEY_LONG) {
+                main_screen_action(params.long_dfl);
+            }
+            break;
+
+        /* Hand mic MODE: press steps LSB, USB, CW, CW-R, AM, NFM; long press is the SSB key's long press (DIG on/off) */
+        case HKEY_MODE:
+            if (!mode_lock && hkey->state == HKEY_RELEASE) {
+                static const x6100_mode_t order[] = {x6100_mode_lsb, x6100_mode_usb, x6100_mode_cw,
+                                                     x6100_mode_cwr, x6100_mode_am,  x6100_mode_nfm};
+                x6100_mode_t mode = cparam_i_get(cfg_cur_mode);
+                size_t       i    = 0;
+
+                if (mode == x6100_mode_lsb_dig || mode == x6100_mode_usb_dig) {
+                    mode = mode == x6100_mode_lsb_dig ? x6100_mode_lsb : x6100_mode_usb;
+                }
+                while (i < sizeof(order) / sizeof(order[0]) && order[i] != mode) {
+                    i++;
+                }
+                cparam_i_set(cfg_cur_mode, order[(i + 1) % (sizeof(order) / sizeof(order[0]))]);
+            } else if (!mode_lock && hkey->state == HKEY_LONG) {
+                change_mode(KEYPAD_MODE_SSB, KEYPAD_LONG);
+            }
+            break;
+
         case HKEY_GENE:
             if (hkey->state == HKEY_RELEASE) {
                 broadcast_overlay_show();
@@ -1511,6 +1542,9 @@ void main_screen_vol_press(void) {
 static void spectrum_key_cb(lv_event_t * e) {
     uint32_t key = *((uint32_t *)lv_event_get_param(e));
 
+    if (cw_field_key(key)) {
+        return;
+    }
     switch (key) {
         case '-':
             if (!subject_i_get(freq_lock)) {
@@ -1646,6 +1680,10 @@ void main_screen_mfk(int dir) {
 }
 
 static void spectrum_pressed_cb(lv_event_t * e) {
+    lv_indev_t *indev = lv_indev_get_act();
+
+    /* The keyboard Enter that sent the CW field line */
+    if (indev && lv_indev_get_type(indev) == LV_INDEV_TYPE_KEYPAD && cw_field_visible()) return;
     if (dialog_cluster_alert_press()) return;
     switch (mfk_state) {
         case MFK_STATE_EDIT:
@@ -1751,6 +1789,40 @@ static void on_cluster_column_change(Subject *subj, void *user_data) {
 }
 
 
+/* Under the frequency strip. Spectrum off: it shrinks under the top bars,
+ * invisible but still the key target, and the waterfall takes its place.
+ * Returns the y under it (the frequency scale) */
+static lv_coord_t spectrum_layout(void) {
+    lv_coord_t y = 0;
+
+    if (param_i_get(cfg_spectrum_show)) {
+        y = FREQ_STRIP_Y + FREQ_STRIP_H;
+        spectrum_height = param_i_get(cfg_spectrum_height);
+        lv_obj_remove_local_style_prop(spectrum, LV_STYLE_OPA, 0);
+    } else {
+        spectrum_height = FREQ_STRIP_Y + FREQ_STRIP_H + METER_ROW_H;
+        lv_obj_set_style_opa(spectrum, LV_OPA_TRANSP, 0);
+    }
+    lv_obj_set_y(spectrum, y);
+    lv_obj_set_height(spectrum, spectrum_height);
+    return y + spectrum_height;
+}
+
+/* Spectrum on/off or its height (Settings, the remote): what is under it moves, live */
+static void on_spectrum_layout_change(Subject *subj, void *user_data) {
+    lv_coord_t y = spectrum_layout();
+
+    freq_scale_set_y(y);
+    y += freq_height;
+    if (y == wf_y) {
+        return;     /* the height of a spectrum that is off */
+    }
+    wf_y = y;
+    waterfall_set_height(480 - y);
+    on_cluster_spots_wf_change(NULL, NULL);     /* waterfall, its lines, band plan, spots, cluster column */
+    panel_keep_below(wf_y - 8);
+}
+
 static void channels_poll_cb(lv_timer_t *t) {
     dialog_channels_poll();
 }
@@ -1786,20 +1858,7 @@ lv_obj_t * main_screen() {
 
     spectrum_min_max_reset();
 
-    /* Under the frequency strip. Spectrum off: it shrinks under the top bars,
-     * invisible but still the key target, and the waterfall takes its place. */
-    if (param_i_get(cfg_spectrum_show)) {
-        y = FREQ_STRIP_Y + FREQ_STRIP_H;
-        spectrum_height = param_i_get(cfg_spectrum_height);
-    } else {
-        spectrum_height = FREQ_STRIP_Y + FREQ_STRIP_H + METER_ROW_H;
-        lv_obj_set_style_opa(spectrum, LV_OPA_TRANSP, 0);
-    }
-
-    lv_obj_set_y(spectrum, y);
-    lv_obj_set_height(spectrum, spectrum_height);
-
-    y += spectrum_height;
+    y = spectrum_layout();
 
     freq_scale_init(obj, y);
 
@@ -1823,7 +1882,10 @@ lv_obj_t * main_screen() {
     subject_subscribe_delayed_and_notify((Subject*)cfg_cluster_spots_wf, on_cluster_spots_wf_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_band_plan, on_band_plan_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_cluster_column, on_cluster_column_change, NULL);
+    subject_subscribe_delayed((Subject*)cfg_spectrum_show, on_spectrum_layout_change, NULL);
+    subject_subscribe_delayed((Subject*)cfg_spectrum_height, on_spectrum_layout_change, NULL);
 
+    cw_field_init(obj);
     knobs_init(obj);
 
     buttons_init(obj);
@@ -1831,8 +1893,9 @@ lv_obj_t * main_screen() {
 
     panel_init(obj);
     panel_keep_below(wf_y - 8);   /* as with the 76 px spectrum: on the scale's bottom edge */
-    msg = msg_init(obj);
-    msg_tiny = msg_tiny_init(obj);
+    /* On the top layer, over dialogs and the other top-layer items (Dyuldin, upstream da454b48) */
+    msg = msg_init(lv_layer_top());
+    msg_tiny = msg_tiny_init(lv_layer_top());
 
     clock_init(obj);
     info_init(obj);

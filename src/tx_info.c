@@ -19,8 +19,6 @@
 #include "theme.h"
 #include "util.h"
 #include "info.h"
-#include "mic_level.h"
-#include "radio.h"
 
 #define UPDATE_UI_MS 40
 
@@ -49,12 +47,12 @@ static lv_obj_t     *vswr_label;
 static lv_obj_t     *alc_label;
 static uint32_t      tx_start;
 
-#define PANEL_W   620
-#define PANEL_H   226
-#define ROW_Y     66
-#define ROW_STEP  54
-#define BARS_X    84
-#define BARS_W    350
+#define PANEL_W   500
+#define PANEL_H   190
+#define ROW_Y     52
+#define ROW_STEP  44
+#define BARS_X    72
+#define BARS_W    275
 #define SLICES    25
 
 static void on_cur_mode_change(Subject *subj, void *user_data);
@@ -148,8 +146,6 @@ static void tx_cb(lv_event_t *e) {
     lv_obj_set_y(panel, DIALOG_Y + 8);
     update_head();
 
-    lv_obj_clear_flag(obj, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_move_foreground(obj);
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(panel);
 }
@@ -171,7 +167,7 @@ static void update_tx_info(void *arg) {
 }
 
 lv_obj_t *tx_info_init(lv_obj_t *parent) {
-    /* "TX" in place of the S-meter */
+    /* Carries the TX/RX events (the S-meter stays on screen, framed red: meter.c) */
     obj = lv_obj_create(parent);
     lv_obj_add_style(obj, &tx_info_style, 0);
     /* Solid: LVGL caches gradients by size, the S-meter's would be reused */
@@ -205,30 +201,30 @@ lv_obj_t *tx_info_init(lv_obj_t *parent) {
     lv_obj_set_style_radius(badge, 5, 0);
     lv_obj_set_style_pad_hor(badge, 10, 0);
     lv_obj_set_style_pad_ver(badge, 2, 0);
-    lv_obj_set_pos(badge, 16, 10);
+    lv_obj_set_pos(badge, 16, 7);
 
     head_label = make_label(panel, &sony_22, theme_hex(TC_text_head));
-    lv_obj_align(head_label, LV_ALIGN_TOP_MID, 0, 12);
+    lv_obj_align(head_label, LV_ALIGN_TOP_MID, 0, 9);
     time_label = make_label(panel, &sony_22, theme_hex(TC_text));
-    lv_obj_align(time_label, LV_ALIGN_TOP_RIGHT, -16, 12);
+    lv_obj_align(time_label, LV_ALIGN_TOP_RIGHT, -16, 9);
 
     lv_obj_t *line = lv_obj_create(panel);
     lv_obj_remove_style_all(line);
     lv_obj_set_size(line, PANEL_W - 36, 1);
-    lv_obj_set_pos(line, 16, 50);
+    lv_obj_set_pos(line, 16, 42);
     lv_obj_set_style_bg_color(line, TC(panel_border), 0);
     lv_obj_set_style_bg_opa(line, LV_OPA_COVER, 0);
 
     static const char *names[] = {"PWR", "SWR", "ALC"};
     lv_obj_t          *values[3];
     for (int i = 0; i < 3; i++) {
-        lv_obj_t *n = make_label(panel, &sony_26, theme_hex(TC_text_value));
+        lv_obj_t *n = make_label(panel, &sony_22, theme_hex(TC_text_value));
         lv_label_set_text(n, names[i]);
         lv_obj_set_pos(n, 16, ROW_Y + i * ROW_STEP);
-        values[i] = make_label(panel, &sony_34, theme_hex(TC_text));
-        lv_obj_set_width(values[i], 130);
+        values[i] = make_label(panel, &sony_28, theme_hex(TC_text));
+        lv_obj_set_width(values[i], 110);
         lv_obj_set_style_text_align(values[i], LV_TEXT_ALIGN_RIGHT, 0);
-        lv_obj_set_pos(values[i], PANEL_W - 16 - 4 - 130, ROW_Y - 5 + i * ROW_STEP);
+        lv_obj_set_pos(values[i], PANEL_W - 16 - 4 - 110, ROW_Y - 4 + i * ROW_STEP);
     }
     pwr_label  = values[0];
     vswr_label = values[1];
@@ -256,12 +252,6 @@ void tx_info_update(float p, float s, float a) {
             alc  = a;
             vswr = s;
             break;
-        case x6100_mode_lsb:
-        case x6100_mode_usb:
-        case x6100_mode_am:
-        case x6100_mode_nfm:
-            if (radio_get_state() == RADIO_TX) mic_level_update(a, p);   /* not while the ATU tunes */
-            /* fall through */
         default:
             lpf(&pwr, p, beta, 0.0f);
             lpf(&alc, a, beta, 0.0f);

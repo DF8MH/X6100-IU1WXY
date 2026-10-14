@@ -18,7 +18,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     dialog_js8.c
     tx_player.c
     tx_level.c
-    mic_level.c
+    swr_guard.c
     dialog_sstv.c
     sstv_resources.c
     dialog_cluster.c
@@ -34,6 +34,8 @@ target_sources(${PROJECT_NAME} PUBLIC
     freq_scale.c
     spot_marks.c
     band_plan.c
+    cw_field.c
+    paddle_keyer.c
     cluster_column.c
     sstv/decoder.c
     sstv/encoder.c
@@ -50,7 +52,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     cJSON.c
     textarea_window.c cw_encoder.c buttons.cpp vol.cpp recorder.c
     cw_tune_ui.c adif.c qso_log.c scheduler.cpp
-    dialog_wifi.c wifi.cpp btaudio.cpp controls.cpp usb_devices.cpp
+    dialog_wifi.c wifi.cpp btaudio.cpp bt_dev.c controls.cpp usb_devices.cpp
     knobs.cpp
     dialog_wspr.c app_frame.c update_check.c
     dialog_field.c

@@ -159,3 +159,12 @@ void band_plan_update(int32_t center, int32_t half_width) {
 void band_plan_refresh(void) {
     redraw();
 }
+
+bool band_plan_is_cw(int32_t freq) {
+    for (size_t i = 0; i < sizeof(plan) / sizeof(plan[0]); i++) {
+        if (freq >= plan[i].start && freq < plan[i].end) {
+            return plan[i].type == BP_CW;
+        }
+    }
+    return false;
+}

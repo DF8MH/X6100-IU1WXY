@@ -1,7 +1,7 @@
 #!/bin/sh
-# Configure adapter for SPP CAT: power, name, SDP record, pairing agent
+# Configure adapter for SPP CAT: power, name, SDP record. No pairing agent and
+# not pairable: new devices pair in the pairing window (btcat-ctl discoverable on).
 BTCAT_BT=yes
-BTCAT_DISCOVERABLE=yes
 BTCAT_ALIAS="X6100"
 [ -r /etc/default/btcat ] && . /etc/default/btcat
 [ -r /mnt/btcat.conf ] && . /mnt/btcat.conf
@@ -10,9 +10,8 @@ for i in $(seq 1 30); do hciconfig hci0 >/dev/null 2>&1 && break; sleep 1; done
 for i in $(seq 1 15); do [ -S /var/run/sdp ] && break; sleep 1; done
 
 bluetoothctl system-alias "$BTCAT_ALIAS"
-bluetoothctl pairable on
-sdptool add --channel=1 SP
-pidof bt-agent >/dev/null || bt-agent -c NoInputNoOutput -d
+# Once per bluetoothd: it is re-run on every new hci0 and each add stacks another record
+sdptool browse local 2>/dev/null | grep -q "Serial Port" || sdptool add --channel=1 SP
 
 /usr/sbin/btcat-ctl apply
 # headphones: keep A2DP + RX loopback, connect the "Connect at startup" ones

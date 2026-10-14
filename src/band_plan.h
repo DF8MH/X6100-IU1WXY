@@ -27,6 +27,9 @@ void band_plan_update(int32_t center, int32_t half_width);
 /* The setting changed: redraw with the last span */
 void band_plan_refresh(void);
 
+/* freq (Hz) is in a CW segment */
+bool band_plan_is_cw(int32_t freq);
+
 #ifdef __cplusplus
 }
 #endif

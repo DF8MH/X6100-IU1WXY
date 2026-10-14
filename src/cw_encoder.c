@@ -13,9 +13,11 @@
 #include "radio.h"
 
 #include "lvgl/lvgl.h"
+#include <ctype.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <pthread.h>
 #include <sched.h>
 
@@ -162,6 +164,25 @@ void cw_encoder_stop() {
         radio_set_morse_key(false);
         state = CW_ENCODER_IDLE;
     }
+}
+
+const char *cw_encoder_expand(const char *text) {
+    static char buf[512];
+    const char *call = params.callsign.x;
+    size_t      n    = 0;
+
+    for (; *text && n < sizeof(buf) - 1; text++) {
+        if (call[0] && !strncasecmp(text, "{CALL}", 6)) {
+            for (const char *c = call; *c && n < sizeof(buf) - 1; c++) {
+                buf[n++] = toupper((unsigned char)*c);
+            }
+            text += 5;
+        } else {
+            buf[n++] = *text;
+        }
+    }
+    buf[n] = 0;
+    return buf;
 }
 
 void cw_encoder_send(const char *text, bool beacon) {

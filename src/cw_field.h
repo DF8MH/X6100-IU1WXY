@@ -1,0 +1,35 @@
+/*
+ *  SPDX-License-Identifier: LGPL-2.1-or-later
+ *
+ *  CW from the keyboard on the main screen: in CW / CW-R, inside a CW segment of the band plan,
+ *  with a USB or Bluetooth keyboard, typing opens a one-line field; Enter keys the line.
+ */
+
+#pragma once
+
+#include "lvgl/lvgl.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void cw_field_init(lv_obj_t *parent);
+
+/* A main screen key: true when the field took it */
+bool cw_field_key(uint32_t key);
+
+/* A line to key after the queue, as typed plus Enter ({CALL} expanded) */
+void cw_field_send_text(const char *text);
+
+/* cw_send / cw_stop / cw_wpm from the remote while the CW Keyboard app is closed */
+void cw_field_remote(const char *cmd, int32_t val, const char *text);
+
+/* Its state for the remote ("ax"), while no app is open */
+int cw_field_remote_state(char *buf, size_t size);
+
+/* The field is on screen */
+bool cw_field_visible(void);
+
+#ifdef __cplusplus
+}
+#endif

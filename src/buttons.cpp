@@ -363,7 +363,6 @@ static button_data_t btn_settings = make_app_btn("Settings", ACTION_APP_SETTINGS
 static button_data_t btn_cluster = make_app_btn("Cluster", ACTION_APP_CLUSTER);
 static button_data_t btn_modes   = make_app_btn("Modes", ACTION_APP_MODES);
 static button_data_t btn_cwt     = make_app_btn("CW\nTrainer", ACTION_APP_CWTRAINER);
-static button_data_t btn_cw_kbd  = make_app_btn("CW\nKeyboard", ACTION_APP_CW_KBD);
 static button_data_t btn_field   = make_app_btn("Field\nOps", ACTION_APP_FIELD);
 static button_data_t btn_bands   = make_app_btn("Bands", ACTION_APP_BANDS);
 
@@ -503,7 +502,7 @@ static buttons_page_t page_app_1 = {
     {&btn_app_p1, &btn_modes, &btn_cluster, &btn_swr, &btn_rec}
 };
 static buttons_page_t page_app_2 = {
-    {&btn_app_p2, &btn_settings, &btn_cwt, &btn_cw_kbd, &btn_field}
+    {&btn_app_p2, &btn_settings, &btn_cwt, &btn_field}
 };
 static buttons_page_t page_app_3 = {
     {&btn_app_p3, &btn_bands, &btn_gps, &btn_screen_rec}   /* the MFK 3:3 one too */
@@ -664,6 +663,8 @@ void buttons_init(lv_obj_t *parent) {
     cfg_sm.p_encoder_bind.subscribe_delayed_and_notify(encoder_binds_change_cb, NULL);
 }
 
+static uint32_t land_index[BUTTONS];   /* their place among the main screen's children */
+
 void buttons_vertical(lv_obj_t *parent, lv_coord_t w, lv_coord_t h) {
     lv_coord_t bw = w - 2 * BTN_INSET, bh = h - 2 * BTN_INSET;
 
@@ -671,12 +672,27 @@ void buttons_vertical(lv_obj_t *parent, lv_coord_t w, lv_coord_t h) {
         lv_obj_t           *f = disp_btns[i].parent;
         const lv_img_dsc_t *img;
 
+        land_index[i] = lv_obj_get_index(f);
         lv_obj_set_parent(f, parent);
         lv_obj_set_pos(f, BTN_INSET, i * h + BTN_INSET);
         lv_obj_set_size(f, bw, bh);
         /* the state images at this size too (the normal one is set with the text) */
         if ((img = theme_image(TI_btn_active, bw, bh))) lv_obj_set_style_bg_img_src(f, img, LV_STATE_CHECKED);
         if ((img = theme_image(TI_btn_off, bw, bh))) lv_obj_set_style_bg_img_src(f, img, LV_STATE_DISABLED);
+        if (disp_btns[i].data) disp_btn_refresh(&disp_btns[i]);
+    }
+}
+
+void buttons_horizontal(lv_obj_t *parent) {
+    for (uint8_t i = 0; i < BUTTONS; i++) {
+        lv_obj_t *f = disp_btns[i].parent;
+
+        lv_obj_set_parent(f, parent);
+        lv_obj_move_to_index(f, land_index[i]);
+        lv_obj_set_pos(f, i * BTN_WIDTH + BTN_INSET, 480 - BTN_HEIGHT + BTN_INSET);
+        lv_obj_set_size(f, BTN_WIDTH - 2 * BTN_INSET, BTN_HEIGHT - 2 * BTN_INSET);
+        lv_obj_remove_local_style_prop(f, LV_STYLE_BG_IMG_SRC, LV_STATE_CHECKED);
+        lv_obj_remove_local_style_prop(f, LV_STYLE_BG_IMG_SRC, LV_STATE_DISABLED);
         if (disp_btns[i].data) disp_btn_refresh(&disp_btns[i]);
     }
 }

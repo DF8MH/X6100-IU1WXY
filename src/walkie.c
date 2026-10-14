@@ -4,7 +4,8 @@
  *  Xiegu X6100 LVGL GUI
  *
  *  Walkie Talkie: a portrait screen (480x800, the knobs on top) in place of
- *  the main one, which is still built and does the radio work unseen.
+ *  the main one, which is still built and does the radio work unseen. On and
+ *  off live: built the first time, then kept.
  */
 
 #include "walkie.h"
@@ -22,6 +23,8 @@
 #include "clock.h"
 #include "dialog_channels.h"
 #include "buttons.h"
+#include "main.h"
+#include "main_screen.h"
 #include "params/params.h"
 #include "cfg/cfg_api.h"
 #include "cfg/settings_manager_api.h"
@@ -42,13 +45,15 @@
 #define BAR_H       30
 #define ROW_STEP    110             /* VOL, SQL, PWR: a name and value over a bar */
 
-static lv_obj_t *main_obj;
+static lv_obj_t *main_scr;              /* the main screen */
+static lv_obj_t *main_obj;              /* the same while the walkie screen is up */
+static lv_timer_t *timer;
 static lv_obj_t *scr, *clock_label, *bat_label, *chan_label, *freq_label, *mode_label;
 static lv_obj_t *meter_box, *tx_label, *rxtx, *rxtx_label;
 static lv_obj_t *vol_bar, *vol_val, *sql_bar, *sql_val, *pwr_bar, *pwr_val;
 static lv_style_t scr_style, strip_style, meter_box_style;     /* boxes of the theme */
 static bool     tx;
-static float    tx_pwr, tx_swr;
+static float    tx_pwr, tx_swr, tx_alc;
 static uint8_t  tx_msg_id;
 
 static void set_text(lv_obj_t *label, const char *text) {
@@ -102,27 +107,44 @@ static lv_obj_t *level_row(const char *name, lv_coord_t y, int32_t max, lv_obj_t
     return b;
 }
 
-/* TX: the power bar (0-10 W) instead of the S-meter needle */
+/* One TX bar (0-10) with its name on the left */
+static void tx_bar(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx, lv_coord_t y, const char *name, float v, lv_color_t on) {
+    lv_draw_rect_dsc_t  dsc;
+    lv_draw_label_dsc_t ld;
+    lv_area_t           a;
+
+    lv_draw_label_dsc_init(&ld);
+    ld.font  = &sony_26;
+    ld.color = TC(text_value);
+    a.x1 = obj->coords.x1 + 16;
+    a.x2 = a.x1 + 70;
+    a.y1 = obj->coords.y1 + y - 2;
+    a.y2 = a.y1 + 30;
+    lv_draw_label(draw_ctx, &ld, &a, name, NULL);
+
+    lv_draw_rect_dsc_init(&dsc);
+    a.x1 = obj->coords.x1 + 90;
+    a.x2 = obj->coords.x2 - 16;
+    a.y1 = obj->coords.y1 + y;
+    a.y2 = a.y1 + 24;
+    dsc.bg_color = TC(chip);
+    lv_draw_rect(draw_ctx, &dsc, &a);
+    a.x2 = a.x1 + (lv_area_get_width(&a) - 1) * LV_CLAMP(0.0f, v, 10.0f) / 10.0f;
+    dsc.bg_color = on;
+    lv_draw_rect(draw_ctx, &dsc, &a);
+}
+
+/* TX: power (0-10 W) and ALC bars instead of the S-meter needle */
 static void meter_draw_cb(lv_event_t *e) {
-    lv_obj_t           *obj = lv_event_get_target(e);
-    lv_draw_ctx_t      *draw_ctx = lv_event_get_draw_ctx(e);
-    lv_draw_rect_dsc_t dsc;
-    lv_area_t          a;
+    lv_obj_t      *obj = lv_event_get_target(e);
+    lv_draw_ctx_t *draw_ctx = lv_event_get_draw_ctx(e);
 
     if (!tx) {
         meter_needle_draw(obj, draw_ctx);
         return;
     }
-    lv_draw_rect_dsc_init(&dsc);
-    a.x1 = obj->coords.x1 + 20;
-    a.x2 = obj->coords.x2 - 20;
-    a.y1 = obj->coords.y1 + 50;
-    a.y2 = a.y1 + 24;
-    dsc.bg_color = TC(chip);
-    lv_draw_rect(draw_ctx, &dsc, &a);
-    a.x2 = a.x1 + (lv_area_get_width(&a) - 1) * LV_CLAMP(0.0f, tx_pwr, 10.0f) / 10.0f;
-    dsc.bg_color = TC(tx);
-    lv_draw_rect(draw_ctx, &dsc, &a);
+    tx_bar(obj, draw_ctx, 24, "PWR", tx_pwr, TC(tx));
+    tx_bar(obj, draw_ctx, 66, "ALC", tx_alc, TC(alc));
 }
 
 static void mem_step(int dir) {
@@ -164,11 +186,7 @@ static void mem_toggle_cb(button_data_t *d) {
 }
 
 static void exit_cb(button_data_t *d) {
-    /* cfg_mic was never changed: the main screen starts with it */
-    param_i_set(cfg_walkie, 0);
-    params_flush();
-    cfg_api_flush_all();
-    exit(0);
+    param_i_set(cfg_walkie, 0);         /* on_walkie_change() goes back */
 }
 
 #define KEY_BTN(text, key, held) \
@@ -312,9 +330,14 @@ static void update_cb(lv_timer_t *t) {
         if (!tx)
             lv_label_set_text(tx_label, "");
     }
-    if (tx && tx_info_refresh(&tx_msg_id, NULL, &tx_pwr, &tx_swr)) {
-        snprintf(buf, sizeof(buf), "%.1f W - SWR %.1f", tx_pwr, tx_swr);
+    if (tx && tx_info_refresh(&tx_msg_id, &tx_alc, &tx_pwr, &tx_swr)) {
+        /* SWR from 2 a warning in yellow, from 3 in red (the bar colours of the TX panel) */
+        if (tx_swr >= 2.0f)
+            snprintf(buf, sizeof(buf), "SWR %.1f HIGH", tx_swr);
+        else
+            snprintf(buf, sizeof(buf), "%.1f W - SWR %.1f", tx_pwr, tx_swr);
         set_text(tx_label, buf);
+        lv_obj_set_style_text_color(tx_label, tx_swr >= 3.0f ? TC(bar_high) : tx_swr >= 2.0f ? TC(bar_mid) : TC(text), 0);
     }
     lv_obj_invalidate(meter_box);       /* the needle moves with meter_update */
 }
@@ -323,12 +346,8 @@ bool walkie_on(void) {
     return main_obj != NULL;
 }
 
-lv_obj_t * walkie_screen(lv_obj_t *main_screen_obj) {
+static void build(void) {
     lv_obj_t *o;
-
-    main_obj = main_screen_obj;
-    vol_set_ctrl(CTRL_VOL);                         /* the VOL knob: the volume, whatever it was on */
-    radio_set_mic_override(x6100_mic_builtin);     /* the PTT key and VOX: the builtin mic */
 
     scr = lv_obj_create(NULL);
     lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
@@ -339,11 +358,6 @@ lv_obj_t * walkie_screen(lv_obj_t *main_screen_obj) {
     lv_obj_set_style_border_width(scr, 0, 0);
     lv_obj_add_event_cb(scr, rotary_cb, EVENT_ROTARY, NULL);
     lv_obj_add_event_cb(scr, keypad_cb, EVENT_KEYPAD, NULL);
-
-    /* The F1-F5 keys are under the screen in landscape: in portrait they run down the left
-     * edge, F1 on top, so the main screen's buttons go there and the knobs work as there */
-    buttons_vertical(scr, SIDE_W, SIDE_KEY_H);
-    buttons_load_page(&wlk_1);
 
     /* Header: the time and the battery over a rule */
     clock_label = label(scr, &sony_28, TC(text_soft));
@@ -405,6 +419,49 @@ lv_obj_t * walkie_screen(lv_obj_t *main_screen_obj) {
     sql_bar = level_row("SQL", 458 + ROW_STEP, 100, &sql_val);
     pwr_bar = level_row("PWR", 458 + 2 * ROW_STEP, 100, &pwr_val);
 
-    lv_timer_create(update_cb, 100, NULL);
-    return scr;
+    timer = lv_timer_create(update_cb, 100, NULL);
+}
+
+static void enter(void) {
+    if (!main_display_portrait(true)) {
+        return;                                     /* fbdev: no portrait */
+    }
+    main_screen_close_app();                        /* no app or Settings left open under it */
+    main_obj = main_scr;
+    vol_set_ctrl(CTRL_VOL);                         /* the VOL knob: the volume, whatever it was on */
+    radio_set_mic_override(x6100_mic_builtin);     /* the PTT key and VOX: the builtin mic */
+    if (!scr) {
+        build();
+    }
+    /* The F1-F5 keys are under the screen in landscape: in portrait they run down the left
+     * edge, F1 on top, so the main screen's buttons go there and the knobs work as there */
+    buttons_vertical(scr, SIDE_W, SIDE_KEY_H);
+    buttons_load_page(&wlk_1);
+    lv_timer_resume(timer);
+    lv_scr_load(scr);
+}
+
+static void leave(void) {
+    main_obj = NULL;                                /* walkie_on() false from here */
+    lv_timer_pause(timer);
+    radio_set_mic_override(-1);                     /* cfg_mic again, never changed */
+    buttons_horizontal(main_scr);
+    buttons_load_page(&buttons_page_vol_1);         /* as at start */
+    main_display_portrait(false);
+    lv_scr_load(main_scr);
+}
+
+static void on_walkie_change(Subject *subj, void *user_data) {
+    bool on = param_i_get(cfg_walkie);
+
+    if (on && !walkie_on()) {
+        enter();
+    } else if (!on && walkie_on()) {
+        leave();
+    }
+}
+
+void walkie_init(lv_obj_t *main_screen_obj) {
+    main_scr = main_screen_obj;
+    subject_subscribe_delayed_and_notify((Subject *)cfg_walkie, on_walkie_change, NULL);
 }

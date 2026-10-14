@@ -12,9 +12,9 @@ Settings. Button and option names are written as the radio shows them.
 - [Getting started](#getting-started): [first steps](#first-steps), [buttons and knobs](#buttons-and-knobs)
 - [Main screen](#main-screen): [status bar](#status-bar), [S-meter](#s-meter), [waterfall](#waterfall), [screen recording](#screen-recording), [Walkie Talkie](#walkie-talkie-mode)
 - [Settings](#settings): [General](#general-tab), [Display](#display-tab), [Audio](#audio-tab), [Wireless](#wireless-tab), [Keys](#keys-tab), [Cluster](#cluster-tab), [TX Cal](#tx-cal-tab), [Info](#info-tab)
-- [Transmitting](#transmitting): [digital-mode TX level](#digital-mode-tx-level), [voice microphone gain](#voice-microphone-gain), [recording voice messages](#recording-voice-messages)
+- [Transmitting](#transmitting): [digital-mode TX level](#digital-mode-tx-level), [recording voice messages](#recording-voice-messages)
 - [Digital modes](#digital-modes): [opening a mode](#opening-a-mode), [FT8 and FT4](#ft8-and-ft4), [JS8](#js8), [WSPR](#wspr), [SSTV, WeFax and NavTex](#sstv-wefax-and-navtex), [RTTY and WeFax TX](#rtty-and-wefax-tx)
-- [CW](#cw): [CW decoder](#cw-decoder), [CW Keyboard](#cw-keyboard), [CW messages](#cw-messages), [CW Trainer](#cw-trainer)
+- [CW](#cw): [CW decoder](#cw-decoder), [CW from the keyboard](#cw-from-the-keyboard), [CW messages](#cw-messages), [CW Trainer](#cw-trainer)
 - [Apps](#apps): [DX Cluster](#dx-cluster), [Field Ops (SOTA / POTA)](#field-ops-sota--pota), [Bands](#bands)
 - [Bluetooth](#bluetooth): [headphones](#bluetooth-headphones), [CAT](#bluetooth-cat)
 - [Themes](#themes)
@@ -48,7 +48,7 @@ The APP button opens three pages of apps and tools:
 | Page | Buttons |
 |---|---|
 | APP 1:3 | Modes, Cluster, SWR Scan, RX Recorder |
-| APP 2:3 | Settings, CW Trainer, CW Keyboard, Field Ops |
+| APP 2:3 | Settings, CW Trainer, Field Ops |
 | APP 3:3 | Bands, GPS, Screen rec |
 
 - Each app has its own button pages, named like `(JS8 1:7)`. The first
@@ -64,10 +64,14 @@ Where: Settings > Keys > FRONT KEYS, LONG PRESS.
 |---|---|
 | Quick | none, screenshot, RX recorder on/off, screen rec on/off, mute, WF mode, ATT on/off, PRE on/off, tuner on/off, tuner tune (transmits a carrier) |
 | Digital modes | RTTY, FT8, WSPR, JS8, SSTV, WeFax, NavTex |
-| Tools | Cluster, CW Trainer, CW Keyboard, Field Ops, Bands, RX recorder, SWR Scan, GPS, QTH grid, Settings |
+| Tools | Cluster, CW Trainer, Field Ops, Bands, RX recorder, SWR Scan, GPS, QTH grid, Settings |
 
 The hand mic F1 and F2 keys (short and long press) are set in the same tab.
 Where: Settings > Keys > HAND MIC KEYS.
+The hand mic MODE key steps LSB, USB, CW, CW-R, AM, NFM; a long press turns
+DIG on or off in SSB, like a long press of the front SSB key.
+The hand mic FIL key works as the front DFL key: the filter pages, and the
+DFL long press action.
 
 ## Main screen
 
@@ -241,7 +245,7 @@ S-meter cal: see [S-meter](#s-meter). WFVIEW SERVER: see
 | SPECTRUM | Spectrum, Fill, Peaks (see [Waterfall](#waterfall)) |
 | WATERFALL | see [Waterfall](#waterfall) |
 | MAIN SCREEN | Band plan, Cluster spots, Cluster column, S-meter type, S-meter colours, Needle lamp |
-| INTERFACE | Popups Freq/Info/ALC, Knob info, Theme, Font |
+| INTERFACE | Popups Freq/Info/ALC, Knob info, Theme, Font, FT8/FT4 info |
 
 - Popups Freq/Info/ALC: a big frequency while tuning, a big value of the
   control being changed, a big ALC reading while transmitting.
@@ -263,15 +267,12 @@ All these options are also on the web configurator's Display page.
 | AGC | Hang, Knee, Slope |
 | BT HEADPHONES | RX to headphones, Volume, Mute speaker (see [Bluetooth headphones](#bluetooth-headphones)) |
 
-The microphone gains move by themselves while you talk: see
-[voice microphone gain](#voice-microphone-gain).
-
 ### Wireless tab
 
 | Card | Options |
 |---|---|
 | WIFI | power, status, IP, networks |
-| BLUETOOTH | Bluetooth (power), Discoverable (CAT), device list, Scan headphones (also finds keyboards) |
+| BLUETOOTH | Bluetooth (power), Pairing (3 min), device list, Scan headphones (also finds keyboards) |
 
 ### Keys tab
 
@@ -295,6 +296,20 @@ What they do: see [DX Cluster](#dx-cluster).
 |---|---|
 | TX CALIBRATION | IQ offsets, band output gain, codec gain |
 | CESSB | on, level |
+| TX PROTECTION | SWR protection |
+
+SWR protection. Where: Settings > TX Cal > TX PROTECTION > SWR protection.
+
+- Off, or the highest SWR allowed, 1.5 to 5.0 in steps of 0.5. Default 2.5.
+- When the SWR stays over it for 0.3 s, the transmission stops and the radio
+  says "TX stopped: SWR 3.4". Short spikes at key-up don't count.
+- Not while the ATU tunes: the tune carrier sees a high SWR on purpose.
+- Nothing stays locked: the next PTT or transmission goes out again.
+- It stops what the radio keys itself: CAT PTT, the PTT button, CW messages
+  and the CW keyboard, voice messages, the digital apps and the keyboard
+  paddle (it keys again after both paddles are let go). A PTT held on the
+  hand mic, VOX and the radio's own CW keyer may key again at once: let go
+  and check the antenna.
 
 ### Info tab
 
@@ -345,19 +360,6 @@ TX power while a digital app is open:
   ("Power is limited to 7W"), and the setting comes back when you close it.
 - The Power button in the apps sets the power: 0.5, 1, 2, 3, 5, 7 W.
 - Digital apps reopen on their last frequency and mode.
-
-### Voice microphone gain
-
-In LSB, USB, AM and FM the microphone gain follows the ALC while you talk.
-There is no setting for it.
-
-- When the ALC stays high (not just on the peaks), the gain goes down 2 steps
-  every 2 seconds or so, at most 6 steps in one transmission.
-- After a transmission of at least 4 seconds of talking where the ALC never
-  reached 1, the gain goes up 2 steps, so the ALC works a little on the peaks.
-- A steady carrier (tune) or a silent microphone is left alone.
-- It changes the gain of the microphone in use (both with Input = Auto),
-  between 4 and 50. Where: Settings > Audio > MICROPHONE.
 
 ### Recording voice messages
 
@@ -412,7 +414,9 @@ Buttons:
 The list. Each row has the slot time, the message, and on the right the
 country with its flag, the distance (when the sender sent a grid and your
 QTH is set) and the SNR. The country comes from AD1C's cty.dat (SP2KMO's
-upstream PR #282).
+upstream PR #282). Settings > Display > INTERFACE > FT8/FT4 info picks what
+goes next to the SNR: km, mi, Country, Country + km (the default) or
+Country + mi.
 
 | Row | Colour |
 |---|---|
@@ -619,24 +623,50 @@ speed (WPM) appear in the panel over the waterfall.
 - Upstream bugs fixed here: a strong station slightly off tune was never
   decoded, and a dash cut by a retune came out as a dot.
 
-### CW Keyboard
+### CW from the keyboard
 
-APP (page 2) > CW Keyboard keys what you type on a USB or Bluetooth keyboard.
+With a USB or Bluetooth keyboard you key CW straight from the main screen.
 Pair a Bluetooth keyboard in Settings > Wireless > BLUETOOTH; it is found
-again when it reconnects. The radio must be in CW or CW-R (the state box says
-NOT CW otherwise).
+again when it reconnects.
 
-- Enter (or Send) keys the line. Lines typed while sending wait in a queue.
-  In the log the sent text is dim, the line on the air is bright up to the
-  key and highlighted after it, the queue is grey.
-- Esc (or Stop) stops sending. The arrow keys or the MFK change the speed
-  (WPM, the key speed of the radio).
-- Without a keyboard an MFK press opens the on-screen keyboard.
-- Your [CW messages](#cw-messages) are buttons on the next pages, four a page
-  (up to 8). Each button shows the start of the message; a press sends it as
-  a typed line.
+- It works in CW or CW-R, with the VFO inside a CW segment of the band plan
+  (the CW part of the strip over the waterfall) and no app open.
+- A letter or digit opens a thin line over the bottom of the waterfall with
+  what you type. Backspace corrects, Esc clears it (and stops sending).
+- Enter keys the line. Lines typed while sending wait in a queue. The line
+  on the air is bright up to the key and highlighted after it, the queue is
+  grey.
+- On the left of the line, the yellow MFK tag with the key speed and an
+  arrow to the corner: while the line is open the MFK turns the speed (the
+  same as KEY > Speed), and goes back to its control when the line closes.
+- When everything is sent the line goes away. Out of CW mode or out of the
+  CW segment nothing new is sent and the line is cleared.
+- F1 to F5 key the MSG > CW messages 1 to 5 (in list order) as if typed
+  and sent with Enter; Esc stops them. An F key with no message does nothing.
+- In a CW message `{CALL}` is your callsign (Settings > General > STATION),
+  also with TX in MSG > CW; with no callsign set it stays as written.
+- Until the line is open, the other keys (- = and so on) work as usual; in
+  CW [ and ] are the paddle (below).
 
-The X6100 Link app's CW tab uses the same keyer.
+The X6100 Link app's CW tab uses the same keyer. Its F1-F5 buttons show
+the start of the same five messages: a tap keys one with `{CALL}` filled in,
+a long press edits it.
+
+### TinyMIDI / Bluetooth paddle
+
+The N6ARA TinyMIDI paddle works as a Bluetooth keyboard.
+
+- Put its mode switch on the left (Keyboard Mode) and pair it in Settings >
+  Wireless > BLUETOOTH like any keyboard: it is a Low Energy one, the scan
+  finds it as *keyboard*.
+- In CW or CW-R the dit contact (the `[` key) and the dah contact (`]`) key
+  the radio. Out of CW they are the volume keys again.
+- It follows the KEY settings: Speed, Iambic A or B, the dit:dah ratio and
+  the key mode: Manual makes the dit contact a straight key, Auto-R swaps
+  the contacts. Train keys only the sidetone, as with a wired paddle.
+- A touch of the paddle stops a CW message or line on the air, as a break.
+- The touch paddle goes up to 30 WPM, a paddle on its 3.5 mm jack up to 40.
+  Any USB keyboard's [ and ] keys do the same.
 
 ### CW messages
 
@@ -649,8 +679,7 @@ The MSG > CW messages are sent with TX or as a beacon.
   space plus 150 ms, at most 1 s), so the transmitter stays keyed through
   the gaps instead of clicking the relay. It goes back to your setting between
   beacons and when the message ends.
-- They also appear as buttons in the [CW Keyboard](#cw-keyboard) and as
-  macros in the X6100 Link app's CW tab.
+- They also appear as macros in the X6100 Link app's CW tab.
 ### CW Trainer
 
 APP (page 2) > CW Trainer keys with the radio's own keyer, so it follows the
@@ -863,10 +892,11 @@ Wireless > BLUETOOTH; the audio switches are in Settings > Audio > BT
 HEADPHONES.
 
 1. Settings > Wireless: switch Bluetooth on, put the headphones in pairing
-   mode and press Scan headphones (15 s).
-2. An MFK press on a device marked *new* pairs, trusts and connects it. On a
-   paired device the menu offers Connect / Disconnect, Connect at startup and
-   Remove.
+   mode and press Scan headphones (16 s).
+2. An MFK press on a device marked *new* pairs, trusts and connects it; it
+   also opens the pairing window (the Pairing switch counts down). What it is
+   doing, or why it failed, shows next to Scan headphones. On a paired device
+   the menu offers Connect / Disconnect, Connect at startup and Remove.
 3. Settings > Audio > BT HEADPHONES, with the headphones connected:
 
 | Option | What it does |
@@ -880,9 +910,12 @@ HEADPHONES.
   (`rootfs/etc/pulse/system.pa.d/btaudio.pa`). The same file stops PulseAudio
   from looping a phone or tablet that connects for CAT (it also appears as an
   A2DP source) into the radio TX audio.
-- Bluetooth keyboards (for the [CW Keyboard](#cw-keyboard)) are paired the
+- Bluetooth keyboards (for [CW from the keyboard](#cw-from-the-keyboard)) are paired the
   same way: Scan headphones also finds keyboards, marked *keyboard* in the
-  list.
+  list. After the MFK press, press the keyboard's pairing key when asked; if
+  it asks for a code, the code to type (then Enter) shows next to Scan
+  headphones. A keyboard that takes a new address at each pairing is found
+  again by its name.
 - Pairings are kept in a backup on `/mnt` and restored at boot
   (`S39btpairings`), so a new image does not forget them.
 
@@ -898,9 +931,16 @@ Where: Settings > Wireless > BLUETOOTH.
 | Option | What it does |
 |---|---|
 | Bluetooth | adapter power |
-| Discoverable (CAT) | always visible, or only already paired devices can connect |
+| Pairing (3 min) | visible and pairable for 3 minutes, then off by itself; the label counts down |
 
-Pair with Just Works (no PIN). On Linux: `rfcomm connect /dev/rfcomm0
+CAT accepts paired devices only (RFCOMM security level medium): a device in
+range that has not paired cannot open the port. Outside the pairing window
+the radio is hidden, not pairable and its pairing agent refuses every
+request; paired devices still connect. To pair a phone or PC once: switch Pairing on, then pair from
+the phone or PC within 3 minutes (Just Works, no PIN). When the window closes
+the new devices are marked trusted and the pairings are saved on `/mnt`.
+Pairing a keyboard or headphones from the device list opens the window too.
+On Linux: `rfcomm connect /dev/rfcomm0
 <BT-MAC> 1`, then use `/dev/rfcomm0`. On Windows and Android the paired
 device exposes an outgoing COM/SPP port. Log files: `/tmp/btcat.log`,
 `/tmp/btcat-setup.log`. Connection details: [reference](#bluetooth-cat-connection).
@@ -1102,11 +1142,6 @@ The radio's baseband records only from the hand mic: plug it in to record. See
 That is the cap for the digital apps. Your setting comes back when you close
 the app.
 
-#### My microphone gain changed by itself
-
-In voice modes it follows the ALC: down when the ALC stays high, up when it
-hardly moves. See [voice microphone gain](#voice-microphone-gain).
-
 #### The DX Cluster shows no spots
 
 Read the status line in the Cluster app. It needs WiFi and your callsign.
@@ -1150,7 +1185,7 @@ Logs page shows them all.
 |---|---|
 | Transport | Bluetooth SPP, RFCOMM channel 1 (or USB CAT) |
 | SPP UUID | `00001101-0000-1000-8000-00805F9B34FB` |
-| Pairing | Just Works, no PIN; device name `X6100` (`BTCAT_ALIAS` in `/etc/default/btcat`) |
+| Pairing | required once, in the 3-minute pairing window; Just Works, no PIN; device name `X6100` (`BTCAT_ALIAS` in `/etc/default/btcat`) |
 | Protocol | Icom CI-V, radio address `0xA4` |
 | Frame | `FE FE A4 <ctrl> <cmd> [sub] [data] FD`; reply `FB` = OK, `FA` = NG |
 | Baud (USB) | 19200 8N1 (ignored over BT) |
@@ -1161,11 +1196,12 @@ Logs page shows them all.
 | Cmd | Sub | Function | Read | Write |
 |---|---|---|:-:|:-:|
 | `00` | - | Frequency (transceive, sent automatically on every change) | - | yes |
+| `01` | - | Mode (transceive, sent automatically on every change; mode byte only, no filter) | - | - |
 | `03` | - | Read frequency | yes | - |
 | `04` | - | Read mode | yes | - |
 | `05` | - | Set frequency (5 BCD bytes) | - | yes |
 | `06` | - | Set mode (`00` LSB, `01` USB, `02` AM, `03` CW, `05` NFM, `07` CW-R) | - | yes |
-| `07` | - / `00` / `01` / `A0` / `B0` | VFO: read current, VFO A, VFO B, A=B, swap A/B | yes | yes |
+| `07` | - / `00` / `01` / `A0` / `B0` | VFO: read current, VFO A, VFO B, A=B, swap A/B; `07 00` / `07 01` also sent automatically when the VFO changes (transceive) | yes | yes |
 | `0F` | - | Split off/on | yes | yes |
 | `10` | - | Tuning step (`00` 10 Hz, `01` 100 Hz, `02` 500 Hz, `03` 1 kHz, `04` 5 kHz) | yes | yes |
 | `11` | - | Attenuator | yes | yes |
@@ -1204,21 +1240,21 @@ Example, read frequency: `FE FE A4 E0 03 FD` →
 | Command | Effect |
 |---|---|
 | `btcat-ctl bt on\|off` | Bluetooth adapter power (= Settings > Wireless > Bluetooth) |
-| `btcat-ctl discoverable on\|off` | Always visible / only paired devices (= Discoverable (CAT)) |
-| `btcat-ctl status` | Print current settings |
-| `btcat-ctl apply` | Re-apply settings from `/mnt/btcat.conf` |
+| `btcat-ctl discoverable on\|off` | Open / close the 3-minute pairing window: visible and pairable, the GUI's agent accepts pairing (= Pairing (3 min)) |
+| `btcat-ctl status` | Print power and the time left in the pairing window |
+| `btcat-ctl apply` | Re-apply power from `/mnt/btcat.conf`, close the pairing window |
 | `/etc/init.d/S94btcat start\|stop\|restart` | Start/stop the bridge (set `BTCAT_ENABLE=no` in `/etc/default/btcat` to disable) |
 
 ### btaudio-ctl
 
-Used by Settings > Wireless and Audio.
+Used by Settings > Wireless and Audio for the headphone audio. Scan, pair,
+connect and remove are in the GUI itself, straight to BlueZ over D-Bus, with
+its own pairing agent (log in `/tmp/bt_pair.log`).
 
 | Command | Effect |
 |---|---|
-| `btaudio-ctl list` | Paired devices and audio state (tab separated) |
-| `btaudio-ctl scan` | 15 s scan, prints the new headphones and keyboards found |
-| `btaudio-ctl pair MAC` | Pair, trust and connect |
-| `btaudio-ctl connect\|disconnect\|remove MAC` | Manage a device |
+| `btaudio-ctl status` | Headphone audio state (tab separated) |
+| `btaudio-ctl save` | Copy the pairings to `/mnt/backups/bluetooth.tgz` |
 | `btaudio-ctl autoconnect MAC on\|off` | Connect at startup |
 | `btaudio-ctl rx on\|off` | RX audio to the headphones (loopback) |
 | `btaudio-ctl volume N` | Headphone volume, 0-100 % |
@@ -1235,7 +1271,7 @@ The DATA partition, readable on a PC.
 | `cluster.conf` | DX cluster server in use, saved servers, filters and alerts |
 | `cw_trainer.json` | CW trainer statistics and Calls best score |
 | `wfview.conf` | wfview server on/off, user and password |
-| `btcat.conf` | Bluetooth power and Discoverable (CAT), written by `btcat-ctl` |
+| `btcat.conf` | Bluetooth power, written by `btcat-ctl` |
 | `btaudio.conf` | headphones settings (RX loopback, speaker mute, Connect at startup devices) |
 | `ft_log.adi`, `js8call_log.adi` | FT8/FT4 and JS8 logs (ADIF) |
 | `ft8_udp.conf` | FT8/FT4 WSJT-X UDP output: `enabled=`, `host=`, `port=`, `id=` |
@@ -1260,7 +1296,7 @@ server=NC7J|dxc.nc7j.com|7373
 ```
 
 Defaults for the Bluetooth bridge are in `/etc/default/btcat`
-(`BTCAT_ENABLE`, `BTCAT_BT`, `BTCAT_DISCOVERABLE`, `BTCAT_ALIAS`); the
+(`BTCAT_ENABLE`, `BTCAT_BT`, `BTCAT_ALIAS`); the
 runtime state in `/mnt/btcat.conf` overrides them.
 
 ## Build

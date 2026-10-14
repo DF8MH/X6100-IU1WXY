@@ -211,9 +211,12 @@ static void * play_thread(void *arg) {
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-    audio_set_play_mode(AUDIO_PLAY_ON);
+    /* On the Bluetooth headphones while they replace the speaker */
+    bool bt = audio_play_bt_begin();
+    if (!bt) audio_set_play_mode(AUDIO_PLAY_ON);
     play_item();
-    audio_set_play_mode(AUDIO_PLAY_OFF);
+    if (bt) audio_play_bt_end();
+    else audio_set_play_mode(AUDIO_PLAY_OFF);
 
     if (dialog.run) {
         scheduler_put_noargs(load_btn_page);

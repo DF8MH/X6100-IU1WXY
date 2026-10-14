@@ -32,6 +32,10 @@
 #define BTPROTO_RFCOMM 3
 typedef struct { uint8_t b[6]; } __attribute__((packed)) bdaddr_t;
 struct sockaddr_rc { sa_family_t rc_family; bdaddr_t rc_bdaddr; uint8_t rc_channel; };
+#define SOL_BLUETOOTH      274
+#define BT_SECURITY        4
+#define BT_SECURITY_MEDIUM 2
+struct bt_security { uint8_t level; uint8_t key_size; };
 
 #define UART_DEFAULT "/dev/ttyS2"
 static const char *UART_PATH = UART_DEFAULT;
@@ -166,7 +170,12 @@ static int rf_listen(void) {
     memset(&a, 0, sizeof(a));
     a.rc_family = AF_BLUETOOTH;
     a.rc_channel = RF_CHANNEL;
-    if (bind(s, (struct sockaddr *)&a, sizeof(a)) < 0 || listen(s, 1) < 0) {
+    /* Paired (bonded) devices only: CAT can key the transmitter, and the
+     * kernel default lets anyone in range connect without pairing.
+     * From SP2KMO's fix in openx6100 (#292, PR #297). No listen without it. */
+    struct bt_security sec = { .level = BT_SECURITY_MEDIUM };
+    if (setsockopt(s, SOL_BLUETOOTH, BT_SECURITY, &sec, sizeof(sec)) < 0 ||
+        bind(s, (struct sockaddr *)&a, sizeof(a)) < 0 || listen(s, 1) < 0) {
         close(s);
         return -1;
     }

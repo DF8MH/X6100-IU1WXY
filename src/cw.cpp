@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <array>
+#include <string>
 #include <atomic>
 #include <cmath>
 
@@ -65,6 +66,23 @@ static uint8_t             frame_counter = 0;
 static std::atomic<float>  rx_shift{0.0f};   /* audio Hz the VFO moved, for the audio thread */
 static int32_t             last_freq;
 static int                 wpm_sent = 0;
+
+/* Squelch: noise keys the detector now and then and prints lone Es, Ts and Is. A character counts
+ * when its keyed frames average SQ_MARGIN_DB over the Dec SNR threshold: on 40 m the noise's
+ * characters averaged 6-11 dB, a real station's 14-28 dB (Dec SNR 8). The text opens after
+ * SQ_OPEN such characters in a row, closes after SQ_CLOSE that are not, or after SQ_IDLE_FRAMES
+ * with nothing keyed. The trainer (own keying) is not squelched.
+ * ponytail: margin from one evening on 40 m; tune here if weak real signals stay closed */
+#define SQ_MARGIN_DB    5.0f
+#define SQ_OPEN         3
+#define SQ_CLOSE        2
+#define SQ_IDLE_FRAMES  375     /* 3 s of 8 ms frames */
+static int         sq_keyed;              /* frames since the last character */
+static float       sq_snr;                /* sum of the keyed frames' SNR (dB) */
+static int         sq_idle;
+static bool        sq_open = false;
+static int         sq_good, sq_bad;
+static std::string sq_pending;
 
 static void on_val_bool_change(Subject *subj, void *user_data);
 static void on_rx_param_change(Subject *subj, void *user_data);
@@ -149,8 +167,69 @@ void cw_put_audio_samples(unsigned int n, float *samples) {
 }
 
 /* Decoded text: to the panel or the trainer, with the WPM when it changes */
+static bool squelch(const char *text) {
+    bool space = text[0] == ' ';
+    bool good  = sq_keyed > 0 && sq_snr / sq_keyed >= rx_threshold.load() + SQ_MARGIN_DB;
+
+    if (!space) {
+        sq_keyed = 0;
+        sq_snr   = 0.0f;
+    }
+    /* Open: a weak character waits in sq_pending; printed only if a good one follows (a weak letter
+     * of the station), dropped with the squelch closing if another weak one comes (the gaps' noise) */
+    if (sq_open) {
+        if (space) {
+            if (!sq_bad) {
+                return true;
+            }
+            sq_pending += text;
+            return false;
+        }
+        if (good) {
+            sq_bad = 0;
+            if (sq_pending.empty()) {
+                return true;
+            }
+            sq_pending += text;
+            cw_decoder_text(sq_pending.c_str());
+            sq_pending.clear();
+            return false;
+        }
+        if (++sq_bad >= SQ_CLOSE) {
+            sq_open = false;
+            sq_good = 0;
+            sq_pending.clear();
+            return false;
+        }
+        sq_pending += text;
+        return false;
+    }
+    if (space) {
+        if (!sq_pending.empty()) {
+            sq_pending += text;
+        }
+        return false;
+    }
+    if (!good) {
+        sq_pending.clear();
+        sq_good = 0;
+        return false;
+    }
+    sq_pending += text;
+    if (++sq_good >= SQ_OPEN) {
+        sq_open = true;
+        sq_bad  = 0;
+        cw_decoder_text(sq_pending.c_str());
+        sq_pending.clear();
+    }
+    return false;
+}
+
 static void on_text(const char *text) {
     if ((!cw_decoder) && (!trainer)) {
+        return;
+    }
+    if (!trainer && !squelch(text)) {
         return;
     }
     cw_decoder_text(text);
@@ -173,6 +252,16 @@ static void on_keyed(bool on) {
  * light the indicator. */
 static void on_frame() {
     bool tuned = keyed && receiver->is_locked();
+
+    if (keyed) {
+        sq_keyed++;
+        sq_snr += receiver->get_snr_db();
+        sq_idle = 0;
+    } else if (++sq_idle >= SQ_IDLE_FRAMES && (sq_open || !sq_pending.empty())) {
+        sq_open = false;
+        sq_good = 0;
+        sq_pending.clear();
+    }
 
     if (tuned) {
         float freq = receiver->get_lock_freq();

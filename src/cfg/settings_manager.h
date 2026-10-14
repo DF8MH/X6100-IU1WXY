@@ -110,10 +110,10 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, {}, &global_params_};
     Parameter<int32_t> p_knob_info{"knob_info", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
-    // The spectrum above the waterfall (Settings > Display, the GUI restarts): off by default
+    // The spectrum above the waterfall (Settings > Display, live): off by default
     Parameter<int32_t> p_spectrum_show{"spectrum_show", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
-    // Its height in px (as upstream bdf4ef63 "Add spectrum height"; read at start, the GUI restarts)
+    // Its height in px (as upstream bdf4ef63 "Add spectrum height"; live)
     Parameter<int32_t> p_spectrum_height{"spectrum_height", 76, 60, 160,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Decoder text: 0 Large (the stock look), 1 Compact (smaller, more lines); from SP2KMO's upstream c2fbe40c
@@ -121,7 +121,7 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_cluster_spots_wf{"cluster_spots_wf", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
-    // Walkie Talkie: a portrait screen instead of the main one (read at start, the GUI restarts)
+    // Walkie Talkie: a portrait screen instead of the main one (live)
     Parameter<int32_t> p_walkie{"walkie", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Walkie Talkie: the main knob steps through the channel memories instead of the frequency
@@ -213,6 +213,10 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_ft8_max_repeats{"ft8_max_repeats", 6, {},
         StorageType::GLOBAL, pending_writes_, {}, &global_params_};
+    /* RX row, right side: 0 km, 1 mi, 2 country, 3 country + km, 4 country + mi
+     * (from SP2KMO's upstream 3074180e) */
+    Parameter<int32_t> p_ft8_info{"ft8_info", 3, 0, 4,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
 
     // WSPR
     Parameter<int32_t> p_wspr_tx_pct{"wspr_tx_pct", 0, 0, 50,
@@ -247,6 +251,9 @@ class SettingsManager {
     Parameter<int32_t> p_key_vol{"key_vol", 10, 0, 32,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_key_train{"key_train", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // SWR protection: the most SWR a transmission keeps, in tenths (10 = off)
+    Parameter<int32_t> p_swr_protect{"swr_protect", 25, 10, 50,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_qsk_time{"qsk_time", 100, 0, 1000,
         StorageType::GLOBAL, pending_writes_, &global_params_};

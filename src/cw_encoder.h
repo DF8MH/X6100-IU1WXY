@@ -32,3 +32,6 @@ int cw_encoder_sent();
 
 /* Seconds left in a beacon pause */
 int cw_encoder_pause_left();
+
+/* The text with {CALL} as the station callsign in upper case (none set: left as is); a static buffer */
+const char *cw_encoder_expand(const char *text);

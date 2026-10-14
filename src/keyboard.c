@@ -8,6 +8,9 @@
 
 #include "keyboard.h"
 
+#include "cw_encoder.h"
+#include "cw_field.h"
+#include "paddle_keyer.h"
 #include "pubsub_ids.h"
 #include "usb_devices.h"
 
@@ -48,9 +51,19 @@ static bool kbd_next(void *ctx, uint16_t *scancode, uint32_t *key, int *value) {
     struct input_event in;
     while (read(evdev_fd, &in, sizeof(in)) > 0) {
         if (in.type != EV_KEY) continue;
+        /* In CW [ and ] are the paddle (paddle_keyer.c): a press stops a message on air, as a break */
+        if ((in.code == KEY_LEFTBRACE || in.code == KEY_RIGHTBRACE) && paddle_keyer_active()) {
+            if (in.value == 1 && cw_encoder_state() != CW_ENCODER_IDLE && !cw_field_key(LV_KEY_ESC)) {
+                cw_encoder_stop();
+            }
+            continue;
+        }
         *scancode = in.code;
         *value    = in.value;
         *key      = xkb_process_key(in.code, in.value); /* also keeps Shift state */
+        if (in.code >= KEY_F1 && in.code <= KEY_F5) {
+            *key = KEYBOARD_F1 + in.code - KEY_F1;      /* xkb gives no character for them */
+        }
         return true;
     }
     return false;
@@ -111,6 +124,7 @@ static void setup_kbd(char *path) {
     kbd_rdev = st.st_rdev;
     kbd_ino  = st.st_ino;
     rollover = (kbd_rollover_t){0};
+    paddle_keyer_open(path);
 
     if (indev_drv_2.type == LV_INDEV_TYPE_NONE) {
         lv_indev_drv_init(&indev_drv_2);

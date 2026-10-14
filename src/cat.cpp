@@ -224,6 +224,8 @@ static std::atomic<bool> scope_out{false};  /* 0x27 0x11: scope wave data output
 static thread_local bool net_req;            /* request came from a network (wfview) client */
 
 static void on_fg_freq_change(Subject *s, void *user_data);
+static void on_mode_change(Subject *s, void *user_data);
+static void on_vfo_change(Subject *s, void *user_data);
 
 struct Frame {
     uint8_t dst_addr;
@@ -1241,10 +1243,20 @@ void cat_init() {
     conn = new Connection(fd);
 
     cfg_sm.cp_fg_freq.subscribe(on_fg_freq_change, &cfg_sm.cp_fg_freq);
+    cfg_sm.cp_cur_mode.subscribe(on_mode_change, nullptr);
+    cfg_sm.p_band_current_vfo.subscribe(on_vfo_change, nullptr);
 
     /* * */
     std::thread thread(cat_thread);
     thread.detach();
+}
+
+/* Unsolicited (transceive) frame: to the serial CAT and the network client */
+static void send_notify(const Frame &frame) {
+    auto data = frame.dump();
+    if (net_sink)
+        net_sink((const uint8_t *)data.data(), data.size());
+    send_queue.push(data);
 }
 
 static void on_fg_freq_change(Subject *s, void *user_data) {
@@ -1254,8 +1266,20 @@ static void on_fg_freq_change(Subject *s, void *user_data) {
     // bcd len - 5 bytes
     frame.set_payload_len(6);
     to_bcd(frame.data.data(), new_freq, 10);
-    auto data = frame.dump();
-    if (net_sink)
-        net_sink((const uint8_t *)data.data(), data.size());
-    send_queue.push(data);
+    send_notify(frame);
+}
+
+/* Transceive: mode (01) and VFO (07) changes too, from Dyuldin's upstream 6886aa36 */
+static void on_mode_change(Subject *s, void *user_data) {
+    Frame frame{0, LOCAL_ADDRESS, C_SND_MODE};
+    frame.set_payload_len(2);
+    frame.data[0] = x_mode_2_ci_mode((x6100_mode_t)cfg_sm.cp_cur_mode.get());
+    send_notify(frame);
+}
+
+static void on_vfo_change(Subject *s, void *user_data) {
+    Frame frame{0, LOCAL_ADDRESS, C_SET_VFO};
+    frame.set_payload_len(2);
+    frame.data[0] = cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? S_VFOA : S_VFOB;
+    send_notify(frame);
 }

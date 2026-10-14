@@ -30,6 +30,7 @@
 #define DEFAULT_MIN S4
 #define DEFAULT_MAX S9_20
 #define WIDTH 800
+#define MAX_HEIGHT 480  /* the buffers: the height changes live (spectrum on/off, its height) */
 
 typedef struct {
     uint8_t values[WATERFALL_NFFT];
@@ -311,12 +312,32 @@ void waterfall_set_height(lv_coord_t h) {
 
     height = lv_obj_get_height(obj);
 
+    if (ready) {
+        /* Again (main_screen.c): the same buffers, an empty waterfall of the new height. The
+         * DSP thread may write a row meanwhile: last_row_id stays under MAX_HEIGHT */
+        last_row_id = 0;
+        for (size_t i = 0; i < MAX_HEIGHT; i++) {
+            wf_rows[i].width = 0;
+        }
+        wfp_head = 0;
+        wfp_full = true;
+        if (!direct) {
+            lv_img_buf_free(frame);
+            frame = lv_img_buf_alloc(WIDTH, height, LV_IMG_CF_TRUE_COLOR);
+            lv_img_set_src(img, frame);
+        }
+        middle_line_points[1].y = height;
+        lv_line_set_points(middle_line, middle_line_points, 2);
+        scheduler_put_noargs(refresh_waterfall);
+        return;
+    }
+
 #if USE_DRM
     direct = drm_planes();
 #endif
     if (direct) {
         /* The GUI stays transparent here: the primary plane shows through */
-        wfp = calloc(WIDTH * height, sizeof(uint32_t));
+        wfp = calloc(WIDTH * MAX_HEIGHT, sizeof(uint32_t));
         lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, 0);
         lv_obj_add_event_cb(obj, direct_hole_cb, LV_EVENT_DRAW_MAIN_END, NULL);
         lv_timer_create(do_scroll_timer, 20, NULL);
@@ -328,8 +349,8 @@ void waterfall_set_height(lv_coord_t h) {
         lv_img_set_src(img, frame);
     }
 
-    wf_rows = calloc(height, sizeof(*wf_rows));
-    for (size_t i = 0; i < height; i++) {
+    wf_rows = calloc(MAX_HEIGHT, sizeof(*wf_rows));
+    for (size_t i = 0; i < MAX_HEIGHT; i++) {
         wf_rows[i].center_freq = radio_center_freq;
         memset(wf_rows[i].values, 0, WATERFALL_NFFT);
     }

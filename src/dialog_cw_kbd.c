@@ -192,6 +192,8 @@ static void timer_cb(lv_timer_t *t) {
 static void enqueue(const char *text) {
     size_t len = strlen(queue);
 
+    text = cw_encoder_expand(text);
+
     if (!cw_mode()) {
         msg_update_text_fmt("Set CW mode to transmit");
         return;

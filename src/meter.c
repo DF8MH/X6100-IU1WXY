@@ -31,6 +31,7 @@ static float            meter_db_raw = S1;
 static float            noise_level = S_MIN;
 
 static float            meter_peak = S1;
+static bool             in_tx;        /* TX: the S-meter at rest, framed red, no readings */
 static int64_t          meter_peak_time;
 static int64_t          now;
 
@@ -60,6 +61,7 @@ static void on_bool_value_change(Subject *subj, void *user_data) {
 }
 
 static void update_db_label() {
+    if (in_tx) return;     /* "TX" stays */
     if (!theme_shape.vision) {
         lv_label_set_text_fmt(db_val_label, "%.1f", meter_db_raw);
     } else if (meter_db_raw < S9 + 1) {   /* 6 dB a unit */
@@ -289,6 +291,17 @@ void meter_needle_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx) {
     lv_draw_line(draw_ctx, &line_dsc, &c, &tip);
 }
 
+/* TX: the whole box veiled red */
+static void tx_veil(lv_obj_t *o, lv_draw_ctx_t *draw_ctx) {
+    lv_draw_rect_dsc_t dsc;
+
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_color = TC(err);
+    dsc.bg_opa   = LV_OPA_30;
+    dsc.radius   = lv_obj_get_style_radius(o, LV_PART_MAIN);
+    lv_draw_rect(draw_ctx, &dsc, &o->coords);
+}
+
 static void meter_draw_cb(lv_event_t * e) {
     lv_obj_t            *obj = lv_event_get_target(e);
     lv_draw_ctx_t       *draw_ctx = lv_event_get_draw_ctx(e);
@@ -298,6 +311,7 @@ static void meter_draw_cb(lv_event_t * e) {
 
     if (needle_on()) {
         meter_needle_draw(obj, draw_ctx);
+        if (in_tx) tx_veil(obj, draw_ctx);
         return;
     }
 
@@ -381,14 +395,26 @@ static void meter_draw_cb(lv_event_t * e) {
 
         lv_draw_label(draw_ctx, &label_dsc, &area, label, NULL);
     }
+    if (in_tx) tx_veil(obj, draw_ctx);
 }
 
 static void tx_cb(lv_event_t * e) {
-    lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    in_tx = true;
+    meter_db = meter_db_raw = meter_peak = min_db;
+    lv_label_set_text(db_val_label, "TX");            /* in place of the dB value, red */
+    lv_obj_set_style_text_color(db_val_label, TC(err), 0);
+    lv_obj_set_style_border_color(obj, TC(err), 0);
+    lv_obj_set_style_border_width(obj, 5, 0);
+    lv_obj_invalidate(obj);
 }
 
 static void rx_cb(lv_event_t * e) {
-    lv_obj_clear_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    in_tx = false;
+    lv_obj_set_style_text_color(db_val_label, TC(text), 0);
+    db_label_place();                                   /* its own colour back */
+    lv_obj_remove_local_style_prop(obj, LV_STYLE_BORDER_COLOR, 0);
+    lv_obj_remove_local_style_prop(obj, LV_STYLE_BORDER_WIDTH, 0);
+    lv_obj_invalidate(obj);
 }
 
 
@@ -429,7 +455,7 @@ void meter_set_noise(float val) {
 
 void meter_update(float db, float beta) {
     /* A NaN (empty PSD while the span changes) would stick in the smoothing forever */
-    if (isnan(db)) {
+    if (isnan(db) || in_tx) {
         return;
     }
     if (!isfinite(meter_db) || !isfinite(meter_peak)) {

@@ -3,6 +3,4 @@
 BTCAT_ENABLE=yes
 # Bluetooth adapter power
 BTCAT_BT=yes
-# yes = always visible, no = only already paired devices can connect
-BTCAT_DISCOVERABLE=yes
 BTCAT_ALIAS="X6100"

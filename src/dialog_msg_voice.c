@@ -309,9 +309,12 @@ static void *worker_cb(void *arg) {
             air_off_tick = lv_tick_get();
             on_air       = false;
         } else {
-            audio_set_play_mode(AUDIO_PLAY_ON);
+            /* Preview: on the Bluetooth headphones while they replace the speaker */
+            bool bt = audio_play_bt_begin();
+            if (!bt) audio_set_play_mode(AUDIO_PLAY_ON);
             ok = play_file();
-            audio_set_play_mode(AUDIO_PLAY_OFF);
+            if (bt) audio_play_bt_end();
+            else audio_set_play_mode(AUDIO_PLAY_OFF);
         }
         if (!ok || !job_tx || !job_loop || stop_req) break;
 

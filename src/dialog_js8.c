@@ -4811,11 +4811,13 @@ static void *beep_thread(void *arg) {
     atomic_store(&beep_guard_sq, 0);
     atomic_store(&beep_guard_n, 0);
     atomic_store(&beep_guard, true);
-    radio_speaker_play(true);
+    bool bt = audio_play_bt_begin();   /* Bluetooth headphones replace the speaker */
+    if (!bt) radio_speaker_play(true);
     beep_play(beep_lead, BEEP_LEAD);
     for (int i = 0; i < beep_count; i++) beep_play(beep_buf, BEEP_TONE + BEEP_GAP);
     audio_play_wait();
-    radio_speaker_play(false);
+    if (bt) audio_play_bt_end();
+    else radio_speaker_play(false);
     atomic_store(&beep_guard_end, now_mono_ms() + BEEP_TAIL_MS);
     atomic_store(&beep_guard, false);
 out:

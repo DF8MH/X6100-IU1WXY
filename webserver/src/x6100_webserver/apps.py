@@ -717,7 +717,7 @@ REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", 
                "js8_send", "js8_cq", "js8_hb", "js8_stop", "wspr_txpct", "wspr_txnext", "sstv_tx", "sstv_stop",
                "app_base", "wefax_mode", "wefax_save", "wefax_clear", "wefax_tx", "wefax_stop",
                "rtty_send", "rtty_stop", "rtty_rate", "rtty_shift", "rtty_center", "rtty_rev",
-               "cw_send", "cw_stop", "cw_wpm", "cw_dec", "location",
+               "cw_send", "cw_stop", "cw_wpm", "cw_dec", "cw_clear", "location",
                "field_screen", "field_ref", "field_start", "field_end", "field_log", "field_spot", "field_update",
                "qso_log", "nb_level", "nb_width", "nr_level", "agc_mode"}
 # The radio RX audio as the GUI's decoders get it (src/audio.c), 16 bit mono

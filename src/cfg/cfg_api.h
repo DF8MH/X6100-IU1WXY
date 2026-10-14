@@ -77,6 +77,7 @@ extern ParamInt         *cfg_spectrum_fill_color; // p_spectrum_fill_color
 extern ParamInt         *cfg_spectrum_fill_gradient; // p_spectrum_fill_gradient
 extern ParamInt         *cfg_smeter_bar_color;   // p_smeter_bar_color
 extern ParamInt         *cfg_swr_color;          // p_swr_color
+extern ParamInt         *cfg_swr_protect;        // p_swr_protect
 extern ParamInt         *cfg_smeter_lamp;        // p_smeter_lamp
 extern ParamInt         *cfg_cluster_column;     // p_cluster_column
 extern ParamInt         *cfg_cluster_order;      // p_cluster_order
@@ -107,6 +108,7 @@ extern ParamInt *cfg_wspr_upload;    // p_wspr_upload
 extern ParamInt *cfg_field_boot;     // p_field_boot
 extern ParamInt *cfg_voice_msg_gain; // p_voice_msg_gain
 extern ParamInt *cfg_ft8_max_repeats; // p_ft8_max_repeats
+extern ParamInt *cfg_ft8_info;       // p_ft8_info
 
 // SWR scan
 extern ParamInt *cfg_swrscan_linear; // p_swrscan_linear

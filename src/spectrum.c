@@ -279,8 +279,9 @@ static void spectrum_draw_cb(lv_event_t *e) {
         rect_dsc.bg_color = TC(text);
         rect_dsc.bg_opa   = LV_OPA_50;
 
-        from = sign_from * (dnf_center - dnf_width);
-        to   = sign_to * (dnf_center + dnf_width);
+        /* dnf_center already carries the sideband's sign (update_dnf): no second flip, or LSB lands on the USB side */
+        from = dnf_center - dnf_width;
+        to   = dnf_center + dnf_width;
 
         if (from < to) {
             f1 = (w * from) / w_hz;
@@ -486,7 +487,8 @@ static void direct_render(void) {
     float      min, max;
 
     markers_check();
-    if (!lv_obj_is_visible(obj) || h <= 0) {
+    /* Spectrum off: transparent, under the top bars */
+    if (!lv_obj_is_visible(obj) || h <= 0 || lv_obj_get_style_opa(obj, 0) < LV_OPA_MIN) {
         return;
     }
     if (h != sbuf_h) {
@@ -568,7 +570,7 @@ lv_obj_t *spectrum_init(lv_obj_t *parent) {
 
     lv_obj_add_style(obj, &spectrum_style, 0);
 #if USE_DRM
-    direct = drm_planes() && param_i_get(cfg_spectrum_show);
+    direct = drm_planes();      /* also when off: it can be shown live (main_screen.c) */
 #endif
     if (direct) {
         /* Transparent, then the markers over the primary plane */

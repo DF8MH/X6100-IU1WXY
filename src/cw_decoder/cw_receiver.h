@@ -56,6 +56,8 @@ class CwReceiver {
     float get_lock_freq() const;
     // A coherent tone is held there (see CoherentToneTracker::is_locked)
     bool  is_locked() const;
+    // SNR of the last frame on the locked tone, dB (the coherent integrator's)
+    float get_snr_db() const { return diag_snr_db_; }
     // The VFO moved by df Hz of audio: the lock follows (CoherentToneTracker::shift_freq)
     void  shift_lock(float df) { tone_tracker_.shift_freq(df); }
     void  change_threshold(float db_val);

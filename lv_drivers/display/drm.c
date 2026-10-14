@@ -463,8 +463,10 @@ bool drm_planes(void) {
     return planes;
 }
 
-void drm_set_portrait(void) {
-    portrait_mode = true;
+void drm_set_portrait(bool on) {
+    portrait_mode = on;
+    frame[0].full = true;       /* both buffers get the whole GUI again */
+    frame[1].full = true;
 }
 
 void drm_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * color_p) {

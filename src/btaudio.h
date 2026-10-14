@@ -7,6 +7,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,6 +28,9 @@ void btaudio_mute_set(bool on);
 
 /* True while headphones are connected and the speaker is to stay silent. */
 bool btaudio_speaker_muted(void);
+
+/* Headphone sink name for local playback while the speaker is silenced. */
+bool btaudio_hp_sink(char *buf, size_t size);
 
 #ifdef __cplusplus
 }
