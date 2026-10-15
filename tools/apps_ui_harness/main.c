@@ -1327,6 +1327,21 @@ int main(int argc, char **argv) {
         dialog_destruct();
         pump(200);
     }
+    if (only && !strcmp(only, "navtex")) {   /* DSC mode (Mode button) and its channel list (Freq.) */
+        harness_fg_freq = 2187500;
+        dialog_construct(dialog_navtex, lv_scr_act());
+        pump(300);
+        buttons_page_t *pg = buttons_get_cur_page();
+        pg->items[2]->press(pg->items[2]);
+        pump(300);
+        shot("navtex_dsc.ppm");
+        pg = buttons_get_cur_page();
+        pg->items[1]->press(pg->items[1]);
+        pump(300);
+        shot("navtex_dsc_freq.ppm");
+        dialog_destruct();
+        pump(200);
+    }
     if (only && !strcmp(only, "cwtrainer")) cwtrainer_demo();
     if (!only || !strcmp(only, "wspr")) wspr_demo();
     if (!only || !strcmp(only, "settings")) settings_demo();

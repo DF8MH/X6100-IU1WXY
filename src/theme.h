@@ -25,9 +25,9 @@ extern "C" {
 #define THEME_COLORS(X) \
     /* screen and the shared boxes (styles.c) */ \
     X(bg,                0x27313a, 0x0040a0, 0xffffff, 0x000000) /* screen background */ \
-    X(bar,               0x3a3f47, 0x2a5aa0, 0xf2f2f2, 0x0e0e0e) /* top bar boxes: info, S-meter, clock */ \
-    X(bar_grad,          0x23272d, 0x103060, 0xf2f2f2, 0x0e0e0e) \
-    X(bar_border,        0x777777, 0x8aa8d8, 0x000000, 0x4c4c4c) \
+    X(bar,               0x2c3a47, 0x2a5aa0, 0xf2f2f2, 0x0e0e0e) /* top bar boxes: info, S-meter, clock (IU1WXY: slate as the strip and the apps) */ \
+    X(bar_grad,          0x18222c, 0x103060, 0xf2f2f2, 0x0e0e0e) \
+    X(bar_border,        0x4a6a8a, 0x8aa8d8, 0x000000, 0x4c4c4c) \
     X(strip,             0x1c2a38, 0x1a4078, 0xffffff, 0x000000) /* frequency strip */ \
     X(strip_grad,        0x101a24, 0x0c2448, 0xffffff, 0x000000) \
     X(strip_border,      0x4a6a8a, 0x8aa8d8, 0x000000, 0x4c4c4c) \
@@ -57,8 +57,8 @@ extern "C" {
     /* app content */ \
     X(panel,             0x000000, 0x000000, 0xffffff, 0x000000) /* content panels, lists, tables */ \
     X(panel_border,      0x445566, 0x445566, 0x000000, 0x4c4c4c) \
-    X(list,              0x202020, 0x202020, 0xffffff, 0x0a0a0a) /* JS8 lists */ \
-    X(row,               0x303030, 0x303030, 0xe4e4e4, 0x1c1c1c) /* alternate / header rows */ \
+    X(list,              0x18222c, 0x18222c, 0xffffff, 0x0a0a0a) /* JS8 lists (slate: the family of dialog and side) */ \
+    X(row,               0x2a3846, 0x2a3846, 0xe4e4e4, 0x1c1c1c) /* alternate / header rows */ \
     X(popup,             0x0b1622, 0x0b1622, 0xffffff, 0x141414) /* menus and popups */ \
     X(popup_border,      0x99aaaa, 0x99aaaa, 0x000000, 0x8a8a8a) \
     X(side,              0x121a22, 0x121a22, 0xf2f2f2, 0x0e0e0e) /* side boxes in apps */ \

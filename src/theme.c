@@ -42,6 +42,9 @@ static const struct {
     {TC_pill_off_text, 0x80868e}, {TC_focus, 0xff8a30},      {TC_focus_text, 0x2a1200},     {TC_meter_bar, 0x5dcaa5},
     {TC_meter_weak, 0x5dcaa5},  {TC_meter_low, 0x5dcaa5},    {TC_meter_high, 0xff5a3c},     {TC_meter_over, 0xffd040},
     {TC_popup, 0x262a31},       {TC_popup_border, 0x5dcaa5},
+    /* the app surfaces in the same anthracite, not IU1WXY's slate */
+    {TC_list, 0x1c1f24},        {TC_row, 0x2a3038},          {TC_side, 0x1c1f24},           {TC_chip, 0x2a3038},
+    {TC_frame, 0x1c1f24},       {TC_veil, 0x1c1f24},
 };
 
 /* Black Metal and Total Black, designed by 2E0JFS: white and grey type, cyan for what is tuned and lit,
@@ -69,6 +72,8 @@ static const theme_set_t deck_colors[] = {
     {TC_meter_bar, 0x28bef0},   {TC_meter_weak, 0x28bef0},   {TC_meter_low, 0x28bef0},      {TC_meter_high, 0xf03c32},
     {TC_meter_over, 0xf03c32},  {TC_pill_off_text, 0x80858a},  {TC_btn_mark, 0x5a5e62},       {TC_btn_mark_assigned, 0x6a6e72},
     {TC_btn_mark_active, 0x28bef0},
+    /* the app surfaces grey, not IU1WXY's slate */
+    {TC_list, 0x16181a},        {TC_row, 0x2e3134},          {TC_frame, 0x0e0f11},          {TC_veil, 0x0e0f11},
 };
 
 static const theme_set_t total_black_colors[] = {   /* over deck_colors */
@@ -76,6 +81,7 @@ static const theme_set_t total_black_colors[] = {   /* over deck_colors */
     {TC_strip_grad, 0x000000},  {TC_strip_border, 0x1e2124}, {TC_dialog, 0x000000},         {TC_dialog_grad, 0x000000},
     {TC_btn, 0x000000},         {TC_btn_grad, 0x000000},     {TC_btn_border, 0x46494d},     {TC_btn_active, 0x000000},
     {TC_btn_active_grad, 0x000000}, {TC_btn_page, 0x000000}, {TC_popup, 0x000000},          {TC_side, 0x000000},
+    {TC_list, 0x000000},        {TC_frame, 0x000000},        {TC_veil, 0x000000},
 };
 
 static const uint32_t builtin_colors[B_OUTDOOR_NEG][TC_COUNT] = {   /* VISION and Outdoor-Negative are made from these */

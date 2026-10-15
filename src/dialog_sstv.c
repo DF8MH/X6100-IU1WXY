@@ -795,7 +795,7 @@ static void construct_cb(lv_obj_t *parent)
         LV_IMG_CF_TRUE_COLOR
     );
     lv_obj_set_size(sstv_canvas, SSTV_CANVAS_W, SSTV_CANVAS_H);
-    lv_canvas_fill_bg(sstv_canvas, lv_color_hex(0x182028), LV_OPA_COVER);
+    lv_canvas_fill_bg(sstv_canvas, TC(frame), LV_OPA_COVER);
 
     lv_obj_move_background(body);
 
