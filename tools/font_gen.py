@@ -6,6 +6,9 @@ Usage: font_gen.py FONT.ttf NAME SONY=PX ...   writes NAME_SONY.c (PX pixels) in
 The Arial fonts (Arial Bold, as RS-BA1's buttons):
   cd src/fonts && ../../tools/font_gen.py /mnt/c/Windows/Fonts/arialbd.ttf arial 14=11 16=13 18=14 \
     20=15 22=18 24=19 26=21 28=22 30=24 32=26 34=27 36=29 38=30 40=32 42=34 44=35 60=48
+Roboto Condensed Medium (Black Metal, Total Black), sizes as Roboto's, from Google Fonts' variable TTF:
+  cd src/fonts && ../../tools/font_gen.py 'RobotoCondensed[wght].ttf:Medium' rcond 14=10 16=12 18=14 \
+    20=16 22=18 24=20 26=22 28=24 30=26 32=28 34=30 36=32 38=34 40=36 42=38 44=40 60=42
 """
 import os
 import sys
@@ -40,7 +43,10 @@ def c_char(ch):
 
 
 def write(ttf, name, sony, px):
-    font = ImageFont.truetype(ttf, px)
+    path, _, var = ttf.partition(':')       # FONT.ttf:Medium, a named weight of a variable font
+    font = ImageFont.truetype(path, px)
+    if var:
+        font.set_variation_by_name(var)
     gl = glyphs(font)
     inked = [g for g in gl if g[2]]
     ascent = max(g[5] + g[3] for g in inked)

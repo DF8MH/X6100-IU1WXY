@@ -25,6 +25,11 @@ void rtty_init();
 void rtty_put_audio_samples(unsigned int n, float *samples);
 
 void rtty_set_state(rtty_state_t state);
+
+/* Tuning scope: the last RTTY_SCOPE_LEN samples through the mark (x) and space (y) filters,
+ * the tones' offset from the centre in Hz; false when no symbol was decided lately */
+#define RTTY_SCOPE_LEN 512
+bool rtty_scope_get(float *x, float *y, float *offset);
 rtty_state_t rtty_get_state();
 
 float rtty_change_rate(int16_t df);

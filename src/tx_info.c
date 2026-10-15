@@ -19,6 +19,11 @@
 #include "theme.h"
 #include "util.h"
 #include "info.h"
+#include "rtty.h"
+#include "dialog_ft8.h"
+#include "dialog_js8.h"
+#include "dialog_wspr.h"
+#include "dialog_sstv.h"
 
 #define UPDATE_UI_MS 40
 
@@ -46,6 +51,15 @@ static lv_obj_t     *pwr_label;
 static lv_obj_t     *vswr_label;
 static lv_obj_t     *alc_label;
 static uint32_t      tx_start;
+
+/* Digital apps: a strip under the frequency bar instead of the panel */
+static lv_obj_t     *strip;
+static lv_obj_t     *strip_fill;
+static lv_obj_t     *strip_pwr;
+static lv_obj_t     *strip_swr;
+static lv_obj_t     *strip_time;
+
+#define STRIP_BAR_W 260
 
 #define PANEL_W   500
 #define PANEL_H   190
@@ -136,11 +150,32 @@ static void update_head(void) {
     lv_label_set_text_fmt(time_label, "%02u:%02u", (unsigned)(s / 60), (unsigned)(s % 60));
 }
 
+static void update_strip(void) {
+    uint32_t s   = lv_tick_elaps(tx_start) / 1000;
+    float    ref = LV_MAX(param_f_get(cfg_pwr), 0.1f);
+    /* SWR from 2 yellow, from 3 red (as the panel's bar and the walkie) */
+    lv_color_t c = vswr >= 3.0f ? TC(bar_high) : vswr >= 2.0f ? TC(bar_mid) : lv_color_white();
+
+    lv_obj_set_width(strip_fill, STRIP_BAR_W * LV_MIN(pwr / ref, 1.0f));
+    lv_label_set_text_fmt(strip_pwr, "%.1f W", pwr);
+    lv_label_set_text_fmt(strip_swr, "%.1f", vswr);
+    lv_obj_set_style_text_color(strip_swr, c, 0);
+    lv_obj_set_style_border_color(strip, vswr >= 2.0f ? c : lv_color_make(230, 50, 50), 0);
+    lv_label_set_text_fmt(strip_time, "%02u:%02u", (unsigned)(s / 60), (unsigned)(s % 60));
+}
+
 static void tx_cb(lv_event_t *e) {
     pwr  = 0.0f;
     vswr = 0.0f;
     alc  = 0.0f;
     tx_start = lv_tick_get();
+
+    if (dialog_type_is_run(dialog_ft8) || dialog_type_is_run(dialog_js8) || dialog_type_is_run(dialog_wspr) ||
+        dialog_type_is_run(dialog_sstv) || rtty_get_state() != RTTY_OFF) {
+        update_strip();
+        lv_obj_clear_flag(strip, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
 
     /* Under the frequency strip */
     lv_obj_set_y(panel, DIALOG_Y + 8);
@@ -153,9 +188,14 @@ static void tx_cb(lv_event_t *e) {
 static void rx_cb(lv_event_t *e) {
     lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(panel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(strip, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void update_tx_info(void *arg) {
+    if (!lv_obj_has_flag(strip, LV_OBJ_FLAG_HIDDEN)) {
+        update_strip();
+        return;
+    }
     if (lv_obj_has_flag(panel, LV_OBJ_FLAG_HIDDEN)) {
         return;
     }
@@ -230,6 +270,66 @@ lv_obj_t *tx_info_init(lv_obj_t *parent) {
     vswr_label = values[1];
     alc_label  = values[2];
 
+    /* The strip, above the open app */
+    strip = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(strip);
+    lv_obj_set_pos(strip, 16, 121);
+    lv_obj_set_size(strip, 768, 46);
+    lv_obj_set_style_bg_color(strip, lv_color_make(70, 12, 12), 0);
+    lv_obj_set_style_bg_opa(strip, 245, 0);
+    lv_obj_set_style_border_width(strip, 3, 0);
+    lv_obj_set_style_radius(strip, 10, 0);
+    lv_obj_set_style_shadow_color(strip, lv_color_black(), 0);
+    lv_obj_set_style_shadow_width(strip, 12, 0);
+    lv_obj_set_style_shadow_opa(strip, LV_OPA_40, 0);
+    lv_obj_set_style_shadow_ofs_y(strip, 3, 0);
+    lv_obj_set_style_pad_hor(strip, 10, 0);
+    lv_obj_clear_flag(strip, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(strip, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t *pill = lv_obj_create(strip);
+    lv_obj_remove_style_all(pill);
+    lv_obj_set_size(pill, 68, 30);
+    lv_obj_set_style_bg_color(pill, lv_color_make(230, 50, 50), 0);
+    lv_obj_set_style_bg_opa(pill, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
+    lv_obj_align(pill, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_t *l = make_label(pill, &sony_24, 0xFFFFFF);
+    lv_label_set_text(l, "TX");
+    lv_obj_center(l);
+
+    l = make_label(strip, &sony_18, 0x9A9A9A);
+    lv_label_set_text(l, "PWR");
+    lv_obj_align(l, LV_ALIGN_LEFT_MID, 82, 0);
+
+    lv_obj_t *track = lv_obj_create(strip);
+    lv_obj_remove_style_all(track);
+    lv_obj_set_size(track, STRIP_BAR_W, 14);
+    lv_obj_set_style_bg_color(track, lv_color_make(30, 30, 30), 0);
+    lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(track, 4, 0);
+    lv_obj_set_style_clip_corner(track, true, 0);
+    lv_obj_align(track, LV_ALIGN_LEFT_MID, 128, 0);
+    strip_fill = lv_obj_create(track);
+    lv_obj_remove_style_all(strip_fill);
+    lv_obj_set_size(strip_fill, 0, 14);
+    lv_obj_set_style_bg_color(strip_fill, lv_color_make(80, 200, 110), 0);
+    lv_obj_set_style_bg_opa(strip_fill, LV_OPA_COVER, 0);
+
+    strip_pwr = make_label(strip, &sony_30, 0xFFFFFF);
+    lv_obj_set_width(strip_pwr, 100);
+    lv_obj_set_style_text_align(strip_pwr, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_align(strip_pwr, LV_ALIGN_LEFT_MID, 394, 0);
+
+    l = make_label(strip, &sony_18, 0x9A9A9A);
+    lv_label_set_text(l, "SWR");
+    lv_obj_align(l, LV_ALIGN_LEFT_MID, 520, 0);
+    strip_swr = make_label(strip, &sony_30, 0xFFFFFF);
+    lv_obj_align(strip_swr, LV_ALIGN_LEFT_MID, 566, 0);
+
+    strip_time = make_label(strip, &sony_28, 0xFFFFFF);
+    lv_obj_align(strip_time, LV_ALIGN_RIGHT_MID, 0, 0);
+
     lv_obj_add_event_cb(obj, tx_cb, EVENT_RADIO_TX, NULL);
     lv_obj_add_event_cb(obj, rx_cb, EVENT_RADIO_RX, NULL);
 
@@ -259,6 +359,11 @@ void tx_info_update(float p, float s, float a) {
     }
     msg_id++;
     scheduler_put_noargs(update_tx_info);
+}
+
+void tx_info_get(float *p, float *s) {
+    *p = pwr;
+    *s = vswr;
 }
 
 bool tx_info_refresh(uint8_t *prev_msg_id, float *alc_p, float *pwr_p, float *vswr_p) {

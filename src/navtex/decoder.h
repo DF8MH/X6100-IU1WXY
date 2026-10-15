@@ -17,6 +17,8 @@ typedef void (*navtex_char_cb_t)(int c, void *userdata);
 navtex_decoder_t *navtex_decoder_create(int reverse);
 void navtex_decoder_destroy(navtex_decoder_t *decoder);
 void navtex_decoder_set_char_callback(navtex_decoder_t *decoder, navtex_char_cb_t cb, void *userdata);
+/* Every demodulated bit, mark = 1 for the higher tone (DSC, dsc.h). Same thread as process. */
+void navtex_decoder_set_bit_callback(navtex_decoder_t *decoder, void (*cb)(int mark, void *userdata), void *userdata);
 void navtex_decoder_process(navtex_decoder_t *decoder,
                             const float *samples,
                             unsigned int n);

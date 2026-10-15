@@ -7,6 +7,11 @@ target_sources(${PROJECT_NAME} PUBLIC
     roboto_28.c roboto_30.c roboto_32.c roboto_34.c roboto_36.c
     roboto_38.c roboto_40.c roboto_42.c roboto_44.c
     roboto_60.c
+    rcond_14.c rcond_16.c rcond_18.c rcond_20.c rcond_22.c rcond_24.c rcond_26.c   # Black Metal, Total Black
+    rcond_28.c rcond_30.c rcond_32.c rcond_34.c rcond_36.c
+    rcond_38.c rcond_40.c rcond_42.c rcond_44.c
+    rcond_60.c
+    rcond_freq_54.c rcond_freq_88.c rcond_pm_20.c   # the frequency, the scope span
     dejavu_14.c dejavu_16.c dejavu_18.c dejavu_20.c dejavu_22.c dejavu_24.c dejavu_26.c
     dejavu_28.c dejavu_30.c dejavu_32.c dejavu_34.c dejavu_36.c
     dejavu_38.c dejavu_40.c dejavu_42.c dejavu_44.c

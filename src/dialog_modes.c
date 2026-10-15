@@ -143,11 +143,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_remove_style_all(box);
     lv_obj_set_size(box, BOX_W, BOX_H);
     lv_obj_set_pos(box, (800 - BOX_W) / 2, BOX_Y);
-    lv_obj_set_style_bg_color(box, TC(popup), 0);
-    lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(box, TC(popup_border), 0);
-    lv_obj_set_style_border_width(box, 2, 0);
-    lv_obj_set_style_radius(box, theme_shape.radius_popup, 0);
+    lv_obj_add_style(box, &popup_style, 0);
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *head = lv_label_create(box);

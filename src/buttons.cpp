@@ -32,6 +32,7 @@ extern "C" {
     #include "params/params.h"
     #include "pubsub_ids.h"
     #include "walkie.h"
+    #include "cw_field.h"
 }
 
 #define STATE_ASSIGNED LV_STATE_USER_1
@@ -465,8 +466,14 @@ static buttons_page_t page_key_1 = {
 static buttons_page_t page_key_2 = {
     {&btn_key_p2, &btn_key_mode, &btn_key_iambic_mode, &btn_key_qsk_time, &btn_key_ratio}
 };
+static void cw_log_cb(button_data_t *data) {
+    cw_field_log_open();
+}
+
+static button_data_t btn_cw_log = {.type = BTN_TEXT, .label = "Log\nQSO", .press = cw_log_cb};
+
 static buttons_page_t page_cw_decoder_1 = {
-    {&btn_cw_p1, &btn_cw_zap, &btn_cw_peak_on, &btn_cw_peak_q}
+    {&btn_cw_p1, &btn_cw_zap, &btn_cw_peak_on, &btn_cw_peak_q, &btn_cw_log}
 };
 static buttons_page_t page_cw_decoder_2 = {
     {&btn_cw_p2, &btn_cw_decoder, &btn_cw_tuner, &btn_cw_snr}
@@ -621,7 +628,7 @@ void buttons_init(lv_obj_t *parent) {
 
         /* Encoder marks: a bar on the left edge, green VOL, blue MFK, or the theme's LED */
         lv_coord_t mark_x = theme_shape.mark[1] ? theme_shape.mark[0] : 0;
-        lv_coord_t mark_y = theme_shape.mark[1] ? (BTN_HEIGHT - 2 - theme_shape.mark[2]) / 2 : 10;
+        lv_coord_t mark_y = theme_shape.mark[1] ? (BTN_HEIGHT - 2 - theme_shape.mark[2]) / 2 : theme_shape.deck ? 0 : 10;
 
         enc_mark = lv_obj_create(f);
         lv_obj_set_pos(enc_mark, mark_x, mark_y);
@@ -1219,6 +1226,30 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
     if (nl && nl > text && nl[-1] == ':') {
         char name[32];
         snprintf(name, sizeof(name), "%.*s", (int)(nl - text - 1), text);
+        /* Deck: "Volume 30" on one line, the name grey, the value white */
+        if (theme_shape.deck && !btn_narrow(b)) {
+            /* The biggest that fits on one line */
+            static const lv_font_t *const fonts[] = {&sony_30, &sony_28, &sony_26, &sony_24, &sony_20};
+            const lv_font_t *f;
+            lv_point_t       ns, vs;
+
+            for (size_t i = 0; i < sizeof(fonts) / sizeof(fonts[0]); i++) {
+                f = fonts[i];
+                lv_txt_get_size(&ns, name, f, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+                lv_txt_get_size(&vs, nl + 1, f, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+                if (ns.x + 6 + vs.x <= btn_w(b) - 8) break;
+            }
+            lv_label_set_text(b->label, name);
+            lv_obj_set_style_text_font(b->label, f, 0);
+            lv_obj_set_style_text_color(b->label, TC(text_dim), 0);
+            lv_obj_align(b->label, LV_ALIGN_CENTER, -(vs.x + 6) / 2, 0);
+            lv_label_set_text(b->value, nl + 1);
+            lv_obj_set_style_text_font(b->value, f, 0);
+            lv_obj_align(b->value, LV_ALIGN_CENTER, (ns.x + 6) / 2, 0);
+            lv_obj_clear_flag(b->value, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_style_bg_color(b->parent, TC(btn), 0);
+            return;
+        }
         /* Name over value; one size smaller when the two lines don't fit (taller fonts, btn_gap) */
         bool fit = lv_font_get_line_height(&sony_22) + lv_font_get_line_height(&sony_32) + 9
                    <= btn_h(b);
@@ -1249,7 +1280,7 @@ static void set_btn_text(disp_btn_t *b, const char *text) {
         lv_label_set_text(b->label, text);
     }
     lv_obj_set_style_text_font(b->label, theme_shape.vision || btn_narrow(b) ? vision_label_font(b, lv_label_get_text(b->label))
-                                                                              : page ? &sony_28 : &sony_30, 0);
+                                                                              : theme_shape.deck ? &sony_30 : page ? &sony_28 : &sony_30, 0);
     if (page) lv_obj_set_style_text_color(b->label, TC(btn_page_text), 0);
     else lv_obj_remove_local_style_prop(b->label, LV_STYLE_TEXT_COLOR, 0);   /* the button's: btn_text, btn_active_text, btn_off_text */
     lv_obj_center(b->label);

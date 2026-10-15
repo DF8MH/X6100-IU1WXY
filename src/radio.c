@@ -411,7 +411,9 @@ bool radio_start_swrscan() {
 
     cparam_i_set(cfg_cur_mode, x6100_mode_am);
     radio_lock();
-    x6100_control_txpwr_set(5.0f);
+    /* 1 W is enough to read the SWR; less if PWR is set lower.
+     * ponytail: fixed 1 W cap, make it a setting if the bridge reads poorly that low */
+    x6100_control_txpwr_set(LV_MIN(param_f_get(cfg_pwr), 1.0f));
     x6100_control_swrscan_set(true);
     radio_unlock();
     state = RADIO_SWRSCAN;

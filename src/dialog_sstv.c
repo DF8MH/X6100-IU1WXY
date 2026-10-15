@@ -1808,11 +1808,7 @@ static void tx_instruction_show(const char *title, const char *hint)
     lv_obj_remove_style_all(box);
     lv_obj_set_pos(box, SSTV_TX_LIST_X, SSTV_TX_LIST_Y);
     lv_obj_set_size(box, SSTV_TX_LIST_W, SSTV_TX_LIST_H);
-    lv_obj_set_style_bg_color(box, TC(popup), 0);
-    lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(box, TC(popup_border), 0);
-    lv_obj_set_style_border_width(box, 2, 0);
-    lv_obj_set_style_radius(box, theme_shape.radius_popup, 0);
+    lv_obj_add_style(box, &popup_style, 0);
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     lv_obj_t *head = lv_label_create(box);

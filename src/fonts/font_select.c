@@ -10,17 +10,19 @@
 #define SIZES(X) X(14) X(16) X(18) X(20) X(22) X(24) X(26) X(28) X(30) \
                  X(32) X(34) X(36) X(38) X(40) X(42) X(44) X(60)
 
-#define DECL(n) extern lv_font_t sony_##n; extern const lv_font_t roboto_##n, dejavu_##n, arial_##n;
+#define DECL(n) extern lv_font_t sony_##n; extern const lv_font_t roboto_##n, dejavu_##n, arial_##n, rcond_##n;
 SIZES(DECL)
 
 #define SONY(n) &sony_##n,
 #define ROBOTO(n) &roboto_##n,
 #define DEJAVU(n) &dejavu_##n,
 #define ARIAL(n) &arial_##n,
+#define RCOND(n) &rcond_##n,
 static lv_font_t *const sony[] = { SIZES(SONY) };
 static const lv_font_t *const roboto[] = { SIZES(ROBOTO) };
 static const lv_font_t *const dejavu[] = { SIZES(DEJAVU) };
 static const lv_font_t *const arial[] = { SIZES(ARIAL) };
+static const lv_font_t *const rcond[] = { SIZES(RCOND) };
 #define N_FONTS (sizeof(sony) / sizeof(sony[0]))
 
 static lv_font_t orig[N_FONTS];
@@ -29,10 +31,11 @@ static bool applied;
 int buttons_h = 54;  /* = BUTTONS_H_MIN */
 
 void fonts_apply(uint8_t choice) {
-    if (applied || (choice != FONT_ROBOTO && choice != FONT_DEJAVU && choice != FONT_ARIAL)) return;
+    if (applied || (choice != FONT_ROBOTO && choice != FONT_DEJAVU && choice != FONT_ARIAL && choice != FONT_RCOND)) return;
     applied = true;
     if (choice == FONT_DEJAVU) buttons_h = 62;
-    const lv_font_t *const *alt = choice == FONT_ROBOTO ? roboto : choice == FONT_DEJAVU ? dejavu : arial;
+    const lv_font_t *const *alt = choice == FONT_ROBOTO ? roboto : choice == FONT_DEJAVU ? dejavu :
+                                   choice == FONT_ARIAL ? arial : rcond;
 
     for (unsigned i = 0; i < N_FONTS; i++) {
         orig[i] = *sony[i];

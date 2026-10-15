@@ -1812,7 +1812,7 @@ static lv_coord_t spectrum_layout(void) {
 static void on_spectrum_layout_change(Subject *subj, void *user_data) {
     lv_coord_t y = spectrum_layout();
 
-    freq_scale_set_y(y);
+    freq_scale_set_y(theme_shape.deck ? y - spectrum_height : y);   /* deck: the edges in the spectrum */
     y += freq_height;
     if (y == wf_y) {
         return;     /* the height of a spectrum that is off */
@@ -1858,9 +1858,10 @@ lv_obj_t * main_screen() {
 
     spectrum_min_max_reset();
 
+    if (theme_shape.deck) freq_height = 0;   /* the edge frequencies go in the spectrum's top corners */
     y = spectrum_layout();
 
-    freq_scale_init(obj, y);
+    freq_scale_init(obj, theme_shape.deck ? y - spectrum_height : y);
 
     spot_tag_y = y + 36;
 
@@ -1897,12 +1898,12 @@ lv_obj_t * main_screen() {
     msg = msg_init(lv_layer_top());
     msg_tiny = msg_tiny_init(lv_layer_top());
 
-    clock_init(obj);
     info_init(obj);
+    clock_init(obj);    /* deck: over the info rows */
 
-    meter = meter_init(obj);
-    tx_info = tx_info_init(obj);
     freq_strip_init(obj);
+    meter = meter_init(obj);    /* deck: on the frequency panel */
+    tx_info = tx_info_init(obj);
 
     /* Holo: an accent line between the top bar and the frequency strip */
     if (theme_shape.rule) {

@@ -17,4 +17,6 @@ lv_obj_t * tx_info_init(lv_obj_t *parent);
 
 void tx_info_update(float pwr, float vswr, float alc);
 
+void tx_info_get(float *pwr, float *swr);
+
 bool tx_info_refresh(uint8_t * prev_msg_id, float * alc_p, float * pwr_p, float * vswr_p);

@@ -31,9 +31,9 @@ extern "C" {
     X(strip,             0x1c2a38, 0x1a4078, 0xffffff, 0x000000) /* frequency strip */ \
     X(strip_grad,        0x101a24, 0x0c2448, 0xffffff, 0x000000) \
     X(strip_border,      0x4a6a8a, 0x8aa8d8, 0x000000, 0x4c4c4c) \
-    X(dialog,            0x49636f, 0x2a5aa0, 0xffffff, 0x101010) /* app windows */ \
-    X(dialog_grad,       0x2c3a45, 0x103060, 0xffffff, 0x000000) \
-    X(dialog_border,     0xe0e4e8, 0x8aa8d8, 0x000000, 0x5a5a5a) \
+    X(dialog,            0x22303d, 0x2a5aa0, 0xffffff, 0x101010) /* app windows */ \
+    X(dialog_grad,       0x141e28, 0x103060, 0xffffff, 0x000000) \
+    X(dialog_border,     0x4a6a8a, 0x8aa8d8, 0x000000, 0x5a5a5a) \
     X(btn,               0x0b1622, 0x0b1622, 0xe6e6e6, 0x5e5e5e) /* bottom buttons */ \
     X(btn_grad,          0x0b1622, 0x0b1622, 0xe6e6e6, 0x262626) \
     X(btn_border,        0x99aaaa, 0x99aaaa, 0x000000, 0x8a8a8a) \
@@ -192,6 +192,8 @@ typedef struct {
     bool    rule;           /* accent line under the top bar and over the active button (Holo) */
     bool    vision;         /* VISION: big type for weak eyes, a low top bar, a tall frequency strip, the S-meter on a row of its own */
 #define VISION_FONT_STEPS 3 /* VISION: every font this many sizes up, apps and Settings too (fonts_scale) */
+    bool    deck;           /* Black Metal, Total Black: two rows of state on top, S/SWR/ALC scales beside a big
+                             * frequency, the frequency edges in the spectrum, one-line flat buttons */
     uint32_t waterfall[16];     /* palette stops from weak to strong signal */
     uint8_t  waterfall_n;       /* 0 = a built-in table (waterfall_table) */
     uint8_t  waterfall_table;   /* 0 gauss, 1 legacy */

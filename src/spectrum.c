@@ -145,7 +145,7 @@ static lv_color_t fill_color(void) {
 /* The fill fading from its colour at the trace to the background at the bottom, the trace drawn
  * over it (after R1CBU's gradient fill, OpenX6100) */
 static bool fill_grad(void) {
-    return params.spectrum_filled.x && param_i_get(cfg_spectrum_fill_gradient);
+    return params.spectrum_filled.x && (param_i_get(cfg_spectrum_fill_gradient) || theme_shape.deck);   /* deck: always */
 }
 
 static void spectrum_draw_cb(lv_event_t *e) {
@@ -253,7 +253,7 @@ static void spectrum_draw_cb(lv_event_t *e) {
 
     lv_draw_rect_dsc_init(&rect_dsc);
 
-    rect_dsc.bg_color = bg_color;
+    rect_dsc.bg_color = theme_shape.deck ? TC(vfo_bg) : bg_color;   /* deck: shaded on the black */
     rect_dsc.bg_opa   = LV_OPA_50;
 
     int32_t w_hz = width_hz / zoom_factor;

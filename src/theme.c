@@ -21,10 +21,10 @@
 #define THEMES_DIR "/mnt/themes"
 #endif
 
-enum { B_IU1WXY, B_LEGACY, B_OUTDOOR, B_CLASSIC, B_OUTDOOR_NEG, B_VISION, B_COUNT };
+enum { B_IU1WXY, B_LEGACY, B_OUTDOOR, B_CLASSIC, B_OUTDOOR_NEG, B_VISION, B_BLACK_METAL, B_TOTAL_BLACK, B_COUNT };
 
 static const char *const builtin_names[B_COUNT] = {"IU1WXY", "Legacy", "Outdoor", "Classic", "Outdoor-Negative",
-                                                   "VISION"};
+                                                   "VISION", "Black Metal", "Total Black"};
 
 /* VISION: IU1WXY's colours made "warm anthracite": white digits on dark grey, orange for what is on,
  * aqua frames, the layout big (styles.c) */
@@ -42,6 +42,40 @@ static const struct {
     {TC_pill_off_text, 0x80868e}, {TC_focus, 0xff8a30},      {TC_focus_text, 0x2a1200},     {TC_meter_bar, 0x5dcaa5},
     {TC_meter_weak, 0x5dcaa5},  {TC_meter_low, 0x5dcaa5},    {TC_meter_high, 0xff5a3c},     {TC_meter_over, 0xffd040},
     {TC_popup, 0x262a31},       {TC_popup_border, 0x5dcaa5},
+};
+
+/* Black Metal and Total Black, designed by 2E0JFS: white and grey type, cyan for what is tuned and lit,
+ * the deck layout (theme_shape.deck). Black Metal has brushed grey gradients on the rows, the
+ * frequency panel and the buttons; Total Black is the same on pure black */
+typedef struct {
+    theme_color_t c;
+    uint32_t      v;
+} theme_set_t;
+
+static const theme_set_t deck_colors[] = {
+    {TC_bg, 0x000000},          {TC_panel, 0x000000},        {TC_bar, 0x2e3134},            {TC_bar_grad, 0x181a1c},
+    {TC_bar_border, 0x5a5e62},  {TC_strip, 0x4e5256},        {TC_strip_grad, 0x26282b},     {TC_strip_border, 0x141618},
+    {TC_dialog, 0x1c1e21},      {TC_dialog_grad, 0x0e0f11},  {TC_dialog_border, 0x4a4e52},  {TC_btn, 0x3e4144},
+    {TC_btn_grad, 0x242628},    {TC_btn_border, 0x5a5e62},   {TC_btn_text, 0xeef0f2},       {TC_btn_active, 0x45494d},
+    {TC_btn_active_grad, 0x26282a}, {TC_btn_active_border, 0xeef0f2}, {TC_btn_active_text, 0xffffff},
+    {TC_btn_page, 0x2e3134},    {TC_btn_page_text, 0xeef0f2}, {TC_btn_off_text, 0x5a5e63},  {TC_btn_off_border, 0x2a2c2f},
+    {TC_card, 0x4a4e52},        {TC_popup, 0x16181a},        {TC_popup_border, 0x5a5e62},   {TC_side, 0x0e0f11},
+    {TC_chip, 0x222528},        {TC_sel_bg, 0x123c4c},       {TC_sel_text, 0x7fdcff},       {TC_sel_border, 0x28bef0},
+    {TC_vfo, 0x28bef0},         {TC_vfo_bg, 0x346a7c},       {TC_text, 0xeef0f2},           {TC_text_value, 0xeef0f2},
+    {TC_text_dim, 0xafb4b9},    {TC_text_soft, 0xb4b9be},    {TC_text_mute, 0x80858a},      {TC_text_head, 0x5fd0f5},
+    {TC_line, 0xa8e4fa},        {TC_off, 0xc8cdd2},          {TC_track, 0x28343e},          {TC_icon_off, 0x2a2d30},
+    {TC_info, 0x28bef0},        {TC_ok, 0x5ae15f},           {TC_ok_bg, 0x1a3e1e},          {TC_toggle_on, 0x28bef0},
+    {TC_vfo_line, 0xe6821e},    {TC_mode_text, 0x000000},    {TC_mode_bg, 0xeef0f2},        {TC_mode_border, 0xeef0f2},
+    {TC_meter_bar, 0x28bef0},   {TC_meter_weak, 0x28bef0},   {TC_meter_low, 0x28bef0},      {TC_meter_high, 0xf03c32},
+    {TC_meter_over, 0xf03c32},  {TC_pill_off_text, 0x80858a},  {TC_btn_mark, 0x5a5e62},       {TC_btn_mark_assigned, 0x6a6e72},
+    {TC_btn_mark_active, 0x28bef0},
+};
+
+static const theme_set_t total_black_colors[] = {   /* over deck_colors */
+    {TC_bar, 0x000000},         {TC_bar_grad, 0x000000},     {TC_bar_border, 0x1e2124},     {TC_strip, 0x000000},
+    {TC_strip_grad, 0x000000},  {TC_strip_border, 0x1e2124}, {TC_dialog, 0x000000},         {TC_dialog_grad, 0x000000},
+    {TC_btn, 0x000000},         {TC_btn_grad, 0x000000},     {TC_btn_border, 0x46494d},     {TC_btn_active, 0x000000},
+    {TC_btn_active_grad, 0x000000}, {TC_btn_page, 0x000000}, {TC_popup, 0x000000},          {TC_side, 0x000000},
 };
 
 static const uint32_t builtin_colors[B_OUTDOOR_NEG][TC_COUNT] = {   /* VISION and Outdoor-Negative are made from these */
@@ -116,9 +150,13 @@ static uint32_t negative(uint32_t c) {
     return (uint32_t)(r + d) << 16 | (uint32_t)(g + d) << 8 | (uint32_t)(b + d);
 }
 
+static void theme_set(const theme_set_t *s, size_t n) {
+    for (size_t i = 0; i < n; i++) colors[s[i].c] = s[i].v;
+}
+
 /* Outdoor-Negative: Outdoor with every colour and the waterfall through negative() */
 static void use_builtin(int b) {
-    int src = b == B_OUTDOOR_NEG ? B_OUTDOOR : b == B_VISION ? B_IU1WXY : b;
+    int src = b == B_OUTDOOR_NEG ? B_OUTDOOR : b >= B_VISION ? B_IU1WXY : b;
 
     memcpy(colors, builtin_colors[src], sizeof(colors));
     theme_shape = builtin_shapes[src];
@@ -135,6 +173,15 @@ static void use_builtin(int b) {
         theme_shape = (theme_shape_t){.radius = 8, .radius_btn = 10, .radius_popup = 10, .border = 2,
                                       .focus_solid = true, .mode_box = true, .pill_border = 2, .font = -1,
                                       .vision = true};
+    }
+    if (b == B_BLACK_METAL || b == B_TOTAL_BLACK) {
+        theme_set(deck_colors, sizeof(deck_colors) / sizeof(deck_colors[0]));
+        if (b == B_TOTAL_BLACK) theme_set(total_black_colors, sizeof(total_black_colors) / sizeof(total_black_colors[0]));
+        theme_shape = (theme_shape_t){.radius_popup = 4, .border = 1, .box_gradient = true,
+                                      .btn_gradient = b == B_BLACK_METAL, .font = FONT_RCOND, .deck = true,
+                                      /* black, deep blue, blue, cyan, yellow-green */
+                                      .waterfall = {0x000000, 0x000418, 0x00145e, 0x0a5ad2, 0x28c8f0, 0xc8f05a},
+                                      .waterfall_n = 6};
     }
     snprintf(theme_shape.name, sizeof(theme_shape.name), "%s", builtin_names[b]);
 }

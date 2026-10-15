@@ -103,9 +103,10 @@ extern lv_style_t   dialog_item_style;
 extern lv_style_t   dialog_item_focus_style;
 extern lv_style_t   dialog_item_edited_style;
 extern lv_style_t   dialog_dropdown_list_style;
+extern lv_style_t   dialog_dropdown_sel_style;
 
 extern lv_style_t   cw_tune_style;
-extern lv_style_t   card_style;     /* Settings cards */
+extern lv_style_t   popup_style;    /* menus and popups over the screen or an app */
 
 extern lv_font_t    sony_14;
 extern lv_font_t    sony_16;
@@ -130,6 +131,8 @@ void styles_init(void);
 
 /* Again after another theme_init() (the UI harness switches themes) */
 void styles_apply(void);
+/* A dropdown's list as a popup of the theme */
+void styles_dropdown_list(lv_obj_t *list);
 /* A box of the theme (colour, gradient, border, radius) with its image at w x h, if it has one */
 void styles_theme_box(lv_style_t *s, theme_color_t top, theme_color_t bottom, theme_color_t border, int radius,
                       theme_image_t img, lv_coord_t w, lv_coord_t h);

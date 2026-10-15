@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-enum { FONT_SONY, FONT_ROBOTO, FONT_DEJAVU, FONT_ARIAL };
+enum { FONT_SONY, FONT_ROBOTO, FONT_DEJAVU, FONT_ARIAL, FONT_RCOND };
 
 /* Call once at boot, before any style or widget uses the fonts */
 void fonts_apply(uint8_t choice);

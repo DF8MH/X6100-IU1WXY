@@ -61,6 +61,7 @@ extern "C" {
     #include "params/params.h"
     #include "backlight.h"
     #include "theme.h"
+    #include "tx_info.h"
 
     #include "lvgl/lvgl.h"
     #include <ctype.h>
@@ -184,6 +185,7 @@ static const struct {
     {"app_base",    "WSPR",   dialog_wspr_remote,   1, 0,         INT32_MIN},
     {"app_base",    "SSTV",   dialog_sstv_remote,   1, 0,         INT32_MIN},
     {"app_base",    "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MIN},
+    {"navtex_mode", "NavTex", dialog_navtex_remote, 0, 1,         INT32_MIN},   /* 0 NAVTEX, 1 DSC */
     {"app_base",    "NavTex", dialog_navtex_remote, 1, 0,         INT32_MIN},
 };
 
@@ -568,11 +570,15 @@ static int state_line(char *buf, size_t size) {
     char     spot[16];
     uint32_t spot_seq = dialog_cluster_tuned(spot, sizeof(spot));
 
+    /* Measured TX power and SWR, tenths (the Link TX bar) */
+    float tx_pwr, tx_swr;
+    tx_info_get(&tx_pwr, &tx_swr);
+
     return snprintf(buf, size,
                     "{\"t\":\"state\",\"vfo\":\"%s\",\"freq\":%i,\"freq_bg\":%i,\"mode\":\"%s\",\"band\":\"%s\","
                     "\"filter\":%i,\"flo\":%i,\"fhi\":%i,\"rfgain\":%i,\"sql\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
                     "\"nb_level\":%i,\"nb_width\":%i,\"nr_level\":%i,\"pwr\":%i,\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s,"
-                    "\"cwt\":%s,\"logrev\":%u,\"did\":\"%s\",\"spot\":\"%s\",\"spotseq\":%u}\n",
+                    "\"cwt\":%s,\"logrev\":%u,\"did\":\"%s\",\"spot\":\"%s\",\"spotseq\":%u,\"fwd\":%i,\"swr\":%i}\n",
                     cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? "A" : "B",
                     cfg_sm.cp_fg_freq.get(), cfg_sm.cp_bg_freq.get(),
                     (mode >= 0 && mode <= x6100_mode_nfm) ? mode_names[mode] : "?", band_name(),
@@ -582,7 +588,8 @@ static int state_line(char *buf, size_t size) {
                     (agc >= 0 && agc <= x6100_agc_auto) ? agc_names[agc] : "?",
                     cfg_sm.p_nb.get() != 0, cfg_sm.p_nr.get() != 0,
                     cfg_sm.p_nb_level.get(), cfg_sm.p_nb_width.get(), cfg_sm.p_nr_level.get(),
-                    (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax, cwt, log_rev(), device_id(), spot, spot_seq);
+                    (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax, cwt, log_rev(), device_id(), spot, spot_seq,
+                    (int)lroundf(tx_pwr * 10), (int)lroundf(tx_swr * 10));
 }
 
 static void send_state(client_t *c) {

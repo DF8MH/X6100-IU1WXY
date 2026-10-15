@@ -13,7 +13,9 @@
 #include "cw.h"
 #include "cw_encoder.h"
 #include "dialog.h"
+#include "dialog_field.h"
 #include "keyboard.h"
+#include "main_screen.h"
 #include "mfk.h"
 #include "panel.h"
 #include "params/params.h"
@@ -21,6 +23,7 @@
 #include "remote_server.h"
 #include "styles.h"
 #include "theme.h"
+#include "textarea_window.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -131,6 +134,34 @@ void cw_field_send_text(const char *text) {
     queue[q]   = 0;
 }
 
+void cw_field_log_qso(const char *text) {
+    char call[32] = "", rs[8] = "", rr[8] = "", line[64];
+
+    if (sscanf(text, "%31s %7s %7s", call, rs, rr) < 1) {
+        return;
+    }
+    snprintf(line, sizeof(line), "%s|%s|%s", call, rs, rr);
+    dialog_field_qso_log(line);
+}
+
+static bool log_ok(void) {
+    cw_field_log_qso(textarea_window_get());
+    textarea_window_close();
+    main_screen_keys_enable(true);
+    return true;
+}
+
+static bool log_cancel(void) {
+    textarea_window_close();
+    main_screen_keys_enable(true);
+    return true;
+}
+
+void cw_field_log_open(void) {
+    main_screen_keys_enable(false);
+    textarea_window_open_w_label(log_ok, log_cancel, "Call [sent [rcvd]]: ");
+}
+
 bool cw_field_key(uint32_t key) {
     size_t len  = strlen(input);
     bool   fkey = key >= KEYBOARD_F1 && key <= KEYBOARD_F5;   /* MSG > CW messages 1-5 */
@@ -150,6 +181,14 @@ bool cw_field_key(uint32_t key) {
             return false;
         }
         cw_field_send_text(msgs[i]);
+        timer_cb(NULL);
+        return true;
+    }
+    if (key == KEYBOARD_F10) {     /* the line is the QSO to log, not sent */
+        if (input[0]) {
+            cw_field_log_qso(input);
+            input[0] = 0;
+        }
         timer_cb(NULL);
         return true;
     }

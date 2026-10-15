@@ -87,6 +87,9 @@ void table_view_push_ui(const cell_data_t *src);
  * returns; table_view_push_ui() takes its own snapshot into the ring pool. */
 void table_view_add_msg_cb(void *data);
 
+/* Flag k of flags.h (flag_of[].flag) as an LVGL image, NULL for none */
+const lv_img_dsc_t *table_view_flag(int k);
+
 #ifdef __cplusplus
 }
 #endif

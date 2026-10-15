@@ -50,25 +50,35 @@ int freq_strip_step_char(const char *text, int32_t step, bool *big) {
 static char      app[16];
 static lv_obj_t *strip, *band_label, *freq_label, *mode_label, *qth_dot, *qth_label, *tx_label;
 static lv_obj_t *nr_label, *nb_label, *dnf_label, *rit_label, *xit_label;
+static lv_obj_t *freq_small, *other_label, *vfo_badge;   /* deck: the 10 Hz digits, the other VFO, A or B */
 static char      note[64];
 static int32_t   note_freq;
 static int32_t   tx_offset = -1;
 
 /* The step marker, under the digit (in the label's own box, so it is redrawn with the text) */
 static void step_mark_draw_cb(lv_event_t *e) {
+    lv_obj_t   *label = lv_event_get_target(e);
     const char *text = lv_label_get_text(freq_label);
+    char        full[48];
     bool        big;
-    int         pos = freq_strip_step_char(text, param_i_get(cfg_mode_freq_step), &big);
 
-    if (pos < 0 || main_screen_freq_locked()) return;
+    if (theme_shape.deck) {   /* "14.100" and ".00": the digit is in one of them, the units are not shown */
+        snprintf(full, sizeof(full), "%s%s0", text, lv_label_get_text(freq_small));
+        text = full;
+    }
 
-    const lv_font_t *font = lv_obj_get_style_text_font(freq_label, 0);
+    int pos = freq_strip_step_char(text, param_i_get(cfg_mode_freq_step), &big);
+
+    if (theme_shape.deck && label == freq_small) pos -= (int)strlen(lv_label_get_text(freq_label));
+    if (pos < 0 || pos >= (int)strlen(lv_label_get_text(label)) || main_screen_freq_locked()) return;
+
+    const lv_font_t *font = lv_obj_get_style_text_font(label, 0);
     lv_area_t        a;
     lv_point_t       p1, p2;
 
-    lv_obj_get_content_coords(freq_label, &a);
-    lv_label_get_letter_pos(freq_label, pos, &p1);
-    lv_label_get_letter_pos(freq_label, pos + 1, &p2);
+    lv_obj_get_content_coords(label, &a);
+    lv_label_get_letter_pos(label, pos, &p1);
+    lv_label_get_letter_pos(label, pos + 1, &p2);
     p1.x += a.x1;
     p2.x += a.x1;
     p1.y = p2.y = a.y1 + p1.y + font->line_height - font->base_line + 2;
@@ -82,8 +92,8 @@ static void step_mark_draw_cb(lv_event_t *e) {
     lv_draw_line_dsc_t dsc;
 
     lv_draw_line_dsc_init(&dsc);
-    dsc.color = TC(ok);
-    dsc.width = 2;
+    dsc.color = theme_shape.deck ? TC(info) : TC(ok);
+    dsc.width = theme_shape.deck ? 3 : 2;
     lv_draw_line(lv_event_get_draw_ctx(e), &dsc, &p1, &p2);
 }
 
@@ -127,7 +137,18 @@ static void update_cb(Subject *subj, void *user_data) {
     int32_t  f = cparam_i_get(cfg_fg_freq);
 
     split_freq(f, &mhz, &khz, &hz);
-    if (param_i_get(cfg_band_split)) {
+    if (theme_shape.deck) {     /* the other VFO at the top right, the current one in the badge */
+        bool     b = param_i_get(cfg_band_current_vfo) == X6100_VFO_B;
+        uint16_t mhz2, khz2, hz2;
+
+        split_freq(cparam_i_get(cfg_bg_freq), &mhz2, &khz2, &hz2);
+        lv_label_set_text_fmt(freq_label, "%i.%03i", mhz, khz);
+        lv_label_set_text_fmt(freq_small, ".%02i", hz / 10);
+        lv_label_set_text_fmt(other_label, "#%06x %s#  %i.%03i.%02i", theme_hex(TC_text), b ? "A" : "B", mhz2, khz2,
+                              hz2 / 10);
+        lv_label_set_text(vfo_badge, b ? "B" : "A");
+        lv_label_set_text_fmt(band_label, "#%06x %s#", theme_hex(TC_accent), app);   /* the open app only */
+    } else if (param_i_get(cfg_band_split)) {
         uint16_t mhz2, khz2, hz2;
         split_freq(cparam_i_get(cfg_bg_freq), &mhz2, &khz2, &hz2);
         lv_label_set_text_fmt(freq_label, "%i.%03i.%03i / %i.%03i.%03i", mhz, khz, hz, mhz2, khz2, hz2);
@@ -137,7 +158,8 @@ static void update_cb(Subject *subj, void *user_data) {
     const char *band = note[0] && f == note_freq ? note : cluster_band_name(cluster_band_of(f));
 
     /* The open app in front of the band, so it's clear where the keys go */
-    if (app[0] && theme_shape.vision) {   /* big type: on two lines, or it ran into the frequency */
+    if (theme_shape.deck) {
+    } else if (app[0] && theme_shape.vision) {   /* big type: on two lines, or it ran into the frequency */
         lv_obj_set_style_text_font(band_label, &sony_24, 0);
         lv_label_set_text_fmt(band_label, "#%06x %s#\n%s", theme_hex(TC_accent), app, band);
     } else if (app[0]) {
@@ -262,6 +284,35 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_set_style_bg_opa(qth_dot, LV_OPA_COVER, 0);
     qth_label = make_label(right, LV_ALIGN_DEFAULT, 0, v ? &sony_32 : &sony_28, theme_hex(TC_text));
 
+    /* Deck: the meter on the left of the panel, the frequency big with the 10 Hz digits smaller, the
+     * other VFO over the right column, the current one in a badge under it; the mode and NR NB DNF
+     * RIT XIT are in the info rows, the locator is not shown */
+    if (theme_shape.deck) {
+        extern const lv_font_t rcond_freq_88, rcond_freq_54;
+
+        lv_obj_set_style_text_font(freq_label, &rcond_freq_88, 0);
+        freq_small = make_label(mid, LV_ALIGN_DEFAULT, 0, &rcond_freq_54, theme_hex(TC_text));
+        lv_obj_set_style_pad_column(mid, 0, 0);
+        lv_obj_set_style_pad_bottom(freq_small, 3, 0);
+        lv_obj_align(mid, LV_ALIGN_CENTER, 100, 10);
+        lv_obj_add_flag(mode_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_text_font(band_label, &sony_20, 0);
+        lv_obj_align(band_label, LV_ALIGN_TOP_LEFT, 310, 4);
+        lv_obj_t *hide[] = {nr_label, nb_label, dnf_label, rit_label, xit_label, right};
+        for (int i = 0; i < 6; i++) lv_obj_add_flag(hide[i], LV_OBJ_FLAG_IGNORE_LAYOUT | LV_OBJ_FLAG_HIDDEN);
+        lv_obj_align(col, LV_ALIGN_TOP_RIGHT, -10, 6);
+        other_label = make_label(col, LV_ALIGN_DEFAULT, 0, &sony_24, theme_hex(TC_text_dim));
+        lv_label_set_recolor(other_label, true);
+        lv_obj_move_to_index(other_label, 0);
+        vfo_badge = make_label(strip, LV_ALIGN_BOTTOM_RIGHT, -12, &sony_24, theme_hex(TC_bg));
+        lv_obj_align(vfo_badge, LV_ALIGN_BOTTOM_RIGHT, -12, -8);
+        lv_obj_set_style_bg_color(vfo_badge, TC(info), 0);
+        lv_obj_set_style_bg_opa(vfo_badge, LV_OPA_COVER, 0);
+        lv_obj_set_style_pad_hor(vfo_badge, 5, 0);
+        lv_obj_add_event_cb(freq_small, step_mark_draw_cb, LV_EVENT_DRAW_POST, NULL);
+        subject_subscribe_delayed((Subject *)cfg_band_current_vfo, update_cb, NULL);
+    }
+
     subject_subscribe_delayed((Subject *)cfg_fg_freq, update_cb, NULL);
     subject_subscribe_delayed((Subject *)cfg_bg_freq, update_cb, NULL);
     subject_subscribe_delayed((Subject *)cfg_band_split, update_cb, NULL);
@@ -283,6 +334,17 @@ void freq_strip_set_label(const char *text, int32_t freq_hz) {
 void freq_strip_set_app(const char *name) {
     snprintf(app, sizeof(app), "%s", name ? name : "");
     if (strip) update_cb(NULL, NULL);
+}
+
+void freq_strip_set_dialog(bool open) {
+    extern const lv_font_t rcond_freq_88, rcond_freq_54;
+
+    if (!strip || !theme_shape.deck) return;
+    lv_obj_set_style_text_font(freq_label, open ? &rcond_freq_54 : &rcond_freq_88, 0);
+    lv_obj_set_style_text_font(freq_small, open ? &sony_32 : &rcond_freq_54, 0);
+    lv_obj_align(lv_obj_get_parent(freq_label), LV_ALIGN_CENTER, 100, open ? -14 : 10);
+    if (open) lv_obj_add_flag(vfo_badge, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_clear_flag(vfo_badge, LV_OBJ_FLAG_HIDDEN);
 }
 
 void freq_strip_set_offset(int32_t offset_hz) {

@@ -174,16 +174,34 @@ static void draw_cb(lv_event_t * e) {
 
     lv_area_t   area;
 
+    /* Theme bands: SWR up to 1.5 in the ok colour, over 3 in the error one */
+    lv_draw_rect_dsc_t band;
+    lv_draw_rect_dsc_init(&band);
+    band.bg_opa = LV_OPA_20;
+
+    area.x1 = x1;
+    area.x2 = x1 + w;
+    area.y1 = y1 + calc_y(1.5f, h);
+    area.y2 = y1 + h;
+    band.bg_color = TC(ok);
+    lv_draw_rect(draw_ctx, &band, &area);
+
+    area.y1 = y1;
+    area.y2 = y1 + calc_y(3.0f, h);
+    band.bg_color = TC(err);
+    lv_draw_rect(draw_ctx, &band, &area);
+
     lv_draw_label_dsc_t dsc_label;
     lv_draw_label_dsc_init(&dsc_label);
 
-    dsc_label.color = TC(text);
+    dsc_label.color = TC(text_dim);
     dsc_label.font = &sony_20;
 
     lv_point_t label_size;
 
     line_dsc.color = TC(line);
-    line_dsc.width = 2;
+    line_dsc.width = 1;
+    line_dsc.opa = LV_OPA_60;
 
     b.x = x1 + w;
 
@@ -216,8 +234,12 @@ static void draw_cb(lv_event_t * e) {
         a.x = x1 + w / 2 + (w / 4) * x;
         b.x = a.x;
 
+        /* The centre one is the VFO */
+        line_dsc.color = x ? TC(line) : TC(vfo_line);
+        line_dsc.opa = x ? LV_OPA_60 : LV_OPA_COVER;
         lv_draw_line(draw_ctx, &line_dsc, &a, &b);
 
+        dsc_label.color = x ? TC(text_dim) : TC(text);
         split_freq(freq, &mhz, &khz, &hz);
         snprintf(str, sizeof(str), "%i.%03i.%03i", mhz, khz, hz);
         lv_txt_get_size(&label_size, str, dsc_label.font, 0, 0, LV_COORD_MAX, 0);
@@ -232,10 +254,16 @@ static void draw_cb(lv_event_t * e) {
 
     /* Chart */
 
-    line_dsc.color = TC(text);
     line_dsc.width = 4;
+    line_dsc.opa = LV_OPA_COVER;
+    line_dsc.round_start = 1;
+    line_dsc.round_end = 1;
 
     for (uint16_t i = 1; i < STEPS; i++) {
+        /* Each segment in the colour of its worse end */
+        float v = LV_MAX(data_filtered[i-1], data_filtered[i]);
+        line_dsc.color = v <= 1.5f ? TC(ok) : v <= 3.0f ? TC(warn) : TC(err);
+
         a.x = x1 + (i - 1) * w / STEPS;
         a.y = y1 + calc_y(data_filtered[i-1], h);
 

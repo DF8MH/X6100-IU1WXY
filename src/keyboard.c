@@ -61,7 +61,7 @@ static bool kbd_next(void *ctx, uint16_t *scancode, uint32_t *key, int *value) {
         *scancode = in.code;
         *value    = in.value;
         *key      = xkb_process_key(in.code, in.value); /* also keeps Shift state */
-        if (in.code >= KEY_F1 && in.code <= KEY_F5) {
+        if (in.code >= KEY_F1 && in.code <= KEY_F10) {
             *key = KEYBOARD_F1 + in.code - KEY_F1;      /* xkb gives no character for them */
         }
         return true;

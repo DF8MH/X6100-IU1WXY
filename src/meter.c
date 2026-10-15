@@ -75,7 +75,7 @@ static void update_db_label() {
 
 /* VISION keeps the bars: its meter is a wide, low row with the value beside it */
 static bool needle_on(void) {
-    return param_i_get(cfg_smeter_needle) && !theme_shape.vision;
+    return param_i_get(cfg_smeter_needle) && !theme_shape.vision && !theme_shape.deck;
 }
 
 /* The dB value: under the bars, or under the dial in the needle's dim colour */
@@ -302,6 +302,66 @@ static void tx_veil(lv_obj_t *o, lv_draw_ctx_t *draw_ctx) {
     lv_draw_rect(draw_ctx, &dsc, &o->coords);
 }
 
+/* Deck: S, SWR and ALC scales stacked, a thin segmented bar under the S numbers (the SWR and ALC
+ * readings are in the TX info box that covers this one while transmitting) */
+static void label_at(lv_draw_ctx_t *draw_ctx, lv_draw_label_dsc_t *dsc, lv_coord_t cx, lv_coord_t y, const char *txt,
+                     bool left) {
+    lv_point_t sz;
+    lv_area_t  a;
+
+    lv_txt_get_size(&sz, txt, dsc->font, 0, 0, LV_COORD_MAX, 0);
+    a.x1 = left ? cx : cx - sz.x / 2;
+    a.y1 = y;
+    a.x2 = a.x1 + sz.x;
+    a.y2 = y + sz.y;
+    lv_draw_label(draw_ctx, dsc, &a, txt, NULL);
+}
+
+static lv_coord_t deck_x(float db) {   /* S1 at 58, S9 at 154, +40 at 233 */
+    db = LV_CLAMP(S1, db, S9_40);
+    return db <= S9 ? 58 + (db - S1) * 2 : 154 + (db - S9) * 79 / (S9_40 - S9);
+}
+
+static void deck_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx) {
+    static const char *const s_num[] = {"1", "3", "5", "7", "9"}, *const swr[] = {"1", "2", "3", "4", ">5"};
+    lv_draw_label_dsc_t      dsc;
+    lv_draw_rect_dsc_t       rect;
+    lv_coord_t               x0 = obj->coords.x1, y0 = obj->coords.y1;
+    char                     txt[4];
+
+    lv_draw_label_dsc_init(&dsc);
+    dsc.font  = &sony_20;
+    dsc.color = TC(text);
+    label_at(draw_ctx, &dsc, x0 + 14, y0 + 17, "S", true);
+    for (int i = 0; i < 5; i++) label_at(draw_ctx, &dsc, x0 + 58 + i * 24, y0 + 4, s_num[i], false);
+    dsc.color = TC(meter_over);
+    label_at(draw_ctx, &dsc, x0 + 193, y0 + 4, "+20", false);
+    label_at(draw_ctx, &dsc, x0 + 233, y0 + 4, "+40", false);
+    dsc.color = TC(text_mute);
+    label_at(draw_ctx, &dsc, x0 + 14, y0 + 47, "SWR", true);
+    label_at(draw_ctx, &dsc, x0 + 14, y0 + 77, "ALC", true);
+    for (int i = 0; i < 5; i++) label_at(draw_ctx, &dsc, x0 + 58 + i * 50, y0 + 35, swr[i], false);
+    for (int i = 0; i <= 5; i++) {
+        snprintf(txt, sizeof(txt), "%d", i * 2);
+        label_at(draw_ctx, &dsc, x0 + 60 + i * 40, y0 + 65, txt, false);
+    }
+
+    /* 31 segments to +40: lit to the level, the peak bright */
+    lv_coord_t lvl = deck_x(meter_db), peak = deck_x(meter_peak);
+    lv_area_t  a = {.y1 = y0 + 27, .y2 = y0 + 33};
+
+    lv_draw_rect_dsc_init(&rect);
+    for (int i = 0; i < 31; i++) {
+        lv_coord_t x = 66 + i * 11 / 2;
+
+        a.x1 = x0 + x;
+        a.x2 = a.x1 + 3;
+        rect.bg_color = x > lvl ? (x <= peak && x + 6 > peak ? TC(text) : TC(track))
+                                : x >= 154 ? TC(meter_high) : TC(meter_bar);
+        lv_draw_rect(draw_ctx, &rect, &a);
+    }
+}
+
 static void meter_draw_cb(lv_event_t * e) {
     lv_obj_t            *obj = lv_event_get_target(e);
     lv_draw_ctx_t       *draw_ctx = lv_event_get_draw_ctx(e);
@@ -309,6 +369,10 @@ static void meter_draw_cb(lv_event_t * e) {
     lv_draw_label_dsc_t label_dsc;
     lv_area_t           area;
 
+    if (theme_shape.deck) {
+        deck_draw(obj, draw_ctx);
+        return;
+    }
     if (needle_on()) {
         meter_needle_draw(obj, draw_ctx);
         if (in_tx) tx_veil(obj, draw_ctx);
@@ -432,6 +496,7 @@ lv_obj_t * meter_init(lv_obj_t * parent) {
     subject_subscribe_delayed_and_notify((Subject*)cfg_cur_att, on_bool_value_change, &att);
 
     db_val_label = lv_label_create(obj);
+    if (theme_shape.deck) lv_obj_add_flag(db_val_label, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_style_text_font(db_val_label, theme_shape.vision ? &sony_40 : &sony_20, 0);
     lv_obj_set_style_text_color(db_val_label, TC(text), 0);
     db_label_place();

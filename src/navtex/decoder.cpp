@@ -46,6 +46,12 @@ void navtex_decoder_set_char_callback(navtex_decoder_t *decoder,
     decoder->rx->set_char_callback(cb, userdata);
 }
 
+void navtex_decoder_set_bit_callback(navtex_decoder_t *decoder, void (*cb)(int mark, void *userdata), void *userdata)
+{
+    if (decoder && decoder->rx)
+        decoder->rx->set_bit_callback(cb, userdata);
+}
+
 void navtex_decoder_destroy(navtex_decoder_t *decoder)
 {
     if (!decoder)

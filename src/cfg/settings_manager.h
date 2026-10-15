@@ -253,7 +253,7 @@ class SettingsManager {
     Parameter<int32_t> p_key_train{"key_train", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // SWR protection: the most SWR a transmission keeps, in tenths (10 = off)
-    Parameter<int32_t> p_swr_protect{"swr_protect", 25, 10, 50,
+    Parameter<int32_t> p_swr_protect{"swr_protect", 20, 10, 50,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_qsk_time{"qsk_time", 100, 0, 1000,
         StorageType::GLOBAL, pending_writes_, &global_params_};

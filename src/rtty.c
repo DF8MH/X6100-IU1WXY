@@ -81,6 +81,35 @@ static const char rtty_symbols[32] = {'\0', '3', '\n', '-', ' ', '\0', '8', '7',
 
 static void on_cur_mode_change(Subject *subj, void *user_data);
 
+/* Tuning scope: the audio through a mark and a space band-pass, X and Y of the old
+ * crossed-ellipse display; and where the two tones really are, from the phase steps
+ * of the decided symbols (offset of their middle from the centre, Hz) */
+static float    scope_x[RTTY_SCOPE_LEN];
+static float    scope_y[RTTY_SCOPE_LEN];
+static uint16_t scope_pos;
+static float    bp_mark[4], bp_space[4];    /* x1 x2 y1 y2 */
+static float    tone_hi, tone_lo;
+static uint32_t tone_ms;                    /* last decided symbol */
+
+/* RBJ band-pass, 0 dB at f, bw Hz wide: b0, a1, a2 (b1 = 0, b2 = -b0) */
+static void bandpass_coef(float *c, float f, float bw) {
+    float w0 = 2.0f * M_PI * f / CAPTURE_RATE_F;
+    float alpha = sinf(w0) * bw / (2.0f * f);
+    float a0 = 1.0f + alpha;
+
+    c[0] = alpha / a0;
+    c[1] = -2.0f * cosf(w0) / a0;
+    c[2] = (1.0f - alpha) / a0;
+}
+
+static float bandpass(float *st, const float *c, float x) {
+    float y = c[0] * (x - st[1]) - c[1] * st[2] - c[2] * st[3];
+
+    st[1] = st[0]; st[0] = x;
+    st[3] = st[2]; st[2] = y;
+    return y;
+}
+
 static void update_nco() {
     float radians = 2.0f * M_PI * params.rtty_center / CAPTURE_RATE_F;
 
@@ -108,6 +137,8 @@ static void init() {
     for (uint16_t i = 0; i < symbol_samples; i++)
         rx_window[i] = liquid_hann(i, symbol_samples);
 
+    tone_hi = params.rtty_shift / 2.0f;
+    tone_lo = -tone_hi;
     ready = true;
 }
 
@@ -278,10 +309,23 @@ void rtty_put_audio_samples(unsigned int n, float *samples) {
         return;
     }
 
+    bool  mark_hi = ((cur_mode == x6100_mode_usb || cur_mode == x6100_mode_usb_dig) && !params.rtty_reverse) ||
+                    ((cur_mode == x6100_mode_lsb || cur_mode == x6100_mode_lsb_dig) && params.rtty_reverse);
+    float half = params.rtty_shift / 2.0f;
+    float bw = params.rtty_rate / 100.0f * 1.5f;   /* a baud and a half */
+    float c_mark[3], c_space[3];
+
+    bandpass_coef(c_mark, params.rtty_center + (mark_hi ? half : -half), bw);
+    bandpass_coef(c_space, params.rtty_center + (mark_hi ? -half : half), bw);
+
     for (size_t i = 0; i < n; i++) {
         cfloat cval;
         firhilbf_r2c_execute(hilb, samples[i], &cval);
         cbuffercf_push(rx_buf, cval);
+
+        scope_x[scope_pos] = bandpass(bp_mark, c_mark, samples[i]);
+        scope_y[scope_pos] = bandpass(bp_space, c_space, samples[i]);
+        scope_pos = (scope_pos + 1) % RTTY_SCOPE_LEN;
     }
 
     while (cbuffercf_size(rx_buf) > symbol_samples) {
@@ -291,6 +335,10 @@ void rtty_put_audio_samples(unsigned int n, float *samples) {
 
         cbuffercf_read(rx_buf, symbol_samples, &buf, &n);
         nco_crcf_mix_block_down(nco, buf, nco_buf, n);
+
+        float complex step = 0.0f;
+        for (uint16_t i = 1; i < n; i++)
+            step += nco_buf[i] * conjf(nco_buf[i - 1]);
 
         for (uint16_t i = 0; i < n; i++)
             nco_buf[i] *= rx_window[i];
@@ -308,10 +356,32 @@ void rtty_put_audio_samples(unsigned int n, float *samples) {
 
         add_symbol(pwr);
 
+        if (fabsf(pwr) > params.rtty_snr) {
+            float hz = cargf(step) * CAPTURE_RATE_F / (2.0f * M_PI);
+            float *tone = hz > 0.0f ? &tone_hi : &tone_lo;
+
+            *tone += (hz - *tone) * 0.05f;
+            tone_ms = lv_tick_get();
+        }
+
         cbuffercf_release(rx_buf, symbol_over);
     }
 
     pthread_mutex_unlock(&rtty_mux);
+}
+
+bool rtty_scope_get(float *x, float *y, float *offset) {
+    pthread_mutex_lock(&rtty_mux);
+    for (uint16_t i = 0; i < RTTY_SCOPE_LEN; i++) {
+        x[i] = scope_x[(scope_pos + i) % RTTY_SCOPE_LEN];
+        y[i] = scope_y[(scope_pos + i) % RTTY_SCOPE_LEN];
+    }
+    *offset = (tone_hi + tone_lo) / 2.0f;
+    /* Noise decides symbols too, but its two "tones" are nowhere near the shift apart */
+    bool tuned = lv_tick_elaps(tone_ms) < 2000 &&
+                 fabsf(tone_hi - tone_lo - params.rtty_shift) < params.rtty_shift * 0.25f;
+    pthread_mutex_unlock(&rtty_mux);
+    return tuned;
 }
 
 void rtty_set_state(rtty_state_t x) {

@@ -47,6 +47,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     navtex/decoder.cpp
     navtex/navtex_rx.cpp
     navtex/fftfilt.cxx
+    navtex/dsc.c
     channels.c
     broadcast_db.c
     cJSON.c

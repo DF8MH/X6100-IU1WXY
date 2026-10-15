@@ -118,9 +118,10 @@ lv_style_t  dialog_item_style;
 lv_style_t  dialog_item_focus_style;
 lv_style_t  dialog_item_edited_style;
 lv_style_t  dialog_dropdown_list_style;
+lv_style_t  dialog_dropdown_sel_style;
 
 lv_style_t  cw_tune_style;
-lv_style_t  card_style;
+lv_style_t  popup_style;
 
 lv_color_t  bg_color;
 
@@ -151,6 +152,12 @@ void styles_init(void) {
         clock_w      = 132;
         meter_row_h  = 50;
         buttons_h    = BUTTONS_H_MAX;
+    }
+    /* Deck (Black Metal, Total Black): two 28 px rows, then the scales beside the frequency */
+    if (theme_shape.deck) {
+        top_bar_h    = 56;
+        freq_strip_h = 102;
+        clock_w      = 280;
     }
 
     lv_style_init(&background_style);
@@ -279,6 +286,7 @@ void styles_init(void) {
 
     lv_style_init(&dialog_dropdown_list_style);
     lv_style_set_text_font(&dialog_dropdown_list_style, &sony_30);
+    lv_style_init(&dialog_dropdown_sel_style);
 
     /* Clock */
     lv_style_init(&clock_style);
@@ -355,13 +363,34 @@ void styles_init(void) {
     }
     lv_style_set_pad_all(&tx_info_style, 0);
 
-    lv_style_init(&card_style);
+    lv_style_init(&popup_style);
 
     lv_style_init(&cw_tune_style);
     lv_style_set_radius(&cw_tune_style, 5);
     lv_style_set_bg_color(&cw_tune_style, lv_color_black());
     lv_style_set_x(&cw_tune_style, 30);
     lv_style_set_y(&cw_tune_style, FREQ_STRIP_Y + FREQ_STRIP_H + 18);
+
+    /* Deck: the rows and the panel full width; the clock on the rows, the meter (and TX info) on the panel */
+    if (theme_shape.deck) {
+        lv_style_set_x(&info_style, 0);
+        lv_style_set_y(&info_style, 0);
+        lv_style_set_width(&info_style, 800);
+        lv_style_set_height(&info_style, TOP_BAR_HEIGHT);
+        lv_style_set_pad_hor(&info_style, 0);
+        lv_style_set_x(&clock_style, -10);
+        lv_style_set_y(&clock_style, 0);
+        lv_style_set_height(&clock_style, TOP_BAR_HEIGHT - 1);
+        lv_style_t *m[] = { &meter_style, &tx_info_style };
+        for (int i = 0; i < 2; i++) {
+            lv_style_set_x(m[i], 0);
+            lv_style_set_y(m[i], FREQ_STRIP_Y);
+            lv_style_set_width(m[i], 300);
+            lv_style_set_height(m[i], FREQ_STRIP_H - 1);
+        }
+        lv_style_set_x(&freq_strip_style, 0);
+        lv_style_set_width(&freq_strip_style, 800);
+    }
 
     styles_apply();
 }
@@ -396,6 +425,15 @@ void styles_apply(void) {
     }
     box(&dialog_style, TC_dialog, TC_dialog_grad, TC_dialog_border, theme_shape.radius);
     box(&freq_strip_style, TC_strip, TC_strip_grad, TC_strip_border, theme_shape.radius);
+    /* Deck: a line under the rows and the panel; the clock and the meter drawn on them */
+    lv_style_set_border_side(&info_style, theme_shape.deck ? LV_BORDER_SIDE_BOTTOM : LV_BORDER_SIDE_FULL);
+    lv_style_set_border_side(&freq_strip_style, theme_shape.deck ? LV_BORDER_SIDE_BOTTOM : LV_BORDER_SIDE_FULL);
+    if (theme_shape.deck) {
+        lv_style_set_bg_opa(&clock_style, LV_OPA_TRANSP);
+        lv_style_set_border_width(&clock_style, 0);
+        lv_style_set_bg_opa(&meter_style, LV_OPA_TRANSP);
+        lv_style_set_border_width(&meter_style, 0);
+    }
 
     /* Messages and the panel: background images, or drawn like a popup */
     if (theme_shape.images) {
@@ -433,9 +471,11 @@ void styles_apply(void) {
     lv_style_set_bg_grad_color(&btn_active_style, TC(btn_active_grad));
     lv_style_set_bg_grad_dir(&btn_active_style, theme_shape.btn_gradient ? LV_GRAD_DIR_VER : LV_GRAD_DIR_NONE);
     lv_style_set_border_color(&btn_active_style, TC(btn_active_border));
-    lv_style_set_border_width(&btn_active_style, theme_shape.rule ? 3 : theme_shape.border < 2 ? 2 : theme_shape.border);
-    /* Holo: the active button is marked by a line on top */
-    lv_style_set_border_side(&btn_active_style, theme_shape.rule ? LV_BORDER_SIDE_TOP : LV_BORDER_SIDE_FULL);
+    bool top_line = theme_shape.rule || theme_shape.deck;
+    lv_style_set_border_width(&btn_active_style, top_line ? 3 : theme_shape.border < 2 ? 2 : theme_shape.border);
+    /* Holo, deck: the active button is marked by a line on top (deck: the others by a thin one) */
+    lv_style_set_border_side(&btn_active_style, top_line ? LV_BORDER_SIDE_TOP : LV_BORDER_SIDE_FULL);
+    lv_style_set_border_side(&btn_style, theme_shape.deck ? LV_BORDER_SIDE_TOP : LV_BORDER_SIDE_FULL);
     lv_style_set_text_color(&btn_active_style, TC(btn_active_text));
 
     /* Disabled: same opaque button, dimmed text and border (not see-through) */
@@ -494,11 +534,24 @@ void styles_apply(void) {
     lv_style_set_border_width(&cw_tune_style, strong ? 2 : 0);
     lv_style_set_border_color(&cw_tune_style, TC(panel_border));
 
-    /* Settings cards: a light veil over the window, or black and framed */
-    lv_style_set_bg_color(&card_style, strong ? TC(panel) : lv_color_white());
-    lv_style_set_bg_opa(&card_style, strong ? LV_OPA_COVER : LV_OPA_10);
-    lv_style_set_border_width(&card_style, strong ? 3 : theme_shape.border);
-    lv_style_set_border_color(&card_style, TC(card));
+
+    /* Popups: the theme's popup colours, its border and corners (as the message boxes) */
+    lv_style_set_bg_color(&popup_style, TC(popup));
+    lv_style_set_bg_opa(&popup_style, LV_OPA_COVER);
+    lv_style_set_border_color(&popup_style, TC(popup_border));
+    lv_style_set_border_width(&popup_style, strong ? 3 : theme_shape.border);
+    lv_style_set_radius(&popup_style, theme_shape.radius_popup);
+
+    /* Dropdown lists: a popup, the selected option as the selected rows of the popups */
+    lv_style_set_bg_color(&dialog_dropdown_list_style, TC(popup));
+    lv_style_set_bg_opa(&dialog_dropdown_list_style, LV_OPA_COVER);
+    lv_style_set_border_color(&dialog_dropdown_list_style, TC(popup_border));
+    lv_style_set_border_width(&dialog_dropdown_list_style, strong ? 3 : theme_shape.border);
+    lv_style_set_radius(&dialog_dropdown_list_style, theme_shape.radius_popup);
+    lv_style_set_text_color(&dialog_dropdown_list_style, text);
+    lv_style_set_bg_color(&dialog_dropdown_sel_style, TC(sel_bg));
+    lv_style_set_bg_opa(&dialog_dropdown_sel_style, LV_OPA_COVER);
+    lv_style_set_text_color(&dialog_dropdown_sel_style, TC(sel_text));
 
     /* Images of the theme, at the size of each surface (buttons.h BTN_WIDTH 160, 1 px apart) */
     lv_style_set_bg_opa(&btn_style, LV_OPA_COVER);
@@ -531,8 +584,9 @@ void styles_apply(void) {
     } else {
         lv_style_remove_prop(&btn_mark_active_style, LV_STYLE_BG_IMG_SRC);
         lv_style_remove_prop(&btn_mark_active_style, LV_STYLE_BG_OPA);
-        lv_style_set_width(&btn_mark_style, 4);
-        lv_style_set_height(&btn_mark_style, BUTTONS_H - 2 - 20);
+        /* deck: a bar along the top, cyan on the control the encoder is on */
+        lv_style_set_width(&btn_mark_style, theme_shape.deck ? 160 - 2 * inset : 4);
+        lv_style_set_height(&btn_mark_style, theme_shape.deck ? 3 : BUTTONS_H - 2 - 20);
         lv_style_set_bg_opa(&btn_mark_style, LV_OPA_COVER);
         lv_style_remove_prop(&btn_mark_style, LV_STYLE_BG_IMG_SRC);
     }
@@ -540,6 +594,13 @@ void styles_apply(void) {
     /* LVGL caches gradients by size, not colors: drop the old ones */
     lv_gradient_set_cache_size(LV_GRAD_CACHE_DEF_SIZE);
     lv_obj_invalidate(lv_scr_act());
+}
+
+/* A dropdown's list as a popup of the theme */
+void styles_dropdown_list(lv_obj_t *list) {
+    lv_obj_add_style(list, &dialog_dropdown_list_style, 0);
+    lv_obj_add_style(list, &dialog_dropdown_sel_style, LV_PART_SELECTED | LV_STATE_CHECKED);
+    lv_obj_add_style(list, &dialog_dropdown_sel_style, LV_PART_SELECTED | LV_STATE_PRESSED);
 }
 
 /* For screens laid out elsewhere (walkie.c): a box of the theme, its image at w x h */

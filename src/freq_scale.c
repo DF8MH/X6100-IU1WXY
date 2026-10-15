@@ -106,7 +106,8 @@ void freq_scale_update(int32_t center, int32_t half_width, uint32_t color) {
         }
     }
 
-    for (int32_t f = (left / step + 1) * step; f < left + span && n < MAX_REFS; f += step) {
+    /* Deck: the edges only, in the spectrum's top corners */
+    for (int32_t f = (left / step + 1) * step; f < left + span && n < MAX_REFS && !theme_shape.deck; f += step) {
         lv_coord_t x = (int64_t)(f - left) * WIDTH / span;
 
         if (x < EDGE_GAP || x > WIDTH - EDGE_GAP) {

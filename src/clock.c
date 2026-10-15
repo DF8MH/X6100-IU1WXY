@@ -131,6 +131,17 @@ lv_obj_t * clock_init(lv_obj_t * parent) {
     lv_obj_set_style_pad_left(power_labels[2], 4, 0);
     if (theme_shape.vision)
         lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);   /* VISION: the time only */
+    if (theme_shape.deck) {     /* "13:03:02" at the right of the first row, the voltages in the second */
+        lv_obj_set_style_text_font(time_label, &sony_24, 0);
+        lv_obj_set_style_text_font(sec_label, &sony_24, 0);
+        lv_obj_set_style_pad_bottom(sec_label, 0, 0);
+        lv_obj_align(lv_obj_get_parent(time_label), LV_ALIGN_TOP_RIGHT, 0, 2);
+        lv_obj_align(row, LV_ALIGN_BOTTOM_LEFT, 0, -3);
+        for (int i = 0; i < 4; i++)
+            lv_obj_set_style_text_font(power_labels[i], i % 2 ? &sony_20 : &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(power_labels[1], TC(text_mute), 0);
+        lv_obj_set_style_text_color(power_labels[3], TC(text_mute), 0);
+    }
 
     show_time();
     lv_timer_create(show_time, 500, NULL);

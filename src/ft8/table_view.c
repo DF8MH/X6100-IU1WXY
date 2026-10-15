@@ -627,3 +627,8 @@ void table_view_set_actions(const table_view_actions_t *actions) {
         memset(&s_actions, 0, sizeof(s_actions));
     }
 }
+
+/* Flag k of flags.h as an LVGL image (the NavTex app's DSC list) */
+const lv_img_dsc_t *table_view_flag(int k) {
+    return flag_img(k);
+}

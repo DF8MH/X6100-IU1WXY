@@ -87,3 +87,9 @@ add_executable(test_swr_guard test_swr_guard.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../
 target_include_directories(test_swr_guard PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(test_swr_guard PRIVATE Catch2::Catch2WithMain)
 add_test(NAME test_swr_guard COMMAND $<TARGET_FILE:test_swr_guard> --colour-mode=ansi )
+
+add_executable(test_dsc test_dsc.cpp ../src/navtex/dsc.c ../src/navtex/decoder.cpp ../src/navtex/navtex_rx.cpp
+    ../src/navtex/fftfilt.cxx)
+target_include_directories(test_dsc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test_dsc PRIVATE Catch2::Catch2WithMain)
+add_test(NAME test_dsc COMMAND $<TARGET_FILE:test_dsc> --colour-mode=ansi )

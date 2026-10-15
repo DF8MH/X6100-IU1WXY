@@ -67,6 +67,7 @@ public:
     navtex_rx(int sample_rate, bool only_sitor_b, bool reverse,
               FILE * rawfile=stdout, FILE * messagesfile=nullptr,
               FILE * logfile=stderr);
+    ~navtex_rx();
     void process_data(const float * data, int nb_samples);
     void process_data(const short * data, int nb_samples);
 
@@ -74,6 +75,13 @@ public:
     void set_char_callback(char_callback_t cb, void *userdata) {
         m_char_callback = cb;
         m_char_callback_userdata = userdata;
+    }
+
+    /* Every demodulated bit, 1 = mark (the higher tone): the DSC decoder (dsc.c) */
+    typedef void (*bit_callback_t)(int mark, void *userdata);
+    void set_bit_callback(bit_callback_t cb, void *userdata) {
+        m_bit_callback = cb;
+        m_bit_callback_userdata = userdata;
     }
 
 private:
@@ -84,6 +92,8 @@ private:
     FILE * m_messagesfile;
     char_callback_t m_char_callback = nullptr;
     void *m_char_callback_userdata = nullptr;
+    bit_callback_t m_bit_callback = nullptr;
+    void *m_bit_callback_userdata = nullptr;
 
     // filter method related
     double m_center_frequency_f;

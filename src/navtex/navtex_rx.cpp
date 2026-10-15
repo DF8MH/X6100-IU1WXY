@@ -264,6 +264,11 @@ navtex_rx::navtex_rx(int sample_rate, bool only_sitor_b, bool reverse,
     configure_filters();
 }
 
+navtex_rx::~navtex_rx() {
+    delete m_mark_lowpass;
+    delete m_space_lowpass;
+}
+
 void navtex_rx::process_data(const float * data, int nb_samples) {
 
     cmplx z, zmark, zspace, *zp_mark, *zp_space;
@@ -466,51 +471,6 @@ void navtex_rx::process_fft_output(cmplx * zp_mark, cmplx * zp_space, int sample
             m_next_prompt_event += m_bit_sample_count;
         }
 
-        /*
-         * Demodulator trace for the sample-4 investigation.
-         * Keep the trace deliberately bounded around the known bad area so
-         * the CSV stays small enough to compare sample-by-sample with fldigi.
-         * Logging is observational only: it does not alter decoder state.
-         */
-        const int trace_first_sample = 450000;
-        const int trace_last_sample  = 520000;
-        const int state_before = (int)m_state;
-        const int error_before = m_error_count;
-        int decided_bit = 0;
-        int have_decided_bit = 0;
-
-        if (m_pulse_edge_event &&
-            (m_state == SYNC || m_state == READ_DATA)) {
-            decided_bit = (int)logic_level;
-            have_decided_bit = 1;
-        }
-
-        if (m_sample_count >= trace_first_sample &&
-            m_sample_count <= trace_last_sample) {
-            static FILE *demod_trace = NULL;
-            if (!demod_trace) {
-                demod_trace = fopen("/tmp/venturi_navtex_demod.csv", "w");
-                if (demod_trace) {
-                    fprintf(demod_trace,
-                        "sample,mark_raw,space_raw,mark_env,space_env,"
-                        "mark_noise,space_noise,noise_floor,mark_clip,space_clip,"
-                        "logic,prompt,bit,state,error\n");
-                }
-            }
-            if (demod_trace) {
-                fprintf(demod_trace,
-                    "%d,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,"
-                    "%.17g,%.17g,%.17g,%d,",
-                    m_sample_count, abs(zp_mark[i]), abs(zp_space[i]),
-                    mark_env, space_env, mark_noise, space_noise, noise_floor,
-                    mark_abs, space_abs, logic_level,
-                    m_pulse_edge_event ? 1 : 0);
-                if (have_decided_bit)
-                    fprintf(demod_trace, "%d", decided_bit);
-                fprintf(demod_trace, ",%d,%d\n", state_before, error_before);
-            }
-        }
-
         switch (m_state) {
             case SYNC_SETUP:
                 m_error_count = 0;
@@ -521,8 +481,9 @@ void navtex_rx::process_fft_output(cmplx * zp_mark, cmplx * zp_space, int sample
             case SYNC:
             case READ_DATA:
                 if (m_pulse_edge_event) {
-                    /* Use the exact value already computed for the trace. */
-                    handle_bit_value(decided_bit);
+                    if (m_bit_callback)
+                        m_bit_callback(logic_level > 0, m_bit_callback_userdata);
+                    handle_bit_value((int)logic_level);
                 }
                 break;
         }
@@ -591,19 +552,6 @@ const char * navtex_rx::state_to_str(State s) {
 
 void navtex_rx::set_state(State s) {
     if (s != m_state) {
-        static FILE *state_trace = NULL;
-        if (!state_trace) {
-            state_trace = fopen("/tmp/venturi_navtex_state.csv", "w");
-            if (state_trace) {
-                fprintf(state_trace, "sample,old_state,new_state,error_count,bit_cursor\n");
-            }
-        }
-        if (state_trace) {
-            fprintf(state_trace, "%d,%s,%s,%d,%d\n",
-                    m_sample_count, state_to_str(m_state), state_to_str(s),
-                    m_error_count, m_bit_cursor);
-            fflush(state_trace);
-        }
         m_state = s;
         LOG_INFO("State: %s", state_to_str(m_state));
     }
@@ -612,22 +560,6 @@ void navtex_rx::set_state(State s) {
 // Turns accumulator values (estimates of whether a bit is 1 or 0)
 // into navtex messages
 void navtex_rx::handle_bit_value(int accumulator) {
-    {
-        static FILE *trace = NULL;
-        if (!trace) {
-            trace = fopen("/tmp/venturi_navtex_trace.csv", "w");
-            if (trace) {
-                fprintf(trace, "event,sample,state,logic,cursor,alpha,error,code,rep,ret\n");
-                fflush(trace);
-            }
-        }
-        if (trace) {
-            fprintf(trace, "BIT,%d,%d,%.17g,%d,%d,%d,,,,\n",
-                    m_sample_count, (int)m_state, (double)accumulator,
-                    m_bit_cursor, m_alpha_phase ? 1 : 0, m_error_count);
-            fflush(trace);
-        }
-    }
     int buffersize = m_bit_values.size();
     int i, offset = 0;
 
@@ -764,16 +696,6 @@ static void flip_smallest_bit(int * pos);
 // -2 on hard failure
 int navtex_rx::process_bytes(int m_bit_cursor) {
     int code = m_ccir476.bytes_to_code(&m_bit_values[m_bit_cursor]);
-    {
-        static FILE *trace = NULL;
-        if (!trace) trace = fopen("/tmp/venturi_navtex_chars.csv", "w");
-        if (trace) {
-            fprintf(trace, "%d,%d,%d,%d,%d,0x%02X\n",
-                    m_sample_count, (int)m_state, m_bit_cursor,
-                    m_alpha_phase ? 1 : 0, m_error_count, code & 0xff);
-            fflush(trace);
-        }
-    }
     int success = 0;
 
     if (m_ccir476.check_bits(code)) {
@@ -819,31 +741,6 @@ int navtex_rx::process_bytes(int m_bit_cursor) {
             goto decode;
         }
 
-        // Detailed trace only for the difficult case: alpha, rep and their
-        // average are all invalid.  This is the point where soft-decision
-        // confidence determines which bit flip is attempted.
-        {
-            static FILE *fec_trace = NULL;
-            if (!fec_trace) {
-                fec_trace = fopen("/tmp/venturi_navtex_fec.csv", "w");
-                if (fec_trace) {
-                    fprintf(fec_trace, "sample,state,cursor,error_before,alpha_code,rep_code,avg_code,"
-                                       "a0,a1,a2,a3,a4,a5,a6,"
-                                       "r0,r1,r2,r3,r4,r5,r6,"
-                                       "v0,v1,v2,v3,v4,v5,v6\n");
-                }
-            }
-            if (fec_trace) {
-                fprintf(fec_trace, "%d,%d,%d,%d,0x%02X,0x%02X,0x%02X",
-                        m_sample_count, (int)m_state, m_bit_cursor, m_error_count,
-                        code & 0xff, rep & 0xff, calc & 0xff);
-                for (i = 0; i < 7; ++i) fprintf(fec_trace, ",%d", m_bit_values[m_bit_cursor + i]);
-                for (i = 0; i < 7; ++i) fprintf(fec_trace, ",%d", m_bit_values[reppos + i]);
-                for (i = 0; i < 7; ++i) fprintf(fec_trace, ",%d", avg[i]);
-                fputc('\n', fec_trace);
-                fflush(fec_trace);
-            }
-        }
 
         // Flip the lowest confidence bit in alpha.
         flip_smallest_bit(&m_bit_values[m_bit_cursor]);

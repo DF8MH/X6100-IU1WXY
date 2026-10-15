@@ -79,6 +79,7 @@ static void atu_label_update(Subject *subj, void * user_data);
 static void agc_label_update(Subject *subj, void * user_data);
 static void att_label_update(Subject *subj, void * user_data);
 static void pre_label_update(Subject *subj, void * user_data);
+static void deck_init(void);
 
 lv_obj_t * info_init(lv_obj_t * parent) {
 
@@ -157,7 +158,140 @@ lv_obj_t * info_init(lv_obj_t * parent) {
     pthread_create(&thread, NULL, status_thread, NULL);
     pthread_detach(thread);
 
+    if (theme_shape.deck) deck_init();
     return obj;
+}
+
+/* Deck (Black Metal, Total Black): the box is the two rows on top. First row: ATT PRE | NR NB DNF |
+ * AGC | SPL ATU | RIT XIT, grey when off, white when on, then the status icons (the clock is over
+ * the box at the right). Second row: the mode, the filter, BW IF STEP, the scope span at the right */
+enum { D_ATT, D_PRE, D_NR, D_NB, D_DNF, D_AGC, D_SPL, D_ATU, D_RIT, D_XIT, D_NUM };
+
+static lv_obj_t *deck_ind[D_NUM], *deck_mode, *deck_info, *deck_scope;
+static lv_font_t scope_font;     /* the plus-minus sign, the rest from sony_24 */
+
+static void deck_set(int i, bool on) {
+    lv_obj_set_style_text_color(deck_ind[i], on ? TC(text) : TC(text_mute), 0);
+}
+
+static void deck_atu_update(Subject *subj, void *user_data) {
+    bool on = param_i_get(cfg_atu_enabled);
+
+    lv_obj_set_style_text_color(deck_ind[D_ATU], !on ? TC(text_mute) : cfg_atu_is_loaded() ? TC(text) : TC(err), 0);
+}
+
+static void deck_update(Subject *subj, void *user_data) {
+    static const char *const agc[] = {"AGC OFF", "AGC-S", "AGC-F", "AGC-A"};   /* x6100_agc_t order */
+    x6100_agc_t a = cparam_i_get(cfg_cur_agc);
+    int32_t     bw = cparam_i_get(cfg_cur_filter_bw), step = param_i_get(cfg_mode_freq_step);
+    int32_t     half = 50000 / (params.waterfall_zoom.x ? LV_MAX(1, param_i_get(cfg_mode_zoom)) : 1);
+    char        b[16], st[16];
+
+    deck_set(D_ATT, cparam_i_get(cfg_cur_att));
+    deck_set(D_PRE, cparam_i_get(cfg_cur_pre));
+    deck_set(D_NR, param_i_get(cfg_nr));
+    deck_set(D_NB, param_i_get(cfg_nb));
+    deck_set(D_DNF, param_i_get(cfg_dnf));
+    deck_set(D_SPL, param_i_get(cfg_band_split));
+    deck_set(D_RIT, param_i_get(cfg_rit));
+    deck_set(D_XIT, param_i_get(cfg_xit));
+    lv_label_set_text(deck_ind[D_AGC], a <= x6100_agc_auto ? agc[a] : "AGC");
+    lv_obj_set_style_text_color(deck_ind[D_AGC], a == x6100_agc_off ? TC(text_mute) : TC(ok), 0);
+    lv_obj_set_style_bg_opa(deck_ind[D_AGC], a == x6100_agc_off ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
+
+    lv_label_set_text(deck_mode, info_params_mode_label_get());
+    if (bw >= 1000) snprintf(b, sizeof(b), "%d.%dk", (int)(bw / 1000), (int)(bw % 1000 / 100));
+    else snprintf(b, sizeof(b), "%d", (int)bw);
+    if (step < 1000) snprintf(st, sizeof(st), "%d Hz", (int)step);
+    else if (step % 1000) snprintf(st, sizeof(st), "%d.%d kHz", (int)(step / 1000), (int)(step % 1000 / 100));
+    else snprintf(st, sizeof(st), "%d kHz", (int)(step / 1000));
+    lv_label_set_text_fmt(deck_info, "BW %s   IF %+d   STEP %s", b, (int)param_i_get(cfg_band_if_shift), st);
+    if (half % 1000) lv_label_set_text_fmt(deck_scope, "SCOPE \xC2\xB1%d.%dk", (int)(half / 1000), (int)(half % 1000 / 100));
+    else lv_label_set_text_fmt(deck_scope, "SCOPE \xC2\xB1%dk", (int)(half / 1000));
+}
+
+static lv_obj_t *deck_row(lv_coord_t y) {
+    lv_obj_t *row = lv_obj_create(obj);
+
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_SIZE_CONTENT, 28);
+    lv_obj_set_pos(row, 10, y);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 10, 0);
+    lv_obj_set_style_text_font(row, &sony_24, 0);
+    lv_obj_set_style_text_color(row, TC(text), 0);
+    return row;
+}
+
+static void deck_init(void) {
+    static const char *const names[D_NUM] = {"ATT", "PRE", "NR", "NB", "DNF", "AGC", "SPL", "ATU", "RIT", "XIT"};
+    extern const lv_font_t   rcond_pm_20;
+    lv_obj_t                *row = deck_row(0), *icons = lv_obj_get_parent(items[INFO_WIFI]);
+
+    /* The grid of the other themes: its state row hidden, the icons row before the clock */
+    lv_obj_set_layout(obj, 0);
+    lv_obj_add_flag(lv_obj_get_parent(items[INFO_VFO]), LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_size(icons, LV_SIZE_CONTENT, 28);
+    lv_obj_set_style_pad_column(icons, 8, 0);
+    lv_obj_align(icons, LV_ALIGN_TOP_RIGHT, -104, 0);
+    for (int i = INFO_WIFI; i < INFO_NUM; i++) {
+        lv_obj_set_width(items[i], LV_SIZE_CONTENT);
+        lv_obj_set_style_text_font(items[i], i == INFO_CLUSTER ? &sony_20 : &lv_font_montserrat_16, 0);
+    }
+
+    for (int i = 0; i < D_NUM; i++) {
+        if (i == D_NR || i == D_AGC || i == D_SPL || i == D_RIT) {
+            lv_obj_t *bar = lv_obj_create(row);   /* a thin bar between the groups */
+
+            lv_obj_remove_style_all(bar);
+            lv_obj_set_size(bar, 1, 14);
+            lv_obj_set_style_bg_color(bar, TC(btn_off_text), 0);
+            lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+        }
+        deck_ind[i] = lv_label_create(row);
+        lv_label_set_text(deck_ind[i], names[i]);
+    }
+    lv_obj_set_style_bg_color(deck_ind[D_AGC], TC(ok_bg), 0);
+    lv_obj_set_style_pad_hor(deck_ind[D_AGC], 4, 0);
+    lv_obj_set_style_pad_ver(deck_ind[D_AGC], 1, 0);
+
+    row = deck_row(28);
+    deck_mode = lv_label_create(row);
+    lv_obj_set_style_text_color(deck_mode, TC(mode_text), 0);
+    lv_obj_set_style_bg_color(deck_mode, TC(mode_bg), 0);
+    lv_obj_set_style_bg_opa(deck_mode, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_hor(deck_mode, 4, 0);
+    lv_obj_set_style_radius(deck_mode, 2, 0);
+
+    static lv_point_t shape[] = {{0, 17}, {6, 1}, {44, 1}, {50, 17}};   /* the filter's passband */
+    lv_obj_t         *filter = lv_line_create(row);
+
+    lv_line_set_points(filter, shape, 4);
+    lv_obj_set_style_line_color(filter, TC(info), 0);
+    lv_obj_set_style_line_width(filter, 2, 0);
+    lv_obj_set_style_pad_hor(filter, 6, 0);
+    deck_info = lv_label_create(row);
+
+    scope_font             = rcond_pm_20;
+    scope_font.fallback    = &sony_24;
+    scope_font.line_height = sony_24.line_height;
+    scope_font.base_line   = sony_24.base_line;
+    deck_scope = lv_label_create(obj);
+    lv_obj_set_style_text_font(deck_scope, &scope_font, 0);
+    lv_obj_set_style_text_color(deck_scope, TC(text), 0);
+    lv_obj_align(deck_scope, LV_ALIGN_TOP_RIGHT, -10, 30);
+
+    Subject *subj[] = {(Subject *)cfg_cur_att, (Subject *)cfg_cur_pre, (Subject *)cfg_nr, (Subject *)cfg_nb,
+                       (Subject *)cfg_dnf, (Subject *)cfg_cur_agc, (Subject *)cfg_band_split, (Subject *)cfg_rit,
+                       (Subject *)cfg_xit, (Subject *)cfg_cur_mode, (Subject *)cfg_cur_filter_bw,
+                       (Subject *)cfg_band_if_shift, (Subject *)cfg_mode_freq_step, (Subject *)cfg_mode_zoom};
+    for (size_t i = 0; i < sizeof(subj) / sizeof(subj[0]); i++) subject_subscribe_delayed(subj[i], deck_update, NULL);
+    subject_subscribe_delayed((Subject *)cfg_fg_freq, deck_atu_update, NULL);
+    subject_subscribe_delayed((Subject *)cfg_atu_enabled, deck_atu_update, NULL);
+    cfg_atu_loaded_subscribe_delayed(deck_atu_update, NULL);
+    deck_update(NULL, NULL);
+    deck_atu_update(NULL, NULL);
 }
 
 const char* info_params_mode_label_get() {

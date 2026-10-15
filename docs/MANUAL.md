@@ -179,8 +179,18 @@ The radio held upright, the knobs on top, with a plain screen: VFO or memory,
 RX/TX, frequency, mode, S-meter, and the VOL, SQL and PWR bars. It follows the
 theme.
 
-Where: Settings > General > CONTROLS > Walkie Talkie. The screen restarts in
-portrait.
+Where: Settings > General > CONTROLS > Walkie Talkie. The screen turns to
+portrait at once, no restart.
+
+> **How to leave Walkie Talkie mode (EN)**
+> 1. Press **APP**: the walkie buttons appear on the left edge, the first one reads "(WLK 1:4)".
+> 2. **Hold** that first button "(WLK 1:4)" (or press it three times): it goes to "(WLK 4:4)".
+> 3. **Hold** the button **"Exit hold"** for a second. The radio goes back to the normal landscape screen.
+>
+> **Come uscire dal modo Walkie Talkie (IT)**
+> 1. Premi **APP**: sul bordo sinistro compaiono i tasti del walkie, il primo dice "(WLK 1:4)".
+> 2. **Tieni premuto** quel primo tasto "(WLK 1:4)" (oppure premilo tre volte): passa a "(WLK 4:4)".
+> 3. **Tieni premuto** per un secondo il tasto **"Exit hold"**. La radio torna alla schermata normale orizzontale.
 
 - PTT: the PTT key on the side of the radio. It transmits with the built-in
   microphone; the border turns red and the S-meter shows the power and SWR.
@@ -198,7 +208,8 @@ portrait.
 - GEN, KEY, DFN, DFL and VM open their pages as on the main screen.
 - MEM: the main knob steps through the memories; the number and name are on
   top.
-- Exit: WLK 4, hold Exit. The radio restarts in landscape.
+- Exit: APP, then WLK 4, hold "Exit hold" (steps in the box above). The screen
+  goes back to landscape, no restart.
 - Not in walkie mode: the apps, Settings and the hand mic keys. Leave walkie
   mode to use them.
 
@@ -300,7 +311,7 @@ What they do: see [DX Cluster](#dx-cluster).
 
 SWR protection. Where: Settings > TX Cal > TX PROTECTION > SWR protection.
 
-- Off, or the highest SWR allowed, 1.5 to 5.0 in steps of 0.5. Default 2.5.
+- Off, or the highest SWR allowed, 1.5 to 5.0 in steps of 0.5. Default 2.0.
 - When the SWR stays over it for 0.3 s, the transmission stops and the radio
   says "TX stopped: SWR 3.4". Short spikes at key-up don't count.
 - Not while the ATU tunes: the tune carrier sees a high SWR on purpose.
@@ -547,6 +558,14 @@ frequency and the receiver state. Leaving the app gives the VFO back.
 
 - NavTex: NAVTEX 518 and 490 kHz, NAVTEX HF 4209.5 kHz and the HF MSI
   frequencies. The MFK scrolls the text.
+- DSC (in NavTex, Mode: NAVTEX / DSC): receive only, MF/HF distress and
+  safety calls on 2187.5, 4207.5, 6312, 8414.5, 12577 and 16804.5 kHz (Freq.
+  lists them). One row per call, the newest on top: UTC time, category
+  (DISTRESS, URGENCY, SAFETY, ROUTINE, ACK), the caller's MMSI with its
+  country, then the nature of distress, ALL SHIPS or the called MMSI and the
+  proposed mode and frequency. Distress rows are red, with the position and
+  the time it was valid. A `?` marks a call whose error check failed. Save
+  (page 2) writes the calls to the Files page.
 - WeFax: DWD, Northwood and Athens stations. View (page 2) chooses Big
   (default), Full (the whole fax) or Small, the old low panel that keeps the
   main waterfall visible above it.
@@ -962,6 +981,8 @@ seconds; the settings are saved first).
 | Outdoor | for the sun: light, black text, grey waterfall, S-meter in one grey gradient |
 | Outdoor-Negative | Outdoor with the lightness inverted: dark, white text, the hues kept |
 | VISION | for weak eyes: big type, white digits on dark grey, orange for what is on, aqua frames; the S-meter on a row of its own, always bars |
+| Black Metal | designed by 2E0JFS: two rows of state on top (ATT PRE, NR NB DNF, AGC, SPL ATU, RIT XIT; mode, filter, BW, IF, STEP, scope span), S/SWR/ALC scales beside a big frequency with the 10 Hz digits smaller, the other VFO and an A/B badge, the span edges in the spectrum, one-line buttons; brushed grey panels, cyan for the tuned digit and the encoder's control, Roboto |
+| Total Black | designed by 2E0JFS: Black Metal on pure black, the buttons marked by a thin grey line on top |
 | RS | RS-BA1 look: glossy buttons with LEDs, black LCD, Arial; drawn with images |
 | your files | `/mnt/themes/<name>.json`, or a folder `/mnt/themes/<name>/theme.json` with PNG images |
 

@@ -969,11 +969,7 @@ static void open_popup(void) {
     lv_obj_remove_style_all(box);
     lv_obj_set_size(box, POP_W, box_h);
     lv_obj_align(box, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(box, TC(popup), 0);
-    lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(box, TC(popup_border), 0);
-    lv_obj_set_style_border_width(box, 2, 0);
-    lv_obj_set_style_radius(box, theme_shape.radius_popup, 0);
+    lv_obj_add_style(box, &popup_style, 0);
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *head = lv_label_create(box);

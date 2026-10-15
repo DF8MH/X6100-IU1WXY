@@ -105,6 +105,7 @@ void dialog_construct(dialog_t *dialog, lv_obj_t *parent) {
         dialog->construct_cb(parent);
 
         dialog->run = true;
+        freq_strip_set_dialog(true);
     }
 
     current_dialog = dialog;
@@ -116,6 +117,7 @@ void dialog_destruct() {
         knobs_display(true);
         waterfall_refresh_reset();
         current_dialog->run = false;
+        freq_strip_set_dialog(false);
 
         if (current_dialog->destruct_cb) {
             current_dialog->destruct_cb();

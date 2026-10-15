@@ -27,6 +27,12 @@ void cw_field_remote(const char *cmd, int32_t val, const char *text);
 /* Its state for the remote ("ax"), while no app is open */
 int cw_field_remote_state(char *buf, size_t size);
 
+/* Log a QSO into the day's log: "CALL [rst sent [rst rcvd]]", 599 when left out */
+void cw_field_log_qso(const char *text);
+
+/* The "Log QSO" button: a line to type the QSO in (keyboard or on-screen keys) */
+void cw_field_log_open(void);
+
 /* The field is on screen */
 bool cw_field_visible(void);
 
