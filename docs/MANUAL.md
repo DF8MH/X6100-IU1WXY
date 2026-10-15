@@ -13,7 +13,7 @@ Settings. Button and option names are written as the radio shows them.
 - [Main screen](#main-screen): [status bar](#status-bar), [S-meter](#s-meter), [waterfall](#waterfall), [screen recording](#screen-recording), [Walkie Talkie](#walkie-talkie-mode)
 - [Settings](#settings): [General](#general-tab), [Display](#display-tab), [Audio](#audio-tab), [Wireless](#wireless-tab), [Keys](#keys-tab), [Cluster](#cluster-tab), [TX Cal](#tx-cal-tab), [Info](#info-tab)
 - [Transmitting](#transmitting): [digital-mode TX level](#digital-mode-tx-level), [recording voice messages](#recording-voice-messages)
-- [Digital modes](#digital-modes): [opening a mode](#opening-a-mode), [FT8 and FT4](#ft8-and-ft4), [JS8](#js8), [WSPR](#wspr), [SSTV, WeFax and NavTex](#sstv-wefax-and-navtex), [RTTY and WeFax TX](#rtty-and-wefax-tx)
+- [Digital modes](#digital-modes): [opening a mode](#opening-a-mode), [FT8 and FT4](#ft8-and-ft4), [JS8](#js8), [WSPR](#wspr), [SSTV, WeFax and NavTex](#sstv-wefax-and-navtex), [PSK31, PSK63 and Olivia](#psk31-psk63-and-olivia), [RTTY and WeFax TX](#rtty-and-wefax-tx)
 - [CW](#cw): [CW decoder](#cw-decoder), [CW from the keyboard](#cw-from-the-keyboard), [CW messages](#cw-messages), [CW Trainer](#cw-trainer)
 - [Apps](#apps): [DX Cluster](#dx-cluster), [Field Ops (SOTA / POTA)](#field-ops-sota--pota), [Bands](#bands)
 - [Bluetooth](#bluetooth): [headphones](#bluetooth-headphones), [CAT](#bluetooth-cat)
@@ -261,9 +261,9 @@ S-meter cal: see [S-meter](#s-meter). WFVIEW SERVER: see
 - Popups Freq/Info/ALC: a big frequency while tuning, a big value of the
   control being changed, a big ALC reading while transmitting.
 - Knob info: the value shown while a knob turns.
-- Theme: see [Themes](#themes). A new theme restarts the radio app at once.
-- Font: Sony Sketch, Roboto or DejaVu (default). A new font applies at the
-  next start; the screen says so when you change it.
+- Theme: see [Themes](#themes). A new theme applies at once, without a restart.
+- Font: Sony Sketch, Roboto or DejaVu (default). A new font applies at once.
+  Themes with their own font (RS, Black Metal, Total Black) keep it.
 
 All these options are also on the web configurator's Display page.
 
@@ -298,6 +298,7 @@ All these options are also on the web configurator's Display page.
 |---|---|
 | CLUSTER FILTERS | Modes (CW, SSB, DIG, AM/FM), Bands (160-6 m), Activity (All spots, POTA, SOTA, POTA + SOTA) |
 | CLUSTER VIEW | Newest first, All bands, Spot snap hold, Spot snap speed |
+| PSK REPORTER | Report decodes (on by default) |
 
 What they do: see [DX Cluster](#dx-cluster).
 
@@ -391,8 +392,8 @@ receiving and turns it on only when transmitting.
 
 ### Opening a mode
 
-APP (page 1) > Modes opens a menu: RTTY, FT8, FT4, WSPR, JS8, SSTV, WeFax,
-NavTex. Turn the MFK to choose, press to open; the last used mode is marked.
+APP (page 1) > Modes opens a menu: RTTY, PSK31, PSK63, FT8, FT4, FT2, WSPR, Olivia,
+JS8, SSTV, WeFax, NavTex. Turn the MFK to choose, press to open; the last used mode is marked.
 Pressing Modes again closes the menu.
 
 - Callsign and QTH: Settings > General > STATION.
@@ -402,7 +403,7 @@ Pressing Modes again closes the menu.
 
 ### FT8 and FT4
 
-APP > Modes > FT8 (or FT4). The radio tunes an FT8/FT4 frequency; the band
+APP > Modes > FT8 (or FT4, FT2). The radio tunes an FT8/FT4/FT2 frequency; the band
 keys step through the others. 80 px of waterfall (about two slots) sit above
 the list. The main knob moves your TX audio offset.
 
@@ -410,16 +411,16 @@ Buttons:
 
 | Page | Buttons |
 |---|---|
-| 1 | Show: All / CQ, Mode: FT8 / FT4, TX CQ, TX Call |
+| 1 | Show: All / CQ, Mode: FT8 / FT4 / FT2, TX CQ, TX Call |
 | 2 | Hold Freq, Auto, Force QSO save, Power |
-| 3 | CQ Modifier, Time Sync, Map |
+| 3 | CQ Modifier, Time Sync, Log Map, Live Map |
 
 - Show: CQ shows the CQs and the messages to you; All shows all traffic.
 - TX CQ calls CQ. TX Call allows or stops transmitting; stopping cuts a
   transmission in progress.
 - Hold Freq: your TX offset does not move to the station you answer.
 - Auto: the next message of the QSO is sent by itself.
-- Time Sync: rounds the clock to the nearest slot (15 s FT8, 7.5 s FT4).
+- Time Sync: rounds the clock to the nearest slot (15 s FT8, 7.5 s FT4, 3.75 s FT2).
 - CQ Modifier: for example `CQ POTA` or `CQ DX`.
 
 The list. Each row has the slot time, the message, and on the right the
@@ -457,9 +458,74 @@ Log. A QSO is logged by itself when the other station sends R+report or
 RR73 and both reports are known; "Force QSO save" logs by hand. The log is
 `/mnt/ft_log.adi`; the radio says "Saved QSO de ...".
 
-Map. Page 3 > Map shows the logged stations on a world map centred on you:
+Log Map. Page 3 > Log Map shows the logged stations on a world map centred on you:
 great-circle paths, a dot and the callsign for each station. Calls and dots
-are larger since v0.119. ESC or Map closes it.
+are larger since v0.119. ESC or Log Map closes it.
+
+Live Map. Page 3 > Live Map puts on the same map every station decoded in
+the last 15 minutes that sent a grid (a CQ or a reply with its 4-character
+square). The dot's colour is the distance from your QTH square: green under
+1000 km, blue under 3000, orange under 8000, pink beyond. Stations heard in the
+last minute have a bigger, ringed dot and their call first; a call is left out
+where it would cover another. A band change empties it. Your own position is
+the centre of your 4-character square, the red dot. ESC or Live Map closes it;
+the map is a snapshot, open it again to refresh.
+
+Live Map (IT). Pagina 3 > Live Map mette sulla stessa mappa ogni stazione
+decodificata negli ultimi 15 minuti che ha mandato un locatore (un CQ o una
+risposta con il quadrato a 4 caratteri). Il colore del punto è la distanza dal
+tuo quadrato: verde sotto 1000 km, blu sotto 3000, arancio sotto 8000, rosa
+oltre. Chi è stato sentito nell'ultimo minuto ha il punto più grande, cerchiato,
+e il nominativo per primo; un nominativo che coprirebbe un altro resta fuori.
+Cambiando banda si svuota. La tua posizione è il centro del tuo quadrato a 4
+caratteri, il punto rosso. ESC o Live Map la chiudono; è una fotografia, per
+aggiornarla si riapre.
+
+PSK Reporter. Settings > Cluster > PSK REPORTER > Report decodes (on by default)
+sends what you decode in FT8, FT4, FT2 and JS8 to pskreporter.info, the way
+WSJT-X does: UDP to report.pskreporter.info:4739, batched about every 5 minutes
+(up to 30 s earlier or later, at random), each call once per band in 5 minutes.
+Your callsign goes with your QTH square cut to 4 characters (JN35, never the
+6-character locator) and "X6100 IU1WXY v0.xxx" as the software; each spot
+carries the call, its grid when the message had one, dial + audio frequency,
+SNR and mode. Your own transmissions are never reported. With no network the
+batch is dropped quietly; nothing waits on it, the decoding goes on. Search
+your call on pskreporter.info to see the spots after a few minutes.
+In PSK31, PSK63 and Olivia the text is free, so a station is reported when the
+decoder reads "DE <call>" (as in "CQ CQ DE IK1ABC"), with no grid and 0 dB SNR,
+because these modes give no S/N figure.
+
+PSK Reporter (IT). Settings > Cluster > PSK REPORTER > Report decodes (acceso
+di fabbrica) manda a pskreporter.info quello che decodifichi in FT8, FT4, FT2 e
+JS8, come fa WSJT-X: UDP a report.pskreporter.info:4739, a gruppi circa ogni 5
+minuti (fino a 30 s prima o dopo, a caso), ogni nominativo una volta per
+banda in 5 minuti. Con il tuo nominativo va il quadrato QTH tagliato a 4
+caratteri (JN35, mai il locatore a 6) e "X6100 IU1WXY v0.xxx" come software;
+ogni spot porta nominativo, locatore se il messaggio lo aveva, frequenza dial +
+audio, SNR e modo. Le tue trasmissioni non vengono mai riportate. Senza rete il
+gruppo si perde in silenzio; niente resta in attesa, la decodifica continua.
+Cerca il tuo nominativo su pskreporter.info per vedere gli spot dopo qualche
+minuto. In PSK31, PSK63 e Olivia il testo è libero: una stazione viene riportata
+quando il decoder legge "DE <nominativo>" (come in "CQ CQ DE IK1ABC"), senza
+locatore e con SNR 0 dB, perché questi modi non danno una misura di S/N.
+
+FT2. FT2 (IU8LMC, 2026) is FT4 at twice the speed: 41.67 Bd, 103 symbols in
+2.47 s, 167 Hz wide, 3.75 s slots. Mode cycles FT8 > FT4 > FT2; the band keys
+step through the FT2 frequencies (1.843, 3.568, 5.360, 7.062, 10.144, 14.084,
+18.108, 21.144, 24.923, 28.184, 50.316 MHz). A transmission starts only in the
+first 0.8 s of its slot, so that it ends inside it; the "RX" line comes every
+4th slot (15 s). QSOs are logged as ADIF MFSK / FT2. From SP2KMO's upstream
+port. The knob moves the TX offset 5 or 10 Hz a click when turned fast again
+(4 or more clicks in 30 ms), from randal007's upstream fix.
+
+FT2 (IT). FT2 (IU8LMC, 2026) è FT4 a velocità doppia: 41,67 Bd, 103 simboli in
+2,47 s, 167 Hz di banda, slot di 3,75 s. Mode passa FT8 > FT4 > FT2; i tasti
+BAND scorrono le frequenze FT2 (1,843, 3,568, 5,360, 7,062, 10,144, 14,084,
+18,108, 21,144, 24,923, 28,184, 50,316 MHz). Una trasmissione parte solo nei
+primi 0,8 s dello slot, così finisce dentro; la riga "RX" arriva ogni 4 slot
+(15 s). I QSO vanno nel log come ADIF MFSK / FT2. Dal port upstream di SP2KMO.
+La manopola sposta di nuovo l'offset TX di 5 o 10 Hz a scatto quando gira
+veloce (4 o più scatti in 30 ms), dalla correzione upstream di randal007.
 
 WSJT-X UDP output. While the app is open the radio sends WSJT-X compatible
 UDP messages (heartbeat, status, decodes, logged QSOs), so GridTracker or
@@ -605,6 +671,58 @@ and its colours; the next press transmits.
   Received pictures are saved in `/mnt/sstv`.
 - Pictures can be uploaded from the web configurator's Gallery or sent from
   the phone.
+
+### PSK31, PSK63 and Olivia
+
+Keyboard-to-keyboard modes, ported from SP2KMO's OpenX6100 PSK31 and Olivia
+work (randal007's merge). APP > Modes > PSK31, PSK63 or Olivia. The radio
+goes to the nearest standard dial frequency in USB-D (PSK 14.070, 7.040,
+3.580...; Olivia 14.071, 7.071, 3.5815...); the BAND keys step through the
+others. Frequency and mode come back when the app closes.
+
+- The waterfall covers the receive filter; the coloured band is where the
+  decoder listens. The main knob moves it (5 Hz a click in PSK, 10 Hz in
+  Olivia); in PSK it snaps
+  onto the signal underneath when the knob stops. The MFK gives 1 Hz (PSK)
+  or 5 Hz (Olivia) steps.
+- Received text in the panel under the waterfall, sent text in the TX
+  colour; the size follows Settings > Display > Decoder text, as RTTY and CW.
+- Mode (page 1): PSK31 (31.25 Bd) or PSK63 (62.5 Bd), same Varicode; Olivia
+  8/250 (default), 16/500 or 32/1000. The status button shows the audio
+  frequency and the lock quality; press resyncs, hold clears the text.
+- PSK squelch (page 2, SQL): text is shown only while the decoder's quality
+  (how tightly the symbols sit on 0 and 180 degrees, the Q on the button)
+  is at the threshold or above, and for 1.5 s after it drops. Noise alone
+  reads about 50 (never above 64 in the tests), a readable PSK31 signal 70 and
+  more. On at 68 by default, so noise prints nothing. Press, then the MFK sets
+  it (0 = off); hold toggles off/on.
+  Olivia needs no squelch: it prints only once it has locked (a few blocks,
+  about 8 s at 8/250).
+- Dial (page 2): the MFK moves the VFO in 1 kHz steps, up to 50 kHz either
+  side; hold goes back to the standard frequency.
+- DX call and RST (page 2): the DX call is taken from "DE <call>" in the
+  received text, or typed in; hold clears it.
+- TX: Free Text, or the macros (pages 3-5: press sends, hold edits; an empty
+  text deletes). Tokens `<MYCALL>`, `<CALL>`, `<RST>`, `<RSTR>`. Stop TX ends
+  with a short carrier tail (PSK) or after the current block (Olivia). Nothing is sent on
+  opening. TX goes through the same path as FT8: power capped at 7 W, ALC
+  levelling, SWR protection, the TX strip.
+- Files: `/mnt/psk_macros.txt`, `/mnt/olivia_macros.txt`, `/mnt/psk.conf`
+  (squelch).
+
+**In italiano.** Modi tastiera-tastiera, dal lavoro di SP2KMO su OpenX6100
+(merge di randal007). APP > Modes > PSK31, PSK63 o Olivia: la radio va sulla
+frequenza standard più vicina in USB-D, i tasti BAND passano alle altre; alla
+chiusura tornano frequenza e modo di prima. Il testo ricevuto sta nel riquadro
+sotto il waterfall. La manopola principale sposta la
+banda di ascolto sul waterfall (in PSK si aggancia al segnale quando si
+ferma), l'MFK la regola fine. Mode: PSK31 o PSK63, Olivia 8/250 (predefinito),
+16/500, 32/1000. Lo squelch PSK (pagina 2, SQL) guarda la qualità della
+demodulazione (Q): parte acceso a 68, col solo rumore (Q intorno a 50) non
+scrive nulla; si regola con l'MFK, 0 lo spegne. Olivia scrive solo
+dopo l'aggancio. In TX: Free Text o le macro (pagine 3-5, premere invia,
+tenere premuto modifica); la potenza resta a 7 W al massimo, con ALC e
+protezione SWR come in FT8. All'apertura non trasmette mai.
 
 ### RTTY and WeFax TX
 
@@ -858,6 +976,11 @@ the start and the last call.
 - Spot: a POTA self-spot on pota.app with the frequency and mode of the radio
   (WiFi needed). The first press shows what will be posted and the button
   reads Spot?; press again within 4 s to post.
+- In POTA the radio also spots by itself: when the activation starts, and
+  after a QSY (1 kHz or more away, or another mode) once you have stayed
+  there a minute. At most one automatic spot in 5 minutes; pota.app keeps
+  only your latest spot, so the old frequency goes away. These QSY spots go
+  to pota.app only: a DX cluster spot can't be withdrawn.
 - SOTAwatch spots are not available yet (they need an API client approved by
   SOTA): post an alert on SOTAwatch and call CQ in CW, RBNHole spots you from
   the Reverse Beacon Network.
@@ -1114,6 +1237,22 @@ as soon as the app is open on the radio. Stop always works. When an app
 opened from the phone changed the mode (CW, or USB for SSTV/WeFax/NavTex),
 the mode comes back when the app closes.
 
+Memories (MEMORIES, next to LOG/DIGITAL/CW). The radio's MEM slots M1-M9 and
+its named channels, the same ones as on the radio and on the web
+configurator's Memories page. Tap one to tune it (frequency, then mode).
+Hold it down for its actions: SAVE VFO stores the radio's frequency, mode,
+AGC, P.AMP and ATT in that slot, CLEAR empties it; a channel can be renamed,
+moved up or down, or deleted (asked once more). Type a name and SAVE VFO to
+add the VFO as a new channel. Needs firmware v0.125 or newer.
+
+**In italiano.** Memorie (MEMORIE, accanto a LOG/DIGITALE/CW): gli slot MEM
+M1-M9 e i canali con nome della radio, gli stessi della radio e della pagina
+Memories del configuratore web. Un tocco sintonizza (frequenza, poi modo).
+Tenendo premuto compaiono le azioni: SALVA VFO mette nello slot frequenza,
+modo, AGC, P.AMP e ATT della radio, SVUOTA lo libera; un canale si rinomina,
+si sposta su o giù, si elimina (con conferma). Scrivi un nome e SALVA VFO per
+aggiungere il VFO come nuovo canale. Serve il firmware v0.125 o successivo.
+
 <table>
   <tr>
     <td align="center"><img src="screenshots/android/ft8_portrait.png" alt="FT8 portrait" width="240"><br><sub><b>FT8</b>, portrait</sub></td>
@@ -1181,7 +1320,8 @@ the WiFi.
 
 #### The new font did not change anything
 
-A font applies at the next start. A theme applies at once.
+RS, Black Metal and Total Black have their own font and keep it: pick another theme
+to see the font you chose.
 
 #### The main screen's waterfall stands still
 
@@ -1297,6 +1437,7 @@ The DATA partition, readable on a PC.
 | `ft_log.adi`, `js8call_log.adi` | FT8/FT4 and JS8 logs (ADIF) |
 | `ft8_udp.conf` | FT8/FT4 WSJT-X UDP output: `enabled=`, `host=`, `port=`, `id=` |
 | `app_freqs` | the last frequency and mode of each digital app |
+| `psk_macros.txt`, `olivia_macros.txt`, `psk.conf` | PSK and Olivia macros, PSK squelch |
 | `js8_inbox.txt`, `js8_held.txt`, `js8_texts.txt` | JS8 inbox, messages held for others, INFO/STATUS/alert words/groups |
 | `incoming_log.adi` | put an ADIF log here to import it at the next start |
 | `field/` | Field Ops state and activation logs (`field/logs/`) |

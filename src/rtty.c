@@ -89,6 +89,7 @@ static float    scope_y[RTTY_SCOPE_LEN];
 static uint16_t scope_pos;
 static float    bp_mark[4], bp_space[4];    /* x1 x2 y1 y2 */
 static float    tone_hi, tone_lo;
+static float    tone_var = 1e6f;            /* spread of the symbols around their tone, Hz^2 */
 static uint32_t tone_ms;                    /* last decided symbol */
 
 /* RBJ band-pass, 0 dB at f, bw Hz wide: b0, a1, a2 (b1 = 0, b2 = -b0) */
@@ -139,6 +140,7 @@ static void init() {
 
     tone_hi = params.rtty_shift / 2.0f;
     tone_lo = -tone_hi;
+    tone_var = 1e6f;
     ready = true;
 }
 
@@ -360,6 +362,8 @@ void rtty_put_audio_samples(unsigned int n, float *samples) {
             float hz = cargf(step) * CAPTURE_RATE_F / (2.0f * M_PI);
             float *tone = hz > 0.0f ? &tone_hi : &tone_lo;
 
+            tone_var += ((hz - *tone) * (hz - *tone) - tone_var) * 0.05f;
+
             *tone += (hz - *tone) * 0.05f;
             tone_ms = lv_tick_get();
         }
@@ -377,8 +381,9 @@ bool rtty_scope_get(float *x, float *y, float *offset) {
         y[i] = scope_y[(scope_pos + i) % RTTY_SCOPE_LEN];
     }
     *offset = (tone_hi + tone_lo) / 2.0f;
-    /* Noise decides symbols too, but its two "tones" are nowhere near the shift apart */
-    bool tuned = lv_tick_elaps(tone_ms) < 2000 &&
+    /* Noise decides symbols too, but its "tones" wander: a real signal keeps each symbol
+     * within a few tens of Hz of its tone, and the two tones a shift apart */
+    bool tuned = lv_tick_elaps(tone_ms) < 2000 && tone_var < 30.0f * 30.0f &&
                  fabsf(tone_hi - tone_lo - params.rtty_shift) < params.rtty_shift * 0.25f;
     pthread_mutex_unlock(&rtty_mux);
     return tuned;

@@ -4,7 +4,7 @@
  *  Themes: every colour of the GUI is a role, a theme gives each role its
  *  value plus the shapes (corners, borders, gradients), the font and the
  *  waterfall palette. Four themes are built in; more are JSON files in
- *  /mnt/themes/ (docs/THEMES.md), chosen in Settings and applied at start.
+ *  /mnt/themes/ (docs/THEMES.md), chosen in Settings and applied live.
  *
  *  Code never writes a colour: TC(role) for an lv_color_t, theme_hex(TC_role)
  *  for 0xRRGGBB (e.g. "#%06x text#" recolor strings).
@@ -206,7 +206,7 @@ uint32_t theme_hex(theme_color_t c);
 #define TC(role) lv_color_hex(theme_hex(TC_##role))
 
 /* Loads the theme by name: a built-in one or /mnt/themes/<name>.json.
- * Unknown names fall back to IU1WXY. Call once, before styles_init(). */
+ * Unknown names fall back to IU1WXY. Then styles_init() (styles_load() does both). */
 void theme_init(const char *name);
 
 /* Names for the Settings list: the built-in themes, then the files */

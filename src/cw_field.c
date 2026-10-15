@@ -160,6 +160,11 @@ static bool log_cancel(void) {
 void cw_field_log_open(void) {
     main_screen_keys_enable(false);
     textarea_window_open_w_label(log_ok, log_cancel, "Call [sent [rcvd]]: ");
+    if (*panel_last_call()) {                   /* the last call the decoder wrote, ready to log */
+        char line[24];
+        snprintf(line, sizeof(line), "%s ", panel_last_call());
+        textarea_window_set(line);
+    }
 }
 
 bool cw_field_key(uint32_t key) {
@@ -261,6 +266,9 @@ bool cw_field_visible(void) {
 }
 
 void cw_field_init(lv_obj_t *parent) {
+    bool again = arrow != NULL;   /* a theme change: the old arrow goes, the timer stays */
+
+    if (again) lv_obj_del(arrow);
     field = lv_obj_create(parent);
     lv_obj_remove_style_all(field);
     lv_obj_set_size(field, FIELD_W, FIELD_H);
@@ -320,5 +328,5 @@ void cw_field_init(lv_obj_t *parent) {
         lv_obj_set_style_line_rounded(line, true, 0);
     }
 
-    lv_timer_create(timer_cb, TIMER_MS, NULL);
+    if (!again) lv_timer_create(timer_cb, TIMER_MS, NULL);
 }

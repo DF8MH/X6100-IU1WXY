@@ -205,7 +205,7 @@ class SettingsManager {
     // FT8
     Parameter<int32_t> p_ft8_show_all{"ft8_show_all", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
-    Parameter<int32_t> p_ft8_protocol{"ft8_protocol", FTX_PROTOCOL_FT8, 0, (int32_t)FTX_PROTOCOL_FT8,
+    Parameter<int32_t> p_ft8_protocol{"ft8_protocol", FTX_PROTOCOL_FT8, 0, 2 /* FT2, ft8/ft2.h */,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_ft8_auto{"ft8_auto", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
@@ -224,6 +224,9 @@ class SettingsManager {
     Parameter<int32_t> p_wspr_tx_freq{"wspr_tx_freq", 1500, 1410, 1590,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_wspr_upload{"wspr_upload", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Decodes (FT8 FT4 FT2 JS8 PSK31 PSK63 Olivia) to PSK Reporter, on by default
+    Parameter<int32_t> p_pskreporter{"pskreporter", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
 
     // Field Ops: start in Field Ops at power on

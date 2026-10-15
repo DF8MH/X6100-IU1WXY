@@ -40,6 +40,7 @@
 typedef struct {
     const char *name;
     const char *prefix;
+    float       lat, lon;   /* its centre, east positive (cty.dat has west positive) */
 } entity_t;
 
 typedef struct {
@@ -216,6 +217,8 @@ static void parse(char *p)
             if (!add_entity(trim(field[0]), prefix)) {
                 return;
             }
+            ents[n_ents - 1].lat = strtof(field[4], NULL);
+            ents[n_ents - 1].lon = -strtof(field[5], NULL);
         }
         ent = n_ents - 1;
 
@@ -396,5 +399,23 @@ bool dxcc_lookup(const char *call, const char **name, const char **prefix)
     if (prefix != NULL) {
         *prefix = ents[ent].prefix;
     }
+    return true;
+}
+
+bool dxcc_pos(const char *call, double *lat, double *lon)
+{
+    const char *prefix;
+    unsigned    i;
+
+    if (!dxcc_lookup(call, NULL, &prefix)) {
+        return false;
+    }
+    for (i = 0; i < n_ents && ents[i].prefix != prefix; i++) {
+    }
+    if (i == n_ents) {
+        return false;
+    }
+    *lat = ents[i].lat;
+    *lon = ents[i].lon;
     return true;
 }

@@ -128,6 +128,8 @@ extern lv_font_t    sony_60;
 
 /* The shared styles from the theme loaded with theme_init() */
 void styles_init(void);
+/* theme_init(), the theme's font, styles_init() */
+void styles_load(const char *name);
 
 /* Again after another theme_init() (the UI harness switches themes) */
 void styles_apply(void);

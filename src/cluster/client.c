@@ -240,6 +240,19 @@ static bool glob_match(const char *pat, const char *str) {
     return *pat == '\0';
 }
 
+/* Alerts: the whole call, or, when the pattern has no '/', any part of it between slashes,
+ * so IK1ABC also fires for IK1ABC/P and EA8/IK1ABC/M (but not IK1ABCD) */
+static bool alert_call_match(const char *pat, const char *call) {
+    char part[CLUSTER_CALL_LEN];
+
+    if (glob_match(pat, call)) return true;
+    if (strchr(pat, '/') || !strchr(call, '/')) return false;
+    snprintf(part, sizeof(part), "%s", call);
+    for (char *save, *w = strtok_r(part, "/", &save); w; w = strtok_r(NULL, "/", &save))
+        if (glob_match(pat, w)) return true;
+    return false;
+}
+
 static char *trim(char *s) {
     while (*s == ' ') s++;
     for (size_t n = strlen(s); n > 0 && s[n - 1] == ' '; n--) s[n - 1] = '\0';
@@ -449,7 +462,7 @@ int cluster_alert_match(const cluster_filter_t *f, const cluster_spot_t *s) {
 
     for (int i = 0; i < f->alert_count; i++) {
         const cluster_alert_t *a = &f->alerts[i];
-        if (!glob_match(a->pattern, s->dx)) continue;
+        if (!alert_call_match(a->pattern, s->dx)) continue;
         if (a->bands && (band < 0 || !(a->bands & (1u << band)))) continue;
         if (a->mode) {
             if (!mode) mode = cluster_spot_mode_class(s);

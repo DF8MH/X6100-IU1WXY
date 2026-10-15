@@ -246,9 +246,12 @@ void spot_marks_init(lv_obj_t *parent, lv_coord_t line_y, lv_coord_t tag_y) {
         lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
         marks[i].label = l;
     }
-    ready = true;
-    lv_timer_create(timer_cb, 1000, NULL);
-    timer_cb(NULL);
+    /* Again on a theme change: drawn by spot_marks_layout(), once the cluster column is there too */
+    if (!ready) {
+        lv_timer_create(timer_cb, 1000, NULL);
+        ready = true;
+        timer_cb(NULL);
+    }
 }
 
 bool spot_marks_crossed(int32_t from, int32_t to, int32_t *spot_hz) {

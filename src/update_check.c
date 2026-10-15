@@ -4,6 +4,8 @@
  *  Xiegu X6100 LVGL GUI - new release alert: once after start, as soon as there is a network,
  *  x6100-link.it/api/latest.json (the release IU1WXY marked to notify, as X6100 Link reads it);
  *  a newer one than this firmware shows a message. Settings > Info > Update alert turns it off.
+ *  Its "min_fw" (set on the site's admin page) is the oldest firmware still fine: an older one
+ *  asks to update at every start, whatever Update alert says.
  *  Python fetches it: BusyBox wget has no HTTPS.
  *
  *  Check of the version order on the host:
@@ -75,7 +77,7 @@ int main(void) {
 static void *check_thread(void *arg) {
     (void)arg;
     /* up to ~20 minutes for the WiFi to come up */
-    for (int i = 0; i < 20 && params.update_alert.x; i++) {
+    for (int i = 0; i < 20; i++) {
         char  buf[512] = "";
         FILE *p;
 
@@ -86,10 +88,15 @@ static void *check_thread(void *arg) {
         }
         if (!buf[0]) continue;      /* no network yet */
 
-        cJSON      *o = cJSON_Parse(buf);
-        const char *v = cJSON_GetStringValue(cJSON_GetObjectItem(o, "version"));
+        cJSON      *o   = cJSON_Parse(buf);
+        const char *v   = cJSON_GetStringValue(cJSON_GetObjectItem(o, "version"));
+        const char *min = cJSON_GetStringValue(cJSON_GetObjectItem(o, "min_fw"));
+        const char *own = strrchr(VERSION, ' ') + 1;
 
-        if (v && params.update_alert.x && update_newer(v, strrchr(VERSION, ' ') + 1))
+        if (min && update_newer(min, own))
+            msg_schedule_long_text_fmt("This firmware is too old: please update to %s or later (x6100-link.it)",
+                                       v && update_newer(v, min) ? v : min);
+        else if (v && params.update_alert.x && update_newer(v, own))
             msg_schedule_long_text_fmt("Firmware %s available", v);
         cJSON_Delete(o);
         break;

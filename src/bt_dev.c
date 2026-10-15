@@ -598,6 +598,7 @@ static void do_pair_connect(const char *addr) {
     GVariant *r;
     bool      scanned = false;
     bool      input;
+    bool      classic = false;
 
     dev_path(addr, path, sizeof(path));
     plog("=== pair %s", addr);
@@ -607,11 +608,19 @@ static void do_pair_connect(const char *addr) {
     if (input) {
         GVariant   *props = dev_props(bus(), path);
         const char *n = NULL;
+        guint32     cls;
 
         if (props && g_variant_lookup(props, "Name", "&s", &n)) {
             snprintf(name, sizeof(name), "%s", n);
         }
+        /* Only classic devices have a Class: a Bluetooth 3.0 keyboard (Rii BT11) keeps its address
+         * and never shows up in the LE search below, so it pairs like headphones do */
+        classic = props && g_variant_lookup(props, "Class", "u", &cls);
         unref(props);
+    }
+    if (input && classic) {
+        plog("keyboard: classic, paired where Scan found it");
+    } else if (input) {
         /* Many keyboards take a pairing only for a few seconds after their
          * pairing key, and an entry left from Scan says nothing about now:
          * the old entry goes, and Pair() is sent the moment the keyboard

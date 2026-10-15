@@ -35,11 +35,14 @@
 #include "dsp.h"
 
 #include "ft8/audio_worker.h"
+#include "ft8/ft2.h"
 #include "ft8/cq_scheduler.h"
 #include "ft8/table_view.h"
 #include "ft8_udp.h"
 #include "dxcc.h"
 #include "js8_map.h"
+#include "main.h"
+#include "pskreporter.h"
 #include "flags.h"
 #include "ft8/tx_worker.h"
 #include "tx_player.h"
@@ -76,8 +79,41 @@
 
 #define FT8_WIDTH_HZ    50
 #define FT4_WIDTH_HZ    83
+#define FT2_WIDTH_HZ    167
 
 #define MAX_TX_START_DELAY 1.5f
+
+/* ---- FT8 / FT4 / FT2 (FT2 from SP2KMO's upstream 76d98ce2) ---------------
+ * cfg_ft8_protocol: FTX_PROTOCOL_FT4 (0), FTX_PROTOCOL_FT8 (1) or FTX_PROTOCOL_FT2 (2, ft8/ft2.h) */
+
+static const char *ftx_mode_name(void) {
+    return ftx_protocol_name(param_i_get(cfg_ft8_protocol));
+}
+
+static bool ftx_is_ft2(void) {
+    return param_i_get(cfg_ft8_protocol) == (int)FTX_PROTOCOL_FT2;
+}
+
+static int ftx_width_hz(void) {
+    switch (param_i_get(cfg_ft8_protocol)) {
+        case FTX_PROTOCOL_FT8: return FT8_WIDTH_HZ;
+        case FTX_PROTOCOL_FT4: return FT4_WIDTH_HZ;
+        default:               return FT2_WIDTH_HZ;
+    }
+}
+
+/* A transmission may start this late into its slot: FT2 lasts 2.52 s and must end inside 3.75 s */
+static float ftx_max_tx_start(void) {
+    return ftx_is_ft2() ? 0.8f : MAX_TX_START_DELAY;
+}
+
+static qso_log_mode_t ftx_log_mode(void) {
+    switch (param_i_get(cfg_ft8_protocol)) {
+        case FTX_PROTOCOL_FT8: return MODE_FT8;
+        case FTX_PROTOCOL_FT4: return MODE_FT4;
+        default:               return MODE_FT2;
+    }
+}
 
 typedef enum {
     RX_PROCESS,
@@ -190,7 +226,8 @@ static buttons_page_t btn_page_2;
 static buttons_page_t btn_page_3;
 
 static void map_cb(struct button_data_t *btn_data);
-static lv_obj_t *map_obj;   /* QSO map, when open */
+static void heard_map_cb(struct button_data_t *btn_data);
+static lv_obj_t *map_obj;   /* QSO or heard map, when open */
 
 static button_data_t button_page_1 = { .type=BTN_TEXT, .label = "(FT8 1:3)", .press = button_next_page_cb, .next=&btn_page_2};
 static button_data_t button_show_cq_all = { .type=BTN_TEXT_FN, .label_fn = cq_all_label_getter, .press = show_cq_all_cb};
@@ -206,7 +243,8 @@ static button_data_t button_force_save = { .type=BTN_TEXT, .label = "Force QSO\n
 static button_data_t button_page_3 = { .type=BTN_TEXT, .label = "(FT8 3:3)", .press = button_next_page_cb, .next=&btn_page_1};
 static button_data_t button_cq_mod = { .type=BTN_TEXT, .label = "CQ\nModifier", .press = cq_modifier_cb };
 static button_data_t button_time_sync = { .type=BTN_TEXT, .label = "Time\nSync", .press = time_sync };
-static button_data_t button_map = { .type=BTN_TEXT, .label = "Map", .press = map_cb };
+static button_data_t button_map = { .type=BTN_TEXT, .label = "Log\nMap", .press = map_cb };
+static button_data_t button_heard_map = { .type=BTN_TEXT, .label = "Live\nMap", .press = heard_map_cb };
 
 static buttons_page_t btn_page_1 = {
     {&button_page_1, &button_show_cq_all, &button_mode_ft4_ft8, &button_tx_cq_en_dis, &button_tx_call_en_dis}
@@ -217,7 +255,7 @@ static buttons_page_t btn_page_2 = {
 };
 
 static buttons_page_t btn_page_3 = {
-    {&button_page_3, &button_cq_mod, &button_time_sync, &button_map}
+    {&button_page_3, &button_cq_mod, &button_time_sync, &button_map, &button_heard_map}
 };
 
 static dialog_t dialog = {
@@ -247,7 +285,7 @@ static int64_t     udp_last_freq  = -1;
 static char        udp_last_dx[16];
 
 static const char *udp_mode_str(void) {
-    return param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? "FT8" : "FT4";
+    return ftx_mode_name();
 }
 
 /* The station worked: the pending TX message starts with it ("DXCALL MYCALL ..."), but CQ */
@@ -299,7 +337,7 @@ static void save_qso(const char *remote_callsign, const char *remote_grid, const
     qso_log_record_t qso = qso_log_record_create(
         params.callsign.x,
         canonized_call,
-        now, param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? MODE_FT8 : MODE_FT4,
+        now, ftx_log_mode(),
         s_snr, r_snr, cparam_i_get(cfg_fg_freq), NULL, NULL,
         station_qth(), remote_grid
     );
@@ -393,13 +431,33 @@ static void map_key_cb(lv_event_t *e) {
     if (*((uint32_t *)lv_event_get_param(e)) == LV_KEY_ESC) map_close();
 }
 
-static void map_cb(struct button_data_t *btn_data) {
-    (void)btn_data;
+/* What the heard map keeps of a decode: enough to call it as a press on its row does */
+typedef struct {
+    ftx_msg_meta_t meta;
+    bool           odd;
+} map_rx_t;
+
+_Static_assert(sizeof(map_rx_t) <= sizeof(((js8_map_station_t *)0)->data), "map_rx_t too big for the map");
+
+static void on_table_press(const cell_data_t *cell_data);
+
+/* MFK press on a station of the Live Map: back to the list and call it, as from its row */
+static void map_pick(const js8_map_station_t *st) {
+    const map_rx_t *rx = (const map_rx_t *)st->data;
+    cell_data_t     cd = {.cell_type = CELL_RX_MSG, .odd = rx->odd, .meta = rx->meta};
+    map_close();
+    on_table_press(&cd);
+}
+
+/* Either map button closes the map that is open */
+static void map_open(bool heard) {
     if (map_obj) {
         map_close();
         return;
     }
-    map_obj = js8_map_create(dialog.obj, WIDTH, WF_HEIGHT, station_qth(), "/mnt/ft_log.adi");
+    map_obj = heard ? js8_map_create(dialog.obj, WIDTH, WF_HEIGHT, station_qth(), "/mnt/ft_log.adi",
+                                     js8_map_heard_fill, false, map_pick)
+                    : js8_map_create(dialog.obj, WIDTH, WF_HEIGHT, station_qth(), "/mnt/ft_log.adi", NULL, true, NULL);
     if (!map_obj) {
         msg_update_text_fmt("Not enough memory for the map");
         return;
@@ -409,6 +467,18 @@ static void map_cb(struct button_data_t *btn_data) {
     lv_obj_add_event_cb(map_obj, map_key_cb, LV_EVENT_KEY, NULL);
     lv_group_add_obj(keyboard_group, map_obj);
     lv_group_focus_obj(map_obj);
+    lv_group_set_editing(keyboard_group, true);   /* the MFK steps through the stations */
+}
+
+static void map_cb(struct button_data_t *btn_data) {
+    (void)btn_data;
+    map_open(false);
+}
+
+/* The stations decoded in the last 15 minutes, from their grid */
+static void heard_map_cb(struct button_data_t *btn_data) {
+    (void)btn_data;
+    map_open(true);
 }
 
 static void key_cb(lv_event_t * e) {
@@ -470,6 +540,11 @@ static void load_band(int8_t dir) {
             type = CFG_DIG_TYPE_FT4;
             lv_finder_set_width(finder, FT4_WIDTH_HZ);
             break;
+
+        default:    /* FT2 */
+            type = CFG_DIG_TYPE_FT2;
+            lv_finder_set_width(finder, FT2_WIDTH_HZ);
+            break;
     }
     bool res = cfg_digital_load(dir, type);
     if (res) {
@@ -498,6 +573,7 @@ static void band_cb(lv_event_t * e) {
     }
 
     load_band(dir);
+    js8_map_heard_clear();
 
     worker_done();
     worker_init();
@@ -535,12 +611,27 @@ static void set_freq(uint32_t freq) {
 }
 
 static void rotary_cb(int32_t diff) {
-    uint32_t abs_diff = abs(diff);
-    if (abs_diff > 3) {
-        diff *= (abs_diff < 6) ? 5 : 10;
+    /* Faster turns move further: 4-5 clicks within 30 ms move 5 Hz each, 6 or more
+     * 10 Hz. The knob's detents arrive batched per GUI read (10 ms), so a single
+     * diff almost never got past 3: count the clicks per 30 ms, as the JS8 app
+     * does (from randal007's upstream ft8-knob-speed b2c3e1ac) */
+    static uint32_t window_ms;
+    static uint32_t window_clicks;
+
+    if (lv_tick_elaps(window_ms) >= 30) {
+        window_ms     = lv_tick_get();
+        window_clicks = 0;
+    }
+    if (map_obj) {   /* the map is open: it zooms */
+        js8_map_zoom(diff);
+        return;
+    }
+    window_clicks += abs(diff);
+    if (window_clicks > 3) {
+        diff *= (window_clicks < 6) ? 5 : 10;
     }
     uint32_t f = params.ft8_tx_freq.x + diff;
-    f = limit(f, filter_low, filter_high - (param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? FT8_WIDTH_HZ : FT4_WIDTH_HZ));
+    f = limit(f, filter_low, filter_high - ftx_width_hz());
 
     set_freq(f);
 
@@ -698,7 +789,7 @@ const char *cq_all_label_getter() {
 
 const char *protocol_label_getter() {
     static char buf[32];
-    sprintf(buf, "Mode:\n%s", param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? "FT8": "FT4");
+    sprintf(buf, "Mode:\n%s", ftx_mode_name());
     return buf;
 }
 
@@ -734,14 +825,17 @@ static void show_cq_all_cb(struct button_data_t *btn_data) {
 static void mode_ft4_ft8_cb(struct button_data_t *btn_data) {
     if (disable_buttons) return;
 
-    ftx_protocol_t proto = param_i_get(cfg_ft8_protocol);
+    /* FT8 -> FT4 -> FT2 -> FT8 */
+    int proto = param_i_get(cfg_ft8_protocol);
     if (proto == FTX_PROTOCOL_FT8)
         proto = FTX_PROTOCOL_FT4;
+    else if (proto == FTX_PROTOCOL_FT4)
+        proto = FTX_PROTOCOL_FT2;
     else {
         proto = FTX_PROTOCOL_FT8;
     }
     param_i_set(cfg_ft8_protocol, proto);
-    freq_strip_set_app(proto == FTX_PROTOCOL_FT4 ? "FT4" : "FT8");
+    freq_strip_set_app(ftx_protocol_name(proto));
     subject_i_set(cq_enabled, false);
 
     worker_done();
@@ -779,7 +873,7 @@ static void tx_cq_en_dis_cb(struct button_data_t *btn_data) {
         clock_gettime(CLOCK_REALTIME, &now);
         float time_since_slot_start;
         tx_time_slot = !get_time_slot(now, &time_since_slot_start);
-        if (time_since_slot_start < MAX_TX_START_DELAY) {
+        if (time_since_slot_start < ftx_max_tx_start()) {
             tx_time_slot = !tx_time_slot;
         }
 
@@ -832,15 +926,7 @@ static void time_sync(struct button_data_t *btn_data) {
     time_t now = time(NULL);
     uint8_t sec = now % 60;
     float drift, slot_time;
-    switch (param_i_get(cfg_ft8_protocol)) {
-        case FTX_PROTOCOL_FT4:
-            slot_time = FT4_SLOT_TIME;
-            break;
-
-        case FTX_PROTOCOL_FT8:
-            slot_time = FT8_SLOT_TIME;
-            break;
-    }
+    slot_time = ftx_slot_time(param_i_get(cfg_ft8_protocol));
     drift = fmodf(sec + slot_time / 2, slot_time) - slot_time / 2;
     struct timespec tp;
 
@@ -960,17 +1046,10 @@ static bool get_time_slot(struct timespec now, float *sec_since_start) {
     bool cur_odd;
     float sec = (now.tv_sec % 60) + now.tv_nsec / 1.0e9f;
 
-    switch (param_i_get(cfg_ft8_protocol)) {
-    case FTX_PROTOCOL_FT4:
-        cur_odd = (int)(sec / FT4_SLOT_TIME) % 2;
-        *sec_since_start = fmodf(sec, FT4_SLOT_TIME);
-        break;
+    float slot_time = ftx_slot_time(param_i_get(cfg_ft8_protocol));
 
-        case FTX_PROTOCOL_FT8:
-        cur_odd = (int)(sec / FT8_SLOT_TIME) % 2;
-        *sec_since_start = fmodf(sec, FT8_SLOT_TIME);
-        break;
-    }
+    cur_odd = (int)(sec / slot_time) % 2;
+    *sec_since_start = fmodf(sec, slot_time);
     return cur_odd;
 }
 
@@ -1078,6 +1157,17 @@ static void add_rx_text(int16_t snr, const char * text, slot_info_t *s_info, flo
     free(old_msg);
     remote_rx_event(snr, text, s_info->odd, &meta);
 
+    /* The heard map and PSK Reporter: the sender of any message we can parse */
+    if (meta.type != FXT_MSG_TYPE_OTHER && meta.call_de[0]) {
+        map_rx_t rx = {meta, s_info->odd};
+        js8_map_heard(meta.call_de, meta.grid, snr, meta.to_me, &rx, sizeof(rx));
+        if (param_i_get(cfg_pskreporter)) {
+            pskr_spot(params.callsign.x, station_qth(), VERSION, meta.call_de, meta.grid,
+                      (uint32_t)cparam_i_get(cfg_fg_freq) + (uint32_t)(freq_hz + 0.5f), snr,
+                      ftx_mode_name());
+        }
+    }
+
     ft8_cell_type_t cell_type;
     if (meta.to_me) {
         cell_type = CELL_RX_TO_ME;
@@ -1093,7 +1183,7 @@ static void add_rx_text(int16_t snr, const char * text, slot_info_t *s_info, flo
     if (meta.type == FTX_MSG_TYPE_CQ) {
         cell_data.worked_type = qso_log_search_worked(
             meta.call_de,
-            param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? MODE_FT8 : MODE_FT4,
+            ftx_log_mode(),
             qso_log_freq_to_band(cparam_i_get(cfg_fg_freq))
         );
     }
@@ -1210,7 +1300,7 @@ static void on_tick_cb(const slot_info_t *info, bool new_slot,
 
     bool have_tx_msg = tx_msg.msg[0] != '\0';
 
-    if ((sec_since_slot_start < MAX_TX_START_DELAY) && have_tx_msg) {
+    if ((sec_since_slot_start < ftx_max_tx_start()) && have_tx_msg) {
         if ((tx_time_slot == info->odd) && subject_i_get(tx_enabled)) {
             state = TX_PROCESS;
             add_tx_text(tx_msg.msg);
@@ -1236,7 +1326,10 @@ static void on_tick_cb(const slot_info_t *info, bool new_slot,
         clock_gettime(CLOCK_REALTIME, &now);
         struct tm *ts = gmtime(&now.tv_sec);
         snprintf(slot_time, sizeof(slot_time), "%02i:%02i:%02i", ts->tm_hour, ts->tm_min, ts->tm_sec);
-        if (!have_tx_msg || !subject_i_get(tx_enabled)) {
+        static unsigned ft2_slots;
+
+        /* FT2: an RX line every 3.75 s would fill the table; one every 4th slot (15 s), as FT8 */
+        if ((!have_tx_msg || !subject_i_get(tx_enabled)) && (!ftx_is_ft2() || (ft2_slots++ % 4) == 0)) {
             add_info("RX %s %s", cfg_digital_label_get(), slot_time);
         }
     }
@@ -1260,7 +1353,7 @@ void dialog_ft8_remote(const char *cmd, int32_t val, const char *text) {
         if (val != param_i_get(cfg_ft8_hold_freq))
             hold_tx_freq_cb(NULL);
     } else if (!strcmp(cmd, "ft8_txfreq")) {
-        set_freq(limit(val, filter_low, filter_high - (param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? FT8_WIDTH_HZ : FT4_WIDTH_HZ)));
+        set_freq(limit(val, filter_low, filter_high - ftx_width_hz()));
     } else if (!strcmp(cmd, "ft8_reply")) {
         cell_data_t cd = {.cell_type = CELL_RX_MSG};
         bool        found;

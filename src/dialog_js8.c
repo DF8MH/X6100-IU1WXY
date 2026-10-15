@@ -11,6 +11,8 @@
 
 #include "dialog_js8.h"
 #include "js8_map.h"
+#include "main.h"
+#include "pskreporter.h"
 
 #include "js8/js8_rx.h"
 #include "js8/js8_tx.h"
@@ -695,6 +697,11 @@ static void process_message(js8_rx_msg_t *m) {
         show_selection();
     }
     alert_check(m, new_station);
+    if (param_i_get(cfg_pskreporter) && !m->low_confidence && m->from[0]) {
+        bool known = find_station(m->from, &seen);   /* its grid, if it sent one */
+        pskr_spot(params.callsign.x, station_qth(), VERSION, m->from, known ? seen.grid : "",
+                  (uint32_t)cparam_i_get(cfg_fg_freq) + (uint32_t)(m->freq_hz + 0.5f), m->snr, "JS8");
+    }
     if (!m->low_confidence && m->from[0]) {
         js8_sync_sample_t *x = &sync_samples[sync_head];
         snprintf(x->call, sizeof(x->call), "%s", m->from);
@@ -1584,6 +1591,10 @@ static void apply_hold(float their_freq) {
  * frequency stays locked. */
 static void rotary_cb(int32_t diff) {
     user_touch();
+    if (map_obj) { /* the map is open: it zooms */
+        js8_map_zoom(diff);
+        return;
+    }
     if (cq_adjusting) {
         cq_adjust_turn(diff);
         return;
@@ -5366,7 +5377,40 @@ static void map_key_cb(lv_event_t *e) {
     if (*((uint32_t *)lv_event_get_param(e)) == LV_KEY_ESC) map_close();
 }
 
-/* Over the waterfall and the list: the world, the station and a path to each QSO of the log */
+/* The stations of this band, for the map */
+static int map_fill(js8_map_station_t *out, int max) {
+    static js8_station_t list[MAX_ROWS];
+    int64_t              now = now_wall_ms();
+    int                  n   = js8_stations_list(stations, now, list, MAX_ROWS);
+    if (n > max) n = max;
+    for (int i = 0; i < n; i++) {
+        memset(&out[i], 0, sizeof(out[i]));
+        snprintf(out[i].call, sizeof(out[i].call), "%s", list[i].call);
+        snprintf(out[i].grid, sizeof(out[i].grid), "%s", list[i].grid);
+        out[i].snr      = list[i].snr;
+        out[i].t        = time(NULL) - (time_t)((now - list[i].heard_ms) / 1000);
+        out[i].heard_me = list[i].heard_me;
+    }
+    return n;
+}
+
+/* MFK press on a station of the map: back to the list with it selected, as a press on its row */
+static void map_pick(const js8_map_station_t *st) {
+    js8_station_t s;
+    map_close();
+    if (!find_station(st->call, &s)) {
+        msg_update_text_fmt("%s: not heard on this band", st->call);
+        return;
+    }
+    snprintf(sel_call, sizeof(sel_call), "%s", s.call);
+    qso_freq = s.freq_hz;
+    sel_snr  = s.snr;
+    show_selection();
+    msg_update_text_fmt("%s at %.0f Hz, %+d dB", s.call, s.freq_hz, s.snr);
+}
+
+/* Over the waterfall and the list: the world, the station, the stations heard on this band
+ * and a path to each QSO of the log */
 static void map_cb(button_data_t *btn) {
     (void)btn;
     user_touch();
@@ -5376,7 +5420,7 @@ static void map_cb(button_data_t *btn) {
     }
     if (popup_guard()) return;
     if (composing) return;
-    map_obj = js8_map_create(dialog.obj, WIDTH, WF_HEIGHT, station_qth(), JS8_LOG_PATH);
+    map_obj = js8_map_create(dialog.obj, WIDTH, WF_HEIGHT, station_qth(), JS8_LOG_PATH, map_fill, true, map_pick);
     if (!map_obj) {
         msg_update_text_fmt("Not enough memory for the map");
         return;
@@ -5386,12 +5430,12 @@ static void map_cb(button_data_t *btn) {
     lv_obj_add_event_cb(map_obj, map_key_cb, LV_EVENT_KEY, NULL);
     lv_group_add_obj(keyboard_group, map_obj);
     lv_group_focus_obj(map_obj);
+    lv_group_set_editing(keyboard_group, true); /* the MFK steps through the stations */
 }
 
 /* ---- Web remote ---------------------------------------------------------- */
 
 void dialog_js8_remote(const char *cmd, int32_t val, const char *text) {
-    (void)val;
     user_touch();
     if (!strcmp(cmd, "js8_send")) {
         char out[TX_TEXT_MAX + 8];

@@ -26,6 +26,9 @@ void panel_add_text(const char * text);
 void panel_set_info(const char * text);
 void panel_keep_below(lv_coord_t y);
 
+/* The last callsign the decoder wrote (CW / RTTY panel), "" when none */
+const char *panel_last_call(void);
+
 #ifdef __cplusplus
 }
 #endif

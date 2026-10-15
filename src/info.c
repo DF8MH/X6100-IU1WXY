@@ -71,6 +71,7 @@ static lv_obj_t     *items[INFO_NUM];
 static SubjectInt *mode_lock;
 
 static void wifi_state_change_cb(void *s, lv_msg_t *m);
+static void wifi_icon_update(void *arg);
 static void *status_thread(void *arg);
 
 static void vfo_label_update(Subject *subj, void * user_data);
@@ -82,8 +83,9 @@ static void pre_label_update(Subject *subj, void * user_data);
 static void deck_init(void);
 
 lv_obj_t * info_init(lv_obj_t * parent) {
+    bool again = mode_lock != NULL;   /* a theme change: the thread and the subscriptions stay */
 
-    mode_lock = subject_i_create(false);
+    if (!again) mode_lock = subject_i_create(false);
 
     obj = lv_obj_create(parent);
 
@@ -152,11 +154,15 @@ lv_obj_t * info_init(lv_obj_t * parent) {
     subject_subscribe_delayed_and_notify((Subject*)cfg_cur_att, att_label_update, NULL);
     subject_subscribe_delayed_and_notify((Subject*)cfg_cur_pre, pre_label_update, NULL);
 
-    lv_msg_subscribe(MSG_WIFI_STATE_CHANGED, wifi_state_change_cb, NULL);
+    if (again) {
+        wifi_icon_update(NULL);
+    } else {
+        lv_msg_subscribe(MSG_WIFI_STATE_CHANGED, wifi_state_change_cb, NULL);
 
-    pthread_t thread;
-    pthread_create(&thread, NULL, status_thread, NULL);
-    pthread_detach(thread);
+        pthread_t thread;
+        pthread_create(&thread, NULL, status_thread, NULL);
+        pthread_detach(thread);
+    }
 
     if (theme_shape.deck) deck_init();
     return obj;
@@ -174,7 +180,9 @@ static void deck_set(int i, bool on) {
     lv_obj_set_style_text_color(deck_ind[i], on ? TC(text) : TC(text_mute), 0);
 }
 
+/* Still subscribed after a theme change to another layout: then there's nothing to update */
 static void deck_atu_update(Subject *subj, void *user_data) {
+    if (!theme_shape.deck) return;
     bool on = param_i_get(cfg_atu_enabled);
 
     lv_obj_set_style_text_color(deck_ind[D_ATU], !on ? TC(text_mute) : cfg_atu_is_loaded() ? TC(text) : TC(err), 0);
@@ -185,6 +193,8 @@ static void deck_update(Subject *subj, void *user_data) {
     x6100_agc_t a = cparam_i_get(cfg_cur_agc);
     int32_t     bw = cparam_i_get(cfg_cur_filter_bw), step = param_i_get(cfg_mode_freq_step);
     int32_t     half = 50000 / (params.waterfall_zoom.x ? LV_MAX(1, param_i_get(cfg_mode_zoom)) : 1);
+
+    if (!theme_shape.deck) return;
     char        b[16], st[16];
 
     deck_set(D_ATT, cparam_i_get(cfg_cur_att));
@@ -386,7 +396,7 @@ void info_lock_mode(bool lock) {
     subject_i_set(mode_lock, lock);
 }
 
-static void wifi_state_change_cb(void *s, lv_msg_t *m) {
+static void wifi_icon_update(void *arg) {
     lv_color_t color;
     switch (wifi_get_status()) {
     case WIFI_CONNECTED:
@@ -400,6 +410,12 @@ static void wifi_state_change_cb(void *s, lv_msg_t *m) {
         break;
     }
     lv_obj_set_style_text_color(items[INFO_WIFI], color, 0);
+}
+
+/* Sent from NetworkManager's thread: the icon is set on the LVGL one (a theme change may be
+ * making items[] again meanwhile) */
+static void wifi_state_change_cb(void *s, lv_msg_t *m) {
+    scheduler_put_noargs(wifi_icon_update);
 }
 
 static void set_icon(info_items_t item, status_t st, uint32_t on_color) {

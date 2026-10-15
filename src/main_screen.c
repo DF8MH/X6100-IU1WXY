@@ -6,6 +6,7 @@
  *  Copyright (c) 2022-2023 Belousov Oleg aka R1CBU
  */
 
+#include "ft8/ft2.h"
 #include "main_screen.h"
 
 #include "styles.h"
@@ -50,6 +51,8 @@
 #include "dialog_wefax.h"
 #include "dialog_navtex.h"
 #include "dialog_js8.h"
+#include "dialog_psk.h"
+#include "dialog_olivia.h"
 #include "dialog_sstv.h"
 #include "dialog_cluster.h"
 #include "dialog_modes.h"
@@ -576,7 +579,7 @@ static void next_freq_step(bool up) {
 static const char *app_name(press_action_t a) {
     switch (a) {
         case ACTION_APP_RTTY:       return "RTTY";
-        case ACTION_APP_FT8:        return param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT4 ? "FT4" : "FT8";
+        case ACTION_APP_FT8:        return ftx_protocol_name(param_i_get(cfg_ft8_protocol));
         case ACTION_APP_SWRSCAN:    return "SWR Scan";
         case ACTION_APP_GPS:        return "GPS";
         case ACTION_APP_SETTINGS:   return "Settings";
@@ -593,6 +596,8 @@ static const char *app_name(press_action_t a) {
         case ACTION_APP_FIELD:      return "Field Ops";
         case ACTION_APP_BANDS:      return "Bands";
         case ACTION_APP_SNAKE:      return "Snake";
+        case ACTION_APP_PSK:        return dialog_psk_is_63() ? "PSK63" : "PSK31";
+        case ACTION_APP_OLIVIA:     return "Olivia";
         default:                    return NULL;    /* Modes menu: a menu, not an app */
     }
 }
@@ -629,6 +634,14 @@ void main_screen_start_app(press_action_t app_action) {
         case ACTION_APP_FT8: case ACTION_APP_JS8: case ACTION_APP_WSPR: case ACTION_APP_SSTV:
         case ACTION_APP_WEFAX: case ACTION_APP_NAVTEX:
             dialog_app_memory(app_name(app_action));
+            radio_set_digi_cap(true);
+            break;
+        case ACTION_APP_PSK:    /* one memory for PSK31 and PSK63 */
+            dialog_app_memory("PSK");
+            radio_set_digi_cap(true);
+            break;
+        case ACTION_APP_OLIVIA:
+            dialog_app_memory("Olivia");
             radio_set_digi_cap(true);
             break;
         case ACTION_APP_RTTY:
@@ -722,6 +735,14 @@ void main_screen_start_app(press_action_t app_action) {
 
         case ACTION_APP_SNAKE:
             dialog_construct(dialog_snake, obj);
+            break;
+
+        case ACTION_APP_PSK:
+            dialog_construct(dialog_psk, obj);
+            break;
+
+        case ACTION_APP_OLIVIA:
+            dialog_construct(dialog_olivia, obj);
             break;
 
         default:
@@ -827,6 +848,8 @@ void main_screen_action(press_action_t action) {
         case ACTION_APP_CW_KBD:
         case ACTION_APP_FIELD:
         case ACTION_APP_BANDS:
+        case ACTION_APP_PSK:
+        case ACTION_APP_OLIVIA:
             main_screen_start_app(action);
             break;
 
@@ -1333,7 +1356,8 @@ static void main_screen_hkey_cb(lv_event_t * e) {
 
 
 case HKEY_VM:
-    if (dialog_wefax->run || dialog_navtex->run || dialog_sstv->run || dialog_js8->run) {
+    if (dialog_wefax->run || dialog_navtex->run || dialog_sstv->run || dialog_js8->run || dialog_psk->run ||
+        dialog_olivia->run) {
         break;
     }
 
@@ -1483,7 +1507,9 @@ static uint16_t freq_accel(uint16_t dt) {
 /* Cluster spots on the waterfall: turning slowly (at most spot_snap_slow
  * detents per 33 ms), the VFO stops on a spot it passes and stays there for
  * spot_snap_hold more detents, a light magnetic click (hold 0: off). Turning
- * fast goes straight past. Settings → Display → MAIN SCREEN. */
+ * fast goes straight past. Settings → Display → MAIN SCREEN. Not in CW: the
+ * segment is thick with spots and a CW signal is tuned by ear, so the knob
+ * kept sticking (ZAP and the app's tap centre a signal instead). */
 static int32_t snap_hz;
 static int     snap_hold;
 
@@ -1495,7 +1521,8 @@ static void freq_shift(int16_t diff, uint16_t dt) {
     int32_t old  = cparam_i_get(cfg_fg_freq);
     int32_t freq = old;
     int32_t spot;
-    int     hold = param_i_get(cfg_spot_snap_hold);
+    int32_t mode = cparam_i_get(cfg_cur_mode);
+    int     hold = mode == x6100_mode_cw || mode == x6100_mode_cwr ? 0 : param_i_get(cfg_spot_snap_hold);
     bool    slow = hold > 0 && (dt == 0 || dt * param_i_get(cfg_spot_snap_slow) >= 33);
 
     if (slow && snap_hold > 0 && old == snap_hz) {
@@ -1708,16 +1735,25 @@ static void spectrum_long_pressed_cb(lv_event_t * e) {
     }
 }
 
+static lv_timer_t *keys_timer;   /* an enable on its way: a dialog opened meanwhile cancels it */
+
 static void keys_enable_cb(lv_timer_t *t) {
+    keys_timer = NULL;
     lv_group_add_obj(keyboard_group, spectrum);
     lv_group_set_editing(keyboard_group, true);
 }
 
 void main_screen_keys_enable(bool value) {
     if (value) {
-        lv_timer_t *timer = lv_timer_create(keys_enable_cb, 100, NULL);
-        lv_timer_set_repeat_count(timer, 1);
+        if (!keys_timer) {
+            keys_timer = lv_timer_create(keys_enable_cb, 100, NULL);
+            lv_timer_set_repeat_count(keys_timer, 1);
+        }
     } else {
+        if (keys_timer) {
+            lv_timer_del(keys_timer);
+            keys_timer = NULL;
+        }
         lv_group_remove_obj(spectrum);
         lv_group_set_editing(keyboard_group, false);
     }
@@ -1827,11 +1863,12 @@ static void channels_poll_cb(lv_timer_t *t) {
     dialog_channels_poll();
 }
 
+static void build(void);
+
 lv_obj_t * main_screen() {
     broadcast_db_init();
     channels_load();    /* creates channels.json with the defaults when missing */
     lv_timer_create(channels_poll_cb, 2000, NULL);
-    uint16_t y = 0;
 
     freq_lock = subject_i_create(false);
 
@@ -1847,6 +1884,19 @@ lv_obj_t * main_screen() {
     lv_obj_add_style(obj, &background_style, LV_PART_MAIN);
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
 
+    /* On the top layer, over dialogs and the other top-layer items (Dyuldin, upstream da454b48) */
+    msg = msg_init(lv_layer_top());
+    msg_tiny = msg_tiny_init(lv_layer_top());
+
+    build();
+    buttons_load_page(&buttons_page_vol_1);
+    return obj;
+}
+
+/* The widgets: at start, and again on a theme change (main_screen_set_theme()) */
+static void build(void) {
+    uint16_t y = 0;
+
     spectrum = spectrum_init(obj);
     main_screen_keys_enable(true);
 
@@ -1858,7 +1908,7 @@ lv_obj_t * main_screen() {
 
     spectrum_min_max_reset();
 
-    if (theme_shape.deck) freq_height = 0;   /* the edge frequencies go in the spectrum's top corners */
+    freq_height = theme_shape.deck ? 0 : 36;   /* deck: the edge frequencies go in the spectrum's top corners */
     y = spectrum_layout();
 
     freq_scale_init(obj, theme_shape.deck ? y - spectrum_height : y);
@@ -1890,13 +1940,9 @@ lv_obj_t * main_screen() {
     knobs_init(obj);
 
     buttons_init(obj);
-    buttons_load_page(&buttons_page_vol_1);
 
     panel_init(obj);
     panel_keep_below(wf_y - 8);   /* as with the 76 px spectrum: on the scale's bottom edge */
-    /* On the top layer, over dialogs and the other top-layer items (Dyuldin, upstream da454b48) */
-    msg = msg_init(lv_layer_top());
-    msg_tiny = msg_tiny_init(lv_layer_top());
 
     info_init(obj);
     clock_init(obj);    /* deck: over the info rows */
@@ -1931,8 +1977,36 @@ lv_obj_t * main_screen() {
 
     subject_subscribe_delayed((Subject*)cfg_band_if_shift, update_zoom_on_if_shift_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_mode_zoom, update_zoom_on_if_shift_change, NULL);
+}
 
-    return obj;
+/* A theme change, live: the open app closes, the main screen is built again with the new
+ * theme; the radio and the settings stay as they are. The modules keep their subscriptions,
+ * timers and threads (subject_no_duplicates()): they find the new widgets through the same
+ * pointers. Not in walkie mode (the buttons are on its screen) */
+void main_screen_set_theme(const char *name) {
+    apps_disable();
+    buttons_page_t *page = buttons_get_cur_page();
+    buttons_unload_page();
+    /* The overlays go with the widgets: closed as their timers would */
+    if (channel_overlay_timer) {
+        lv_timer_del(channel_overlay_timer);
+        channel_overlay_timer_cb(NULL);
+    }
+    if (broadcast_overlay_timer) {
+        lv_timer_del(broadcast_overlay_timer);
+        broadcast_overlay_timer_cb(NULL);
+    }
+    lv_async_call_cancel((lv_async_cb_t)lv_obj_invalidate, spectrum);   /* spectrum.c update_dnf() */
+    lv_obj_clean(obj);
+    walkie_drop();
+
+    styles_load(name);
+    subject_no_duplicates(true);
+    build();
+    subject_no_duplicates(false);
+    buttons_load_page(page ? page : &buttons_page_vol_1);
+    lv_obj_report_style_change(NULL);   /* what is left: the messages, the top layer */
+    event_obj_drop_deleted();           /* what the threads queued for the old widgets */
 }
 
 void main_screen_notify_rx_tx(bool tx) {

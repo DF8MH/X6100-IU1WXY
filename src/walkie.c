@@ -461,6 +461,15 @@ static void on_walkie_change(Subject *subj, void *user_data) {
     }
 }
 
+/* A theme change (main_screen_set_theme()): made again with the new theme at the next enter() */
+void walkie_drop(void) {
+    if (scr) {
+        lv_timer_del(timer);
+        lv_obj_del(scr);
+        scr = NULL;
+    }
+}
+
 void walkie_init(lv_obj_t *main_screen_obj) {
     main_scr = main_screen_obj;
     subject_subscribe_delayed_and_notify((Subject *)cfg_walkie, on_walkie_change, NULL);

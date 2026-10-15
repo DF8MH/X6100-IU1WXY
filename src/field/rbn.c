@@ -8,6 +8,7 @@
 
 #include "rbn.h"
 
+#include "bands.h"
 #include "../cluster/spots.h"
 
 #include <ctype.h>
@@ -79,7 +80,7 @@ void field_rbn_feed_line(const char *line, time_t now) {
 
     if (!cluster_parse_line(line, &s))
         return;
-    int    band = cluster_band_of(s.freq_hz);
+    int    band = field_band_of(s.freq_hz);
     time_t min  = now / 60;
     int    slot = (int)(min % FIELD_RBN_MINUTES);
 

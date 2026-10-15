@@ -56,3 +56,7 @@ images/*.png
 _build/
 build/
 build_test/
+
+# Developer tools and tests: private repo IU1WXY/X6100-IU1WXY-dev
+/tests/
+/tools/

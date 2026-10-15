@@ -201,6 +201,8 @@ static lv_obj_t *make_label(lv_obj_t *parent, lv_align_t align, lv_coord_t x, co
 }
 
 lv_obj_t *freq_strip_init(lv_obj_t *parent) {
+    bool again = strip != NULL;   /* a theme change: the timer stays */
+
     strip = lv_obj_create(parent);
     lv_obj_remove_style_all(strip);
     lv_obj_add_style(strip, &freq_strip_style, 0);
@@ -321,7 +323,7 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     lv_obj_add_event_cb(freq_label, step_mark_draw_cb, LV_EVENT_DRAW_POST, NULL);
     update_cb(NULL, NULL);
     qth_update_cb(NULL);
-    lv_timer_create(qth_update_cb, QTH_POLL_MS, NULL);
+    if (!again) lv_timer_create(qth_update_cb, QTH_POLL_MS, NULL);
     return strip;
 }
 

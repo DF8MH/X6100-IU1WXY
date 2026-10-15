@@ -353,14 +353,32 @@ static void uint8_dropdown_update_cb(lv_event_t * e) {
     params_uint8_set(var, lv_dropdown_get_selected(obj));
 }
 
-/* The fonts are swapped at start only (fonts_apply()) */
-static void font_update_cb(lv_event_t * e) {
-    uint8_dropdown_update_cb(e);
-    msg_update_text_fmt("Font: from the next start");
+/* Themes and fonts are applied live: every window takes its colours and fonts when
+ * built, so the main screen is built again (main_screen_set_theme()) */
+static lv_obj_t *theme_dd;
+static lv_obj_t *font_dd;
+
+/* Settings goes with the rest of the screen, then opens again on Display, on the
+ * dropdown that was changed (arg) */
+static void theme_apply(void *arg) {
+    bool font = arg != NULL;
+
+    main_screen_set_theme(params.theme_name.x);
+    main_screen_start_app(ACTION_APP_SETTINGS);
+    load_display_page(&btn_display);
+    lv_group_focus_obj(font ? font_dd : theme_dd);
 }
 
-/* Themes are applied at start: every window takes its colours when built, so the
- * GUI saves and restarts at once (x6100_daemon starts it again) */
+static void font_update_cb(lv_event_t * e) {
+    uint8_dropdown_update_cb(e);
+    if (theme_shape.font >= 0) {
+        msg_update_text_fmt("Font: this theme has its own");   /* RS, Black Metal, Total Black */
+        return;
+    }
+    params_flush();
+    lv_async_call(theme_apply, (void *)1);   /* not from inside the dropdown's own event */
+}
+
 static void theme_update_cb(lv_event_t * e) {
     char name[32];
 
@@ -368,7 +386,7 @@ static void theme_update_cb(lv_event_t * e) {
     params_str_set(&params.theme_name, name);
     params_flush();
     cfg_api_flush_all();
-    exit(0);
+    lv_async_call(theme_apply, NULL);   /* not from inside the dropdown's own event */
 }
 
 /* Shared create */
@@ -2298,6 +2316,7 @@ static uint8_t make_theme(uint8_t row) {
         }
     }
     lv_obj_add_event_cb(obj, theme_update_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    theme_dd = obj;
 
     lv_obj_set_size(obj, SMALL_6, ROW_H);
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
@@ -2314,6 +2333,7 @@ static uint8_t make_font(uint8_t row) {
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row, 1);
 
     obj = dropdown_uint8(grid, &params.font, " Sony Sketch \n Roboto \n DejaVu", font_update_cb);
+    font_dd = obj;
 
     lv_obj_set_size(obj, SMALL_6, ROW_H);
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
@@ -3607,9 +3627,15 @@ static void focus_cb(lv_group_t *g) {
 
 static void grid_delete() {
     if (page) {
+        lv_group_focus_cb_t cb = lv_group_get_focus_cb(keyboard_group);
+
         lv_group_set_editing(keyboard_group, false);
         // lv_group_remove_all_objs(keyboard_group);
+        /* Not while the rows go: the focus steps back over them and focus_cb() would colour
+         * a row label already deleted (Settings opened again on the theme, then a tab) */
+        lv_group_set_focus_cb(keyboard_group, NULL);
         lv_obj_del(page);
+        lv_group_set_focus_cb(keyboard_group, cb);
         page = NULL;
         grid = NULL;
         focus_label = NULL;
@@ -4098,6 +4124,11 @@ static void make_cluster_page() {
     row = make_switch_row(row, "All bands", cfg_sm.p_cluster_all_bands);
     row = make_param_slider(row, "Spot snap hold", &snap_hold_slider);
     row = make_param_slider(row, "Spot snap speed", &snap_slow_slider);
+    card_end(row);
+
+    /* The other way: what this radio decodes, reported to pskreporter.info */
+    row = card_begin("PSK REPORTER");
+    row = make_switch_row(row, "Report decodes", cfg_sm.p_pskreporter);   /* FT8 FT4 FT2 JS8 PSK31 PSK63 Olivia */
     card_end(row);
 }
 

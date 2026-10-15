@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-#define FIELD_RBN_BANDS   11    /* cluster_band_of() indexes: 160 m .. 6 m */
+#define FIELD_RBN_BANDS   11    /* field_band_of() indexes: 160 m .. 6 m */
 #define FIELD_RBN_MINUTES 15    /* activity window */
 
 typedef struct {

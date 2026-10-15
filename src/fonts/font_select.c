@@ -25,20 +25,25 @@ static const lv_font_t *const arial[] = { SIZES(ARIAL) };
 static const lv_font_t *const rcond[] = { SIZES(RCOND) };
 #define N_FONTS (sizeof(sony) / sizeof(sony[0]))
 
-static lv_font_t orig[N_FONTS];
-static bool applied;
+static lv_font_t orig[N_FONTS];   /* Sony's, as built */
+static bool saved;
 
 int buttons_h = 54;  /* = BUTTONS_H_MIN */
 
+/* Again on a theme change: Sony's back first, then the choice */
 void fonts_apply(uint8_t choice) {
-    if (applied || (choice != FONT_ROBOTO && choice != FONT_DEJAVU && choice != FONT_ARIAL && choice != FONT_RCOND)) return;
-    applied = true;
+    for (unsigned i = 0; i < N_FONTS; i++) {
+        if (!saved) orig[i] = *sony[i];
+        *sony[i] = orig[i];
+    }
+    saved = true;
+    buttons_h = 54;
+    if (choice != FONT_ROBOTO && choice != FONT_DEJAVU && choice != FONT_ARIAL && choice != FONT_RCOND) return;
     if (choice == FONT_DEJAVU) buttons_h = 62;
     const lv_font_t *const *alt = choice == FONT_ROBOTO ? roboto : choice == FONT_DEJAVU ? dejavu :
                                    choice == FONT_ARIAL ? arial : rcond;
 
     for (unsigned i = 0; i < N_FONTS; i++) {
-        orig[i] = *sony[i];
         *sony[i] = *alt[i];
         sony[i]->fallback = &orig[i];
     }
@@ -52,7 +57,7 @@ const lv_font_t *font_down(const lv_font_t *f, int steps) {
 }
 
 /* VISION: every sony_N drawn `steps` sizes bigger (sony_20 as sony_26 with 3), up to sony_44; sony_60 stays.
- * Call once, after fonts_apply() and before the UI is built */
+ * Call after fonts_apply(), before the UI is built */
 void fonts_scale(int steps) {
     static lv_font_t was[N_FONTS];
 

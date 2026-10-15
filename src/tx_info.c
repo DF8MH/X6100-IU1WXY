@@ -22,6 +22,8 @@
 #include "rtty.h"
 #include "dialog_ft8.h"
 #include "dialog_js8.h"
+#include "dialog_psk.h"
+#include "dialog_olivia.h"
 #include "dialog_wspr.h"
 #include "dialog_sstv.h"
 
@@ -171,7 +173,8 @@ static void tx_cb(lv_event_t *e) {
     tx_start = lv_tick_get();
 
     if (dialog_type_is_run(dialog_ft8) || dialog_type_is_run(dialog_js8) || dialog_type_is_run(dialog_wspr) ||
-        dialog_type_is_run(dialog_sstv) || rtty_get_state() != RTTY_OFF) {
+        dialog_type_is_run(dialog_sstv) || dialog_type_is_run(dialog_psk) || dialog_type_is_run(dialog_olivia) ||
+        rtty_get_state() != RTTY_OFF) {
         update_strip();
         lv_obj_clear_flag(strip, LV_OBJ_FLAG_HIDDEN);
         return;
@@ -270,7 +273,8 @@ lv_obj_t *tx_info_init(lv_obj_t *parent) {
     vswr_label = values[1];
     alc_label  = values[2];
 
-    /* The strip, above the open app */
+    /* The strip, above the open app (again on a theme change: the old one goes) */
+    if (strip) lv_obj_del(strip);
     strip = lv_obj_create(lv_layer_top());
     lv_obj_remove_style_all(strip);
     lv_obj_set_pos(strip, 16, 121);

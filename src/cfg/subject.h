@@ -112,6 +112,14 @@ class Subject {
     ObserverDelayed *subscribe_delayed_and_notify(observer_cb fn, void *user_data);
 
     void unsubscribe(Observer *o);
+
+    // On while a theme change builds the main screen again (main_screen_set_theme()): a
+    // subscription that is already there (same callback and data) is not added twice, the
+    // _and_notify ones still notify. Main thread only
+    static bool no_duplicates;
+
+  private:
+    Observer *duplicate(observer_cb fn, void *user_data);
 };
 
 // RAII wrapper for Subject::push_suppress/pop_suppress: suppresses all

@@ -89,6 +89,7 @@ static bool             view_fixed = false;
 
 static void refresh_waterfall( void * arg);
 static void do_scroll_timer(lv_timer_t *t);
+static void make_objs(void);
 static void update_middle_line();
 static void middle_line_cb(lv_event_t * event);
 static void redraw_cb(lv_event_t * e);
@@ -170,6 +171,7 @@ lv_obj_t * waterfall_init(lv_obj_t * parent) {
     subject_subscribe((Subject*)cfg_auto_level_enabled, on_grid_max_change, NULL);
     subject_subscribe_and_notify((Subject*)cfg_band_grid_max, on_grid_max_change, NULL);
 
+    if (ready) make_objs();
     return obj;
 }
 
@@ -303,6 +305,22 @@ static void do_scroll_timer(lv_timer_t *t) {
     scheduler_put_noargs(refresh_waterfall);
 }
 
+/* What goes on the buffers: made again on a theme change (main_screen_set_theme()), the buffers stay */
+static void make_objs(void) {
+    if (direct) {
+        /* The GUI stays transparent here: the primary plane shows through */
+        lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, 0);
+        lv_obj_add_event_cb(obj, direct_hole_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+    } else {
+        img = lv_img_create(obj);
+        lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
+        lv_img_set_src(img, frame);
+        lv_obj_add_event_cb(img, do_scroll_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+        lv_obj_move_background(img);
+    }
+    band_info_init(obj);
+}
+
 void waterfall_set_height(lv_coord_t h) {
     lv_obj_set_height(obj, h);
     lv_obj_update_layout(obj);
@@ -336,17 +354,10 @@ void waterfall_set_height(lv_coord_t h) {
     direct = drm_planes();
 #endif
     if (direct) {
-        /* The GUI stays transparent here: the primary plane shows through */
         wfp = calloc(WIDTH * MAX_HEIGHT, sizeof(uint32_t));
-        lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, 0);
-        lv_obj_add_event_cb(obj, direct_hole_cb, LV_EVENT_DRAW_MAIN_END, NULL);
         lv_timer_create(do_scroll_timer, 20, NULL);
     } else {
         frame = lv_img_buf_alloc(WIDTH, height, LV_IMG_CF_TRUE_COLOR);
-
-        img = lv_img_create(obj);
-        lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
-        lv_img_set_src(img, frame);
     }
 
     wf_rows = calloc(MAX_HEIGHT, sizeof(*wf_rows));
@@ -356,17 +367,10 @@ void waterfall_set_height(lv_coord_t h) {
     }
     last_row_id = 0;
 
-    if (!direct) {
-        lv_obj_add_event_cb(img, do_scroll_cb, LV_EVENT_DRAW_MAIN_END, NULL);
-    }
-
     waterfall_min_max_reset();
-    band_info_init(obj);
+    make_objs();
     middle_line_points[1].y = height;
     lv_line_set_points(middle_line, middle_line_points, 2);
-    if (!direct) {
-        lv_obj_move_background(img);
-    }
     ready = true;
 }
 

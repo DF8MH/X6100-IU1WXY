@@ -64,7 +64,9 @@ void event_obj_check() {
         pthread_mutex_unlock(&queue_mux);
 
         if (item) {
-            if (item->event_code == LV_EVENT_REFRESH) {
+            if (!item->obj) {
+                /* its object is gone (event_obj_drop_deleted()) */
+            } else if (item->event_code == LV_EVENT_REFRESH) {
                 lv_obj_invalidate(item->obj);
             } else {
                 lv_event_send(item->obj, item->event_code, item->param);
@@ -77,6 +79,17 @@ void event_obj_check() {
             free(item);
         }
     }
+}
+
+/* After a theme change deleted the widgets: what the threads queued for them is not sent */
+void event_obj_drop_deleted() {
+    pthread_mutex_lock(&queue_mux);
+    for (uint8_t i = 0; i < QUEUE_SIZE; i++) {
+        if (queue[i] && !lv_obj_is_valid(queue[i]->obj)) {
+            queue[i]->obj = NULL;
+        }
+    }
+    pthread_mutex_unlock(&queue_mux);
 }
 
 void event_send(lv_obj_t *obj, lv_event_code_t event_code, void *param) {

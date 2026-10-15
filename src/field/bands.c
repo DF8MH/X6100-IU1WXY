@@ -12,6 +12,23 @@
 #include <string.h>
 #include <time.h>
 
+static const char *const names[FIELD_RBN_BANDS] = {
+    "160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m",
+};
+
+int field_band_of(int32_t hz) {
+    const char *name = cluster_band_name(cluster_band_of(hz));
+
+    for (int i = 0; i < FIELD_RBN_BANDS; i++)
+        if (!strcmp(name, names[i]))
+            return i;
+    return -1;
+}
+
+const char *field_band_name(int band) {
+    return band >= 0 && band < FIELD_RBN_BANDS ? names[band] : "";
+}
+
 void field_bands(field_bands_t *b) {
     static cluster_spot_t snap[CLUSTER_MAX_SPOTS];
     static int            snap_n;
@@ -31,14 +48,14 @@ void field_bands(field_bands_t *b) {
         snap_n = n;
     gmtime_r(&now, &tm);
     for (int k = 0; k < snap_n; k++) {
-        int i = cluster_band_of(snap[k].freq_hz);
+        int i = field_band_of(snap[k].freq_hz);
         if (i >= 0 && i < FIELD_RBN_BANDS && cluster_age_min(snap[k].utc_min, tm.tm_hour * 60 + tm.tm_min) <= 30)
             b->spots[i]++;
     }
     field_rbn_activity(b->rbn);
     n = field_rbn_heard(FIELD_HEARD_S, hits, 32);
     for (int k = 0; k < n; k++) {
-        int i = cluster_band_of(hits[k].freq_hz);
+        int i = field_band_of(hits[k].freq_hz);
         if (i >= 0 && i < FIELD_RBN_BANDS) {
             b->heard[i]++;
             if (hits[k].snr > b->best_snr[i])

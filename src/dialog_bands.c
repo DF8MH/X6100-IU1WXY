@@ -199,7 +199,7 @@ static void construct_cb(lv_obj_t *parent) {
         rows[b].cell = c;
 
         rows[b].name = label(c, &sony_22, 8, 62);
-        lv_label_set_text(rows[b].name, cluster_band_name(b));
+        lv_label_set_text(rows[b].name, field_band_name(b));
 
         lv_obj_t *track = lv_obj_create(c);
         lv_obj_remove_style_all(track);
@@ -230,7 +230,7 @@ static void construct_cb(lv_obj_t *parent) {
 
     if (params.callsign.x[0])
         field_rbn_start(params.callsign.x);
-    sel = cluster_band_of(cparam_i_get(cfg_fg_freq));
+    sel = field_band_of(cparam_i_get(cfg_fg_freq));
     if (sel < 0)
         sel = 0;
     timer_cb(NULL);

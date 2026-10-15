@@ -39,7 +39,7 @@ endif()
 
 add_subdirectory(lvgl)
 
-if(ENABLE_TESTING)
+if(ENABLE_TESTING AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
         enable_testing()
         add_subdirectory(tests)
 else()

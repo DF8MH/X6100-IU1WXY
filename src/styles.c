@@ -8,6 +8,7 @@
 
 #include "styles.h"
 #include "theme.h"
+#include "fonts/font_select.h"
 
 #define PATH "A:/dev/shm/"
 
@@ -140,10 +141,15 @@ static void box(lv_style_t *s, theme_color_t top, theme_color_t bottom, theme_co
 
 int top_bar_h = TOP_BAR_STD_H, freq_strip_h = FREQ_STRIP_STD_H, clock_w = 168, meter_row_h = 0;
 
+/* lv_style_reset(), not init: this runs again on a theme change and the old properties go */
 void styles_init(void) {
     /* * */
     lv_style_t *style;
 
+    top_bar_h    = TOP_BAR_STD_H;
+    freq_strip_h = FREQ_STRIP_STD_H;
+    clock_w      = 168;
+    meter_row_h  = 0;
     /* VISION: 48 + 70 = the 66 + 50 of the others, so the apps start at the same y; the buttons
      * as tall as with DejaVu (the apps already fit them) */
     if (theme_shape.vision) {
@@ -160,9 +166,9 @@ void styles_init(void) {
         clock_w      = 280;
     }
 
-    lv_style_init(&background_style);
+    lv_style_reset(&background_style);
 
-    lv_style_init(&spectrum_style);
+    lv_style_reset(&spectrum_style);
     lv_style_set_bg_color(&spectrum_style, lv_color_hex(0x000000));
     lv_style_set_bg_opa(&spectrum_style, LV_OPA_COVER);
     lv_style_set_border_color(&spectrum_style, lv_color_hex(0xAAAAAA));
@@ -171,7 +177,7 @@ void styles_init(void) {
     lv_style_set_width(&spectrum_style, 800);
     lv_style_set_x(&spectrum_style, 0);
 
-    lv_style_init(&freq_style);
+    lv_style_reset(&freq_style);
     lv_style_set_text_color(&freq_style, lv_color_white());
     lv_style_set_text_font(&freq_style, &sony_22);   /* VISION: 28 (fonts_scale) */
     lv_style_set_pad_ver(&freq_style, theme_shape.vision ? 5 : 9);
@@ -179,7 +185,7 @@ void styles_init(void) {
     lv_style_set_height(&freq_style, 36);
     lv_style_set_text_align(&freq_style, LV_TEXT_ALIGN_CENTER);
 
-    lv_style_init(&waterfall_style);
+    lv_style_reset(&waterfall_style);
     lv_style_set_bg_color(&waterfall_style, lv_color_hex(0x000000));
     lv_style_set_border_color(&waterfall_style, lv_color_hex(0xAAAAAA));
     lv_style_set_border_width(&waterfall_style, 0);
@@ -190,18 +196,19 @@ void styles_init(void) {
     lv_style_set_pad_all(&waterfall_style, 0);
 
     /* Buttons */
-    lv_style_init(&btn_style);
+    lv_style_reset(&btn_style);
     lv_style_set_text_font(&btn_style, &sony_30);
     lv_style_set_text_color(&btn_style, lv_color_white());
     /* Modes style: night blue, light border; active = gold border */
     lv_style_set_bg_opa(&btn_style, LV_OPA_COVER);
     lv_style_set_radius(&btn_style, 10);
 
-    lv_style_init(&btn_active_style);
+    lv_style_reset(&btn_active_style);
 
-    lv_style_init(&btn_disabled_style);
+    lv_style_reset(&btn_disabled_style);
 
     style = &btn_mark_style;
+    lv_style_reset(style);
     lv_style_set_width(style, 4),
     lv_style_set_height(style, BUTTONS_H - 2 - 20),
     lv_style_set_radius(style, 2);
@@ -210,11 +217,11 @@ void styles_init(void) {
     lv_style_set_border_width(style, 0);
 
     style = &btn_mark_assigned_style;
-    lv_style_init(style);
-    lv_style_init(&btn_mark_active_style);
+    lv_style_reset(style);
+    lv_style_reset(&btn_mark_active_style);
 
     /* Message style */
-    lv_style_init(&msg_style);
+    lv_style_reset(&msg_style);
     lv_style_set_pad_hor(&msg_style, 10);
     lv_style_set_text_color(&msg_style, lv_color_white());
     lv_style_set_text_font(&msg_style, &sony_38);
@@ -226,7 +233,7 @@ void styles_init(void) {
     lv_style_set_bg_img_opa(&msg_style, LV_OPA_COVER);
     lv_style_set_pad_ver(&msg_style, 20);
 
-    lv_style_init(&msg_tiny_style);
+    lv_style_reset(&msg_tiny_style);
     lv_style_set_text_color(&msg_tiny_style, lv_color_white());
     lv_style_set_text_font(&msg_tiny_style, &sony_60);
     lv_style_set_width(&msg_tiny_style, 324);
@@ -237,7 +244,7 @@ void styles_init(void) {
     lv_style_set_pad_ver(&msg_tiny_style, 12);
 
     /* Panel */
-    lv_style_init(&panel_style);
+    lv_style_reset(&panel_style);
     lv_style_set_text_color(&panel_style, lv_color_white());
     lv_style_set_text_font(&panel_style, &sony_24);
     lv_style_set_width(&panel_style, 795);
@@ -249,12 +256,12 @@ void styles_init(void) {
     lv_style_set_radius(&panel_style, 0);
     lv_style_set_bg_img_opa(&panel_style, LV_OPA_COVER);
 
-    lv_style_init(&panel_info_style);
+    lv_style_reset(&panel_info_style);
     lv_style_set_align(&panel_info_style, LV_ALIGN_OUT_TOP_LEFT);
     lv_style_set_y(&panel_info_style, -38);
     lv_style_set_text_font(&panel_info_style, &sony_30);
 
-    lv_style_init(&dialog_style);
+    lv_style_reset(&dialog_style);
     lv_style_set_text_color(&dialog_style, lv_color_white());
     lv_style_set_text_font(&dialog_style, &sony_36);
     lv_style_set_width(&dialog_style, 796);
@@ -263,7 +270,7 @@ void styles_init(void) {
     lv_style_set_y(&dialog_style, DIALOG_Y);
     lv_style_set_radius(&dialog_style, 7);
 
-    lv_style_init(&freq_strip_style);
+    lv_style_reset(&freq_strip_style);
     lv_style_set_x(&freq_strip_style, TOP_BAR_MARGIN);
     lv_style_set_y(&freq_strip_style, FREQ_STRIP_Y);
     lv_style_set_width(&freq_strip_style, 800 - 2 * TOP_BAR_MARGIN);
@@ -272,24 +279,24 @@ void styles_init(void) {
     lv_style_set_pad_ver(&dialog_style, 0);
     lv_style_set_pad_hor(&dialog_style, 0);
 
-    lv_style_init(&dialog_item_style);
+    lv_style_reset(&dialog_item_style);
     lv_style_set_bg_opa(&dialog_item_style, LV_OPA_TRANSP);
     lv_style_set_text_color(&dialog_item_style, lv_color_white());
 
-    lv_style_init(&dialog_item_focus_style);
+    lv_style_reset(&dialog_item_focus_style);
     lv_style_set_text_color(&dialog_item_focus_style, lv_color_black());
     lv_style_set_border_color(&dialog_item_focus_style, lv_color_white());
 
-    lv_style_init(&dialog_item_edited_style);
+    lv_style_reset(&dialog_item_edited_style);
     lv_style_set_bg_opa(&dialog_item_edited_style, LV_OPA_COVER);
     lv_style_set_text_color(&dialog_item_edited_style, lv_color_black());
 
-    lv_style_init(&dialog_dropdown_list_style);
+    lv_style_reset(&dialog_dropdown_list_style);
     lv_style_set_text_font(&dialog_dropdown_list_style, &sony_30);
-    lv_style_init(&dialog_dropdown_sel_style);
+    lv_style_reset(&dialog_dropdown_sel_style);
 
     /* Clock */
-    lv_style_init(&clock_style);
+    lv_style_reset(&clock_style);
     lv_style_set_text_color(&clock_style, lv_color_white());
     lv_style_set_align(&clock_style, LV_ALIGN_TOP_RIGHT);
     lv_style_set_x(&clock_style, -TOP_BAR_MARGIN);
@@ -299,7 +306,7 @@ void styles_init(void) {
     lv_style_set_pad_all(&clock_style, 0);
 
     /* Knobs */
-    lv_style_init(&knobs_style);
+    lv_style_reset(&knobs_style);
     lv_style_set_text_color(&knobs_style, lv_color_white());
     lv_style_set_text_font(&knobs_style, &sony_24);
     lv_style_set_radius(&knobs_style, 8);
@@ -308,7 +315,7 @@ void styles_init(void) {
     lv_style_set_pad_ver(&knobs_style, 3);
 
     /* Left info */
-    lv_style_init(&info_style);
+    lv_style_reset(&info_style);
     lv_style_set_align(&info_style, LV_ALIGN_TOP_LEFT);
     lv_style_set_x(&info_style, TOP_BAR_MARGIN);
     lv_style_set_y(&info_style, TOP_BAR_MARGIN);
@@ -318,7 +325,7 @@ void styles_init(void) {
     lv_style_set_pad_ver(&info_style, 0);
     lv_style_set_pad_row(&info_style, 0);
 
-    lv_style_init(&info_row_style);
+    lv_style_reset(&info_row_style);
     lv_style_set_align(&info_row_style, LV_ALIGN_CENTER);
     lv_style_set_radius(&info_row_style, 0);
     lv_style_set_border_width(&info_row_style, 0);
@@ -326,13 +333,13 @@ void styles_init(void) {
     lv_style_set_pad_all(&info_row_style, 0);
     lv_style_set_pad_column(&info_row_style, 1);
 
-    lv_style_init(&info_item_style);
+    lv_style_reset(&info_item_style);
     lv_style_set_text_font(&info_item_style, theme_shape.vision ? &sony_28 : &sony_20);
     lv_style_set_pad_ver(&info_item_style, 1);
     lv_style_set_radius(&info_item_style, 3);
 
     /* Meter */
-    lv_style_init(&meter_style);
+    lv_style_reset(&meter_style);
     lv_style_set_align(&meter_style, LV_ALIGN_TOP_LEFT);
     if (theme_shape.vision) {   /* the whole row under the frequency strip */
         lv_style_set_x(&meter_style, TOP_BAR_MARGIN);
@@ -348,7 +355,7 @@ void styles_init(void) {
     lv_style_set_pad_all(&meter_style, 0);
 
     /* TX info: over the meter, twice as high (PWR and SWR rows) */
-    lv_style_init(&tx_info_style);
+    lv_style_reset(&tx_info_style);
     lv_style_set_align(&tx_info_style, LV_ALIGN_TOP_LEFT);
     if (theme_shape.vision) {
         lv_style_set_x(&tx_info_style, TOP_BAR_MARGIN);
@@ -363,9 +370,9 @@ void styles_init(void) {
     }
     lv_style_set_pad_all(&tx_info_style, 0);
 
-    lv_style_init(&popup_style);
+    lv_style_reset(&popup_style);
 
-    lv_style_init(&cw_tune_style);
+    lv_style_reset(&cw_tune_style);
     lv_style_set_radius(&cw_tune_style, 5);
     lv_style_set_bg_color(&cw_tune_style, lv_color_black());
     lv_style_set_x(&cw_tune_style, 30);
@@ -393,6 +400,15 @@ void styles_init(void) {
     }
 
     styles_apply();
+}
+
+/* The theme by name, its font, the styles: at start and on a theme change (main_screen_set_theme()) */
+void styles_load(const char *name) {
+    theme_init(name);    /* an unknown one falls back to IU1WXY */
+    fonts_apply(theme_shape.font >= 0 ? theme_shape.font : params.font.x);
+    if (theme_shape.vision)
+        fonts_scale(VISION_FONT_STEPS);   /* everything bigger: apps, Settings, popups */
+    styles_init();
 }
 
 /* The theme's image of a surface in place of its colours (the image draws
@@ -606,7 +622,7 @@ void styles_dropdown_list(lv_obj_t *list) {
 /* For screens laid out elsewhere (walkie.c): a box of the theme, its image at w x h */
 void styles_theme_box(lv_style_t *s, theme_color_t top, theme_color_t bottom, theme_color_t border, int radius,
                       theme_image_t img, lv_coord_t w, lv_coord_t h) {
-    lv_style_init(s);
+    lv_style_reset(s);   /* built again after a theme change (walkie_drop()) */
     box(s, top, bottom, border, radius);
     surface_img(s, img, w, h);
 }

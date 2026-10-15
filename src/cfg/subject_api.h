@@ -12,6 +12,7 @@
 // owned by the caller and never freed through this API. Observers returned by
 // subject_*_subscribe are owned by C/UI code and freed with param_unsubscribe.
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -36,6 +37,9 @@ extern "C" {
 // Unsubscribe + destroy an observer (ObserverDeleter). The user_data is the
 // caller's own data — param_unsubscribe never frees it.
 void param_unsubscribe(Observer *o);
+
+// Subject::no_duplicates: on while a theme change builds the main screen again
+void subject_no_duplicates(bool on);
 
 // --- Generic Subject helpers (UI state, not persisted) ---
 SubjectInt      *subject_i_create(int32_t val);

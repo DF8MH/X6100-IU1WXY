@@ -91,7 +91,7 @@ static void show_time() {
 }
 
 lv_obj_t * clock_init(lv_obj_t * parent) {
-    pthread_mutex_init(&power_mux, NULL);
+    if (!obj) pthread_mutex_init(&power_mux, NULL);
 
     obj = lv_obj_create(parent);
 
@@ -144,10 +144,11 @@ lv_obj_t * clock_init(lv_obj_t * parent) {
     }
 
     show_time();
-    lv_timer_create(show_time, 500, NULL);
-
-    last_time_sync = get_last_sync_time();
-    timer_time_sync = lv_timer_create(check_time_sync_cb, 200, NULL);
+    if (!timer_time_sync) {     /* not again on a theme change */
+        lv_timer_create(show_time, 500, NULL);
+        last_time_sync = get_last_sync_time();
+        timer_time_sync = lv_timer_create(check_time_sync_cb, 200, NULL);
+    }
     return obj;
 }
 

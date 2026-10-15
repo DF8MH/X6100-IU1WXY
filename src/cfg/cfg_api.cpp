@@ -71,6 +71,7 @@ ParamInt         *cfg_spot_snap_slow      = nullptr;
 ParamInt         *cfg_freq_accel_onset    = nullptr;
 ParamInt         *cfg_wspr_tx_freq        = nullptr;
 ParamInt         *cfg_wspr_upload         = nullptr;
+ParamInt         *cfg_pskreporter         = nullptr;
 ParamInt         *cfg_field_boot          = nullptr;
 ParamInt         *cfg_voice_msg_gain      = nullptr;
 ParamInt         *cfg_ft8_max_repeats     = nullptr;
@@ -223,6 +224,7 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_freq_accel_onset = &cfg_sm.p_freq_accel_onset;
     cfg_wspr_tx_freq     = &cfg_sm.p_wspr_tx_freq;
     cfg_wspr_upload      = &cfg_sm.p_wspr_upload;
+    cfg_pskreporter      = &cfg_sm.p_pskreporter;
     cfg_field_boot       = &cfg_sm.p_field_boot;
     cfg_voice_msg_gain   = &cfg_sm.p_voice_msg_gain;
     cfg_ft8_max_repeats  = &cfg_sm.p_ft8_max_repeats;

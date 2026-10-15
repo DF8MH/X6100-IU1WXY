@@ -136,6 +136,14 @@ static bool        spotted;      /* this activation is on pota.app: End posts a 
 static time_t      end_armed_at;
 static bool        spot_armed;   /* Spot asks before posting: a second press within 4 s sends */
 static time_t      spot_armed_at;
+/* POTA auto spot: at the start of the activation, and again after a QSY (frequency 1 kHz away
+ * or another mode) once the new one has stayed for QSY_SETTLE_S */
+#define QSY_SETTLE_S   60       /* a minute on the new frequency: working there, not looking for a gap */
+#define QSY_MIN_GAP_S  300      /* at most one auto spot in 5 minutes: pota.app is not flooded */
+static lv_timer_t *qsy_timer;
+static int32_t     spot_hz;      /* where the last spot said we are */
+static char        spot_mode[8];
+static time_t      spot_at, qsy_at;
 
 /* The remote state, written on the LVGL thread, read by the remote server */
 static pthread_mutex_t remote_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -1003,7 +1011,7 @@ static void bands_fill(void) {
 
         if (fb.heard[b])
             snprintf(heard_txt, sizeof(heard_txt), "#%06x %d  %+d dB#", theme_hex(TC_ok), fb.heard[b], fb.best_snr[b]);
-        snprintf(row, sizeof(row), "%s\t\t#%06x %s#\t%d\t%d\t%s\t%s", cluster_band_name(b), color, word, fb.spots[b],
+        snprintf(row, sizeof(row), "%s\t\t#%06x %s#\t%d\t%d\t%s\t%s", field_band_name(b), color, word, fb.spots[b],
                  fb.rbn[b], heard_txt, b == fb.best ? "BEST" : "");
         lv_obj_t *r = list_add(row);
 
@@ -1042,7 +1050,7 @@ static void build_bands(void) {
     list_create(body, 8, 36, W - 16, body_h - STATUS_H - 40, widths, 7);
     list_head("BAND\tACTIVITY\t\tSPOTS\tRBN\tHEARD YOU\t", 13, 6);
     lv_obj_set_style_text_font(list, VF(22), 0);
-    sel = cluster_band_of(cparam_i_get(cfg_fg_freq));
+    sel = field_band_of(cparam_i_get(cfg_fg_freq));
     bands_fill();
     buttons_load_page(&page_bands);
 }
@@ -1209,6 +1217,25 @@ static void refresh(void) {
 
 static void spot_done(const char *line);
 
+static void spot_to(bool cluster);
+
+static void qsy_cb(lv_timer_t *t) {
+    time_t now = time(NULL);
+    bool   moved;
+
+    if (!st.active || st.ref.type != 'P' || !spot_at) {
+        return;
+    }
+    moved = abs(cparam_i_get(cfg_fg_freq) - spot_hz) >= 1000 || strcmp(adif_mode(), spot_mode);
+    if (!moved) {
+        qsy_at = 0;             /* back where the spot says */
+    } else if (!qsy_at) {
+        qsy_at = now;
+    } else if (now - qsy_at >= QSY_SETTLE_S && now - spot_at >= QSY_MIN_GAP_S && !atomic_load(&busy)) {
+        spot_to(false);         /* pota.app only: a cluster spot can't be withdrawn, the old one would stay */
+    }
+}
+
 static bool activation_start(void) {
     char      name[40], *p;
     struct tm tm;
@@ -1240,6 +1267,11 @@ static bool activation_start(void) {
     state_save();
     msg_update_text_fmt("Activation started: %s", st.ref.ref);
     refresh();
+    spot_at = 0;
+    if (st.ref.type == 'P') {
+        spot_to(true);               /* auto spot; QSYs spot again (qsy_cb) */
+        if (!qsy_timer) qsy_timer = lv_timer_create(qsy_cb, 2000, NULL);
+    }
     return true;
 }
 
@@ -1250,6 +1282,10 @@ static void activation_end(void) {
         return;
     st.active = false;
     state_save();
+    if (qsy_timer) {
+        lv_timer_del(qsy_timer);
+        qsy_timer = NULL;
+    }
     msg_update_text_fmt("Activation complete: %s, %d QSO%s, %d min", st.ref.ref, qsos_n, qsos_n == 1 ? "" : "s", s / 60);
     /* ponytail: spotted is not saved, a restart mid-activation sends no QRT */
     if (spotted && st.ref.type != 'S' &&
@@ -1281,7 +1317,7 @@ static void spot_done(const char *line) {
     msg_update_text_fmt("POTA spot: %s", line);
 }
 
-static void spot(void) {
+static void spot_to(bool cluster) {
     if (!st.have_ref || !ref_ok(st.ref.ref)) {
         msg_update_text_fmt("Choose the %s reference first", prog_name());
         return;
@@ -1303,11 +1339,20 @@ static void spot(void) {
         return;
     }
     char comment[48];
+    spot_hz = cparam_i_get(cfg_fg_freq);
+    snprintf(spot_mode, sizeof(spot_mode), "%s", adif_mode());
+    spot_at = time(NULL);
+    qsy_at  = 0;
     snprintf(comment, sizeof(comment), "POTA %s %s", st.ref.ref, adif_mode());
-    cluster_client_send_spot(cparam_i_get(cfg_fg_freq) / 1000.0, my_call(), comment);   /* the DX clusters too */
+    if (cluster)
+        cluster_client_send_spot(cparam_i_get(cfg_fg_freq) / 1000.0, my_call(), comment);   /* the DX clusters too */
     if (job_start(spot_done, HELPER " pota-spot --call %s --freq-khz %.1f --ref %s --mode %s", my_call(),
                   cparam_i_get(cfg_fg_freq) / 1000.0, st.ref.ref, adif_mode()))
         msg_update_text_fmt("POTA spot: %s %.1f %s...", st.ref.ref, cparam_i_get(cfg_fg_freq) / 1000.0, adif_mode());
+}
+
+static void spot(void) {
+    spot_to(true);
 }
 
 static void spot_cb(button_data_t *b) {
@@ -1411,7 +1456,7 @@ void dialog_field_day_log(const qso_log_record_t *r) {
     field_qso_t q = {.t = r->time, .freq_hz = (int32_t)(r->freq_mhz * 1e6f + 0.5f)};
 
     snprintf(q.call, sizeof(q.call), "%s", r->remote_call);
-    snprintf(q.mode, sizeof(q.mode), "%s", r->mode == MODE_FT4 ? "FT4" : r->mode == MODE_JS8 ? "JS8" : "FT8");
+    snprintf(q.mode, sizeof(q.mode), "%s", r->mode == MODE_FT4 ? "FT4" : r->mode == MODE_JS8 ? "JS8" : r->mode == MODE_FT2 ? "FT2" : "FT8");
     snprintf(q.rst_s, sizeof(q.rst_s), "%d", r->rsts);
     snprintf(q.rst_r, sizeof(q.rst_r), "%d", r->rstr);
     snprintf(q.name, sizeof(q.name), "%s", r->name);
@@ -1588,7 +1633,7 @@ void dialog_field_tune_band(int band) {
     main_screen_set_freq(f);
     if (!is_cw() && !main_screen_mode_locked())
         cparam_i_set(cfg_cur_mode, f < 10000000 ? x6100_mode_lsb : x6100_mode_usb);
-    msg_update_text_fmt("%s: %.3f MHz", cluster_band_name(band), f / 1e6);
+    msg_update_text_fmt("%s: %.3f MHz", field_band_name(band), f / 1e6);
 }
 
 static void tune_cb(button_data_t *b) {

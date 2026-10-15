@@ -16,6 +16,9 @@ target_sources(${PROJECT_NAME} PUBLIC
     dialog_wefax.c
     dialog_navtex.c
     dialog_js8.c
+    dialog_psk.c psk_rx.c psk_tx.c psk_spec.c psk_macro.c digi_qso.c
+    dialog_olivia.c olivia.c olivia_app.c olivia_demod.c olivia_macro.c olivia_mod.c olivia_resamp.c
+    olivia_rx.c olivia_tx.c
     tx_player.c
     tx_level.c
     swr_guard.c
@@ -23,8 +26,9 @@ target_sources(${PROJECT_NAME} PUBLIC
     sstv_resources.c
     dialog_cluster.c
     freq_list.c
-    js8_map.c
+    js8_map.c map_geo.c
     ft8_udp.c
+    pskreporter.c
     dxcc.c
     dialog_modes.c
     dialog_cw_trainer.c

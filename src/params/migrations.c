@@ -195,6 +195,40 @@ static int _6_add_wspr_presets() {
     return 0;
 }
 
+/* FT2 dial frequencies (IU8LMC's Decodium list, from SP2KMO's upstream 76d98ce2) */
+static int _7_add_ft2_presets() {
+    int rc;
+    char *query;
+    rc = asprintf(&query,
+        "INSERT OR IGNORE INTO digital_modes(label, freq, mode, type) "
+        "SELECT column1, column2, 3, %u FROM (VALUES "
+            "('FT2 160m', 1843000),"
+            "('FT2 80m', 3568000),"
+            "('FT2 60m', 5360000),"
+            "('FT2 40m', 7062000),"
+            "('FT2 30m', 10144000),"
+            "('FT2 20m', 14084000),"
+            "('FT2 17m', 18108000),"
+            "('FT2 15m', 21144000),"
+            "('FT2 12m', 24923000),"
+            "('FT2 10m', 28184000),"
+            "('FT2 6m', 50316000)"
+        ")",
+        CFG_DIG_TYPE_FT2
+    );
+    if (rc == -1) {
+        printf("Cannot allocate SQL query\n");
+        return 1;
+    }
+    rc = sqlite3_exec(db, query, NULL, NULL, NULL);
+    free(query);
+    if (rc != SQLITE_OK) {
+        printf("Cannot add FT2 presets: %s\n", sqlite3_errmsg(db));
+        return 1;
+    }
+    return 0;
+}
+
 static int (*migrations[])() = {
     _0_init_migrations,
     _1_create_ftx_table,
@@ -203,6 +237,7 @@ static int (*migrations[])() = {
     _4_add_js8_presets,
     _5_add_ghostnet_presets,
     _6_add_wspr_presets,
+    _7_add_ft2_presets,
 };
 
 int migrations_apply(void) {

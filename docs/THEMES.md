@@ -9,7 +9,7 @@ Built in: **IU1WXY** (default), **Classic** (black, grey keys, IC-7300 style)
 lightness inverted: dark, the hues kept) and, not offered in the menu, Legacy. More themes are JSON files
 on the SD card in `/mnt/themes/`, one per file: `/mnt/themes/My theme.json`
 shows up as *My theme* in Settings -> Display -> INTERFACE -> Theme. Choosing a theme
-restarts the radio app at once with it.
+applies it at once, without restarting the radio app (an open app closes).
 
 ## File format
 

@@ -918,11 +918,14 @@ def read_slots(dbcon):
     return {"slots": slots}
 
 
+# The same memories and channels for X6100 Link, under LINK
+@app.get(LINK + '/memories')
 @app.get('/api/memories')
 def get_memories(dbcon):
     return read_slots(dbcon)
 
 
+@app.put(LINK + '/memories/<id:int>')
 @app.put('/api/memories/<id:int>')
 def set_memory(dbcon, id):
     if id not in MEM_SLOTS:
@@ -942,6 +945,7 @@ def set_memory(dbcon, id):
     return read_slots(dbcon)
 
 
+@app.delete(LINK + '/memories/<id:int>')
 @app.delete('/api/memories/<id:int>')
 def clear_memory(dbcon, id):
     if id not in MEM_SLOTS:
@@ -1111,11 +1115,13 @@ def check_index(channels, i):
         raise ValueError("No such channel")
 
 
+@app.get(LINK + '/channels')
 @app.get('/api/channels')
 def get_channels():
     return channels_state()
 
 
+@app.post(LINK + '/channels')
 @app.post('/api/channels')
 def add_channel():
     def change(channels):
@@ -1125,6 +1131,7 @@ def add_channel():
     return channels_edit(change)
 
 
+@app.put(LINK + '/channels/<i:int>')
 @app.put('/api/channels/<i:int>')
 def set_channel(i):
     def change(channels):
@@ -1133,6 +1140,7 @@ def set_channel(i):
     return channels_edit(change)
 
 
+@app.delete(LINK + '/channels/<i:int>')
 @app.delete('/api/channels/<i:int>')
 def delete_channel(i):
     def change(channels):
@@ -1141,6 +1149,7 @@ def delete_channel(i):
     return channels_edit(change)
 
 
+@app.post(LINK + '/channels/<i:int>/move')
 @app.post('/api/channels/<i:int>/move')
 def move_channel(i):
     def change(channels):

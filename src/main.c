@@ -53,7 +53,6 @@
 #include "usb_devices.h"
 #include "dialog_cluster.h"
 #include "sstv_resources.h"
-#include "theme.h"
 #include "walkie.h"
 
 #define DISP_BUF_SIZE (800 * 480 * 4)
@@ -195,11 +194,7 @@ int main(void) {
     if (system("mkdir -p /mnt/themes; for t in /usr/share/x6100/themes/*; do "
                "[ -e \"/mnt/themes/${t##*/}\" ] || cp -r \"$t\" /mnt/themes/; done") != 0)
         LV_LOG_WARN("Bundled themes not copied to /mnt/themes");
-    theme_init(params.theme_name.x);    /* an unknown one falls back to IU1WXY */
-    fonts_apply(theme_shape.font >= 0 ? theme_shape.font : params.font.x);
-    if (theme_shape.vision)
-        fonts_scale(VISION_FONT_STEPS);   /* everything bigger: apps, Settings, popups */
-    styles_init();
+    styles_load(params.theme_name.x);
 
     radio_init();
     audio_mixer_setup(x6100_control_get_base_ver());

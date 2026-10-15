@@ -175,11 +175,14 @@ extern "C" lv_obj_t *band_info_init(lv_obj_t *parent) {
     lv_anim_set_exec_cb(&fade, fade_anim);
     lv_anim_set_ready_cb(&fade, fade_ready);
 
-    zoom_sub = Subscription(cfg_mode_zoom->subscribe(on_zoom_changed, nullptr));
+    fade_run = false;
+    if (!zoom_sub) {    /* once: a theme change makes the object again */
+        zoom_sub = Subscription(cfg_mode_zoom->subscribe(on_zoom_changed, nullptr));
+        freq_sub = Subscription(cfg_fg_freq->subscribe_delayed(on_freq_changed, nullptr));
+        if_shift_sub = Subscription(cfg_band_if_shift->subscribe_delayed(on_if_shift_changed, nullptr));
+    }
     on_zoom_changed(cfg_mode_zoom, nullptr);
-    freq_sub = Subscription(cfg_fg_freq->subscribe_delayed(on_freq_changed, nullptr));
     on_freq_changed(cfg_fg_freq, nullptr);
-    if_shift_sub = Subscription(cfg_band_if_shift->subscribe_delayed(on_if_shift_changed, nullptr));
     on_if_shift_changed(cfg_band_if_shift, nullptr);
 
     return obj;

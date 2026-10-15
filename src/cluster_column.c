@@ -339,6 +339,8 @@ static lv_obj_t *cell(lv_obj_t *p, lv_coord_t x, lv_coord_t w, lv_coord_t y, lv_
 }
 
 void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
+    bool again = box != NULL;   /* a theme change: the timer stays, the new rows are filled */
+
     box = lv_obj_create(parent);
     lv_obj_remove_style_all(box);
     lv_obj_set_pos(box, 800 - COL_W, y);
@@ -377,6 +379,8 @@ void cluster_column_init(lv_obj_t *parent, lv_coord_t y) {
         rows[i].mode = cell(box, 173, 32, ry + 3, LV_TEXT_ALIGN_LEFT, theme_hex(TC_text), NF(18));
         rows[i].age  = cell(box, 207, 32, ry + 3, LV_TEXT_ALIGN_RIGHT, theme_hex(TC_text), NF(18));
     }
-    lv_timer_create(timer_cb, 250, NULL);
+    if (!again) lv_timer_create(timer_cb, 250, NULL);
+    lv_obj_update_layout(box);  /* its height, for the rows redraw() fits */
+    last_min = 0xFFFF;          /* drawn now, not at the next spot */
     timer_cb(NULL);
 }

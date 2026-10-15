@@ -558,7 +558,7 @@ static void spectrum_refresh(void *data) {
 }
 
 lv_obj_t *spectrum_init(lv_obj_t *parent) {
-    pthread_mutex_init(&data_mux, NULL);
+    if (!obj) pthread_mutex_init(&data_mux, NULL);   /* the DSP thread may hold it on a theme change */
     spectrum_min_max_reset();
 
     for (size_t i = 0; i < SPECTRUM_SIZE; i++) {

@@ -98,9 +98,14 @@ static char* search_kbd_device() {
     glob_t      globbuf;
     bool        found = false;
 
+    /* A wireless receiver or a keyboard with media keys has several "-kbd" links: the one with the letters */
     if (glob("/dev/input/by-path/*-kbd", 0, NULL, &globbuf) == 0) {
-        snprintf(path, sizeof(path), "%s", globbuf.gl_pathv[0]);
-        found = true;
+        for (size_t i = 0; i < globbuf.gl_pathc && !found; i++) {
+            if (has_letters(globbuf.gl_pathv[i])) {
+                snprintf(path, sizeof(path), "%s", globbuf.gl_pathv[i]);
+                found = true;
+            }
+        }
     }
     globfree(&globbuf);
     if (!found && glob("/dev/input/event*", 0, NULL, &globbuf) == 0) {

@@ -42,6 +42,8 @@ bool main_screen_band_locked();
 bool main_screen_mode_locked();
 
 void main_screen_set_freq(uint64_t f);
+/* Another theme, live (Settings, the remote) */
+void main_screen_set_theme(const char *name);
 
 void mem_load(uint16_t id);
 void mem_save(uint16_t id);

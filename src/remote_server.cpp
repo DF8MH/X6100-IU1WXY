@@ -19,6 +19,7 @@
  *  apps transmit. While the radio transmits only the stop/close commands are taken.
  */
 
+#include "ft8/ft2.h"
 #include "remote_server.h"
 #include "cw_field.h"
 
@@ -47,16 +48,20 @@ extern "C" {
     #include "dialog_snake.h"
     #include "dialog_ft8.h"
     #include "dialog_js8.h"
+    #include "dialog_psk.h"
+    #include "dialog_olivia.h"
     #include "dialog_navtex.h"
     #include "dialog_sstv.h"
     #include "dialog_wefax.h"
     #include "dialog_wspr.h"
     #include "gps.h"
+    #include "main.h"
     #include "main_screen.h"
     #include "meter.h"
     #include "radio.h"
     #include "rtty.h"
     #include "scheduler.h"
+    #include "walkie.h"
     #include "waterfall.h"
     #include "params/params.h"
     #include "backlight.h"
@@ -88,8 +93,9 @@ extern "C" {
 #define IN_SIZE         512
 #define OUT_SIZE        (32 * 1024)
 #define NBINS           800
-#define FRAME_MS        100
+#define FRAME_MS        50      /* below dsp.cpp 66 ms: all its 15 lines a second go out, not every other one (7.5) */
 #define STATE_MS        200
+#define TUNE_MS         50      /* while the VFO moves, the state goes out this often */
 #define IDLE_MS         5000    /* a command client must be done within this */
 #define STALL_MS        10000   /* a subscriber that takes nothing for this long is dropped */
 #define MAX_PENDING     16      /* commands queued on the LVGL thread */
@@ -126,7 +132,7 @@ static const char *mode_names[] = {"LSB", "LSB-D", "USB", "USB-D", "CW", "CW-R",
 static const char *agc_names[]  = {"OFF", "SLOW", "FAST", "AUTO"};
 
 /* "app" values; cont_modes[] order in dialog_sstv.c */
-static const char *app_names[]  = {"off", "FT8", "FT4", "JS8", "WSPR", "SSTV", "WeFax", "NavTex", "RTTY", "CW", "Field", "Snake"};
+static const char *app_names[]  = {"off", "FT8", "FT4", "JS8", "WSPR", "SSTV", "WeFax", "NavTex", "RTTY", "CW", "Field", "Snake", "PSK31", "PSK63", "Olivia", "FT2"};
 static const char *sstv_modes[] = {"R8BW", "R36", "R72", "M1", "M2", "S1", "S2"};
 
 /* Commands of the app that is open: app is current_app() or its start ("FT": FT8 and FT4); a name
@@ -187,6 +193,10 @@ static const struct {
     {"app_base",    "WeFax",  dialog_wefax_remote,  1, 0,         INT32_MIN},
     {"navtex_mode", "NavTex", dialog_navtex_remote, 0, 1,         INT32_MIN},   /* 0 NAVTEX, 1 DSC */
     {"app_base",    "NavTex", dialog_navtex_remote, 1, 0,         INT32_MIN},
+    {"psk_mode",    "PSK",    dialog_psk_remote,    0, 1,         INT32_MIN},   /* 0 PSK31, 1 PSK63 */
+    {"psk_freq",    "PSK",    dialog_psk_remote,    200, 3000,    INT32_MIN},
+    {"olivia_mode", "Olivia", dialog_olivia_remote, 0, 2,         INT32_MIN},   /* 0 8/250, 1 16/500, 2 32/1000 */
+    {"olivia_freq", "Olivia", dialog_olivia_remote, 200, 3000,    INT32_MIN},
 };
 
 /* The "ax" object of each app (any thread) */
@@ -197,7 +207,7 @@ static const struct {
     {"FT", dialog_ft8_remote_state},    {"JS8", dialog_js8_remote_state},     {"WSPR", dialog_wspr_remote_state},
     {"SSTV", dialog_sstv_remote_state}, {"WeFax", dialog_wefax_remote_state}, {"NavTex", dialog_navtex_remote_state},
     {"RTTY", rtty_remote_state},        {"CW", dialog_cw_kbd_remote_state},
-    {"Field", dialog_field_remote_state},
+    {"Field", dialog_field_remote_state}, {"PSK", dialog_psk_remote_state}, {"Olivia", dialog_olivia_remote_state},
 };
 
 static client_t          clients[MAX_CLIENTS];
@@ -278,7 +288,7 @@ void remote_set_band(int32_t m) {
 /* "" when none of the remote's apps is open. Any thread. */
 static const char *current_app() {
     if (dialog_type_is_run(dialog_ft8))
-        return cfg_sm.p_ft8_protocol.get() == FTX_PROTOCOL_FT4 ? "FT4" : "FT8";
+        return ftx_protocol_name(cfg_sm.p_ft8_protocol.get());
     if (dialog_type_is_run(dialog_js8))
         return "JS8";
     if (dialog_type_is_run(dialog_wspr))
@@ -295,6 +305,10 @@ static const char *current_app() {
         return "Field";
     if (dialog_type_is_run(dialog_snake))
         return "Snake";
+    if (dialog_type_is_run(dialog_psk))
+        return dialog_psk_is_63() ? "PSK63" : "PSK31";
+    if (dialog_type_is_run(dialog_olivia))
+        return "Olivia";
     if (rtty_get_state() != RTTY_OFF)
         return "RTTY";
     return "";
@@ -310,7 +324,8 @@ static bool app_open(size_t i) {
 static void open_app(int32_t app) {
     static const press_action_t actions[] = {ACTION_NONE,     ACTION_APP_FT8,   ACTION_APP_FT8,    ACTION_APP_JS8,
                                              ACTION_APP_WSPR, ACTION_APP_SSTV,  ACTION_APP_WEFAX,  ACTION_APP_NAVTEX,
-                                             ACTION_APP_RTTY, ACTION_APP_CW_KBD, ACTION_APP_FIELD, ACTION_APP_SNAKE};
+                                             ACTION_APP_RTTY, ACTION_APP_CW_KBD, ACTION_APP_FIELD, ACTION_APP_SNAKE,
+                                             ACTION_APP_PSK,  ACTION_APP_PSK,   ACTION_APP_OLIVIA, ACTION_APP_FT8};
     const char *cur = current_app();
 
     if (!app) {
@@ -321,7 +336,13 @@ static void open_app(int32_t app) {
     if (!strcmp(cur, app_names[app]))
         return;
     if (actions[app] == ACTION_APP_FT8)
-        cfg_sm.p_ft8_protocol.set(app == 2 ? FTX_PROTOCOL_FT4 : FTX_PROTOCOL_FT8);
+        cfg_sm.p_ft8_protocol.set(app == 2 ? FTX_PROTOCOL_FT4 : !strcmp(app_names[app], "FT2") ? FTX_PROTOCOL_FT2 : FTX_PROTOCOL_FT8);
+    if (actions[app] == ACTION_APP_PSK && dialog_type_is_run(dialog_psk)) {
+        dialog_psk_set_mode(!strcmp(app_names[app], "PSK63"));   /* the other one: in place */
+        return;
+    }
+    if (actions[app] == ACTION_APP_PSK)
+        dialog_psk_set_mode(!strcmp(app_names[app], "PSK63"));
     main_screen_start_app(actions[app]);
     /* CW: frequency and mode back at the close, as the radio's own apps (restore_radio) */
     if (actions[app] == ACTION_APP_CW_KBD)
@@ -336,7 +357,8 @@ static void open_app(int32_t app) {
     int32_t to = -1;
     if (actions[app] == ACTION_APP_CW_KBD && !cw)
         to = x6100_mode_cw;
-    else if (cw && (actions[app] == ACTION_APP_SSTV || actions[app] == ACTION_APP_WEFAX || actions[app] == ACTION_APP_NAVTEX))
+    else if (cw && (actions[app] == ACTION_APP_SSTV || actions[app] == ACTION_APP_WEFAX || actions[app] == ACTION_APP_NAVTEX ||
+                    actions[app] == ACTION_APP_PSK || actions[app] == ACTION_APP_OLIVIA))
         to = x6100_mode_usb;
     if (to >= 0) {
         cfg_sm.cp_cur_mode.set(to);
@@ -578,7 +600,7 @@ static int state_line(char *buf, size_t size) {
                     "{\"t\":\"state\",\"vfo\":\"%s\",\"freq\":%i,\"freq_bg\":%i,\"mode\":\"%s\",\"band\":\"%s\","
                     "\"filter\":%i,\"flo\":%i,\"fhi\":%i,\"rfgain\":%i,\"sql\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
                     "\"nb_level\":%i,\"nb_width\":%i,\"nr_level\":%i,\"pwr\":%i,\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s,"
-                    "\"cwt\":%s,\"logrev\":%u,\"did\":\"%s\",\"spot\":\"%s\",\"spotseq\":%u,\"fwd\":%i,\"swr\":%i}\n",
+                    "\"cwt\":%s,\"logrev\":%u,\"did\":\"%s\",\"spot\":\"%s\",\"spotseq\":%u,\"fwd\":%i,\"swr\":%i,\"fw\":\"%s\"}\n",
                     cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? "A" : "B",
                     cfg_sm.cp_fg_freq.get(), cfg_sm.cp_bg_freq.get(),
                     (mode >= 0 && mode <= x6100_mode_nfm) ? mode_names[mode] : "?", band_name(),
@@ -589,7 +611,8 @@ static int state_line(char *buf, size_t size) {
                     cfg_sm.p_nb.get() != 0, cfg_sm.p_nr.get() != 0,
                     cfg_sm.p_nb_level.get(), cfg_sm.p_nb_width.get(), cfg_sm.p_nr_level.get(),
                     (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax, cwt, log_rev(), device_id(), spot, spot_seq,
-                    (int)lroundf(tx_pwr * 10), (int)lroundf(tx_swr * 10));
+                    (int)lroundf(tx_pwr * 10), (int)lroundf(tx_swr * 10),
+                    strrchr(VERSION, 'v') + 1);   /* "0.125": Link hides what this firmware doesn't have */
 }
 
 static void send_state(client_t *c) {
@@ -910,11 +933,11 @@ static void disp_apply(void *arg) {
     } else if (!strcmp(d->name, "bright_buttons")) {
         backlight_set_buttons((buttons_light_t)d->val);
     } else if (!strcmp(d->name, "theme")) {
-        /* as Settings: the GUI saves and starts again with it (x6100_daemon) */
+        /* as Settings: saved and applied live */
         params_str_set(&params.theme_name, d->text);
         params_flush();
         cfg_api_flush_all();
-        exit(0);
+        main_screen_set_theme(d->text);
     }
 }
 
@@ -926,6 +949,11 @@ static const char *disp_set(cJSON *req, disp_set_t *d) {
     strcpy(d->name, t->valuestring);
     if (!strcmp(d->name, "theme")) {
         cJSON *n = cJSON_GetObjectItemCaseSensitive(req, "theme");
+
+        if (radio_get_state() != RADIO_RX)
+            return "Radio is transmitting";     /* the open app closes */
+        if (walkie_on())
+            return "Not in walkie mode";        /* its screen holds the buttons */
         char   names[32][32];
         int    count = theme_list(names, 32);
 
@@ -1056,6 +1084,7 @@ static void *server_thread(void *arg) {
     struct pollfd pfd[2 + MAX_CLIENTS];
     int           slot[2 + MAX_CLIENTS];
     uint64_t      next_state = 0;
+    int32_t       sent_freq  = 0;
 
     for (int i = 0; i < MAX_CLIENTS; i++)
         clients[i].fd = -1;
@@ -1108,9 +1137,13 @@ static void *server_thread(void *arg) {
 
         uint64_t now = now_ms();
         send_texts(now);
-        bool     state = subscribers > 0 && now >= next_state;
-        if (state)
+        int32_t  freq  = cfg_sm.cp_fg_freq.get();
+        bool     state = subscribers > 0
+            && (now >= next_state || (freq != sent_freq && now + STATE_MS >= next_state + TUNE_MS));
+        if (state) {
             next_state = now + STATE_MS;
+            sent_freq  = freq;
+        }
         for (int i = 0; i < MAX_CLIENTS; i++) {
             client_t *c = &clients[i];
             if (c->fd < 0)

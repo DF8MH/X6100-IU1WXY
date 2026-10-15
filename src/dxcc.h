@@ -27,6 +27,10 @@ extern "C" {
  * it from a worker thread, not from the LVGL thread. */
 bool dxcc_lookup(const char *call, const char **name, const char **prefix);
 
+/* The centre of the country of `call` (cty.dat's position), degrees, east
+ * and north positive. False when the call is unknown, as above. */
+bool dxcc_pos(const char *call, double *lat, double *lon);
+
 #ifdef __cplusplus
 }
 #endif

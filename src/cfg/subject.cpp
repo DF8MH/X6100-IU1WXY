@@ -49,9 +49,26 @@ void ObserverDelayed::async_trampoline(void *user_data) {
     obs->Observer::notify();
 }
 
+bool Subject::no_duplicates = false;
+
+Observer *Subject::duplicate(observer_cb fn, void *user_data) {
+    if (!no_duplicates) {
+        return nullptr;
+    }
+    for (auto *o : observers) {
+        if (o->fn == fn && o->user_data == user_data) {
+            return o;
+        }
+    }
+    return nullptr;
+}
+
 Observer *Subject::subscribe(observer_cb fn, void *user_data) {
     const std::lock_guard<std::mutex> lock(mutex_subscribe);
 
+    if (auto *o = duplicate(fn, user_data)) {
+        return o;
+    }
     auto observer = new Observer(this, fn, user_data);
     observers.push_back(observer);
     return observer;
@@ -65,6 +82,9 @@ Observer *Subject::subscribe_and_notify(observer_cb fn, void *user_data) {
 ObserverDelayed *Subject::subscribe_delayed(observer_cb fn, void *user_data) {
     const std::lock_guard<std::mutex> lock(mutex_subscribe);
 
+    if (auto *o = dynamic_cast<ObserverDelayed *>(duplicate(fn, user_data))) {
+        return o;
+    }
     auto observer = new ObserverDelayed(this, fn, user_data);
     observers.push_back(observer);
     return observer;

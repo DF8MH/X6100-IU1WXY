@@ -12,6 +12,10 @@ void param_unsubscribe(Observer *o) {
     ObserverDeleter{}(o);
 }
 
+void subject_no_duplicates(bool on) {
+    Subject::no_duplicates = on;
+}
+
 SubjectInt *subject_i_create(int32_t val) {
     return new SubjectInt(val);
 }

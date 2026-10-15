@@ -14,3 +14,5 @@ void walkie_init(lv_obj_t *main_screen_obj);
 
 /* The walkie screen is up: the VOL knob is the volume only, the buttons' knob is the MFK */
 bool walkie_on(void);
+/* A theme change: the screen, built once, is built again when next shown */
+void walkie_drop(void);

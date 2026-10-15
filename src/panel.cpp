@@ -7,6 +7,7 @@
  */
 #include <cmath>
 #include <cstring>
+#include <strings.h>
 
 #include "panel.h"
 #include "knobs.h"
@@ -27,6 +28,7 @@ static lv_obj_t    *info;
 static lv_anim_t    dim_anim;
 static char         buf[1024] = "";
 static char        *buf_write = buf;
+static char         shown[1536];    /* buf with the calls coloured (label recolour) */
 static uint8_t      max_line_count;
 static x6100_mode_t prev_mode;
 
@@ -126,7 +128,8 @@ static void scope_create() {
     scope_label("S", LV_ALIGN_TOP_MID, 9, 1);
     scope_off = scope_label("", LV_ALIGN_BOTTOM_MID, 0, -1);
 
-    lv_timer_create(scope_tick, 100, NULL);
+    static lv_timer_t *tick;
+    if (!tick) tick = lv_timer_create(scope_tick, 100, NULL);   /* not again on a theme change */
 }
 
 /* As many lines as the panel holds in its font (from upstream panel.cpp) */
@@ -169,6 +172,81 @@ static void check_lines() {
     }
 }
 
+/* A finished word that looks like a callsign: 4-12 letters, digits and '/', a letter, a digit and
+ * a letter after it (so 5NN, 599, TU and R5 stay plain), not our own call */
+static bool is_call(const char *w, size_t len) {
+    bool letter = false, digit = false, after = false;
+
+    if (len < 4 || len > 12) return false;
+    for (size_t i = 0; i < len; i++) {
+        char c = w[i];
+        if (c >= '0' && c <= '9') {
+            digit = true;
+        } else if (c >= 'A' && c <= 'Z') {
+            if (digit) after = true; else letter = true;
+        } else if (c != '/') {
+            return false;
+        }
+    }
+    return letter && digit && after
+        && !(strlen(params.callsign.x) == len && !strncasecmp(w, params.callsign.x, len));
+}
+
+/* Noise decodes into call-shaped words too (TT1SAR, YP4F): a call counts only after DE or when it
+ * comes at least twice, as a station sends it ("CQ CQ DE IK1ABC IK1ABC K") */
+static bool sent_call(const char *w, size_t len) {
+    const char *e = w, *b;
+    size_t      n;
+    int         times = 0;
+
+    if (!is_call(w, len)) return false;
+    while (e > buf && strchr(" \n", e[-1])) e--;       /* the word before */
+    for (b = e; b > buf && !strchr(" \n", b[-1]); b--) {}
+    if (e - b == 2 && !strncmp(b, "DE", 2)) return true;
+    for (const char *p = buf; *p; p += n ? n : 1) {
+        n = strcspn(p, " \n");
+        if (n == len && !strncmp(p, w, len) && ++times >= 2) return true;
+    }
+    return false;
+}
+
+/* buf into the label, the calls in the heading colour; a word still being decoded stays plain */
+static void show() {
+    char   color[8];
+    char  *o = shown, *end = shown + sizeof(shown) - 16;
+    size_t n;
+
+    snprintf(color, sizeof(color), "%06X", (unsigned)(theme_hex(TC_text_head) & 0xFFFFFF));
+    for (const char *p = buf; *p && o < end; p += n) {
+        n = strcspn(p, " \n");
+        if (n == 0) {           /* a separator */
+            *o++ = *p;
+            n = 1;
+            continue;
+        }
+        bool call = p[n] && sent_call(p, n) && o + n + 10 < end;
+        if (call) o += sprintf(o, "#%s ", color);
+        for (size_t i = 0; i < n && o < end; i++)
+            if (p[i] != '#') *o++ = p[i];       /* '#' is the recolour mark */
+        if (call) *o++ = '#';
+    }
+    *o = '\0';
+    lv_label_set_text_static(obj, shown);
+}
+
+const char *panel_last_call(void) {
+    static char call[16];
+    const char *p = buf;
+    size_t      n;
+
+    call[0] = '\0';
+    for (; *p; p += n ? n : 1) {
+        n = strcspn(p, " \n");
+        if (n && p[n] && sent_call(p, n)) snprintf(call, sizeof(call), "%.*s", (int)n, p);
+    }
+    return call;
+}
+
 /* Settings > Display > Decoder text: Large (the stock sony_24) or Compact (sony_18, more lines).
  * Follows the setting live; ported from SP2KMO's upstream c2fbe40c, with his fix 0736fa9c: every
  * line that no longer fits goes, not one */
@@ -181,7 +259,7 @@ static void text_size_cb(Subject *subj, void *user_data) {
         len = strlen(buf);
         check_lines();
     } while (strlen(buf) != len);
-    lv_label_set_text_static(obj, buf);
+    show();
 }
 
 static void panel_update_text_cb(const char *text) {
@@ -207,7 +285,7 @@ static void panel_update_text_cb(const char *text) {
         }
     }
     check_lines();
-    lv_label_set_text_static(obj, buf);
+    show();
 }
 
 static void panel_update_info_cb(const char *text) {
@@ -217,6 +295,7 @@ static void panel_update_info_cb(const char *text) {
 lv_obj_t * panel_init(lv_obj_t *parent) {
     obj = lv_label_create(parent);
 
+    lv_label_set_recolor(obj, true);
     lv_label_set_text_static(obj, buf);
 
     lv_obj_add_style(obj, &panel_style, 0);
