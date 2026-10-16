@@ -26,6 +26,10 @@ void panel_add_text(const char * text);
 void panel_set_info(const char * text);
 void panel_keep_below(lv_coord_t y);
 
+/* cw_calls from X6100 Link: "IU1WXY,IK1ABC", calls it found on QRZ. With Parse on they count as
+ * confirmed, the panel colours them and tells the remote clients (cw_calls event). LVGL thread */
+void panel_remote(const char *cmd, int32_t val, const char *text);
+
 /* The last callsign the decoder wrote (CW / RTTY panel), "" when none */
 const char *panel_last_call(void);
 

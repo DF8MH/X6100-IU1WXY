@@ -154,38 +154,98 @@ static lv_point_t needle_pt(lv_point_t c, float a_deg, lv_coord_t r) {
 }
 
 /* Needle lamp (Settings): an amber dial brighter low in the middle, as a bulb behind it. LVGL 8
- * has no radial gradient: a vertical one and a few soft discs around the bottom centre */
+ * has no radial gradient, so the dial is computed per pixel once per box size (main screen and
+ * walkie) into an ARGB image: smooth glow, anti-aliased rounded corners, no banding */
 #define LAMP_INK        lv_color_hex(0x1a1006)
 #define LAMP_RED        lv_color_hex(0xb01e10)
 
+typedef struct {
+    lv_img_dsc_t dsc;
+    lv_coord_t   radius;
+} lamp_img_t;
+
+static lamp_img_t lamp_cache[2];
+
+static const lv_img_dsc_t *lamp_img(lv_coord_t w, lv_coord_t h, lv_coord_t radius) {
+    lamp_img_t *c = NULL;
+
+    for (int i = 0; i < 2; i++) {
+        lamp_img_t *e = &lamp_cache[i];
+
+        if (e->dsc.data && e->dsc.header.w == w && e->dsc.header.h == h && e->radius == radius)
+            return &e->dsc;
+        if (!c && !e->dsc.data)
+            c = e;
+    }
+    if (!c) {                               /* both slots taken by other sizes: reuse the first */
+        c = &lamp_cache[0];
+        lv_img_cache_invalidate_src(&c->dsc);   /* LVGL caches by descriptor: drop the stale entry */
+        lv_mem_free((void *)c->dsc.data);
+        c->dsc.data = NULL;
+    }
+
+    lv_color32_t *px = lv_mem_alloc((size_t)w * h * sizeof(lv_color32_t));
+
+    if (!px)
+        return NULL;
+
+    const float lo[3] = {0x9a, 0x5e, 0x1c}, hi[3] = {0xe0, 0xa0, 0x48}, bulb[3] = {0xff, 0xe2, 0xa8};
+    float       cx = (w - 1) / 2.0f, rad = LV_MIN(radius, LV_MIN(w, h) / 2);
+
+    for (lv_coord_t y = 0; y < h; y++) {
+        float t = (float)y / (h - 1);
+
+        for (lv_coord_t x = 0; x < w; x++) {
+            /* bulb just below the bottom centre, elliptical (wider than tall) */
+            float dx = (x - cx) / (h * 1.9f), dy = (h * 1.05f - y) / (h * 1.25f);
+            float g  = 0.62f * expf(-(dx * dx + dy * dy) * 1.6f);
+            float ex = fabsf(x - cx) / cx;
+            float k  = 0.10f * ex * ex;     /* edge darkening, as the light falls off */
+
+            /* anti-aliased rounded corners */
+            float qx = LV_MAX(rad - x - 0.5f, x + 0.5f - (w - rad)), qy = LV_MAX(rad - y - 0.5f, y + 0.5f - (h - rad));
+            float a  = 1.0f;
+
+            if (qx > 0 && qy > 0)
+                a = LV_CLAMP(0.0f, rad + 0.5f - sqrtf(qx * qx + qy * qy), 1.0f);
+
+            uint8_t ch[3];
+
+            for (int i = 0; i < 3; i++) {
+                float v = lo[i] + (hi[i] - lo[i]) * t;
+
+                v = v + (bulb[i] - v) * g;
+                v *= 1.0f - k;
+                ch[i] = (uint8_t)LV_CLAMP(0, (int)(v + 0.5f), 255);
+            }
+            lv_color32_t *o = &px[y * w + x];
+
+            o->ch.red   = ch[0];
+            o->ch.green = ch[1];
+            o->ch.blue  = ch[2];
+            o->ch.alpha = (uint8_t)(a * 255.0f + 0.5f);
+        }
+    }
+
+    c->dsc.header.always_zero = 0;
+    c->dsc.header.cf          = LV_IMG_CF_TRUE_COLOR_ALPHA;
+    c->dsc.header.w           = w;
+    c->dsc.header.h           = h;
+    c->dsc.data_size          = (uint32_t)w * h * sizeof(lv_color32_t);
+    c->dsc.data               = (const uint8_t *)px;
+    c->radius                 = radius;
+    return &c->dsc;
+}
+
 static void lamp_draw(lv_obj_t *obj, lv_draw_ctx_t *draw_ctx) {
-    lv_draw_rect_dsc_t dsc;
-    lv_area_t          a;
-    lv_coord_t         h = lv_obj_get_height(obj), cx = (obj->coords.x1 + obj->coords.x2) / 2;
+    const lv_img_dsc_t *img = lamp_img(lv_obj_get_width(obj), lv_obj_get_height(obj),
+                                       lv_obj_get_style_radius(obj, LV_PART_MAIN));
 
-    lv_draw_rect_dsc_init(&dsc);
-    dsc.radius        = lv_obj_get_style_radius(obj, LV_PART_MAIN);
-    dsc.bg_color      = lv_color_hex(0x9a5e1c);
-    dsc.bg_grad.dir   = LV_GRAD_DIR_VER;
-    dsc.bg_grad.stops_count = 2;
-    dsc.bg_grad.stops[0].color = lv_color_hex(0x9a5e1c);
-    dsc.bg_grad.stops[0].frac  = 0;
-    dsc.bg_grad.stops[1].color = lv_color_hex(0xe0a048);
-    dsc.bg_grad.stops[1].frac  = 255;
-    lv_draw_rect(draw_ctx, &dsc, &obj->coords);
+    if (img) {
+        lv_draw_img_dsc_t dsc;
 
-    lv_draw_rect_dsc_init(&dsc);
-    dsc.radius   = LV_RADIUS_CIRCLE;
-    dsc.bg_color = lv_color_hex(0xffe2a8);
-    dsc.bg_opa   = LV_OPA_20;
-    for (int i = 0; i < 4; i++) {          /* each disc smaller: brighter towards the bulb */
-        lv_coord_t rr = h * (5 - i) / 4;
-
-        a.x1 = cx - rr * 3 / 2;
-        a.x2 = cx + rr * 3 / 2;
-        a.y1 = obj->coords.y2 - rr;
-        a.y2 = obj->coords.y2 + rr;
-        lv_draw_rect(draw_ctx, &dsc, &a);
+        lv_draw_img_dsc_init(&dsc);
+        lv_draw_img(draw_ctx, &dsc, &obj->coords, img);
     }
 }
 

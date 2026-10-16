@@ -1639,10 +1639,10 @@ static void snap_later(void)
     }
 }
 
-/* Web remote / X6100 Link: psk_mode 0 PSK31, 1 PSK63; psk_freq audio Hz (then the snap) */
+/* Web remote / X6100 Link: psk_mode 0 PSK31, 1 PSK63; psk_freq audio Hz (then the snap);
+ * psk_send text, psk_stop */
 void dialog_psk_remote(const char *cmd, int32_t val, const char *text)
 {
-    (void)text;
     if (!alive)
         return;
     if (!strcmp(cmd, "psk_mode")) {
@@ -1650,6 +1650,10 @@ void dialog_psk_remote(const char *cmd, int32_t val, const char *text)
     } else if (!strcmp(cmd, "psk_freq") && !psk_tx_is_on()) {
         set_center(val);
         snap_later();
+    } else if (!strcmp(cmd, "psk_send")) {
+        send_text(text);
+    } else if (!strcmp(cmd, "psk_stop")) {
+        psk_tx_stop();
     }
 }
 

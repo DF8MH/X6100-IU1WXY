@@ -88,8 +88,11 @@ params_t params = {
     .js8_ghostnet           = { .x = false,     .name = "js8_ghostnet" },
     .js8_custom_on          = { .x = false,     .name = "js8_custom_on" },
     .js8_custom_hz          = { .x = 0,         .name = "js8_custom_hz" },
+    .ft8_custom_on          = { .x = false,     .name = "ft8_custom_on" },
+    .ft8_custom_hz          = { .x = 0,         .name = "ft8_custom_hz" },
     .ft8_output_gain_offset = { .x = 0.0f,      .name = "ft8_output_gain_offset" },
     .ft8_cq_modifier        = { .x = "",        .name = "ft8_cq_modifier"},
+    .sstv_denoise           = { .x = true,      .name = "sstv_denoise" },
 
     .long_gen               = ACTION_SCREENSHOT,
     .long_app               = ACTION_APP_RECORDER,
@@ -263,8 +266,11 @@ static bool params_load() {
         if (params_load_uint8(&params.js8_speed, name, i)) continue;
         if (params_load_bool(&params.js8_rx_all, name, i)) continue;
         if (params_load_bool(&params.js8_ghostnet, name, i)) continue;
+        if (params_load_bool(&params.sstv_denoise, name, i)) continue;
         if (params_load_bool(&params.js8_custom_on, name, i)) continue;
         if (params_load_int32(&params.js8_custom_hz, name, i)) continue;
+        if (params_load_bool(&params.ft8_custom_on, name, i)) continue;
+        if (params_load_int32(&params.ft8_custom_hz, name, i)) continue;
         if (params_load_bool(&params.mag_info, name, i)) continue;
         if (params_load_bool(&params.mag_alc, name, i)) continue;
         if (params_load_uint8(&params.spectrum_beta, name, i)) continue;
@@ -395,8 +401,11 @@ static void params_save() {
     params_save_uint8(&params.js8_speed);
     params_save_bool(&params.js8_rx_all);
     params_save_bool(&params.js8_ghostnet);
+    params_save_bool(&params.sstv_denoise);
     params_save_bool(&params.js8_custom_on);
     params_save_int32(&params.js8_custom_hz);
+    params_save_bool(&params.ft8_custom_on);
+    params_save_int32(&params.ft8_custom_hz);
     params_save_bool(&params.mag_info);
     params_save_bool(&params.mag_alc);
     params_save_uint8(&params.spectrum_beta);

@@ -22,11 +22,13 @@
 #include "ft8/ft2.h"
 #include "remote_server.h"
 #include "cw_field.h"
+#include "panel.h"
 
 #include "cfg/db.h"
 #include "cfg/settings_manager.h"
 #include "cfg/settings_manager_api.h"
 #include "util.h"
+#include "wifi.h"
 
 #include <dirent.h>
 #include <sys/stat.h>
@@ -50,6 +52,7 @@ extern "C" {
     #include "dialog_js8.h"
     #include "dialog_psk.h"
     #include "dialog_olivia.h"
+    #include "dialog_jtty.h"
     #include "dialog_navtex.h"
     #include "dialog_sstv.h"
     #include "dialog_wefax.h"
@@ -132,7 +135,7 @@ static const char *mode_names[] = {"LSB", "LSB-D", "USB", "USB-D", "CW", "CW-R",
 static const char *agc_names[]  = {"OFF", "SLOW", "FAST", "AUTO"};
 
 /* "app" values; cont_modes[] order in dialog_sstv.c */
-static const char *app_names[]  = {"off", "FT8", "FT4", "JS8", "WSPR", "SSTV", "WeFax", "NavTex", "RTTY", "CW", "Field", "Snake", "PSK31", "PSK63", "Olivia", "FT2"};
+static const char *app_names[]  = {"off", "FT8", "FT4", "JS8", "WSPR", "SSTV", "WeFax", "NavTex", "RTTY", "CW", "Field", "Snake", "PSK31", "PSK63", "Olivia", "FT2", "JTTY"};
 static const char *sstv_modes[] = {"R8BW", "R36", "R72", "M1", "M2", "S1", "S2"};
 
 /* Commands of the app that is open: app is current_app() or its start ("FT": FT8 and FT4); a name
@@ -179,6 +182,7 @@ static const struct {
     {"cw_wpm",      "",       cw_field_remote,      5, 60,        INT32_MIN},
     {"cw_dec",      "",       cw_field_remote,      0, 1,         INT32_MIN},
     {"cw_clear",    "",       cw_field_remote,      1, 0,         INT32_MIN},
+    {"cw_calls",    "",       panel_remote,         1, 0,         INT32_MAX},   /* calls the app found on QRZ */
     {"field_screen", "Field", dialog_field_remote,  1, 0,         INT32_MIN},
     {"field_ref",   "Field",  dialog_field_remote,  1, 0,         INT32_MIN},
     {"field_start", "Field",  dialog_field_remote,  1, 0,         INT32_MIN},
@@ -195,8 +199,15 @@ static const struct {
     {"app_base",    "NavTex", dialog_navtex_remote, 1, 0,         INT32_MIN},
     {"psk_mode",    "PSK",    dialog_psk_remote,    0, 1,         INT32_MIN},   /* 0 PSK31, 1 PSK63 */
     {"psk_freq",    "PSK",    dialog_psk_remote,    200, 3000,    INT32_MIN},
+    {"psk_send",    "PSK",    dialog_psk_remote,    1, 0,         INT32_MIN},
+    {"psk_stop",    "PSK",    dialog_psk_remote,    1, 0,         INT32_MAX},
     {"olivia_mode", "Olivia", dialog_olivia_remote, 0, 2,         INT32_MIN},   /* 0 8/250, 1 16/500, 2 32/1000 */
     {"olivia_freq", "Olivia", dialog_olivia_remote, 200, 3000,    INT32_MIN},
+    {"olivia_send", "Olivia", dialog_olivia_remote, 1, 0,         INT32_MIN},
+    {"olivia_stop", "Olivia", dialog_olivia_remote, 1, 0,         INT32_MAX},
+    {"jtty_freq",   "JTTY",   dialog_jtty_remote,   200, 2700,    INT32_MIN},
+    {"jtty_send",   "JTTY",   dialog_jtty_remote,   1, 0,         INT32_MAX},   /* also while sending: queued */
+    {"jtty_stop",   "JTTY",   dialog_jtty_remote,   1, 0,         INT32_MAX},
 };
 
 /* The "ax" object of each app (any thread) */
@@ -208,6 +219,7 @@ static const struct {
     {"SSTV", dialog_sstv_remote_state}, {"WeFax", dialog_wefax_remote_state}, {"NavTex", dialog_navtex_remote_state},
     {"RTTY", rtty_remote_state},        {"CW", dialog_cw_kbd_remote_state},
     {"Field", dialog_field_remote_state}, {"PSK", dialog_psk_remote_state}, {"Olivia", dialog_olivia_remote_state},
+    {"JTTY", dialog_jtty_remote_state},
 };
 
 static client_t          clients[MAX_CLIENTS];
@@ -309,6 +321,8 @@ static const char *current_app() {
         return dialog_psk_is_63() ? "PSK63" : "PSK31";
     if (dialog_type_is_run(dialog_olivia))
         return "Olivia";
+    if (dialog_type_is_run(dialog_jtty))
+        return "JTTY";
     if (rtty_get_state() != RTTY_OFF)
         return "RTTY";
     return "";
@@ -325,7 +339,8 @@ static void open_app(int32_t app) {
     static const press_action_t actions[] = {ACTION_NONE,     ACTION_APP_FT8,   ACTION_APP_FT8,    ACTION_APP_JS8,
                                              ACTION_APP_WSPR, ACTION_APP_SSTV,  ACTION_APP_WEFAX,  ACTION_APP_NAVTEX,
                                              ACTION_APP_RTTY, ACTION_APP_CW_KBD, ACTION_APP_FIELD, ACTION_APP_SNAKE,
-                                             ACTION_APP_PSK,  ACTION_APP_PSK,   ACTION_APP_OLIVIA, ACTION_APP_FT8};
+                                             ACTION_APP_PSK,  ACTION_APP_PSK,   ACTION_APP_OLIVIA, ACTION_APP_FT8,
+                                             ACTION_APP_JTTY};
     const char *cur = current_app();
 
     if (!app) {
@@ -358,7 +373,8 @@ static void open_app(int32_t app) {
     if (actions[app] == ACTION_APP_CW_KBD && !cw)
         to = x6100_mode_cw;
     else if (cw && (actions[app] == ACTION_APP_SSTV || actions[app] == ACTION_APP_WEFAX || actions[app] == ACTION_APP_NAVTEX ||
-                    actions[app] == ACTION_APP_PSK || actions[app] == ACTION_APP_OLIVIA))
+                    actions[app] == ACTION_APP_PSK || actions[app] == ACTION_APP_OLIVIA ||
+                    actions[app] == ACTION_APP_JTTY))
         to = x6100_mode_usb;
     if (to >= 0) {
         cfg_sm.cp_cur_mode.set(to);
@@ -639,7 +655,8 @@ static void send_spectrum() {
         center = spec_center;
         width  = spec_width;
     }
-    l = snprintf(buf, sizeof(buf), "{\"t\":\"spec\",\"c\":%u,\"w\":%u,\"d\":\"", center, width);
+    /* "s": the S-meter rides on every line (15/s) so the app meter follows the audio, not the 5/s state */
+    l = snprintf(buf, sizeof(buf), "{\"t\":\"spec\",\"c\":%u,\"w\":%u,\"s\":%d,\"d\":\"", center, width, meter_get_raw_db());
     for (size_t i = 0; i < NBINS; i += 3) {     /* base64, the last group padded */
         uint32_t v = bins[i] << 16 | (i + 1 < NBINS ? bins[i + 1] << 8 : 0) | (i + 2 < NBINS ? bins[i + 2] : 0);
         buf[l++] = b64[v >> 18 & 63];
@@ -810,7 +827,8 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
         if ((!strcmp(name, "field_screen") || !strcmp(name, "field_ref") || !strcmp(name, "field_log")) &&
             !cmd->text[0])
             return "Invalid text";
-        if ((!strcmp(name, "rtty_send") || !strcmp(name, "cw_send")) && !cmd->text[0])
+        if ((!strcmp(name, "rtty_send") || !strcmp(name, "cw_send") || !strcmp(name, "psk_send") ||
+             !strcmp(name, "olivia_send")) && !cmd->text[0])
             return "Invalid text";
         static const int32_t rtty_rates[] = {4500, 4545, 5000, 5600, 7500, 10000, 11000, 15000};   /* rtty_change_rate() */
         if (!strcmp(name, "rtty_rate") && std::find(std::begin(rtty_rates), std::end(rtty_rates), cmd->val) == std::end(rtty_rates))
@@ -868,6 +886,8 @@ static const struct {
     {"band_plan", &cfg_sm.p_band_plan, 0, 1},
     {"cluster_spots_wf", &cfg_sm.p_cluster_spots_wf, 0, 1},
     {"cluster_column", &cfg_sm.p_cluster_column, 0, 1},
+    {"cluster_order", &cfg_sm.p_cluster_order, 0, 1},           /* Newest first (X6100 Link) */
+    {"cluster_all_bands", &cfg_sm.p_cluster_all_bands, 0, 1},
     {"smeter_needle", &cfg_sm.p_smeter_needle, 0, 1},
     {"smeter_color", &cfg_sm.p_smeter_color, 0, 2},
     {"wf_palette", &cfg_sm.p_wf_palette, 0, 6},
@@ -1010,6 +1030,49 @@ static void disp_get(client_t *c) {
         client_send(c, buf, l);
 }
 
+/* Ethernet for the web configurator (Network page): {"cmd":"eth_get"} answers {"t":"eth",...};
+ * {"cmd":"eth_set","dhcp":0|1,"ip":..,"mask":..,"gw":..,"dns":..} is checked as Settings checks it
+ * (wifi.cpp) and applied on the GUI thread */
+static const char *eth_keys[ETH_FIELDS] = {"ip", "mask", "gw", "dns"};
+
+static void eth_get(client_t *c) {
+    eth_info_t in;
+    char       buf[512];
+
+    eth_get_info(&in);
+    int l = snprintf(buf, sizeof(buf), "{\"t\":\"eth\",\"present\":%d,\"connected\":%d,\"state\":\"%s\",\"iface\":\"%s\","
+                     "\"addr\":\"%s\",\"gateway\":\"%s\",\"dhcp\":%d",
+                     in.present, in.connected, in.state, in.iface, in.addr, in.gw, in.cfg.dhcp);
+    for (int i = 0; i < ETH_FIELDS; i++)
+        l += snprintf(buf + l, sizeof(buf) - l, ",\"%s\":\"%s\"", eth_keys[i], in.cfg.field[i]);
+    l += snprintf(buf + l, sizeof(buf) - l, "}\n");
+    client_send(c, buf, l);
+}
+
+static const char *eth_set(cJSON *req, eth_cfg_t *cfg) {
+    cJSON *dhcp = cJSON_GetObjectItemCaseSensitive(req, "dhcp");
+
+    memset(cfg, 0, sizeof(*cfg));
+    if (!cJSON_IsNumber(dhcp) && !cJSON_IsBool(dhcp))
+        return "Invalid mode";
+    cfg->dhcp = cJSON_IsTrue(dhcp) || (cJSON_IsNumber(dhcp) && dhcp->valueint);
+    for (int i = 0; i < ETH_FIELDS; i++) {
+        cJSON *v = cJSON_GetObjectItemCaseSensitive(req, eth_keys[i]);
+
+        if (v && !cJSON_IsString(v))
+            return "Invalid value";
+        if (v && strlen(v->valuestring) >= sizeof(cfg->field[i]))
+            return "Value too long";
+        if (v)
+            strcpy(cfg->field[i], v->valuestring);
+    }
+    return eth_check(cfg);
+}
+
+static void eth_apply_cb(void *arg) {
+    eth_apply((eth_cfg_t *)arg);
+}
+
 static void handle_line(client_t *c, const char *line) {
     cJSON      *req  = cJSON_Parse(line);
     cJSON      *name = cJSON_GetObjectItemCaseSensitive(req, "cmd");
@@ -1026,6 +1089,14 @@ static void handle_line(client_t *c, const char *line) {
         disp_set_t d;
         if (!(err = disp_set(req, &d))) {
             scheduler_put(disp_apply, &d, sizeof(d));
+            client_send(c, "{\"t\":\"ok\"}\n", 11);
+        }
+    } else if (!strcmp(name->valuestring, "eth_get")) {
+        eth_get(c);
+    } else if (!strcmp(name->valuestring, "eth_set")) {
+        eth_cfg_t cfg;
+        if (!(err = eth_set(req, &cfg))) {
+            scheduler_put(eth_apply_cb, &cfg, sizeof(cfg));
             client_send(c, "{\"t\":\"ok\"}\n", 11);
         }
     } else if (!strcmp(name->valuestring, "sub")) {

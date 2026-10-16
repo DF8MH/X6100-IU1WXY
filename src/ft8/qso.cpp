@@ -45,6 +45,7 @@ void Candidate::set_report(int report) {
 
 void Candidate::set_msg_type(ftx_msg_type_t msg_type) {
     _last_rx_type = msg_type;
+    _quiet_slots = 0;
 }
 
 void Candidate::set_local_snr(int snr) {
@@ -61,6 +62,12 @@ bool Candidate::match_callsign(std::string callsign) {
 
 bool Candidate::is_finished() {
     return (_last_rx_type == FTX_MSG_TYPE_73) || (_last_rx_type == FTX_MSG_TYPE_RR73);
+}
+
+/* One more slot without its message: true once our last try (RR73 and 73 go once) had its answer slot, and a slot spare */
+bool Candidate::quiet_slot(int max_repeats) {
+    int tries = (_last_rx_type == FTX_MSG_TYPE_R_REPORT || is_finished()) ? 1 : max_repeats;
+    return tries > 0 && ++_quiet_slots > 2 * tries + 1;
 }
 
 bool Candidate::can_be_saved() {
@@ -281,7 +288,21 @@ void FTxQsoProcessor::set_auto(bool val) {
     _auto = val;
 }
 
+void FTxQsoProcessor::set_max_repeats(int val) {
+    _max_repeats = val;
+}
+
+void FTxQsoProcessor::set_is_pota(is_pota_cb_t cb) {
+    _is_pota = cb;
+}
+
 void FTxQsoProcessor::start_new_slot() {
+    _cur_fresh = false;
+    if (_cur_candidate != NULL && _cur_candidate->quiet_slot(_max_repeats)) {
+        // Given up, or over without a 73: the next caller gets the answer
+        delete _cur_candidate;
+        _cur_candidate = NULL;
+    }
     if (_next_candidate != NULL) {
         delete _next_candidate;
         _next_candidate = NULL;
@@ -347,9 +368,16 @@ bool FTxQsoProcessor::force_save_qso() {
 }
 
 Candidate **FTxQsoProcessor::get_candidate_to_update(std::string call_de) {
+    bool pota = _is_pota && _is_pota(call_de.c_str());
     if (_cur_candidate == NULL) {
         // Start new QSO
         _cur_candidate = new Candidate(call_de);
+        _cur_fresh = !pota;
+    } else if (_cur_fresh && pota) {
+        // Callers in the same slot: a POTA activator goes first
+        delete _cur_candidate;
+        _cur_candidate = new Candidate(call_de);
+        _cur_fresh = false;
     }
     Candidate **candidate_to_update = NULL;
     if (_cur_candidate->match_callsign(call_de)) {
@@ -362,6 +390,7 @@ Candidate **FTxQsoProcessor::get_candidate_to_update(std::string call_de) {
 }
 
 Candidate *FTxQsoProcessor::get_or_create_cur_candidate(std::string remote_callsign) {
+    _cur_fresh = false;     // the operator chose
     // Try to continue current QSO
     if ((_cur_candidate != NULL) && !_cur_candidate->match_callsign(remote_callsign)) {
         delete _cur_candidate;
@@ -412,6 +441,14 @@ void ftx_qso_processor_delete(FTxQsoProcessor *p) {
 
 void ftx_qso_processor_set_auto(FTxQsoProcessor *p, bool val) {
     p->set_auto(val);
+}
+
+void ftx_qso_processor_set_max_repeats(FTxQsoProcessor *p, int max_repeats) {
+    p->set_max_repeats(max_repeats);
+}
+
+void ftx_qso_processor_set_is_pota(FTxQsoProcessor *p, is_pota_cb_t is_pota) {
+    p->set_is_pota(is_pota);
 }
 
 void ftx_qso_processor_start_new_slot(FTxQsoProcessor *p) {

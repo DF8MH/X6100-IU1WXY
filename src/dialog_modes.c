@@ -24,7 +24,7 @@
 
 #define BOX_W  760
 #define COL_W  ((BOX_W - 4) / 2)
-#define ROW_H  44
+#define ROW_H  37
 #define HEAD_H 38
 #define HINT_H 28
 #define BOX_Y  (TOP_BAR_STD_H + 4)
@@ -41,6 +41,7 @@ static const struct {
     int            ftx; /* FT8 app protocol, PSK app: 0 PSK31, 1 PSK63, -1 = neither */
 } modes[] = {
     {"RTTY", "45 bd", ACTION_APP_RTTY, -1},
+    {"JTTY", "1.9 s", ACTION_APP_JTTY, -1},
     {"PSK31", "31 bd", ACTION_APP_PSK, 0},
     {"PSK63", "63 bd", ACTION_APP_PSK, 1},
     {"FT8", "15 s", ACTION_APP_FT8, FTX_PROTOCOL_FT8},
@@ -56,7 +57,7 @@ static const struct {
 
 #define MODES_N ((int)(sizeof(modes) / sizeof(modes[0])))
 
-/* 80 + 338 = 418 with 2 x 6 rows of 44: stays clear of the buttons (480 - BUTTONS_H_MAX = 418). */
+/* 80 + 333 = 413 with 2 x 7 rows of 37: stays clear of the buttons (480 - BUTTONS_H_MAX = 418). */
 _Static_assert(BOX_Y + BOX_H <= 480 - BUTTONS_H_MAX, "Modes menu overlaps the buttons");
 
 static lv_obj_t *rows[MODES_N];

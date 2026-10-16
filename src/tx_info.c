@@ -24,6 +24,7 @@
 #include "dialog_js8.h"
 #include "dialog_psk.h"
 #include "dialog_olivia.h"
+#include "dialog_jtty.h"
 #include "dialog_wspr.h"
 #include "dialog_sstv.h"
 
@@ -174,6 +175,7 @@ static void tx_cb(lv_event_t *e) {
 
     if (dialog_type_is_run(dialog_ft8) || dialog_type_is_run(dialog_js8) || dialog_type_is_run(dialog_wspr) ||
         dialog_type_is_run(dialog_sstv) || dialog_type_is_run(dialog_psk) || dialog_type_is_run(dialog_olivia) ||
+        dialog_type_is_run(dialog_jtty) ||
         rtty_get_state() != RTTY_OFF) {
         update_strip();
         lv_obj_clear_flag(strip, LV_OBJ_FLAG_HIDDEN);

@@ -7,7 +7,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     events.c msg.c msg_tiny.c keypad.c
     hkey.c clock.c info.c
     meter.c band_info.cpp tx_info.c
-    audio.c mfk.cpp cw.cpp cw_decoder.c panel.cpp
+    audio.c mfk.cpp cw.cpp cw_decoder.c cw_parse.c panel.cpp
     rtty.c screenshot.c screen_rec.c avi_writer.c backlight.c gps.c cat.cpp wfview_server.c remote_server.cpp
     dialog.c dialog_settings.cpp dialog_swrscan.c
     dialog_ft8.c dialog_freq.c dialog_gps.c dialog_msg_cw.c
@@ -19,9 +19,11 @@ target_sources(${PROJECT_NAME} PUBLIC
     dialog_psk.c psk_rx.c psk_tx.c psk_spec.c psk_macro.c digi_qso.c
     dialog_olivia.c olivia.c olivia_app.c olivia_demod.c olivia_macro.c olivia_mod.c olivia_resamp.c
     olivia_rx.c olivia_tx.c
+    dialog_jtty.c jtty.c jtty_rx.c jtty_tx.c
     tx_player.c
     tx_level.c
     swr_guard.c
+    base_guard.c
     dialog_sstv.c
     sstv_resources.c
     dialog_cluster.c
@@ -46,6 +48,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     sstv/vis.c
     sstv/linesync.c
     sstv/preview.c
+    sstv/denoise.c
     wefax/decoder.c
     wefax/encoder.c
     navtex/decoder.cpp

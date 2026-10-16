@@ -11,6 +11,7 @@
 #include "../util.h"
 #include "gfsk.h"
 #include "ft2.h"
+#include "hound.h"
 
 #include "lvgl/lvgl.h"
 #include <ft8lib/constants.h>
@@ -405,6 +406,8 @@ static void decode_messages(const ftx_waterfall_t *wf, int *num_candidates, ftx_
 
             char             text[FTX_MAX_MESSAGE_LENGTH];
             ftx_message_rc_t unpack_status = ftx_message_decode(&message, &hash_if, text);
+            if (unpack_status == FTX_MESSAGE_RC_ERROR_TYPE && hound_unpack_dxpedition(&message, text))
+                unpack_status = FTX_MESSAGE_RC_OK; /* a Fox's multi-stream message */
             if (unpack_status != FTX_MESSAGE_RC_OK) {
                 LV_LOG_INFO("Error [%d] while unpacking!", (int)unpack_status);
             } else {

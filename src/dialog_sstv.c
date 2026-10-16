@@ -15,6 +15,7 @@
 #include "sstv/linesync.h"
 #include "sstv/preview.h"
 #include "sstv/vis.h"
+#include "sstv/denoise.h"
 #include "radio.h"
 #include "remote_server.h"
 #include "tx_player.h"
@@ -77,6 +78,7 @@ static void destruct_cb(void);
 static void test_cb(button_data_t *data);
 static void close_cb(button_data_t *data);
 static void restart_cb(button_data_t *data);
+static void denoise_cb(button_data_t *data);
 static void key_cb(lv_event_t *e);
 static void start_cb(button_data_t *data);
 static void cont_start_cb(button_data_t *data);
@@ -131,7 +133,8 @@ static void *live_decode_thread_cb(void *arg);
 static void *cont_decode_thread_cb(void *arg);
 static void *tx_thread_cb(void *arg);
 static bool save_debug_wav(const char *path, const float *samples, long count);
-static bool save_sstv_png(const uint8_t *rgb, int width, int height, char *saved_name, size_t saved_name_size);
+static bool save_sstv_png(const uint8_t *rgb, int width, int height, const char *name);
+static void save_rx_picture(void);
 static bool save_tx_png(const char *path, const uint8_t *rgb, unsigned int width, unsigned int height);
 static bool tx_start_final_rf(void);
 static bool tx_start_final_rf_mode(sstv_mode_t mode);
@@ -177,6 +180,7 @@ static volatile bool saved_overlay_pending = false;
 static char saved_overlay_name[96];
 static lv_color_t sstv_buffer[((DIALOG_H_MAX - 20) * 4 / 3) * (DIALOG_H_MAX - 20)];
 static uint8_t test_rgb[SSTV_MAX_W * SSTV_MAX_H * 3];
+static uint8_t dn_tmp[SSTV_MAX_W * SSTV_MAX_H * 3];   /* sstv_denoise() scratch */
 static sstv_info_t test_info;
 static lv_timer_t *ui_timer = NULL;
 static pthread_t test_thread;
@@ -544,22 +548,14 @@ static void reset_ui_to_standby(void)
     set_receiver_ui_stopped();
 }
 
-static bool save_sstv_png(const uint8_t *rgb, int width, int height, char *saved_name, size_t saved_name_size)
+static bool save_sstv_png(const uint8_t *rgb, int width, int height, const char *name)
 {
     if (!rgb || width <= 0 || height <= 0) return false;
     if (mkdir(SSTV_SAVE_DIR, 0775) != 0 && errno != EEXIST) {
         fprintf(stderr, "SSTV SAVE: mkdir failed: %s\n", strerror(errno)); return false;
     }
-    time_t now=time(NULL); struct tm tm_now;
-    if (!localtime_r(&now,&tm_now)) return false;
     char path[160];
-    snprintf(path,sizeof(path),SSTV_SAVE_DIR "/sstv-%04d%02d%02d-%02d%02d%02d.png",
-             tm_now.tm_year+1900,tm_now.tm_mon+1,tm_now.tm_mday,
-             tm_now.tm_hour,tm_now.tm_min,tm_now.tm_sec);
-    if (saved_name && saved_name_size > 0) {
-        const char *base = strrchr(path, '/');
-        snprintf(saved_name, saved_name_size, "%s", base ? base + 1 : path);
-    }
+    snprintf(path, sizeof(path), SSTV_SAVE_DIR "/%s", name);
     FILE *fp=fopen(path,"wb"); if(!fp){fprintf(stderr,"SSTV SAVE: fopen %s failed: %s\n",path,strerror(errno));return false;}
     png_structp png=png_create_write_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
     png_infop info=png ? png_create_info_struct(png) : NULL;
@@ -613,6 +609,35 @@ static bool save_tx_png(const char *path, const uint8_t *rgb,
     fprintf(stderr,"SSTV TX: final WYSIWYG framebuffer written to %s (%ux%u)\n",
             path,width,height);
     return true;
+}
+
+/* Received picture in test_rgb: save it as sstv-STAMP.png; with Denoise on,
+ * clean test_rgb (shown on screen afterwards) and save it as sstv-STAMP_dn.png.
+ * Decoder threads only, before test_ready. */
+static void save_rx_picture(void)
+{
+    char stem[40], name[48];
+    time_t now = time(NULL);
+    struct tm tm_now;
+
+    if (!localtime_r(&now, &tm_now)) return;
+    strftime(stem, sizeof(stem), "sstv-%Y%m%d-%H%M%S", &tm_now);
+    snprintf(name, sizeof(name), "%s.png", stem);
+    bool saved = save_sstv_png(test_rgb, test_info.width, test_info.height, name);
+    if (params.sstv_denoise.x) {
+        struct timespec t0;
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+        sstv_denoise(test_rgb, dn_tmp, test_info.width, test_info.height);
+        fprintf(stderr, "SSTV DENOISE: %dx%d in %llu ms\n", test_info.width, test_info.height,
+                (unsigned long long)monotonic_ms_since(&t0));
+        snprintf(name, sizeof(name), "%s_dn.png", stem);
+        if (save_sstv_png(test_rgb, test_info.width, test_info.height, name))
+            saved = true;
+    }
+    if (saved) {
+        snprintf(saved_overlay_name, sizeof(saved_overlay_name), "%s", name);
+        saved_overlay_pending = true;
+    }
 }
 
 static void render_scaled_image(void)
@@ -741,6 +766,7 @@ static button_data_t btn_delete_picture = { .type = BTN_TEXT, .label = "Delete\n
 static button_data_t btn_tx = { .type = BTN_TEXT, .label = "TX", .press = tx_ui_cb };
 static button_data_t btn_restart = { .type = BTN_TEXT, .label = "Auto RX\nRestart ON", .press = restart_cb };
 static button_data_t btn_test = { .type = BTN_TEXT, .label = "Test RX", .press = test_cb };
+static button_data_t btn_denoise = { .type = BTN_TEXT, .label = "Denoise\nON", .press = denoise_cb };
 static button_data_t btn_close = { .type = BTN_TEXT, .label = "Close", .press = close_cb };
 static button_data_t btn_freq = { .type = BTN_TEXT, .label = "Freq.", .press = freq_cb };
 
@@ -751,7 +777,7 @@ static buttons_page_t btn_page_2 = {
     .items = { &btn_sstv_page_2, &btn_freq, &btn_browser, &btn_delete_picture, &btn_restart }
 };
 static buttons_page_t btn_page_3 = {
-    .items = { &btn_sstv_page_3, &btn_test, &btn_dig_pwr, NULL, &btn_close }
+    .items = { &btn_sstv_page_3, &btn_test, &btn_dig_pwr, &btn_denoise, &btn_close }
 };
 
 static dialog_t dialog = {
@@ -830,6 +856,7 @@ static void construct_cb(lv_obj_t *parent)
     btn_restart.label = live_restart_enabled ? "Auto RX\nRestart ON" : "Auto RX\nRestart OFF";
     buttons_disabled(&btn_restart, false);
     buttons_disabled(&btn_test, false);
+    btn_denoise.label = params.sstv_denoise.x ? "Denoise\nON" : "Denoise\nOFF";
 
     shown_rows = 0;
     test_ready = false;
@@ -955,6 +982,8 @@ static void *test_thread_cb(void *arg)
     const char *path = arg ? (const char *)arg : SSTV_TEST_WAV;
     fprintf(stderr, "SSTV %s: starting automatic VIS detection\n", arg ? "LIVE" : "TEST");
     int rows = sstv_decode_wav(path, test_rgb, &test_info);
+    if (rows > 0 && params.sstv_denoise.x)
+        sstv_denoise(test_rgb, dn_tmp, test_info.width, test_info.height);
     test_rows = rows > 0 ? rows : 0;
     test_ready = true;
     test_running = false;
@@ -1026,12 +1055,7 @@ static void *live_decode_thread_cb(void *arg)
     bool aborted = live_abort_requested;
     test_rows = (!aborted && rows > 0) ? rows : 0;
     if (!aborted && rows > 0) {
-        char saved_name[96] = {0};
-        if (save_sstv_png(test_rgb, test_info.width, test_info.height,
-                          saved_name, sizeof(saved_name))) {
-            snprintf(saved_overlay_name, sizeof(saved_overlay_name), "%s", saved_name);
-            saved_overlay_pending = true;
-        }
+        save_rx_picture();
     }
     test_ready = !aborted;
     live_abort_requested = false;
@@ -1059,12 +1083,7 @@ static void *cont_decode_thread_cb(void *arg)
                sstv_decode_cont_samples(cont_samples, cont_written, cont_decode_mode, test_rgb, &test_info);
     test_rows = rows > 0 ? rows : 0;
     if (rows > 0) {
-        char saved_name[96] = {0};
-        if (save_sstv_png(test_rgb, test_info.width, test_info.height,
-                          saved_name, sizeof(saved_name))) {
-            snprintf(saved_overlay_name, sizeof(saved_overlay_name), "%s", saved_name);
-            saved_overlay_pending = true;
-        }
+        save_rx_picture();
     }
     test_ready = true;
     free(cont_samples); cont_samples = NULL;
@@ -1460,6 +1479,15 @@ static void restart_cb(button_data_t *data)
     btn_restart.label = live_restart_enabled ? "Auto RX\nRestart ON" : "Auto RX\nRestart OFF";
     if (btn_restart.disp_btn) buttons_refresh(&btn_restart);
     fprintf(stderr,"SSTV LIVE: VIS restart %s\n",live_restart_enabled ? "ON" : "OFF");
+}
+
+/* Takes effect from the next picture; the original is always saved */
+static void denoise_cb(button_data_t *data)
+{
+    (void)data;
+    params_bool_set(&params.sstv_denoise, !params.sstv_denoise.x);
+    btn_denoise.label = params.sstv_denoise.x ? "Denoise\nON" : "Denoise\nOFF";
+    if (btn_denoise.disp_btn) buttons_refresh(&btn_denoise);
 }
 
 static void close_cb(button_data_t *data)

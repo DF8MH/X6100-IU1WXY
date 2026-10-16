@@ -3,7 +3,7 @@
 # user has read them on the screen and pressed Send.
 #   x6100-diag collect VERSION BASEBAND   writes /tmp/x6100-diag.txt
 #   x6100-diag send                       posts it to x6100-link.it, prints the code
-# Bluetooth and system state only: no WiFi networks, no positions, no logbook.
+# Bluetooth, base I2C and system state only: no WiFi networks, no positions, no logbook.
 
 OUT=/tmp/x6100-diag.txt
 MAX=60000
@@ -31,6 +31,11 @@ collect() {
 		echo
 		echo "== Kernel messages (Bluetooth, HID, USB)"
 		dmesg 2>/dev/null | grep -i -E "bluetooth|hci|rtl|hid|input|usb" | tail -n 80
+		echo
+		echo "== Base I2C (write errors, resends, stuck TX)"
+		cat /mnt/base_i2c.log.1 /mnt/base_i2c.log 2>/dev/null | tail -n 40
+		dmesg 2>/dev/null | grep -i -E "i2c|pcf8563|rtc" | tail -n 30
+		grep -E "Can't (write to|read from|open) i2c|base i2c|Flow reset" /tmp/x6100_log.txt 2>/dev/null | tail -n 30
 	} | tr -cd '\11\12\40-\176' | head -c $MAX > $OUT   # plain ASCII: the site shows it as it is
 	wc -l < $OUT
 }

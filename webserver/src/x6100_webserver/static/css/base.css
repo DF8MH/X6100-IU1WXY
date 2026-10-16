@@ -22,6 +22,9 @@ nav .sub{display:none;position:absolute;right:0;top:100%;z-index:50;min-width:17
 nav .grp:hover .sub,nav .grp:focus-within .sub{display:flex;flex-direction:column;gap:2px}
 nav .sub a{white-space:nowrap}
 nav .sub::before{content:"";position:absolute;left:0;right:0;top:-6px;height:6px}
+/* Phones: the menu bar wraps and a menu hung on its own button went off the left edge (System on the 2nd row):
+   there it opens under the whole bar, edge to edge */
+@media (max-width:640px){nav{position:relative}nav .grp{position:static}nav .sub{left:0;right:0;min-width:0}}
 main{max-width:980px;margin:0 auto;padding:28px 20px}
 h2{margin:0 0 4px;font-size:22px;display:flex;align-items:center;gap:10px}
 h2 .i{width:22px;height:22px;color:var(--accent)}

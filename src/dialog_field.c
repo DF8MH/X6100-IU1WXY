@@ -3,11 +3,11 @@
  *
  *  Xiegu X6100 LVGL GUI - Field Ops
  *
- *  Screens: home (SOTA, POTA, Bands, Log tiles), SOTA or POTA (the reference where you
+ *  Screens: home (SOTA, POTA, WWBOTA, HOTA, Bands, Log tiles), a program (the reference where you
  *  are and the nearest ones; during an activation the activation screen: frequency,
  *  S-meter, CQ, QSO count and time), Bands (activity and who hears you, from RBN) and
  *  the activation log. The dialog covers the whole screen above the buttons; the main
- *  knob still tunes. The network jobs (reference list update, POTA spot, QRZ upload) run
+ *  knob still tunes. The network jobs (reference list update, POTA/WWBOTA/HOTA spot, QRZ upload) run
  *  x6100-field in a thread; its one-line answer comes back through the scheduler.
  *  The companion app follows the screen through the remote state (dialog_field_remote_state)
  *  and logs, spots and starts the activation with dialog_field_remote().
@@ -68,6 +68,7 @@
 #endif
 #define REFS_PATH   FIELD_DIR "/refs.tsv"
 #define STATE_PATH  FIELD_DIR "/state"
+#define HOTA_KEY    FIELD_DIR "/hota.conf"   /* written by the web page (Field Ops) */
 #define LOGS_DIR    FIELD_DIR "/logs"
 #define HELPER      "x6100-field"
 
@@ -76,7 +77,7 @@
 #define STATUS_H    34
 #define MAX_NEAR    30
 #define MAX_QSO     200
-#define HOME_TILES  3       /* SOTA, POTA, Bands; 4 shows LOG again (hidden for now) */
+#define HOME_TILES  5       /* SOTA, POTA, WWBOTA, HOTA, Bands; 6 shows LOG again (hidden for now) */
 #define GPS_MAX_AGE 600     /* s */
 #define PHONE_MAX_AGE 1800
 
@@ -91,7 +92,7 @@ static void show(screen_t s);
 static struct {
     screen_t    screen;
     int         home_sel;
-    char        prog;       /* 'S' SOTA, 'P' POTA */
+    char        prog;       /* 'S' SOTA, 'P' POTA, 'B' WWBOTA, 'H' HOTA */
     bool        have_ref;
     field_ref_t ref;
     bool        active;
@@ -132,14 +133,15 @@ static int         qsos_n;
 static atomic_bool busy;            /* an x6100-field job runs */
 static bool        updating;        /* the reference list downloads */
 static bool        end_armed;
-static bool        spotted;      /* this activation is on pota.app: End posts a QRT spot */
+static bool        spotted;      /* this activation is on pota.app / wwbota.org / cqhota.app: End posts a QRT spot */
+static char        wwbota_id[48]; /* wwbota.org's id of this activation's spot: QSY and QRT update it */
 static time_t      end_armed_at;
 static bool        spot_armed;   /* Spot asks before posting: a second press within 4 s sends */
 static time_t      spot_armed_at;
-/* POTA auto spot: at the start of the activation, and again after a QSY (frequency 1 kHz away
+/* POTA, WWBOTA and HOTA auto spot: at the start of the activation, and again after a QSY (frequency 1 kHz away
  * or another mode) once the new one has stayed for QSY_SETTLE_S */
 #define QSY_SETTLE_S   60       /* a minute on the new frequency: working there, not looking for a gap */
-#define QSY_MIN_GAP_S  300      /* at most one auto spot in 5 minutes: pota.app is not flooded */
+#define QSY_MIN_GAP_S  300      /* at most one auto spot in 5 minutes: the spot sites are not flooded */
 static lv_timer_t *qsy_timer;
 static int32_t     spot_hz;      /* where the last spot said we are */
 static char        spot_mode[8];
@@ -151,17 +153,31 @@ static char            remote_json[1536] = "{}";
 
 /* Colours */
 
-static lv_color_t accent(int k) {
-    switch (k) {
-        case 0: return TC(warn);        /* SOTA */
-        case 1: return TC(ok);          /* POTA */
-        case 2: return TC(info);        /* Bands */
-        default: return TC(text_head);  /* Log */
+/* The home tiles: the programs, then Bands and Log */
+static const struct {
+    char        prog;
+    const char *name, *icon, *sub;
+} tiles[] = {
+    {'S', "SOTA", "sota", "Summits\nOn The Air"},   {'P', "POTA", "pota", "Parks\nOn The Air"},
+    {'B', "WWBOTA", "wwbota", "Bunkers\nOn The Air"}, {'H', "HOTA", "hota", "History\nOn The Air"},
+    {0, "BANDS", "bands", "Activity\nRBN, beacon"}, {0, "LOG", "log", "Activation\nlog"},
+};
+
+static lv_color_t prog_color(char p) {
+    switch (p) {
+        case 'S': return TC(warn);
+        case 'P': return TC(ok);
+        case 'B': return TC(digi);
+        default: return TC(alert);      /* HOTA */
     }
 }
 
+static lv_color_t accent(int k) {
+    return tiles[k].prog ? prog_color(tiles[k].prog) : k == 4 ? TC(info) : TC(text_head);
+}
+
 static lv_color_t prog_accent(void) {
-    return accent(st.prog == 'S' ? 0 : 1);
+    return prog_color(st.prog);
 }
 
 /* State file: key=value lines */
@@ -207,7 +223,7 @@ static void state_load(void) {
         else if (!strcmp(line, "home"))
             st.home_sel = atoi(v);
         else if (!strcmp(line, "prog"))
-            st.prog = *v == 'P' ? 'P' : 'S';
+            st.prog = *v && strchr("PBH", *v) ? *v : 'S';
         else if (!strcmp(line, "active"))
             st.active = atoi(v);
         else if (!strcmp(line, "start"))
@@ -218,7 +234,7 @@ static void state_load(void) {
             st.have_ref = field_ref_parse(v, &st.ref);
     }
     fclose(f);
-    if (st.screen >= SCR_LOG && HOME_TILES < 4)
+    if (st.screen >= SCR_LOG && HOME_TILES < 6)
         st.screen = SCR_HOME;
     if (st.home_sel >= HOME_TILES)
         st.home_sel = 0;
@@ -314,8 +330,49 @@ static void deg_text(char *buf, size_t size, double lat, double lon) {
     snprintf(buf, size, "%.4f %c   %.4f %c", fabs(lat), lat >= 0 ? 'N' : 'S', fabs(lon), lon >= 0 ? 'E' : 'W');
 }
 
+static const char *prog_name_of(char p) {
+    return p == 'S' ? "SOTA" : p == 'P' ? "POTA" : p == 'B' ? "WWBOTA" : "HOTA";
+}
+
 static const char *prog_name(void) {
-    return st.prog == 'S' ? "SOTA" : "POTA";
+    return prog_name_of(st.prog);
+}
+
+/* "sota", "pota", "wwbota", "hota": the icons */
+static const char *prog_icon(void) {
+    static char s[8];
+    const char *n = prog_name();
+    size_t      i = 0;
+
+    for (; n[i] && i < sizeof(s) - 1; i++)
+        s[i] = tolower((unsigned char)n[i]);
+    s[i] = 0;
+    return s;
+}
+
+/* What the activation needs: QSOs (SOTA 4, POTA 10, WWBOTA 25 or 10 in S5 and Z3) or, HOTA, 5 different calls */
+static int prog_needs(void) {
+    switch (st.ref.type) {
+        case 'S': return 4;
+        case 'P': return 10;
+        case 'B': return !strncmp(st.ref.ref, "B/S5-", 5) || !strncmp(st.ref.ref, "B/Z3-", 5) ? 10 : 25;
+        default: return 5;
+    }
+}
+
+/* The activation's count: QSOs, HOTA different calls */
+static int act_count(void) {
+    int n = 0;
+
+    if (st.ref.type != 'H')
+        return qsos_n;
+    for (int i = 0; i < qsos_n; i++) {
+        int k = 0;
+        while (k < i && strcasecmp(qsos[k].call, qsos[i].call))
+            k++;
+        n += k == i;
+    }
+    return n;
 }
 
 static void freq_text(char *buf, size_t size, int32_t hz) {
@@ -583,7 +640,7 @@ static void list_select(int k) {
         lv_obj_t *row = lv_obj_get_child(list, i);
         bool      on  = i == sel;
 
-        lv_obj_set_style_bg_color(row, st.screen == SCR_PROG && st.prog == 'P' ? TC(ok) : TC(warn), 0);
+        lv_obj_set_style_bg_color(row, st.screen == SCR_PROG ? prog_accent() : TC(warn), 0);
         lv_obj_set_style_bg_opa(row, on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
         lv_obj_set_style_text_color(row, on ? lv_color_black() : TC(text), 0);
     }
@@ -741,19 +798,16 @@ static void head_set(const char *icon_name, const char *text) {
 
 /* Home */
 
-static const char *home_names[] = {"SOTA", "POTA", "BANDS", "LOG"};
-static const char *home_icons[] = {"sota", "pota", "bands", "log"};
-
 static void home_open(int k) {
     st.home_sel = k;
-    if (k <= 1) {
-        st.prog = k == 0 ? 'S' : 'P';
+    if (tiles[k].prog) {
+        st.prog = tiles[k].prog;
         /* The activation keeps its program */
         if (st.active && st.have_ref)
             st.prog = st.ref.type;
         show(SCR_PROG);
     } else {
-        show(k == 2 ? SCR_BANDS : SCR_LOG);
+        show(k == 4 ? SCR_BANDS : SCR_LOG);
     }
 }
 
@@ -782,9 +836,8 @@ static void tile_click_cb(lv_event_t *e) {
 }
 
 static void build_home(void) {
-    static const char *subs[] = {"Summits\nOn The Air", "Parks\nOn The Air", "Activity\nRBN, beacon", "Activation\nlog"};
-    lv_coord_t          tw = HOME_TILES == 4 ? 182 : 240, gap = 12;
-    lv_coord_t          x0 = (W - HOME_TILES * tw - (HOME_TILES - 1) * gap) / 2, th = body_h - STATUS_H - 30;
+    lv_coord_t gap = 8, tw = (W - 16 - (HOME_TILES - 1) * gap) / HOME_TILES;
+    lv_coord_t x0 = (W - HOME_TILES * tw - (HOME_TILES - 1) * gap) / 2, th = body_h - STATUS_H - 30;
 
     head_set(NULL, "FIELD OPERATIONS");
     list   = NULL;
@@ -798,12 +851,12 @@ static void build_home(void) {
         lv_obj_add_flag(t, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(t, tile_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)k);
 
-        icon(t, home_icons[k], 96, (tw - 96) / 2 - 2, 24);
-        lv_obj_t *n = label(t, VF(38), accent(k), 0, 136, tw - 4);
+        icon(t, tiles[k].icon, 96, (tw - 96) / 2 - 2, 24);
+        lv_obj_t *n = label(t, VF(32), accent(k), 0, 140, tw - 4);
         lv_obj_t *s = label(t, VF(20), lv_color_mix(accent(k), TC(text), 160), 0, 186, tw - 4);
 
-        lv_label_set_text(n, home_names[k]);
-        lv_label_set_text(s, subs[k]);
+        lv_label_set_text(n, tiles[k].name);
+        lv_label_set_text(s, tiles[k].sub);
         lv_obj_set_style_text_align(n, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_align(s, LV_TEXT_ALIGN_CENTER, 0);
     }
@@ -811,7 +864,7 @@ static void build_home(void) {
     buttons_load_page(&page_home);
 }
 
-/* SOTA / POTA: the reference */
+/* A program: the reference */
 
 static void prog_info_update(void) {
     char        buf[200], deg[48], grid[16] = "";
@@ -827,9 +880,10 @@ static void prog_info_update(void) {
         lv_label_set_text(info_name, st.ref.name);
     } else {
         lv_label_set_text(info_ref, "------");
-        lv_label_set_text(info_name, near_n == -1 ? "No reference list"
-                                     : !have_pos  ? "No position"
-                                                  : "Looking...");
+        lv_label_set_text(info_name, near_n == -1                         ? "No reference list"
+                                     : !have_pos                          ? "No position"
+                                     : near_n == 0 && near_prog == st.prog ? "None in the list: Update list"
+                                                                          : "Looking...");
     }
     if (have_pos) {
         qth_pos_to_str(lat, lon, grid);
@@ -854,9 +908,9 @@ static void build_ref(void) {
     char       t[32];
 
     snprintf(t, sizeof(t), "%s MODE", prog_name());
-    head_set(st.prog == 'S' ? "sota" : "pota", t);
+    head_set(prog_icon(), t);
     lv_obj_t *p = panel(body, 8, 6, 384, h);
-    icon(p, st.prog == 'S' ? "sota" : "pota", 64, 12, 12);
+    icon(p, prog_icon(), 64, 12, 12);
     info_ref   = label(p, VF(36), prog_accent(), 88, 10, 284);
     info_name  = label(p, VF(24), TC(text), 88, 54, 284);
     info_lines = label(p, VF(22), TC(text), 16, 100, 352);
@@ -869,7 +923,7 @@ static void build_ref(void) {
 
     static const lv_coord_t widths[] = {130, 88, 150};
     list_create(body, 400, 38, W - 408, h - 32, widths, 3);
-    list_head(st.prog == 'S' ? "SUMMIT\tKM\tNAME" : "PARK\tKM\tNAME", 404, 8);
+    list_head(st.prog == 'S' ? "SUMMIT\tKM\tNAME" : st.prog == 'P' ? "PARK\tKM\tNAME" : st.prog == 'B' ? "BUNKER\tKM\tNAME" : "SITE\tKM\tNAME", 404, 8);
     if (near_n > 0 && near_prog == st.prog) {
         for (int k = 0; k < near_n; k++) {
             snprintf(row, sizeof(row), "%s\t%.*f\t%s", near[k].ref, near[k].km < 10 ? 1 : 0, near[k].km, near[k].name);
@@ -880,14 +934,15 @@ static void build_ref(void) {
         list_select(sel);
     }
     prog_info_update();
-    lv_label_set_text(status, updating      ? "Downloading parks and summits: about 3 minutes..."
-                              : near_n == -1 ? "No reference list yet: Update list (page 2), with WiFi"
-                                             : "MFK: choose the reference, press to use it.  Start: begin the activation");
+    lv_label_set_text(status, updating ? "Downloading the reference lists: about 3 minutes..."
+                              : near_n == -1 || (near_n == 0 && near_prog == st.prog)
+                                  ? "No reference list yet: Update list (page 2), with WiFi"
+                                  : "MFK: choose the reference, press to use it.  Start: begin the activation");
     buttons_load_page(&page_ref1);
     near_lookup(false);
 }
 
-/* SOTA / POTA: the activation */
+/* A program: the activation */
 
 static void act_update(void) {
     char buf[64];
@@ -913,7 +968,7 @@ static void act_update(void) {
     lv_label_set_text(act_sval, buf);
 
     int s = (int)(time(NULL) - st.start);
-    lv_label_set_text_fmt(act_qsos, "%d", qsos_n);
+    lv_label_set_text_fmt(act_qsos, "%d", act_count());
     lv_label_set_text_fmt(act_time, "%d:%02d", s / 3600, s / 60 % 60);
     lv_label_set_text(act_last, qsos_n ? qsos[qsos_n - 1].call : "-");
 
@@ -934,7 +989,7 @@ static void build_act(void) {
     char       t[48];
 
     snprintf(t, sizeof(t), "%s - ACTIVATION (%s)", prog_name(), adif_mode());
-    head_set(st.prog == 'S' ? "sota" : "pota", t);
+    head_set(prog_icon(), t);
 
     lv_obj_t *p = panel(body, 8, 6, 584, h);
     act_band    = label(p, VF(28), lv_color_black(), 14, 8, 0);
@@ -969,10 +1024,12 @@ static void build_act(void) {
     act_recent = label(box, VF(22), TC(text_dim), 14, h - 120 - 3 * 24 - 12, 530);
 
     lv_obj_t *r = panel(body, 600, 6, W - 608, h);
-    static const char *names[] = {"QSOs", "TIME", "LAST"};
+    char               need[24];
+    const char        *names[] = {need, "TIME", "LAST"};
     lv_obj_t         **vals[]  = {&act_qsos, &act_time, &act_last};
     const lv_font_t   *fonts[] = {VF(60), VF(44), VF(32)};
     lv_coord_t         ys[]    = {8, 124, 222};
+    snprintf(need, sizeof(need), "%s / %d", st.ref.type == 'H' ? "CALLS" : "QSOs", prog_needs());
     for (int k = 0; k < 3; k++) {
         lv_obj_t *n = label(r, VF(22), TC(text_dim), 0, ys[k], W - 610);
         lv_label_set_text(n, names[k]);
@@ -1047,7 +1104,9 @@ static void build_bands(void) {
     static const lv_coord_t widths[] = {72, 150, 100, 80, 90, 160, 90};
 
     head_set("bands", "BAND OVERVIEW");
-    list_create(body, 8, 36, W - 16, body_h - STATUS_H - 40, widths, 7);
+    list_create(body, 8, 36, W - 16, body_h - STATUS_H - 64, widths, 7);
+    lv_label_set_text(label(body, VF(18), TC(text_dim), 14, body_h - STATUS_H - 24, W - 28),
+                      "Skimmer data: Reverse Beacon Network (reversebeacon.net)");
     list_head("BAND\tACTIVITY\t\tSPOTS\tRBN\tHEARD YOU\t", 13, 6);
     lv_obj_set_style_text_font(list, VF(22), 0);
     sel = field_band_of(cparam_i_get(cfg_fg_freq));
@@ -1062,7 +1121,7 @@ static void build_log(void) {
     char                    row[120], t[48];
     struct tm               tm;
 
-    snprintf(t, sizeof(t), "%s LOGBOOK  %s", st.have_ref ? (st.ref.type == 'S' ? "SOTA" : "POTA") : "",
+    snprintf(t, sizeof(t), "%s LOGBOOK  %s", st.have_ref ? prog_name_of(st.ref.type) : "",
              st.have_ref ? st.ref.ref : "");
     head_set("log", t);
     list_create(body, 8, 36, W - 16, body_h - STATUS_H - 40, widths, 6);
@@ -1219,11 +1278,30 @@ static void spot_done(const char *line);
 
 static void spot_to(bool cluster);
 
+static bool hota_key(void) {
+    return access(HOTA_KEY, R_OK) == 0;
+}
+
+/* The spot on the program's site (POTA, WWBOTA, HOTA); qrt: the activation ended */
+static bool spot_job(bool qrt) {
+    double      khz = cparam_i_get(cfg_fg_freq) / 1000.0;
+    const char *m   = adif_mode();
+
+    if (!ref_ok(st.ref.ref))   /* it goes on a command line */
+        return false;
+    if (st.ref.type == 'B')
+        return job_start(spot_done, HELPER " wwbota-spot --call %s --freq-khz %.1f --ref %s --mode %s --id '%s'%s",
+                         my_call(), khz, st.ref.ref, m, wwbota_id, qrt ? " --qrt" : "");
+    return job_start(spot_done, HELPER " %s --call %s --freq-khz %.1f --ref %s --mode %s%s",
+                     st.ref.type == 'H' ? "hota-spot" : "pota-spot", my_call(), khz, st.ref.ref, m,
+                     qrt ? " --comments QRT" : "");
+}
+
 static void qsy_cb(lv_timer_t *t) {
     time_t now = time(NULL);
     bool   moved;
 
-    if (!st.active || st.ref.type != 'P' || !spot_at) {
+    if (!st.active || st.ref.type == 'S' || !spot_at) {
         return;
     }
     moved = abs(cparam_i_get(cfg_fg_freq) - spot_hz) >= 1000 || strcmp(adif_mode(), spot_mode);
@@ -1253,6 +1331,7 @@ static bool activation_start(void) {
     st.active = true;
     st.start  = time(NULL);
     spotted   = false;
+    wwbota_id[0] = 0;
     gmtime_r(&st.start, &tm);
     snprintf(name, sizeof(name), "%s", st.ref.ref);
     for (p = name; *p; p++)
@@ -1268,7 +1347,7 @@ static bool activation_start(void) {
     msg_update_text_fmt("Activation started: %s", st.ref.ref);
     refresh();
     spot_at = 0;
-    if (st.ref.type == 'P') {
+    if (st.ref.type != 'S') {
         spot_to(true);               /* auto spot; QSYs spot again (qsy_cb) */
         if (!qsy_timer) qsy_timer = lv_timer_create(qsy_cb, 2000, NULL);
     }
@@ -1288,9 +1367,7 @@ static void activation_end(void) {
     }
     msg_update_text_fmt("Activation complete: %s, %d QSO%s, %d min", st.ref.ref, qsos_n, qsos_n == 1 ? "" : "s", s / 60);
     /* ponytail: spotted is not saved, a restart mid-activation sends no QRT */
-    if (spotted && st.ref.type != 'S' &&
-        job_start(spot_done, HELPER " pota-spot --call %s --freq-khz %.1f --ref %s --mode %s --comments QRT", my_call(),
-                  cparam_i_get(cfg_fg_freq) / 1000.0, st.ref.ref, adif_mode()))
+    if (spotted && st.ref.type != 'S' && spot_job(true))
         spotted = false;
     if (dialog.run)
         show(SCR_PROG);
@@ -1312,9 +1389,15 @@ static void activate_cb(button_data_t *b) {
 }
 
 static void spot_done(const char *line) {
-    if (st.active && !strcmp(line, "ok"))
-        spotted = true;
-    msg_update_text_fmt("POTA spot: %s", line);
+    if (!strncmp(line, "ok", 2) && (!line[2] || line[2] == ' ')) {
+        spotted = st.active;
+        /* wwbota.org: "ok <id>", the spot the next QSY or the QRT updates */
+        if (st.ref.type == 'B')
+            snprintf(wwbota_id, sizeof(wwbota_id), "%.*s", st.active && line[2] ? (int)strspn(line + 3, "0123456789abcdefABCDEF-") : 0,
+                     line + 3);   /* it goes on a command line */
+        line = "ok";
+    }
+    msg_update_text_fmt("%s spot: %s", prog_name_of(st.ref.type), line);
 }
 
 static void spot_to(bool cluster) {
@@ -1338,17 +1421,23 @@ static void spot_to(bool cluster) {
             msg_update_text_fmt("DX cluster not running: no SOTA spot");
         return;
     }
-    char comment[48];
+    char        comment[48];
+    const char *p = prog_name_of(st.ref.type);
     spot_hz = cparam_i_get(cfg_fg_freq);
     snprintf(spot_mode, sizeof(spot_mode), "%s", adif_mode());
     spot_at = time(NULL);
     qsy_at  = 0;
-    snprintf(comment, sizeof(comment), "POTA %s %s", st.ref.ref, adif_mode());
+    snprintf(comment, sizeof(comment), "%s %s %s", p, st.ref.ref, adif_mode());
     if (cluster)
         cluster_client_send_spot(cparam_i_get(cfg_fg_freq) / 1000.0, my_call(), comment);   /* the DX clusters too */
-    if (job_start(spot_done, HELPER " pota-spot --call %s --freq-khz %.1f --ref %s --mode %s", my_call(),
-                  cparam_i_get(cfg_fg_freq) / 1000.0, st.ref.ref, adif_mode()))
-        msg_update_text_fmt("POTA spot: %s %.1f %s...", st.ref.ref, cparam_i_get(cfg_fg_freq) / 1000.0, adif_mode());
+    if (st.ref.type == 'H' && !hota_key()) {
+        /* cqhota.app takes spots with the activator's own key only */
+        msg_update_text_fmt(cluster ? "HOTA spot on the DX clusters only: no HOTA key (web page, Field Ops)"
+                                    : "No HOTA spot: no HOTA key (web page, Field Ops)");
+        return;
+    }
+    if (spot_job(false))
+        msg_update_text_fmt("%s spot: %s %.1f %s...", p, st.ref.ref, cparam_i_get(cfg_fg_freq) / 1000.0, adif_mode());
 }
 
 static void spot(void) {
@@ -1384,7 +1473,7 @@ static void cq_cb(button_data_t *b) {
     char text[80];
 
     if (!is_cw()) {
-        /* The voice CQ recorded with Rec CQ ("CQ SOTA" / "CQ POTA" in /mnt/msg, also in MSG > Voice) */
+        /* The voice CQ recorded with Rec CQ ("CQ SOTA", "CQ POTA"... in /mnt/msg, also in MSG > Voice) */
         snprintf(text, sizeof(text), "CQ %s", prog_name());
         if (msg_voice_send_toggle(text))
             msg_update_text_fmt("CQ: sending \"%s\" (CQ again: stop, hold CQ: level)", text);
@@ -1578,9 +1667,9 @@ static void ref_cb(button_data_t *b) {
 static void update_done(const char *line) {
     updating = false;
     if (!strncmp(line, "ok", 2)) {
-        int p = 0, s = 0;
-        sscanf(line, "ok %d %d", &p, &s);
-        msg_update_text_fmt("Reference list: %d parks, %d summits", p, s);
+        int p = 0, s = 0, b = 0, h = 0;
+        sscanf(line, "ok %d %d %d %d", &p, &s, &b, &h);
+        msg_update_text_fmt("Reference list: %d parks, %d summits, %d bunkers, %d HOTA", p, s, b, h);
         near_lookup(true);
     } else {
         msg_update_text_fmt("Reference list: %s", line);
@@ -1592,9 +1681,9 @@ static void update_done(const char *line) {
 static void list_update(void) {
     if (job_start(update_done, HELPER " update --call %s", my_call()[0] ? my_call() : "unknown")) {
         updating = true;
-        msg_update_text_fmt("Downloading parks and summits: about 3 minutes");
+        msg_update_text_fmt("Downloading the reference lists: about 3 minutes");
         if (dialog.run && st.screen == SCR_PROG && !st.active)
-            lv_label_set_text(status, "Downloading parks and summits: about 3 minutes...");
+            lv_label_set_text(status, "Downloading the reference lists: about 3 minutes...");
     }
 }
 
@@ -1961,12 +2050,13 @@ int dialog_field_remote_state(char *buf, size_t size) {
 
 void dialog_field_remote(const char *cmd, int32_t val, const char *text) {
     if (!strcmp(cmd, "field_screen")) {
-        if (!strcmp(text, "SOTA") || !strcmp(text, "POTA")) {
-            st.home_sel = text[0] == 'S' ? 0 : 1;
-            home_open(st.home_sel);
-        } else {
+        int k = 0;
+        while (k < 4 && strcmp(text, tiles[k].name))
+            k++;
+        if (k < 4)
+            home_open(k);
+        else
             show(!strcmp(text, "BANDS") ? SCR_BANDS : !strcmp(text, "LOG") ? SCR_LOG : SCR_HOME);
-        }
     } else if (!strcmp(cmd, "field_ref")) {
         if (set_ref(text))
             refresh();

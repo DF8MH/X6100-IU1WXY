@@ -71,16 +71,29 @@ No PC, no sound card cable: APP → **Modes** opens them, the radio decodes and
 transmits by itself.
 
 - **FT8 / FT4**: decode, CQ, reply, auto sequence, QSO log in ADIF.
+- **FT8 page 4**: **Freq** opens the list of FT8, FT4 or FT2 frequencies, one
+  per band, or takes any dial frequency (14.091 for a DXpedition);
+  **Hound** for Fox and Hound DXpeditions, WSJT-X rules, no SuperFox;
+  **Retries** 3 to 15. A **POTA** tag marks stations spotted on POTA and any
+  CQ POTA, and Auto answers a POTA activator first.
 - **JS8**: JS8Call compatible, all four speeds decoded at once, inbox,
   relays, heartbeats, ADIF log with POTA/SOTA, **APRS** (position, spots,
-  SMS, email).
+  SMS, email). Messages up to 500 characters (from randal007's x6100-js8).
+- **JTTY**: the keyboard mode of WSJT-X 3.2 (K1JT and the WSJT-X team), laid
+  out like RTTY and PSK, F1-F8 contest macros, spots to PSK Reporter.
 - **WSPR**: decode every cycle, random beacon (TX %), upload to WSPRnet.
 - **SSTV**: receive with automatic VIS, **transmit** CQ, replies and pictures
-  with text templates (Martin, Scottie, Robot).
+  with text templates (Martin, Scottie, Robot). **Denoise** cleans speckles
+  and noise streaks and keeps the edges; the original is always saved, the
+  clean copy next to it as `_dn.png`.
 - **WeFax** and **NavTex**: station lists, faxes saved as pictures, big or
   full-screen view. WeFax and RTTY also transmit from the phone.
 - **CW decoder**: the new upstream receiver, which copies down to about 0 dB
-  SNR and shows the WPM, here tuned not to print noise.
+  SNR and shows the WPM, here tuned not to print noise. **Parse** (CW 2:2)
+  splits run-together text: `CQCQDEIU1WXYK` reads `CQ CQ DE IU1WXY K`, with
+  calls, RST and abbreviations coloured.
+- **CW messages**: `{HIS}` sends the other station's call, the last one the
+  decoder confirmed.
 - **CW Keyboard**: type on a USB or Bluetooth keyboard and the radio keys it,
   with a send queue.
 
@@ -88,7 +101,7 @@ transmits by itself.
 
 - Spots drawn **on the waterfall**, in a **column** beside it, and in a full
   **Cluster app** that follows the VFO; tap or press to tune.
-- Filters by mode, band and POTA/SOTA; **alerts** on callsigns and prefixes
+- Filters by mode, band and activity (POTA, SOTA, WWBOTA, HOTA); **alerts** on callsigns and prefixes
   with a popup.
 - **Newest first** and **all bands**: the column and the app can list the
   spots by time (the most recent on top, without the VFO marker row) and from
@@ -151,6 +164,12 @@ QSO count, the time since the start and the last call.
 screen you were on live on the SD card: leave with GEN by mistake, switch off,
 change the battery, and Field Ops comes back exactly where it was.
 
+**WWBOTA and HOTA.** Bunkers (WWBOTA) and History On The Air (HOTA) have
+their own tiles next to SOTA and POTA: reference lists, `MY_SIG` in the log,
+self-spots to wwbota.org and cqhota.app (the HOTA key goes on the web Field
+Ops page). Their spots show in the cluster, each with its toggle in
+Settings → Cluster.
+
 **On the phone.** When the radio enters Field Ops, the companion app switches
 by itself to its SOTA/POTA page: the reference and the nearby ones to choose
 with a tap, Start and End, and the QSO entry with the phone's keyboard (call,
@@ -199,6 +218,11 @@ app of its own (APP page 3 → **Bands**), in the same look as the other apps.
   stay in UTC.
 - Settings rewritten as cards, all reachable with the MFK.
 - Tuning from **100 kHz** up (NAVTEX on 490 kHz included).
+- **Walkie Talkie**: the radio held upright with a plain portrait screen, a
+  bandscope of the band around you and 32 channels of its own (WLK 4: Store,
+  hold for Clear). Settings → Walkie has the switch, "Main knob steps
+  channels" and the microphone. No digital modes in walkie: USB-D and LSB-D
+  become USB and LSB.
 
 ### Smooth screen, smooth knob
 
@@ -223,6 +247,14 @@ app of its own (APP page 3 → **Bands**), in the same look as the other apps.
 - **Bluetooth CAT** for up to 3 clients at once, together with USB CAT.
 - **Bluetooth headphones** (RX audio, volume, speaker mute) and **keyboards**;
   pairings survive a new image.
+- **Bluetooth tab** in Settings: adapter status, the 3-minute pairing window
+  (pairing is refused outside it), the device list with headphones, keyboards
+  (also the ones that send no name) and phones tagged, Forget with a
+  confirmation, headphone audio and CAT clients. One pair of headphones at a
+  time. Based on SP2KMO's and randal007's upstream work.
+- **Ethernet**: a USB Ethernet adapter with DHCP or a fixed IP, netmask,
+  gateway and DNS, in Settings → Wireless and on the web page System →
+  Ethernet. WiFi keeps working alongside.
 - **wfview**: the radio appears as an IC-705 on the network.
 - **Web server** on the radio, HTTP and HTTPS (see [Remote control](#remote-control)).
 
@@ -332,9 +364,13 @@ rendering and main knob handling (detents timed in their own thread) are
 imported here,
 **1KO125** by Hany El Imam / TheMurusTeam (WeFax, NavTex, SSTV decoders),
 **JS8** by randal007 on the JS8Call engine (Jordan Sherer KN4CRD), **wsprd**
-from WSJT-X (K1JT, K9AN). Libraries: LVGL, cJSON, FFTW, liquid-dsp, libpng,
+from WSJT-X (K1JT, K9AN), **JTTY** from WSJT-X 3.2 (K1JT and the WSJT-X team). Libraries: LVGL, cJSON, FFTW, liquid-dsp, libpng,
 bottle, PulseAudio, BlueZ. Fonts: Roboto, DejaVu, Arial, Sony Sketch.
 Hardware: Xiegu.
+
+Skimmer spots in Field Ops > Bands come from the **Reverse Beacon Network**
+([reversebeacon.net](https://www.reversebeacon.net)), thanks to its skimmer
+operators.
 
 ## Privacy and disclaimer
 
@@ -358,5 +394,6 @@ Everything else (settings, logs, pictures) stays on the SD card. Full notice, we
 ## License
 
 The GUI is LGPL-2.1-or-later ([LICENSE](LICENSE)); the vendored js8core and
-wsprd are GPLv3, so the firmware image is GPLv3. The web server has its own
+wsprd, and JTTY (ported from WSJT-X by K1JT and the WSJT-X team, `src/jtty*`),
+are GPLv3, so the firmware image is GPLv3. The web server has its own
 license ([webserver/LICENSE](webserver/LICENSE)).

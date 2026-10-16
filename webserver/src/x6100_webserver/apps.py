@@ -168,7 +168,7 @@ def delete_digital_mode(mode_id, dbcon):
 # and "port=..." lines are the server in use, "server=name|host|port" lines
 # the saved ones. The GUI reloads the server when the file's mtime changes.
 # Filters and alerts are more lines: filter_modes=CW,SSB,DIG,AMFM, filter_bands=40,20,
-# filter_activity=POTA,SOTA, max_age=MIN,
+# filter_activity=POTA,SOTA,WWBOTA,HOTA, max_age=MIN,
 # skip_spotters=A,B, alert=PATTERN|bands|mode, alert_popup=0|1, alert_beep=0|1.
 
 CLUSTER_DEFAULT_HOST = "dxfun.com"
@@ -191,7 +191,7 @@ CLUSTER_MAX_SERVERS = 16
 CLUSTER_MAX_ALERTS = 50
 CLUSTER_MODES = ["CW", "SSB", "DIG", "AMFM"]
 CLUSTER_BANDS = [160, 80, 60, 40, 30, 20, 17, 15, 12, 10, 6]
-CLUSTER_ACTIVITY = ["POTA", "SOTA"]
+CLUSTER_ACTIVITY = ["POTA", "SOTA", "WWBOTA", "HOTA"]   # the GUI's cluster_act_names
 # Written by the radio GUI: pattern|freq_hz|HH:MM of the last spot that matched
 CLUSTER_ALERTS_SEEN = "/tmp/cluster_alerts_seen"
 
@@ -250,10 +250,11 @@ def read_cluster_options():
             opts["popup"] = line[12:].strip() not in ("", "0")
         elif line.startswith("alert_beep="):
             opts["beep"] = line[11:].strip() not in ("", "0")
-        elif line.startswith("alert="):
-            parts = line[6:].split("|")
+        elif line.startswith("alert=") or line.startswith("alert_off="):   # alert_off: kept, not used (X6100 Link)
+            on = line.startswith("alert=")
+            parts = line[6 if on else 10:].split("|")
             if len(parts) == 3 and parts[0].strip() and len(opts["alerts"]) < CLUSTER_MAX_ALERTS:
-                opts["alerts"].append({"pattern": parts[0].strip(), "bands": parts[1], "mode": parts[2].strip().upper()})
+                opts["alerts"].append({"pattern": parts[0].strip(), "bands": parts[1], "mode": parts[2].strip().upper(), "enabled": on})
     return opts
 
 
@@ -270,7 +271,7 @@ def cluster_option_lines(opts):
     if opts["skip"]:
         lines.append("skip_spotters=" + opts["skip"])
     for a in opts["alerts"]:
-        lines.append(f"alert={a['pattern']}|{a['bands']}|{a['mode']}")
+        lines.append(f"{'alert' if a.get('enabled', True) else 'alert_off'}={a['pattern']}|{a['bands']}|{a['mode']}")
     lines.append(f"alert_popup={int(opts['popup'])}")
     lines.append(f"alert_beep={int(opts['beep'])}")
     return lines
@@ -313,7 +314,8 @@ def cluster_state():
     return {"host": host, "port": port,
             "servers": [{"name": n, "host": h, "port": p} for n, h, p in servers],
             "filters": {"modes": opts["modes"], "bands": opts["bands"], "activity": opts["activity"], "max_age": opts["max_age"], "skip": opts["skip"]},
-            "alerts": opts["alerts"], "popup": opts["popup"], "beep": opts["beep"]}
+            "alerts": opts["alerts"], "popup": opts["popup"], "beep": opts["beep"],
+            "options": {"modes": CLUSTER_MODES, "bands": CLUSTER_BANDS, "activity": CLUSTER_ACTIVITY}}  # what this firmware has (X6100 Link)
 
 
 def cluster_error(status, msg):
@@ -379,20 +381,20 @@ def set_wfview():
 
 
 # Field Ops routes: x6100-field (rootfs/usr/sbin) does the downloads, same files as the GUI:
-# <FIELD_DIR>/refs.tsv, qrz.conf ("key=..."), logs/*.adi
+# <FIELD_DIR>/refs.tsv, qrz.conf and hota.conf ("key=..."), logs/*.adi
 
 field_lock = threading.Lock()
 field_update = {"running": False, "result": ""}
-field_refs_counts = (None, 0, 0)   # (mtime, size), parks, summits
+field_refs_counts = (None, {})   # (mtime, size), {"P": parks, "S": summits, "B": bunkers, "H": HOTA}
 
 
 def field_path(*names):
     return os.path.join(settings.FIELD_DIR, *names)
 
 
-def qrz_key_set():
+def key_set(name):
     try:
-        with open(field_path("qrz.conf"), errors="replace") as f:
+        with open(field_path(name), errors="replace") as f:
             return any(line.startswith("key=") and line[4:].strip() for line in f)
     except OSError:
         return False
@@ -406,14 +408,14 @@ def field_refs():
         return None
     stamp = (st.st_mtime, st.st_size)
     if field_refs_counts[0] != stamp:   # counted once per new file
-        parks = summits = 0
+        counts = {}
         with open(field_path("refs.tsv"), "rb") as f:
             for line in f:
-                parks += line.startswith(b"P\t")
-                summits += line.startswith(b"S\t")
-        field_refs_counts = (stamp, parks, summits)
+                counts[line[:1]] = counts.get(line[:1], 0) + 1
+        field_refs_counts = (stamp, counts)
+    c = field_refs_counts[1]
     return {"date": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)), "size": fmt_size(st.st_size),
-            "parks": field_refs_counts[1], "summits": field_refs_counts[2]}
+            "parks": c.get(b"P", 0), "summits": c.get(b"S", 0), "bunkers": c.get(b"B", 0), "hota": c.get(b"H", 0)}
 
 
 def field_logs():
@@ -452,15 +454,17 @@ def field():
 def get_field():
     with field_lock:
         update = dict(field_update)
-    return {"qrz_key": qrz_key_set(), "update": update, "refs": field_refs(), "logs": field_logs()}
+    return {"qrz_key": key_set("qrz.conf"), "hota_key": key_set("hota.conf"), "update": update, "refs": field_refs(),
+            "logs": field_logs()}
 
 
-@app.post('/api/field/qrz')
-def set_field_qrz():
+@app.post('/api/field/<name:re:qrz|hota>')
+def set_field_key(name):
+    """QRZ Logbook API key, cqhota.app integration key: <name>.conf, never shown back"""
     key = str((bottle.request.json or {}).get("key", "")).strip()
-    if key and not re.fullmatch(r"[!-~]{1,64}", key):
-        return api_error(400, "Invalid key: 1-64 printable characters, no spaces")
-    path = field_path("qrz.conf")
+    if key and not re.fullmatch(r"[!-~]{1,128}", key):
+        return api_error(400, "Invalid key: 1-128 printable characters, no spaces")
+    path = field_path(name + ".conf")
     try:
         os.makedirs(settings.FIELD_DIR, exist_ok=True)
         if key:
@@ -717,7 +721,9 @@ REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", 
                "js8_send", "js8_cq", "js8_hb", "js8_stop", "wspr_txpct", "wspr_txnext", "sstv_tx", "sstv_stop",
                "app_base", "wefax_mode", "wefax_save", "wefax_clear", "wefax_tx", "wefax_stop",
                "rtty_send", "rtty_stop", "rtty_rate", "rtty_shift", "rtty_center", "rtty_rev",
-               "cw_send", "cw_stop", "cw_wpm", "cw_dec", "cw_clear", "navtex_mode", "location",
+               "psk_mode", "psk_freq", "psk_send", "psk_stop", "olivia_mode", "olivia_freq", "olivia_send", "olivia_stop",
+               "jtty_freq", "jtty_send", "jtty_stop",
+               "cw_send", "cw_stop", "cw_wpm", "cw_dec", "cw_clear", "cw_calls", "navtex_mode", "location",
                "field_screen", "field_ref", "field_start", "field_end", "field_log", "field_spot", "field_update",
                "qso_log", "nb_level", "nb_width", "nr_level", "agc_mode"}
 # The radio RX audio as the GUI's decoders get it (src/audio.c), 16 bit mono
@@ -1015,6 +1021,48 @@ def display_set():
     return {"status": "OK"}
 
 
+# Ethernet: the USB adapter's address, as Settings > Wireless > Ethernet. Read and applied through the
+# GUI socket (eth_get / eth_set, src/remote_server.cpp); the GUI checks the values as its own page does
+
+ETH_FIELDS = ("ip", "mask", "gw", "dns")
+
+
+@app.route('/network')
+def network():
+    return bottle.template('network')
+
+
+@app.get('/api/network')
+def network_get():
+    reply = display_call({"cmd": "eth_get"})
+    if not reply or reply.get("t") != "eth":
+        return api_error(503, "Radio GUI not reachable")
+    reply.pop("t", None)
+    return reply
+
+
+@app.post('/api/network')
+def network_set():
+    try:
+        data = bottle.request.json
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("dhcp"), bool):
+        return api_error(400, "Invalid mode")
+    cmd = {"cmd": "eth_set", "dhcp": data["dhcp"]}
+    for k in ETH_FIELDS:
+        v = data.get(k, "")
+        if not isinstance(v, str) or len(v) > 15:
+            return api_error(400, "Invalid value")
+        cmd[k] = v.strip()
+    reply = display_call(cmd)
+    if reply is None:
+        return api_error(503, "Radio GUI not reachable")
+    if reply.get("t") != "ok":
+        return api_error(409, reply.get("err", "Rejected by the radio"))
+    return {"status": "OK"}
+
+
 CW_MSG_MAX = 64     # as the radio's editor (textarea_window)
 
 
@@ -1229,32 +1277,59 @@ def set_cluster_filters():
     return cluster_save(host, port, servers, opts)
 
 
-@app.post('/api/cluster/alerts')
-def add_cluster_alert():
-    data = bottle.request.json or {}
+def cluster_alert_input(data):
+    """(alert, None) from a request, or (None, error response)."""
     pattern = str(data.get("pattern", "")).strip().upper()
     if not pattern or len(pattern) > 31 or not re.fullmatch(r"[A-Z0-9/*]+", pattern):
-        return cluster_error(400, "Invalid pattern: 1-31 characters, letters, digits, '/' and '*'")
+        return None, cluster_error(400, "Invalid pattern: 1-31 characters, letters, digits, '/' and '*'")
     bands = data.get("bands", [])
     if not isinstance(bands, list):
-        return cluster_error(400, "Invalid bands")
+        return None, cluster_error(400, "Invalid bands")
     try:
         bands = sorted({int(b) for b in bands}, reverse=True)
     except (TypeError, ValueError):
-        return cluster_error(400, "Invalid bands")
+        return None, cluster_error(400, "Invalid bands")
     if any(b not in CLUSTER_BANDS for b in bands):
-        return cluster_error(400, "Invalid bands")
+        return None, cluster_error(400, "Invalid bands")
     mode = str(data.get("mode", "")).strip().upper()
     if mode not in ("", "CW", "SSB", "DIG"):
-        return cluster_error(400, "Invalid mode")
+        return None, cluster_error(400, "Invalid mode")
+    return {"pattern": pattern, "bands": ",".join(str(b) for b in bands), "mode": mode,
+            "enabled": data.get("enabled", True) is not False}, None
+
+
+def cluster_alert_dup(alerts, a):
+    return any(x["pattern"].upper() == a["pattern"] and x["bands"] == a["bands"] and x["mode"] == a["mode"] for x in alerts)
+
+
+@app.post('/api/cluster/alerts')
+def add_cluster_alert():
+    a, err = cluster_alert_input(bottle.request.json or {})
+    if err:
+        return err
     host, port, servers = read_cluster_conf()
     opts = read_cluster_options()
     if len(opts["alerts"]) >= CLUSTER_MAX_ALERTS:
         return cluster_error(400, f"At most {CLUSTER_MAX_ALERTS} alerts")
-    bands = ",".join(str(b) for b in bands)
-    if any(a["pattern"].upper() == pattern and a["bands"] == bands and a["mode"] == mode for a in opts["alerts"]):
+    if cluster_alert_dup(opts["alerts"], a):
         return cluster_error(400, "This alert is already in the list")
-    opts["alerts"].append({"pattern": pattern, "bands": bands, "mode": mode})
+    opts["alerts"].append(a)
+    return cluster_save(host, port, servers, opts)
+
+
+# Edit an alert, or turn it off and on ("enabled"; an alert off stays in the list as alert_off=)
+@app.put('/api/cluster/alerts/<index:int>')
+def edit_cluster_alert(index):
+    a, err = cluster_alert_input(bottle.request.json or {})
+    if err:
+        return err
+    host, port, servers = read_cluster_conf()
+    opts = read_cluster_options()
+    if not 0 <= index < len(opts["alerts"]):
+        return cluster_error(404, "No such alert")
+    if cluster_alert_dup(opts["alerts"][:index] + opts["alerts"][index + 1:], a):
+        return cluster_error(400, "This alert is already in the list")
+    opts["alerts"][index] = a
     return cluster_save(host, port, servers, opts)
 
 
@@ -1419,7 +1494,7 @@ def get_gallery():
             except OSError:
                 continue
             items.append({"kind": kind, "name": name, "size": st.st_size, "mtime": int(st.st_mtime)})
-    items.sort(key=lambda x: x["mtime"], reverse=True)
+    items.sort(key=lambda x: (x["mtime"], x["name"]), reverse=True)   # same second: sstv-X_dn.png above sstv-X.png
     bottle.response.content_type = 'application/json'
     return json.dumps(items)
 

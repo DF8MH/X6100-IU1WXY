@@ -53,6 +53,8 @@
 #include <fcntl.h>
 #include <math.h>
 #include <pthread.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdatomic.h>
@@ -67,7 +69,9 @@
 #define WF_HEIGHT        (DIALOG_H - 26)   /* 13 px margins above and below */
 #define WF_VISIBLE       0      /* the list covers the whole waterfall: more room for the log */
 #define TX_BAR_H         30     /* TX status line between waterfall and list */
-#define TX_TEXT_MAX      160    /* longest message the compose window takes */
+#define TX_TEXT_MAX      500    /* longest message the compose window takes: past 20 frames
+                                   (~345-425 characters), so the frame limit is what stops you,
+                                   as on desktop (randal007's x6100-js8 35f34de8) */
 #define OFFER_MS         (5 * 60 * 1000) /* how long an offered reply stays on Reply */
 #define TEXT_MAX         64     /* INFO / STATUS */
 #ifndef JS8_TEXTS_PATH
@@ -1627,15 +1631,112 @@ static void rotary_cb(int32_t diff) {
 
 /* ---- Compose window --------------------------------------------------- */
 
+/* The frame count plans the whole message, which on the radio takes a few
+ * tenths of a second past ~8 frames and a second or two near 20: done on
+ * every key it froze the screen (up to 23 s typing a long message fast).
+ * So it is counted once typing pauses (desktop's m_txTextDirtyDebounce,
+ * 100 ms there; longer here for the slower processor), on a thread of its
+ * own at nice 10. The newest request wins; the thread stays for the
+ * program's life, idle between counts. From randal007's x6100-js8
+ * f192baf1 and ab567f18. */
+#define COMPOSE_COUNT_MS      350
+#define COMPOSE_COUNT_POLL_MS 50
+static lv_timer_t *compose_count_timer; /* the pause */
+static lv_timer_t *compose_poll_timer;  /* waits for the count */
+
+static struct {
+    pthread_mutex_t  mu;
+    pthread_cond_t   cv;
+    bool             started;
+    unsigned         want; /* the newest request */
+    unsigned         done; /* the request `pv` answers */
+    char             call[32], grid[16], text[TX_TEXT_MAX * 2];
+    js8_speed_t      speed;
+    js8_tx_preview_t pv;
+} counter = {.mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER};
+
+static void *count_thread(void *arg) {
+    (void)arg;
+    pthread_setname_np(pthread_self(), "js8-count");
+    setpriority(PRIO_PROCESS, (id_t)syscall(SYS_gettid), 10); /* behind the decoders and the GUI */
+    static char      call[sizeof(counter.call)], grid[sizeof(counter.grid)], text[sizeof(counter.text)];
+    js8_tx_preview_t pv;
+    pthread_mutex_lock(&counter.mu);
+    for (;;) {
+        while (counter.done == counter.want) pthread_cond_wait(&counter.cv, &counter.mu);
+        unsigned    n     = counter.want;
+        js8_speed_t speed = counter.speed;
+        memcpy(call, counter.call, sizeof(call));
+        memcpy(grid, counter.grid, sizeof(grid));
+        memcpy(text, counter.text, sizeof(text));
+        pthread_mutex_unlock(&counter.mu);
+        js8_tx_preview(call, grid, text, speed, &pv);
+        pthread_mutex_lock(&counter.mu);
+        if (n == counter.want) counter.pv = pv; /* else typed on meanwhile: count again */
+        counter.done = n;
+    }
+    return NULL;
+}
+
+static void compose_count_cancel(void) {
+    if (compose_count_timer) {
+        lv_timer_del(compose_count_timer);
+        compose_count_timer = NULL;
+    }
+    if (compose_poll_timer) { /* a count still running is just never shown */
+        lv_timer_del(compose_poll_timer);
+        compose_poll_timer = NULL;
+    }
+}
+
+static void compose_poll_cb(lv_timer_t *t) {
+    (void)t;
+    js8_tx_preview_t pv;
+    pthread_mutex_lock(&counter.mu);
+    bool ready = counter.done == counter.want;
+    if (ready) pv = counter.pv;
+    pthread_mutex_unlock(&counter.mu);
+    if (!ready) return;
+    lv_timer_del(compose_poll_timer);
+    compose_poll_timer = NULL;
+    if (composing && pv.ok)
+        msg_update_text_fmt("%d frame%s, %.0f s", pv.frames, pv.frames == 1 ? "" : "s", pv.seconds);
+}
+
+static void compose_count_cb(lv_timer_t *t) {
+    (void)t;
+    compose_count_timer = NULL; /* a one-shot: LVGL deletes it after this */
+    if (!composing) return;
+    char typed[TX_TEXT_MAX * 2];
+    macros_fill(textarea_window_get(), false, typed, sizeof(typed)); /* counted as it goes out */
+    pthread_mutex_lock(&counter.mu);
+    snprintf(counter.call, sizeof(counter.call), "%s", params.callsign.x);
+    snprintf(counter.grid, sizeof(counter.grid), "%s", station_qth());
+    snprintf(counter.text, sizeof(counter.text), "%s", typed);
+    counter.speed = cur_speed();
+    counter.want++;
+    if (!counter.started) {
+        pthread_t th;
+        if (pthread_create(&th, NULL, count_thread, NULL) == 0) {
+            pthread_detach(th);
+            counter.started = true;
+        }
+    }
+    pthread_cond_signal(&counter.cv);
+    bool started = counter.started;
+    pthread_mutex_unlock(&counter.mu);
+    if (!started) return; /* no thread: no count, typing still works */
+    if (!compose_poll_timer) compose_poll_timer = lv_timer_create(compose_poll_cb, COMPOSE_COUNT_POLL_MS, NULL);
+}
+
 static void compose_changed_cb(lv_event_t *e) {
     (void)e;
-    js8_tx_preview_t pv;
-    char             typed[TX_TEXT_MAX * 2];
-    macros_fill(textarea_window_get(), false, typed, sizeof(typed)); /* counted as it goes out */
-    js8_tx_preview(params.callsign.x, station_qth(), typed, cur_speed(), &pv);
-    if (pv.ok) {
-        msg_update_text_fmt("%d frame%s, %.0f s", pv.frames, pv.frames == 1 ? "" : "s", pv.seconds);
+    if (compose_count_timer) {
+        lv_timer_reset(compose_count_timer);
+        return;
     }
+    compose_count_timer = lv_timer_create(compose_count_cb, COMPOSE_COUNT_MS, NULL);
+    lv_timer_set_repeat_count(compose_count_timer, 1);
 }
 
 /* JS8 is capitals only: take lowercase (a USB keyboard without Caps Lock,
@@ -1676,6 +1777,7 @@ static void compose_layout(bool typing) {
 
 static void compose_close(void) {
     if (!composing) return;
+    compose_count_cancel();
     textarea_window_close();
     composing = false;
     compose_layout(false);

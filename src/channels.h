@@ -78,3 +78,10 @@ bool channels_set_name(uint16_t index, const char *name);
 bool channels_move(uint16_t from, uint16_t to);
 
 
+/*
+ * The JSON names of the modes and AGC ("NFM", "AUTO"), and back.
+ */
+const char *channels_mode_name(x6100_mode_t mode);
+bool channels_mode_parse(const char *value, x6100_mode_t *mode);
+const char *channels_agc_name(x6100_agc_t agc);
+bool channels_agc_parse(const char *value, x6100_agc_t *agc);

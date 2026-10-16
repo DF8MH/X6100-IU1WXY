@@ -223,7 +223,6 @@ void styles_init(void) {
     /* Message style */
     lv_style_reset(&msg_style);
     lv_style_set_pad_hor(&msg_style, 10);
-    lv_style_set_text_color(&msg_style, lv_color_white());
     lv_style_set_text_font(&msg_style, &sony_38);
     lv_style_set_width(&msg_style, 603);
     // lv_style_set_height(&msg_style, 66);
@@ -234,7 +233,6 @@ void styles_init(void) {
     lv_style_set_pad_ver(&msg_style, 20);
 
     lv_style_reset(&msg_tiny_style);
-    lv_style_set_text_color(&msg_tiny_style, lv_color_white());
     lv_style_set_text_font(&msg_tiny_style, &sony_60);
     lv_style_set_width(&msg_tiny_style, 324);
     lv_style_set_height(&msg_tiny_style, 66);
@@ -451,27 +449,22 @@ void styles_apply(void) {
         lv_style_set_border_width(&meter_style, 0);
     }
 
-    /* Messages and the panel: background images, or drawn like a popup */
-    if (theme_shape.images) {
-        bool dark = theme_shape.images == 1;
-
-        for (int i = 0; i < 3; i++) {
+    /* Messages: drawn as the theme's popups in every theme; the panel: background images, or the same */
+    for (int i = 0; i < 3; i++) {
+        if (boxes[i] == &panel_style && theme_shape.images) {
             lv_style_remove_prop(boxes[i], LV_STYLE_BG_OPA);
             lv_style_remove_prop(boxes[i], LV_STYLE_BG_COLOR);
             lv_style_remove_prop(boxes[i], LV_STYLE_BORDER_WIDTH);
             lv_style_remove_prop(boxes[i], LV_STYLE_BORDER_COLOR);
+            lv_style_set_bg_img_src(boxes[i], theme_shape.images == 1 ? PATH "images/panel_dark.bin" : PATH "images/panel.bin");
+            continue;
         }
-        lv_style_set_bg_img_src(&msg_style, dark ? PATH "images/msg_dark.bin" : PATH "images/msg.bin");
-        lv_style_set_bg_img_src(&panel_style, dark ? PATH "images/panel_dark.bin" : PATH "images/panel.bin");
-        lv_style_set_bg_img_src(&msg_tiny_style, dark ? PATH "images/msg_tiny_dark.bin" : PATH "images/msg_tiny.bin");
-    } else {
-        for (int i = 0; i < 3; i++) {
-            lv_style_remove_prop(boxes[i], LV_STYLE_BG_IMG_SRC);
-            lv_style_set_bg_opa(boxes[i], LV_OPA_COVER);
-            lv_style_set_bg_color(boxes[i], TC(popup));
-            lv_style_set_border_width(boxes[i], strong ? 3 : theme_shape.border);
-            lv_style_set_border_color(boxes[i], TC(popup_border));
-        }
+        lv_style_remove_prop(boxes[i], LV_STYLE_BG_IMG_SRC);
+        lv_style_set_bg_opa(boxes[i], LV_OPA_COVER);
+        lv_style_set_bg_color(boxes[i], TC(popup));
+        lv_style_set_border_width(boxes[i], strong ? 3 : theme_shape.border);
+        lv_style_set_border_color(boxes[i], TC(popup_border));
+        if (boxes[i] != &panel_style) lv_style_set_radius(boxes[i], theme_shape.radius_popup);
     }
 
     /* Buttons */
@@ -517,9 +510,9 @@ void styles_apply(void) {
     lv_style_set_text_color(&dialog_item_style, text);
     lv_style_set_text_color(&clock_style, text);
     lv_style_set_text_color(&knobs_style, text);
-    for (int i = 0; i < 3; i++) {
-        lv_style_set_text_color(boxes[i], theme_shape.images ? lv_color_white() : text);
-    }
+    lv_style_set_text_color(&msg_style, text);
+    lv_style_set_text_color(&msg_tiny_style, text);
+    lv_style_set_text_color(&panel_style, theme_shape.images ? lv_color_white() : text);
 
     /* Settings controls: focused and being edited */
     lv_style_set_text_color(&dialog_item_focus_style, TC(focus_text));

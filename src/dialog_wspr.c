@@ -145,6 +145,7 @@ static wspr_bb_t           *bb;             /* kept for good: the audio thread m
 static atomic_int           state = ST_STOP;
 static atomic_uint          gen;            /* bumped on close and band change */
 static atomic_bool          tx_next;
+static bool                 tx_by_next;    /* the prepared beacon is there for TX next, not the TX % pick */
 static atomic_int           uploaded;
 static atomic_int           upload_failed;
 static atomic_int           decoding;
@@ -250,7 +251,8 @@ static int16_t *prepare_tx(uint32_t *n) {
     int     pct = param_i_get(cfg_wspr_tx_pct);
     float   pwr = fminf(param_f_get(cfg_pwr), MAX_PWR);
 
-    if (!atomic_load(&tx_next) && (pct == 0 || rand() % 100 >= pct)) {
+    tx_by_next = atomic_load(&tx_next);
+    if (!tx_by_next && (pct == 0 || rand() % 100 >= pct)) {
         return NULL;
     }
     if (!wspr_encode(my_call, my_grid, wspr_dbm(pwr), sym)) {
@@ -280,6 +282,10 @@ static void *cycle_thread_cb(void *arg) {
             if (!prepared) {
                 free(tx);
                 tx = prepare_tx(&tx_n);
+            } else if (tx && tx_by_next && !atomic_load(&tx_next)) {
+                /* Prepared at 116 s for TX next, then TX next was turned off: no beacon */
+                free(tx);
+                tx = NULL;
             }
             prepared = false;
             dial_hz  = cparam_i_get(cfg_fg_freq);

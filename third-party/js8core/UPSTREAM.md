@@ -112,7 +112,28 @@ Each one is its own commit on top of the pristine import, so
     all four speeds for 50 typical messages (checked against its code
     built with Qt; `tests/test_js8.cpp` "[desktop]" keeps 24 of them).
 
-All eleven are candidates to send upstream (10 with a fix to `compute_drift_estimate` instead). Patch 5 matters to upstream only
+12-15. **Not taken.** randal007's x6100-js8 numbers its local patches the
+    same way; its 12 (`set_sync_stats()`), 13 (decode thread name, merged
+    window log), 14 (withdrawn there) and 15 (Ultra on its own decode
+    thread) touch only the engine and none is needed by 16. The numbers
+    are skipped so 16 keeps its name in both trees.
+
+16. **Compound frames' commands and SNR, as desktop** (from randal007's
+    x6100-js8 a3553bcb, test fd5abba6). `pack_cmd()` / `unpack_cmd()`
+    packed a compound-directed frame's command as
+    `(cmd & 0x1F) << 2 | (num & 0x03)`; desktop's `Varicode::packCmd()`
+    packs an SNR command as `[1][type][6-bit number]` (type 1 = HEARTBEAT
+    SNR) and any other command as its 7-bit value. So every command to or
+    from a compound call (KG4UHM/6, a prefix/call) differed from desktop's,
+    and an SNR kept only 2 bits: "KG4UHM/6 SNR -03" went out as -31, and
+    a heartbeat ACK from KG4UHM/6 read back as "HW CPY?". Now desktop's
+    layout; `tests/test_js8.cpp` checks messages to and from compound and
+    portable calls against desktop's own `buildMessageFrames()` bit for
+    bit, and desktop's compound frames reading back with their command and
+    SNR. Merged upstream in JS8Call-improved/Android-port#108: drop it at
+    the next re-import.
+
+All twelve (1-11, 16) are candidates to send upstream (10 with a fix to `compute_drift_estimate` instead). Patch 5 matters to upstream only
 if they ever move decoders off static storage; patch 6 affects them
 today.
 

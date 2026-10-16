@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-#define BAND_PLAN_H 22
+#define BAND_PLAN_H 18
 
 /* Strip on parent (800 px wide) at y; call after the waterfall is created so it is on top */
 void band_plan_init(lv_obj_t *parent, lv_coord_t y);

@@ -11,6 +11,7 @@
 #include "params/params.h"
 #include "cfg/cfg_api.h"
 #include "radio.h"
+#include "panel.h"
 
 #include "lvgl/lvgl.h"
 #include <ctype.h>
@@ -166,6 +167,8 @@ void cw_encoder_stop() {
     }
 }
 
+/* {CALL}: my callsign; {HIS}: the other station's, the last call the decoder confirmed
+ * (the one Log QSO offers), nothing when there is none */
 const char *cw_encoder_expand(const char *text) {
     static char buf[512];
     const char *call = params.callsign.x;
@@ -177,6 +180,11 @@ const char *cw_encoder_expand(const char *text) {
                 buf[n++] = toupper((unsigned char)*c);
             }
             text += 5;
+        } else if (!strncasecmp(text, "{HIS}", 5)) {
+            for (const char *c = panel_last_call(); *c && n < sizeof(buf) - 1; c++) {
+                buf[n++] = toupper((unsigned char)*c);
+            }
+            text += 4;
         } else {
             buf[n++] = *text;
         }

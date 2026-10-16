@@ -11,9 +11,9 @@ Settings. Button and option names are written as the radio shows them.
 
 - [Getting started](#getting-started): [first steps](#first-steps), [buttons and knobs](#buttons-and-knobs)
 - [Main screen](#main-screen): [status bar](#status-bar), [S-meter](#s-meter), [waterfall](#waterfall), [screen recording](#screen-recording), [Walkie Talkie](#walkie-talkie-mode)
-- [Settings](#settings): [General](#general-tab), [Display](#display-tab), [Audio](#audio-tab), [Wireless](#wireless-tab), [Keys](#keys-tab), [Cluster](#cluster-tab), [TX Cal](#tx-cal-tab), [Info](#info-tab)
+- [Settings](#settings): [General](#general-tab), [Display](#display-tab), [Audio](#audio-tab), [Wireless](#wireless-tab), [Bluetooth](#bluetooth-tab), [Keys](#keys-tab), [Cluster](#cluster-tab), [TX Cal](#tx-cal-tab), [Info](#info-tab), [Walkie](#walkie-tab)
 - [Transmitting](#transmitting): [digital-mode TX level](#digital-mode-tx-level), [recording voice messages](#recording-voice-messages)
-- [Digital modes](#digital-modes): [opening a mode](#opening-a-mode), [FT8 and FT4](#ft8-and-ft4), [JS8](#js8), [WSPR](#wspr), [SSTV, WeFax and NavTex](#sstv-wefax-and-navtex), [PSK31, PSK63 and Olivia](#psk31-psk63-and-olivia), [RTTY and WeFax TX](#rtty-and-wefax-tx)
+- [Digital modes](#digital-modes): [opening a mode](#opening-a-mode), [FT8 and FT4](#ft8-and-ft4), [JS8](#js8), [WSPR](#wspr), [SSTV, WeFax and NavTex](#sstv-wefax-and-navtex), [PSK31, PSK63 and Olivia](#psk31-psk63-and-olivia), [JTTY](#jtty), [RTTY and WeFax TX](#rtty-and-wefax-tx)
 - [CW](#cw): [CW decoder](#cw-decoder), [CW from the keyboard](#cw-from-the-keyboard), [CW messages](#cw-messages), [CW Trainer](#cw-trainer)
 - [Apps](#apps): [DX Cluster](#dx-cluster), [Field Ops (SOTA / POTA)](#field-ops-sota--pota), [Bands](#bands)
 - [Bluetooth](#bluetooth): [headphones](#bluetooth-headphones), [CAT](#bluetooth-cat)
@@ -21,6 +21,7 @@ Settings. Button and option names are written as the radio shows them.
 - [Web configurator](#web-configurator)
 - [X6100 Link app](#x6100-link-app)
 - [wfview server](#wfview-server)
+- [Ethernet](#ethernet)
 - [Troubleshooting and FAQ](#troubleshooting-and-faq)
 - [Reference](#reference): [Bluetooth CAT connection](#bluetooth-cat-connection), [CI-V commands](#supported-ci-v-commands), [btcat-ctl](#btcat-ctl), [btaudio-ctl](#btaudio-ctl), [files on /mnt](#files-on-mnt)
 - [Build](#build)
@@ -176,11 +177,17 @@ Records the screen and the audio to an AVI file (MJPEG video, 800x480,
 ### Walkie Talkie mode
 
 The radio held upright, the knobs on top, with a plain screen: VFO or memory,
-RX/TX, frequency, mode, S-meter, and the VOL, SQL and PWR bars. It follows the
-theme.
+RX/TX, frequency, mode, a bandscope, the S-meter, and the VOL, SQL and PWR
+bars. It follows the theme.
 
-Where: Settings > General > CONTROLS > Walkie Talkie. The screen turns to
-portrait at once, no restart.
+- Bandscope: the band around the frequency, the same trace as the main
+  spectrum (fill, peaks, colours, filter and VFO line), with the band edges
+  in MHz and the span under it. The zoom is the main screen's. It runs also
+  when the main spectrum is turned off.
+
+Where: Settings > Walkie > WALKIE TALKIE > Walkie Talkie (or Settings >
+General > CONTROLS > Walkie Talkie). The screen turns to portrait at once, no
+restart.
 
 > **How to leave Walkie Talkie mode (EN)**
 > 1. Press **APP**: the walkie buttons appear on the left edge, the first one reads "(WLK 1:4)".
@@ -193,8 +200,11 @@ portrait at once, no restart.
 > 3. **Tieni premuto** per un secondo il tasto **"Exit hold"**. La radio torna alla schermata normale orizzontale.
 
 - PTT: the PTT key on the side of the radio. It transmits with the built-in
-  microphone; the border turns red and the S-meter shows the power and SWR.
-- VOL knob: always the volume. The buttons that set a value use the MFK.
+  microphone (Settings > Walkie > Microphone); the border turns red and the
+  S-meter shows the power and SWR. The microphone of Settings > Audio is back
+  when you leave walkie mode.
+- VOL knob: always the volume. The buttons that set a value use the MFK. When
+  you leave walkie mode the VOL knob goes back to what it was on before.
 - F1-F5 run down the left edge, with the buttons next to them. APP opens the
   walkie pages:
 
@@ -203,11 +213,20 @@ portrait at once, no restart.
 | WLK 1 | MEM/VFO, Band +, Band -, TX power |
 | WLK 2 | AM/FM, SSB (held: DIG), ATU (held: tune, it transmits), PRE (held: ATT) |
 | WLK 3 | AGC (held: split), A/B (held: copy), Step (held: back), Lock |
-| WLK 4 | Vol Sql RF Pwr (the levels page), Exit (held) |
+| WLK 4 | Store, Clear (held), Vol Sql RF Pwr (the levels page), Exit (held) |
 
 - GEN, KEY, DFN, DFL and VM open their pages as on the main screen.
-- MEM: the main knob steps through the memories; the number and name are on
-  top.
+- Walkie channels: 32 channels of their own, apart from Channel Memory. Each
+  keeps frequency, mode, AGC, PRE and ATT, like a memory.
+  - MEM: the main knob steps through channels 1-32, the empty ones too. The
+    panel shows "CH 05 - name", "CH 05" or "CH 05 - empty". A stored channel
+    tunes the radio; an empty one leaves it where it is.
+  - Store (WLK 4): the current frequency and mode go into the channel shown,
+    and the knob switches to MEM.
+  - Clear (WLK 4, held): empties the channel shown.
+  - They are kept in /mnt/walkie_channels.json, the same format as
+    channels.json with the channel number in "ch". A name can be written
+    there; the radio shows it.
 - Exit: APP, then WLK 4, hold "Exit hold" (steps in the box above). The screen
   goes back to landscape, no restart.
 - Not in walkie mode: the apps, Settings and the hand mic keys. Leave walkie
@@ -215,8 +234,9 @@ portrait at once, no restart.
 
 ## Settings
 
-APP (page 2) > Settings. The tabs are on two button pages: General, Display,
-Audio, Wireless (page 1); Keys, Cluster, TX Cal, Info (page 2).
+APP (page 2) > Settings. The tabs are on three button pages: General, Display,
+Audio, Wireless (page 1); Bluetooth, Keys, Cluster, TX Cal (page 2); Info,
+Walkie (page 3).
 
 The MFK walks the controls and stops at the first and last one. There the
 page shows its top or its end, so status rows below the last control are
@@ -276,14 +296,56 @@ All these options are also on the web configurator's Display page.
 | MICROPHONE | Input (Built-in, Hand, Auto), Hand mic gain, Built-in gain |
 | VOX | On, Gain, Anti-VOX, Delay |
 | AGC | Hang, Knee, Slope |
-| BT HEADPHONES | RX to headphones, Volume, Mute speaker (see [Bluetooth headphones](#bluetooth-headphones)) |
 
 ### Wireless tab
 
 | Card | Options |
 |---|---|
 | WIFI | power, status, IP, networks |
-| BLUETOOTH | Bluetooth (power), Pairing (3 min), device list, Scan headphones (also finds keyboards) |
+| ETHERNET | a USB Ethernet adapter: DHCP or a static address (see [Ethernet](#ethernet)) |
+
+WiFi/BT power switches the WiFi and Bluetooth chip (one chip for both): with
+it off, Bluetooth is off too. Bluetooth has its own tab.
+
+### Bluetooth tab
+
+| Card | Options |
+|---|---|
+| ADAPTER | Bluetooth (power), Status, Address, Pairing (3 min) |
+| DEVICES | Scan (headphones and keyboards, 16 s), Activity, the device list |
+| HEADPHONES | RX to headphones, Volume, Mute speaker |
+| BLUETOOTH CAT | Clients connected, Port |
+
+- Status: *on* and hidden (paired devices connect, nobody else can pair),
+  *pairing* while the pairing window is open, *off*. With the WiFi/BT chip
+  switched off in Wireless it says so; if the Bluetooth service on the radio
+  stops it says that too, and the page picks it up again when it is back.
+- Pairing (3 min): the radio is visible and pairable for 3 minutes, the label
+  counts down. Outside the window every pairing request is refused.
+- The list: paired devices first, then what Scan found. Tags: *headphones*,
+  *keyboard*, *phone*, *CAT* (a PC or other CAT client), *new* (not paired
+  yet), *connected*. When a scan moves the devices around, the MFK stays on
+  the device it was on.
+- MFK press on a *new* device: pair and connect (headphones in pairing mode;
+  for a keyboard press its pairing key). A keyboard that never sends its
+  name shows as *Keyboard* and its address. Activity says what is going on:
+  the code to type on a keyboard (then Enter), or "not found - is it in
+  pairing mode?".
+- MFK press on a paired device: a menu with Connect or Disconnect, Connect at
+  startup (headphones) and Forget. Forget asks again (Cancel is first); after
+  it the device has to be paired again.
+- One pair of headphones at a time: connecting one disconnects the others. A
+  keyboard and a CAT phone stay connected.
+- Details: [Bluetooth headphones](#bluetooth-headphones), [Bluetooth CAT](#bluetooth-cat).
+
+> **Scheda Bluetooth (IT)**
+> Impostazioni > Bluetooth (seconda pagina dei tasti). Il WiFi resta in Wireless.
+> - **ADAPTER**: Bluetooth acceso/spento; Status (*on* e nascosta, *pairing* con la finestra di accoppiamento aperta, *off*; dice anche se il chip WiFi/BT è spento da Wireless o se il servizio Bluetooth della radio si è fermato); Address, l'indirizzo della radio; Pairing (3 min), visibile e accoppiabile per 3 minuti col conto alla rovescia. Fuori dalla finestra ogni richiesta di accoppiamento è rifiutata.
+> - **DEVICES**: Scan cerca cuffie e tastiere per 16 s. Activity dice cosa sta facendo: il codice da scrivere sulla tastiera (poi Invio) o "not found - is it in pairing mode?". Nella lista prima i dispositivi accoppiati, poi quelli trovati; etichette *headphones*, *keyboard*, *phone*, *CAT*, *new*, *connected*. Se la lista si riordina durante la ricerca, la MFK resta sul dispositivo scelto. Una tastiera che non manda il suo nome compare come *Keyboard* e indirizzo.
+> - Pressione MFK su un dispositivo *new*: accoppia e connette. Su uno accoppiato: menu con Connect o Disconnect, Connect at startup (cuffie) e Forget, che chiede conferma (Cancel per primo); dopo va accoppiato di nuovo.
+> - Una cuffia alla volta: connetterne una scollega le altre. Tastiera e telefono CAT restano connessi.
+> - **HEADPHONES**: RX to headphones, Volume, Mute speaker (prima erano in Audio).
+> - **BLUETOOTH CAT**: quanti client CAT sono connessi, e la porta (SPP, canale 1).
 
 ### Keys tab
 
@@ -296,7 +358,7 @@ All these options are also on the web configurator's Display page.
 
 | Card | Options |
 |---|---|
-| CLUSTER FILTERS | Modes (CW, SSB, DIG, AM/FM), Bands (160-6 m), Activity (All spots, POTA, SOTA, POTA + SOTA) |
+| CLUSTER FILTERS | Modes (CW, SSB, DIG, AM/FM), Bands (160-6 m), Activity (POTA, SOTA, WWBOTA, HOTA; none lit = all spots) |
 | CLUSTER VIEW | Newest first, All bands, Spot snap hold, Spot snap speed |
 | PSK REPORTER | Report decodes (on by default) |
 
@@ -341,7 +403,8 @@ Diagnostics. Where: Settings > Info > FIRMWARE > Diagnostics.
 
 The text has the versions, uptime and memory, the Bluetooth controller and
 devices, the last pairing log, the input devices and the kernel messages
-about Bluetooth, HID and USB. It has no WiFi networks, no position and no
+about Bluetooth, HID, USB, I2C and the clock, and the
+base I2C error log. It has no WiFi networks, no position and no
 logbook. The first time, a short note explains what it is for: it is read
 only by IU1WXY and deleted within 90 days.
 
@@ -351,6 +414,32 @@ only by IU1WXY and deleted within 90 days.
 | not accepted now: ask IU1WXY first | reception is closed |
 | too many today, try tomorrow | the daily limit is reached |
 | not sent: no internet? | the radio could not reach the site |
+
+### Walkie tab
+
+| Card | Options |
+|---|---|
+| WALKIE TALKIE | Walkie Talkie, Main knob steps channels, Microphone |
+
+- Walkie Talkie: turns the portrait screen on. Settings closes and the walkie
+  screen comes up (see [Walkie Talkie mode](#walkie-talkie-mode)).
+- Main knob steps channels: the main knob goes through the walkie channels
+  instead of tuning. The same as the MEM/VFO button on WLK 1.
+- Microphone: the input used while the walkie screen is up (Built-in, Hand,
+  Auto; default Built-in). The Audio tab's input is not changed.
+
+> **Scheda Walkie (IT)**
+> Impostazioni > Walkie > WALKIE TALKIE.
+> - **Walkie Talkie**: accende lo schermo verticale. Le Impostazioni si chiudono e compare lo schermo walkie.
+> - **Main knob steps channels**: la manopola principale scorre i canali walkie invece di sintonizzare. È lo stesso del tasto MEM/VFO su WLK 1.
+> - **Microphone**: l'ingresso microfono usato con lo schermo walkie (Built-in, Hand, Auto; di serie Built-in). L'ingresso della scheda Audio non cambia.
+>
+> **Canali walkie (IT)**: 32 canali propri, separati dalle memorie (Channel Memory). Ognuno tiene frequenza, modo, AGC, PRE e ATT.
+> - **MEM**: la manopola principale scorre i canali 1-32, anche quelli vuoti. Il pannello mostra "CH 05 - nome", "CH 05" o "CH 05 - empty". Un canale salvato sintonizza la radio, uno vuoto la lascia dov'è.
+> - **Store** (WLK 4): frequenza e modo attuali vanno nel canale mostrato, e la manopola passa a MEM.
+> - **Clear** (WLK 4, tenuto premuto): svuota il canale mostrato.
+> - Sono salvati in /mnt/walkie_channels.json, stesso formato di channels.json con il numero del canale in "ch". Lì si può scrivere un nome, la radio lo mostra.
+> - Uscendo dal modo walkie la manopola VOL torna alla funzione di prima e torna il microfono scelto in Audio.
 
 ## Transmitting
 
@@ -393,7 +482,7 @@ receiving and turns it on only when transmitting.
 ### Opening a mode
 
 APP (page 1) > Modes opens a menu: RTTY, PSK31, PSK63, FT8, FT4, FT2, WSPR, Olivia,
-JS8, SSTV, WeFax, NavTex. Turn the MFK to choose, press to open; the last used mode is marked.
+JTTY, JS8, SSTV, WeFax, NavTex. Turn the MFK to choose, press to open; the last used mode is marked.
 Pressing Modes again closes the menu.
 
 - Callsign and QTH: Settings > General > STATION.
@@ -414,12 +503,18 @@ Buttons:
 | 1 | Show: All / CQ, Mode: FT8 / FT4 / FT2, TX CQ, TX Call |
 | 2 | Hold Freq, Auto, Force QSO save, Power |
 | 3 | CQ Modifier, Time Sync, Log Map, Live Map |
+| 4 | Freq: Preset / 14.091, Hound: Off / On, Retries |
 
 - Show: CQ shows the CQs and the messages to you; All shows all traffic.
 - TX CQ calls CQ. TX Call allows or stops transmitting; stopping cuts a
   transmission in progress.
 - Hold Freq: your TX offset does not move to the station you answer.
-- Auto: the next message of the QSO is sent by itself.
+- Auto: the next message of the QSO is sent by itself, and a station that
+  calls you gets an answer, also while you call CQ (what other programs call
+  "Res"). It never calls a CQ on its own. If several stations call you in the
+  same slot and one is a POTA activator, that one is answered first.
+- Retries: how many times a message goes out with no answer before the QSO is
+  dropped. Each press steps 3, 4, 5, 6, 8, 10, 12, 15 and back to 3; 6 by default.
 - Time Sync: rounds the clock to the nearest slot (15 s FT8, 7.5 s FT4, 3.75 s FT2).
 - CQ Modifier: for example `CQ POTA` or `CQ DX`.
 
@@ -437,6 +532,20 @@ Country + mi.
 | CQ, worked on this band and mode | darker green, struck through |
 | a message to you | red |
 | your TX | blue |
+
+A POTA tag after the message marks a station spotted on POTA right now, and
+any `CQ POTA`. The spots are the ones the cluster already fetches from
+pota.app; with no spots there is no tag.
+
+Auto, Retries, POTA (IT). Auto risponde da solo a chi ti chiama, anche mentre
+chiami CQ, e porta avanti il QSO (in altri programmi si chiama "Res"); non
+chiama mai un CQ di sua iniziativa. Se nello stesso slot ti chiamano più
+stazioni e una è un attivatore POTA, risponde prima a lei. Pagina 4 > Retries:
+quante volte un messaggio parte senza risposta prima di lasciare il QSO; ogni
+pressione passa a 3, 4, 5, 6, 8, 10, 12, 15 e torna a 3 (6 di serie). Il tag
+POTA dopo il messaggio segna una stazione spottata ora su POTA e ogni
+`CQ POTA`. Gli spot sono quelli che il cluster già scarica da pota.app: senza
+spot non c'è tag.
 
 Replying. Turn the MFK onto a row and press it, or touch it. The radio
 answers that station, moves your TX offset there (unless Hold Freq is on) and
@@ -533,6 +642,75 @@ JTAlert can follow it. From SP2KMO's upstream PR #275. It is set in
 `/mnt/ft8_udp.conf` (`enabled=`, `host=`, `port=`, `id=`); the defaults are
 port 2237 and the network gateway (your phone on a hotspot) plus the WSJT-X
 multicast group.
+
+Custom frequency. DXpeditions often work away from 14.074, e.g. H49A on
+14.091. Page 4 > Freq lists the mode's preset frequencies, one per band: pick
+one with the knob and press. Hold Freq for the keyboard: type the dial frequency in kHz
+(14091) or MHz (14.091) and press Enter. The radio goes there in USB-D, the
+rows say "RX FT8 Custom 14.091" and the button shows 14.091. It is kept for
+the next time. An empty entry, a band key or a Mode change goes back to the
+preset list. Range 1800 - 54000 kHz. The web remote's "base" reports it.
+
+Custom frequency (IT). Le DXpedition lavorano spesso fuori da 14.074, per
+esempio H49A su 14.091. Pagina 4 > Freq elenca le frequenze preset del modo,
+una per banda: scegli con la manopola e premi. Tieni premuto Freq per la
+tastiera: scrivi la frequenza
+dial in kHz (14091) o MHz (14.091) e premi Invio. La radio ci va in USB-D, le
+righe dicono "RX FT8 Custom 14.091" e il tasto mostra 14.091. Resta per la
+volta dopo. Un campo vuoto, un tasto BAND o un cambio di Mode tornano alla
+lista dei preset. Da 1800 a 54000 kHz. Il "base" del web remote la riporta.
+
+Hound mode. For an FT8 DXpedition in Fox and Hound mode (FT8 only). Page 4 >
+Hound: On, then select the Fox's CQ and press. The rules are WSJT-X's (K1JT
+and the WSJT-X team, GPL v3):
+
+- You call "FOX YOURCALL GRID" in the second period (:15 and :45). Below
+  1000 Hz is the Fox's: if your offset is lower it jumps to 1000-3000 Hz at
+  random. Calling stops after 2 minutes; press the CQ again to go on.
+- The Fox answers alone or inside a multi-stream message, e.g.
+  "K1ABC RR73; YOURCALL <H49A> -12". You send "FOX YOURCALL R-xx" with the
+  Fox's SNR, first on the Fox's own offset, then 300 Hz away from it.
+  It stops after 11 periods (165 s) without RR73.
+- The Fox's RR73 ("YOURCALL RR73; ..." or "YOURCALL FOX RR73") logs the QSO
+  and TX stops. Decodes from the second period (other Hounds) are ignored.
+- TX CQ and Hold Freq do nothing in Hound mode. The RX rows show the state,
+  e.g. "Hound: calling H49A". Hound is off each time the app opens.
+
+The multi-stream messages are now decoded in any FT8 session (ft8_lib left
+them out); the Fox's call shows as `<...>` until its CQ has been heard.
+
+Hound mode (IT). Per una DXpedition FT8 in modalità Fox and Hound (solo FT8).
+Pagina 4 > Hound: On, poi seleziona il CQ della Fox e premi. Le regole sono
+quelle di WSJT-X (K1JT e il team WSJT-X, GPL v3):
+
+- Chiami "FOX TUONOMINATIVO LOCATORE" nel secondo periodo (:15 e :45). Sotto
+  1000 Hz c'è la Fox: se il tuo offset è più basso salta a caso tra 1000 e
+  3000 Hz. La chiamata si ferma dopo 2 minuti; ripremi il CQ per continuare.
+- La Fox risponde da sola o dentro un messaggio multi-stream, per esempio
+  "K1ABC RR73; TUONOMINATIVO <H49A> -12". Mandi "FOX TUONOMINATIVO R-xx" con
+  l'SNR della Fox, prima sull'offset della Fox, poi a 300 Hz da lì. Si ferma
+  dopo 11 periodi (165 s) senza RR73.
+- L'RR73 della Fox ("TUONOMINATIVO RR73; ..." o "TUONOMINATIVO FOX RR73")
+  mette il QSO nel log e ferma la TX. Le decodifiche del secondo periodo (gli
+  altri Hound) sono ignorate.
+- TX CQ e Hold Freq non agiscono in Hound. Le righe RX mostrano lo stato, per
+  esempio "Hound: calling H49A". Hound è spento ogni volta che l'app si apre.
+
+I messaggi multi-stream ora vengono decodificati in ogni sessione FT8
+(ft8_lib li lasciava fuori); il nominativo della Fox appare come `<...>`
+finché non si è sentito il suo CQ.
+
+SuperFox. Not supported. The SuperFox signal (WSJT-X 2.7) is a 1500 Hz wide
+polar-coded waveform. Its code tables in WSJT-X are licensed for WSJT-X only
+("NOT free software ... no derived work" without IV3NWV's written
+permission), so they cannot go into this firmware, and the Fox check is a
+one-time code verified on an internet server. Old-style Fox and Hound works.
+
+SuperFox (IT). Non supportato. Il segnale SuperFox (WSJT-X 2.7) è largo
+1500 Hz con un codice polare. Le sue tabelle in WSJT-X hanno una licenza solo
+per WSJT-X (niente opere derivate senza il permesso scritto di IV3NWV), quindi
+non possono entrare in questo firmware, e la verifica della Fox è un codice
+monouso controllato su un server internet. Il Fox and Hound classico funziona.
 
 ### JS8
 
@@ -647,7 +825,33 @@ SSTV buttons:
 |---|---|
 | 1 | Start Auto RX, Start Manual RX, RX Mode (Manual RX), TX |
 | 2 | Freq., RX Pics Browser, Delete picture, Auto RX Restart (on: a new VIS during a picture starts a new one) |
-| 3 | Test RX, Close (ESC also closes), Power |
+| 3 | Test RX, Power, Denoise (ON/OFF), Close (ESC also closes) |
+
+Denoise. SSTV 3:3 > Denoise, on by default. When a picture is complete the
+radio saves it as it came off the air (`sstv-20261016-143205.png`), cleans
+it and saves the clean copy next to it (`sstv-20261016-143205_dn.png`); the
+screen shows the clean one. The clean-up removes the coloured dashes that
+QRM and fading leave along a line and the single wrong dots, then evens out
+the grain a little without softening edges. A picture without noise comes out
+the same. Two limits: a line drawn only 1 pixel high goes with the noise, and
+in Robot 36/72 a colour dash covers two lines, so it stays. It takes about
+0.1 s per picture after the decoding; the live picture while receiving is
+the raw one. With Denoise OFF only the original is saved. In the RX Pics
+Browser, the web Gallery and the X6100 Link app both files are listed, the
+`_dn` one first with the original right below it; delete either one on its own.
+
+Denoise (IT). SSTV 3:3 > Denoise, acceso di serie. A immagine completa la
+radio la salva com'è arrivata (`sstv-20261016-143205.png`), la pulisce e salva
+la copia pulita accanto (`sstv-20261016-143205_dn.png`); sullo schermo resta
+quella pulita. La pulizia toglie i trattini colorati che QRM e fading lasciano
+lungo una riga e i singoli punti sbagliati, poi uniforma un po' la grana
+senza ammorbidire i bordi. Un'immagine senza disturbi esce uguale. Due limiti:
+una linea alta 1 pixel sparisce insieme al rumore, e in Robot 36/72 un
+trattino di colore copre due righe e quindi resta. Costa circa 0,1 s per
+immagine, dopo la decodifica; durante la ricezione si vede l'immagine grezza.
+Con Denoise OFF si salva solo l'originale. Nel RX Pics Browser, nella Gallery
+web e nell'app X6100 Link compaiono tutti e due i file, prima il `_dn` e
+subito sotto l'originale; si cancellano uno per uno.
 
 SSTV TX. TX opens the TX menu (turn the MFK, press to choose):
 
@@ -724,6 +928,23 @@ dopo l'aggancio. In TX: Free Text o le macro (pagine 3-5, premere invia,
 tenere premuto modifica); la potenza resta a 7 W al massimo, con ALC e
 protezione SWR come in FT8. All'apertura non trasmette mai.
 
+### JTTY
+
+The keyboard mode added in WSJT-X 3.2 by K1JT and the WSJT-X team (ported
+from WSJT-X, GPLv3). APP > Modes > JTTY. The radio goes to the JTTY dial
+frequency of the band in USB-D (14.090 on 20 m). The layout is the same as
+RTTY and PSK: received text in the panel under the waterfall, sent text in
+the TX colour. F1-F8 are contest macros. Decoded stations go to PSK Reporter
+when it is on. TX goes through the same path as FT8 (7 W cap, ALC, SWR
+protection). I haven't made a QSO with it yet, so reports are welcome.
+
+**In italiano.** Il modo da tastiera arrivato con WSJT-X 3.2 di K1JT e del
+team WSJT-X (portato da WSJT-X, GPLv3). APP > Modes > JTTY: la radio va sulla
+frequenza JTTY della banda in USB-D (14.090 sui 20 m). Stessa impostazione di
+RTTY e PSK, macro contest su F1-F8, le stazioni decodificate vanno su PSK
+Reporter se è acceso. In TX stesso percorso di FT8 (massimo 7 W, ALC,
+protezione SWR).
+
 ### RTTY and WeFax TX
 
 RTTY and WeFax transmit only from the [X6100 Link app](#x6100-link-app); the
@@ -760,10 +981,36 @@ speed (WPM) appear in the panel over the waterfall.
 - Upstream bugs fixed here: a strong station slightly off tune was never
   decoded, and a dash cut by a retune came out as a dot.
 
+Parse. Where: CW 2:2 > Parse (on by default). The decoder often runs words
+together when the spacing is tight: "CQCQDEIU1WXYK". With Parse on, each
+finished word is split on the usual CW words and on callsigns: "CQ CQ DE
+IU1WXY K", "UR 5NN 5NN", "TU 73 <SK>", "NAME GIO". It only adds spaces,
+never changes a letter, and leaves a word alone when it does not read
+cleanly (ANTENNA stays ANTENNA). Callsigns show in the theme's accent colour
+once confirmed: after or before DE, sent twice, or found on QRZ by X6100
+Link. A call-shaped word heard once (often noise) stays plain. Abbreviations
+and prosigns are dimmer, RST (599, 5NN) in the heading colour. A call
+already on the panel decides a doubtful split: with W1AW sent before,
+"DEW1AWK" reads DE W1AW K. Parse Off gives the text exactly as decoded.
+
+Parse (IT). Dove: CW 2:2 > Parse (acceso di serie). Con la spaziatura
+stretta il decoder attacca le parole: "CQCQDEIU1WXYK". Con Parse acceso ogni
+parola finita viene separata sulle parole CW consuete e sui nominativi: "CQ
+CQ DE IU1WXY K", "UR 5NN 5NN", "TU 73 <SK>", "NAME GIO". Aggiunge solo
+spazi, non cambia mai una lettera, e lascia com'è una parola che non si
+legge in modo pulito (ANTENNA resta ANTENNA). I nominativi prendono il
+colore di accento del tema quando sono confermati: dopo o prima di DE,
+ripetuti due volte, o trovati su QRZ da X6100 Link. Una parola con la forma
+di un nominativo sentita una volta sola (spesso rumore) resta normale.
+Abbreviazioni e prosegni sono più tenui, l'RST (599, 5NN) nel colore dei
+titoli. Un nominativo già sul pannello decide una separazione dubbia: con
+W1AW già passato, "DEW1AWK" diventa DE W1AW K. Con Parse spento il testo è
+esattamente quello decodificato.
+
 ### CW from the keyboard
 
 With a USB or Bluetooth keyboard you key CW straight from the main screen.
-Pair a Bluetooth keyboard in Settings > Wireless > BLUETOOTH; it is found
+Pair a Bluetooth keyboard in Settings > Bluetooth > DEVICES; it is found
 again when it reconnects.
 
 - It works in CW or CW-R, with the VFO inside a CW segment of the band plan
@@ -794,7 +1041,7 @@ a long press edits it.
 The N6ARA TinyMIDI paddle works as a Bluetooth keyboard.
 
 - Put its mode switch on the left (Keyboard Mode) and pair it in Settings >
-  Wireless > BLUETOOTH like any keyboard: it is a Low Energy one, the scan
+  Bluetooth > DEVICES like any keyboard: it is a Low Energy one, the scan
   finds it as *keyboard*.
 - In CW or CW-R the dit contact (the `[` key) and the dah contact (`]`) key
   the radio. Out of CW they are the volume keys again.
@@ -817,6 +1064,9 @@ The MSG > CW messages are sent with TX or as a beacon.
   the gaps instead of clicking the relay. It goes back to your setting between
   beacons and when the message ends.
 - They also appear as macros in the X6100 Link app's CW tab.
+- `{CALL}` is your callsign and `{HIS}` the other station's: on the radio the
+  last call the decoder confirmed (the one Log QSO offers), in the app the call
+  typed in the CW tab's LOG field, e.g. `{HIS} UR 599 599 BK`.
 ### CW Trainer
 
 APP (page 2) > CW Trainer keys with the radio's own keyer, so it follows the
@@ -877,12 +1127,17 @@ radio and the web configurator, and apply to the app, the column and the
 waterfall.
 
 - On the radio: modes (CW, SSB, DIG, AM/FM), bands (160-6 m, all on = no
-  filter) and activity (All spots, POTA, SOTA, POTA + SOTA). One mode and one
-  band always stay on. A change applies at once.
+  filter) and activity (POTA, SOTA, WWBOTA, HOTA, any mix; none lit = all
+  spots). One mode and one band always stay on. A change applies at once.
   Where: Settings > Cluster > CLUSTER FILTERS.
 - POTA / SOTA come from the spot comment: the word POTA or SOTA, a park
   reference (`US-1234`, `IT-0123`) or a summit reference (`I/LO-123`,
   `W7W/KG-001`). WWFF references (`IFF-0123`) are not taken as POTA.
+  WWBOTA: the word WWBOTA (or BOTA) or a bunker (`B/G-0070`); HOTA: the word
+  HOTA or a HOTA reference (`RO-H0390`).
+- Besides the cluster, the radio reads the activator spots of pota.app,
+  wwbota.org and cqhota.app once a minute (WiFi needed) and puts them in the
+  same list.
 - On the web configurator (Cluster page): the same modes, bands and activity,
   plus maximum age and spotters to skip (`*` wildcard).
 - Alerts (web configurator): callsigns or prefixes (`3B8M`, `VP8*`, `*/MM`),
@@ -939,7 +1194,7 @@ or a long-press action. GEN or Radio goes back to the normal screen.
 | **Activation** | **Bands** |
 | ![Activation](screenshots/field_activation.png) | ![Band overview](screenshots/field_bands.png) |
 
-Home: the SOTA, POTA and Bands tiles. MFK to choose, a press (or a tap)
+Home: the SOTA, POTA, WWBOTA, HOTA and Bands tiles. MFK to choose, a press
 opens.
 
 SOTA / POTA, before the activation:
@@ -1007,9 +1262,44 @@ HIGH / GOOD / FAIR / POOR, the best band marked.
 - Use band (or a press) tunes a typical activation frequency of the band.
 - RBN is connected while the screen is open (the first minute fills the
   counts); it needs WiFi and the callsign.
+- The skimmer data comes from the Reverse Beacon Network
+  (reversebeacon.net), thanks to its skimmer operators.
 
-No POTA or SOTA spot goes to the DX cluster: neither program reads them
-there.
+Start and Spot also post the spot on the DX cluster (`POTA IT-0123 SSB`,
+`SOTA I/LO-123 CW`); the QSY spots don't.
+
+WWBOTA (World Wide Bunkers On The Air) and HOTA (History On The Air) work
+like POTA, with their own tile.
+
+- Update list downloads the bunkers (wwbota.org) and the HOTA references
+  (cqhota.app) with the parks and summits. Lists that did not change since
+  the last update are not downloaded again.
+- The activation screen shows what a valid activation needs: `QSOs / 25` in
+  WWBOTA (`/ 10` for the S5 and Z3 bunkers), `CALLS / 5` in HOTA (different
+  calls, the same UTC day, within 500 m), `QSOs / 10` in POTA, `QSOs / 4` in
+  SOTA.
+- The log has `MY_SIG WWBOTA` or `MY_SIG HOTA` and `MY_SIG_INFO` with the
+  reference.
+- Spots: the same rules as POTA (Start, Spot, after a QSY, QRT at End).
+  WWBOTA spots go to wwbota.org, no account needed. HOTA spots go to
+  cqhota.app with your own key: on cqhota.app, My account > Integration API
+  key, then paste it in the web configurator's Field Ops page. Without the
+  key HOTA spots go to the DX cluster only, and the message says so.
+
+**In italiano.** WWBOTA (bunker) e HOTA (luoghi storici) funzionano come POTA,
+ognuno con la sua casella. Update list scarica anche i bunker (wwbota.org) e
+le referenze HOTA (cqhota.app); una lista che non è cambiata non si scarica di
+nuovo. La schermata dell'attivazione mostra cosa serve: `QSOs / 25` in WWBOTA
+(`/ 10` per i bunker S5 e Z3), `CALLS / 5` in HOTA (nominativi diversi, stesso
+giorno UTC, entro 500 m). Il log ha `MY_SIG WWBOTA` o `MY_SIG HOTA` e
+`MY_SIG_INFO` con la referenza. Gli spot seguono le regole di POTA (Start,
+Spot, dopo un QSY, QRT con End): WWBOTA va su wwbota.org senza account, HOTA
+va su cqhota.app con la tua chiave (su cqhota.app: My account > Integration
+API key, da incollare nella pagina Field Ops del configuratore web). Senza
+chiave lo spot HOTA va solo sul DX cluster e il messaggio lo dice. Nel
+Cluster i filtri di attività sono POTA, SOTA, WWBOTA e HOTA (nessuno acceso =
+tutti gli spot); la radio legge anche gli spot di pota.app, wwbota.org e
+cqhota.app.
 
 ### Bands
 
@@ -1029,17 +1319,16 @@ apps: APP (page 3) > Bands, or a long-press action.
 
 ### Bluetooth headphones
 
-Radio RX audio to A2DP headphones. Pairing and connection are in Settings >
-Wireless > BLUETOOTH; the audio switches are in Settings > Audio > BT
-HEADPHONES.
+Radio RX audio to A2DP headphones. Everything is in Settings > Bluetooth:
+pairing and connection in DEVICES, the audio switches in HEADPHONES.
 
-1. Settings > Wireless: switch Bluetooth on, put the headphones in pairing
-   mode and press Scan headphones (16 s).
+1. Switch Bluetooth on, put the headphones in pairing mode and press Scan
+   (16 s).
 2. An MFK press on a device marked *new* pairs, trusts and connects it; it
    also opens the pairing window (the Pairing switch counts down). What it is
-   doing, or why it failed, shows next to Scan headphones. On a paired device
-   the menu offers Connect / Disconnect, Connect at startup and Remove.
-3. Settings > Audio > BT HEADPHONES, with the headphones connected:
+   doing, or why it failed, shows on the Activity row. On a paired device
+   the menu offers Connect / Disconnect, Connect at startup and Forget.
+3. HEADPHONES, with the headphones connected:
 
 | Option | What it does |
 |---|---|
@@ -1053,11 +1342,11 @@ HEADPHONES.
   from looping a phone or tablet that connects for CAT (it also appears as an
   A2DP source) into the radio TX audio.
 - Bluetooth keyboards (for [CW from the keyboard](#cw-from-the-keyboard)) are paired the
-  same way: Scan headphones also finds keyboards, marked *keyboard* in the
-  list. After the MFK press, press the keyboard's pairing key when asked; if
-  it asks for a code, the code to type (then Enter) shows next to Scan
-  headphones. A keyboard that takes a new address at each pairing is found
-  again by its name.
+  same way: Scan also finds keyboards, marked *keyboard* in the list (one
+  that never sends its name shows as *Keyboard* and its address). After the
+  MFK press, press the keyboard's pairing key when asked; if it asks for a
+  code, the code to type (then Enter) shows on the Activity row. A keyboard
+  that takes a new address at each pairing is found again by its name.
 - Pairings are kept in a backup on `/mnt` and restored at boot
   (`S39btpairings`), so a new image does not forget them.
 
@@ -1068,12 +1357,13 @@ bind-mounts a pty over it, so the GUI talks to btcat. USB CAT and up to 3
 Bluetooth clients share the CAT port: one request at a time, replies go back
 to whoever asked, transceive frames (dst `0x00`) go to everyone.
 
-Where: Settings > Wireless > BLUETOOTH.
+Where: Settings > Bluetooth (ADAPTER and BLUETOOTH CAT cards).
 
 | Option | What it does |
 |---|---|
 | Bluetooth | adapter power |
 | Pairing (3 min) | visible and pairable for 3 minutes, then off by itself; the label counts down |
+| Clients | Bluetooth CAT clients connected now, or "bridge not running" |
 
 CAT accepts paired devices only (RFCOMM security level medium): a device in
 range that has not paired cannot open the port. Outside the pairing window
@@ -1145,7 +1435,7 @@ The menu has General and four groups:
 | | Memories | MEM 1-9 slots and the named channel list |
 | Operating | Remote | tune the radio from the browser: frequency, mode, band, filter, RF gain, PRE/ATT/AGC/NB/NR, live spectrum and waterfall (click or drag to tune), RX audio (HTTPS page, one listener). Receive only (no PTT); transmitting remotely is done by the [X6100 Link app](#x6100-link-app) |
 | | Cluster | DX cluster servers, filters and alerts (writes `/mnt/cluster.conf`) |
-| | Field Ops | QRZ Logbook API key and upload, update the parks and summits list, download the activation logs |
+| | Field Ops | QRZ Logbook API key and upload, HOTA key, update the reference lists, download the activation logs |
 | | CW messages | the MSG > CW messages: add, edit, delete (1-64 characters) |
 | | Logs | every QSO on the radio, day by day: edit, delete, export as ADIF or CSV |
 | Files | Files | browse and download `/mnt` |
@@ -1153,6 +1443,7 @@ The menu has General and four groups:
 | | Backup | download settings, memories, cluster, wfview, QSO log, voice messages (optionally CW trainer and WiFi) as one file, and restore the parts you choose |
 | System | Display | every display option of the radio (see below) |
 | | Time | local and server time, NTP sync, timezone |
+| | Ethernet | the USB Ethernet adapter: state, DHCP or static address (see [Ethernet](#ethernet)) |
 | | wfview | enable the wfview server, set user and password |
 
 Gallery: a folder per kind (screen recordings, voice recordings, screenshots,
@@ -1280,6 +1571,53 @@ waterfall.
   50001, the user and password above, audio codec LPCM 1ch 16bit.
 - The WFVIEW SERVER card shows the connected client.
 
+## Ethernet
+
+A USB Ethernet adapter in the radio's USB port gives it a wired connection
+next to WiFi. Adapters with the common chips work (ASIX, Realtek
+RTL8152/8153, CDC Ethernet/NCM). It can be plugged in at any time.
+
+Where: Settings > Wireless > ETHERNET, or the Ethernet page of the web
+configurator (System > Ethernet). Both show the same settings. The ETHERNET
+card is there only while an adapter is plugged in: it appears and goes away
+with the adapter, also with the page open. Without one the web page says
+"No Ethernet adapter connected".
+
+- Status: connected, no cable, connecting or not connected, and the
+  adapter's name (eth0).
+- Address in use / Gateway in use: what the adapter has now.
+- Mode: DHCP (the default, the network gives the address) or Static.
+- IP address, Netmask, Gateway, DNS: used in Static mode. The netmask can be
+  written as 255.255.255.0 or /24. Gateway and DNS can stay empty.
+- Apply: checks all the fields and saves them. Nothing changes until Apply.
+
+On the radio, move to a field with the MFK and press it: the keyboard opens
+for that field (the 1# key gives the digits). OK keeps the value only if it is
+a valid address.
+
+Apply refuses an address that is not a dotted quad, a netmask that is not
+valid, the subnet's network or broadcast address, and a gateway outside the
+subnet. The setting is kept across restarts and belongs to the port, not to
+one adapter: another adapter gets the same address.
+
+WiFi and Ethernet together: with a gateway set, internet traffic goes over
+the cable and WiFi stays connected for its own network. Leave the gateway
+empty and the cable reaches only its subnet, while internet stays on WiFi.
+Changing Ethernet never touches the WiFi settings.
+
+> **Ethernet (IT)**
+> Un adattatore Ethernet USB nella porta USB della radio le dà una connessione via cavo accanto al WiFi. Funzionano gli adattatori con i chip più comuni (ASIX, Realtek RTL8152/8153, CDC Ethernet/NCM). Si può collegare in qualsiasi momento.
+> Dove: Impostazioni > Wireless > ETHERNET, oppure la pagina Ethernet del configuratore web (System > Ethernet). Le due mostrano le stesse impostazioni. La scheda ETHERNET c'è solo con un adattatore collegato: compare e sparisce con l'adattatore, anche a pagina aperta. Senza adattatore la pagina web scrive "No Ethernet adapter connected".
+> - **Status**: connesso, senza cavo, in connessione o non connesso, e il nome dell'adattatore (eth0).
+> - **Address in use / Gateway in use**: quello che l'adattatore ha adesso.
+> - **Mode**: DHCP (di serie, l'indirizzo lo dà la rete) o Static.
+> - **IP address, Netmask, Gateway, DNS**: usati in modo Static. La netmask si scrive 255.255.255.0 oppure /24. Gateway e DNS possono restare vuoti.
+> - **Apply**: controlla tutti i campi e li salva. Fino ad Apply non cambia niente.
+>
+> Sulla radio si va sul campo con il MFK e lo si preme: si apre la tastiera per quel campo (il tasto 1# dà le cifre). OK tiene il valore solo se è un indirizzo valido.
+> Apply rifiuta un indirizzo che non sia nella forma a.b.c.d, una netmask non valida, l'indirizzo di rete o di broadcast della sottorete e un gateway fuori dalla sottorete. L'impostazione resta dopo il riavvio e vale per la porta, non per un adattatore: un altro adattatore prende lo stesso indirizzo.
+> WiFi ed Ethernet insieme: con il gateway impostato il traffico internet passa dal cavo e il WiFi resta connesso per la sua rete. Con il gateway vuoto il cavo raggiunge solo la sua sottorete e internet resta sul WiFi. Cambiare Ethernet non tocca mai le impostazioni WiFi.
+
 ## Troubleshooting and FAQ
 
 #### FT8, JS8 or WSPR decode nothing, or nobody answers
@@ -1400,7 +1738,7 @@ Example, read frequency: `FE FE A4 E0 03 FD` →
 
 | Command | Effect |
 |---|---|
-| `btcat-ctl bt on\|off` | Bluetooth adapter power (= Settings > Wireless > Bluetooth) |
+| `btcat-ctl bt on\|off` | Bluetooth adapter power (= Settings > Bluetooth > Bluetooth) |
 | `btcat-ctl discoverable on\|off` | Open / close the 3-minute pairing window: visible and pairable, the GUI's agent accepts pairing (= Pairing (3 min)) |
 | `btcat-ctl status` | Print power and the time left in the pairing window |
 | `btcat-ctl apply` | Re-apply power from `/mnt/btcat.conf`, close the pairing window |
@@ -1408,7 +1746,7 @@ Example, read frequency: `FE FE A4 E0 03 FD` →
 
 ### btaudio-ctl
 
-Used by Settings > Wireless and Audio for the headphone audio. Scan, pair,
+Used by Settings > Bluetooth for the headphone audio. Scan, pair,
 connect and remove are in the GUI itself, straight to BlueZ over D-Bus, with
 its own pairing agent (log in `/tmp/bt_pair.log`).
 

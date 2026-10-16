@@ -83,11 +83,11 @@ static uint64_t       waterfall_time;
 static std::atomic<bool> waterfall_enabled{true};
 static std::atomic<bool> spectrum_enabled{true};
 /* The spectrum is not on the screen (spectrum_show, followed live): its FFT
- * is never run */
+ * is never run. The walkie screen's bandscope needs it whatever the setting */
 static std::atomic<bool> spectrum_shown{true};
 
 static void on_spectrum_show(Subject *subj, void *user_data) {
-    spectrum_shown = cfg_sm.p_spectrum_show.get();
+    spectrum_shown = cfg_sm.p_spectrum_show.get() || cfg_sm.p_walkie.get();
 }
 
 static cfloat buf_filtered[RADIO_SAMPLES * 2];
@@ -315,6 +315,7 @@ void dsp_init() {
     audio_dc_blocker = iirfilt_rrrf_create_dc_blocker(2.0f * M_PI_2f32 * 50.0f * AUDIO_DECIM / AUDIO_CAPTURE_RATE);
 
     cfg_sm.p_spectrum_show.subscribe_and_notify(on_spectrum_show);
+    cfg_sm.p_walkie.subscribe(on_spectrum_show);
     cfg_sm.p_mode_zoom.subscribe_and_notify(on_zoom_change);
 
     cfg_sm.p_band_if_shift.subscribe(update_filters);
@@ -742,6 +743,11 @@ static void dsp_update_min_max(float *psd_lin, uint16_t size) {
 
     // From the window sum back to the level of one bin, plus a margin
     min -= 10.0f * log10f(window_size) + 5.0f;
+    /* The displayed bins carry zoom_level_offset (narrower bins have less
+     * noise each, compensated above): the auto levels must carry it too, or
+     * the noise floor climbs by 3 dB per zoom step. By Hany El Imam (1KO125
+     * 1.0.2 beta 4), via OpenX6100/x6100_gui 725e61a4. */
+    min += zoom_level_offset;
 
     if (min < S_MIN) {
         min = S_MIN;

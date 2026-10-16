@@ -8,6 +8,7 @@
 #include "dialog_recorder.h"
 
 #include "audio.h"
+#include "radio.h"
 #include "recorder.h"
 #include "dialog.h"
 #include "styles.h"
@@ -213,10 +214,10 @@ static void * play_thread(void *arg) {
 
     /* On the Bluetooth headphones while they replace the speaker */
     bool bt = audio_play_bt_begin();
-    if (!bt) audio_set_play_mode(AUDIO_PLAY_ON);
+    if (!bt) radio_set_play_mode(AUDIO_PLAY_ON);
     play_item();
     if (bt) audio_play_bt_end();
-    else audio_set_play_mode(AUDIO_PLAY_OFF);
+    else radio_set_play_mode(AUDIO_PLAY_OFF);
 
     if (dialog.run) {
         scheduler_put_noargs(load_btn_page);
@@ -350,7 +351,7 @@ static void construct_cb(lv_obj_t *parent) {
 }
 
 static void destruct_cb() {
-    audio_set_play_mode(AUDIO_PLAY_OFF);
+    radio_set_play_mode(AUDIO_PLAY_OFF);
     play_state = false;
     textarea_window_close();
     lv_timer_del(level_timer);

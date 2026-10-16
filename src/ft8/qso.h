@@ -34,6 +34,7 @@ typedef struct {
 } ftx_tx_msg_t;
 
 typedef void (*save_qso_cb_t)(const char *remote_callsign, const char *remote_grid, const int r_snr, const int s_snr);
+typedef bool (*is_pota_cb_t)(const char *callsign);
 
 #ifdef __cplusplus
 #include <string>
@@ -52,6 +53,7 @@ class Candidate {
     bool match_callsign(std::string callsign);
     bool is_finished();
     bool can_be_saved();
+    bool quiet_slot(int max_repeats);
     void save_qso(save_qso_cb_t save_qso_cb);
 
     std::string get_tx_text(std::string local_callsign, std::string local_qth);
@@ -64,6 +66,7 @@ class Candidate {
     int            _rcvd_snr;
     int            _sent_snr;
     bool           _saved=false;
+    int            _quiet_slots=0;  /* slots since its last message */
 };
 
 class FTxQsoProcessor {
@@ -86,6 +89,8 @@ class FTxQsoProcessor {
     void process_cq(ftx_msg_meta_t *meta, std::vector<std::string> &tokens, const int snr);
 
     void set_auto(bool);
+    void set_max_repeats(int);
+    void set_is_pota(is_pota_cb_t);
     void start_new_slot();
     void reset();
     void start_qso(ftx_msg_meta_t *meta, ftx_tx_msg_t *tx_msg);
@@ -101,6 +106,8 @@ class FTxQsoProcessor {
     std::string   _local_qth;
     save_qso_cb_t _save_qso_cb;
     int           _max_repeats = -1;
+    is_pota_cb_t  _is_pota = NULL;
+    bool          _cur_fresh = false;   /* the current QSO is a non-POTA caller of this slot, not answered yet */
 
     ftx_msg_type_t _last_rx_type;
     Candidate     *_next_candidate = NULL;
@@ -122,6 +129,8 @@ extern void             ftx_qso_processor_delete(FTxQsoProcessor *p);
 extern void ftx_qso_processor_add_rx_text(FTxQsoProcessor *p, const char *text, const int snr, ftx_msg_meta_t *meta,
                                           ftx_tx_msg_t *tx_msg);
 extern void ftx_qso_processor_set_auto(FTxQsoProcessor *p, bool);
+extern void ftx_qso_processor_set_max_repeats(FTxQsoProcessor *p, int max_repeats);
+extern void ftx_qso_processor_set_is_pota(FTxQsoProcessor *p, is_pota_cb_t is_pota);
 extern void ftx_qso_processor_start_new_slot(FTxQsoProcessor *p);
 extern void ftx_qso_processor_reset(FTxQsoProcessor *p);
 extern void ftx_qso_processor_start_qso(FTxQsoProcessor *p, ftx_msg_meta_t *meta, ftx_tx_msg_t *tx_msg);

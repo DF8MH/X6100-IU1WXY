@@ -53,6 +53,7 @@
 #include "dialog_js8.h"
 #include "dialog_psk.h"
 #include "dialog_olivia.h"
+#include "dialog_jtty.h"
 #include "dialog_sstv.h"
 #include "dialog_cluster.h"
 #include "dialog_modes.h"
@@ -598,6 +599,7 @@ static const char *app_name(press_action_t a) {
         case ACTION_APP_SNAKE:      return "Snake";
         case ACTION_APP_PSK:        return dialog_psk_is_63() ? "PSK63" : "PSK31";
         case ACTION_APP_OLIVIA:     return "Olivia";
+        case ACTION_APP_JTTY:       return "JTTY";
         default:                    return NULL;    /* Modes menu: a menu, not an app */
     }
 }
@@ -642,6 +644,10 @@ void main_screen_start_app(press_action_t app_action) {
             break;
         case ACTION_APP_OLIVIA:
             dialog_app_memory("Olivia");
+            radio_set_digi_cap(true);
+            break;
+        case ACTION_APP_JTTY:
+            dialog_app_memory("JTTY");
             radio_set_digi_cap(true);
             break;
         case ACTION_APP_RTTY:
@@ -743,6 +749,10 @@ void main_screen_start_app(press_action_t app_action) {
 
         case ACTION_APP_OLIVIA:
             dialog_construct(dialog_olivia, obj);
+            break;
+
+        case ACTION_APP_JTTY:
+            dialog_construct(dialog_jtty, obj);
             break;
 
         default:
@@ -850,6 +860,7 @@ void main_screen_action(press_action_t action) {
         case ACTION_APP_BANDS:
         case ACTION_APP_PSK:
         case ACTION_APP_OLIVIA:
+        case ACTION_APP_JTTY:
             main_screen_start_app(action);
             break;
 
@@ -1357,7 +1368,7 @@ static void main_screen_hkey_cb(lv_event_t * e) {
 
 case HKEY_VM:
     if (dialog_wefax->run || dialog_navtex->run || dialog_sstv->run || dialog_js8->run || dialog_psk->run ||
-        dialog_olivia->run) {
+        dialog_olivia->run || dialog_jtty->run) {
         break;
     }
 

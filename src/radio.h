@@ -12,6 +12,7 @@
 #include <aether_radio/x6100_control/control.h>
 
 #include "lvgl/lvgl.h"
+#include "audio.h"
 
 #define RADIO_SAMPLES   (512)
 
@@ -86,6 +87,8 @@ bool radio_get_modem(void);   /* the TX audio from the GUI (apps, recordings), n
  * recorder do) - and while it does, the audio it sends us isn't the
  * receiver's. Off puts the mics back. */
 void radio_speaker_play(bool on);
+/* audio_set_play_mode() with the radio lock: use this one */
+void radio_set_play_mode(audio_play_mode_t mode);
 
 void radio_set_line_in(uint8_t d);
 void radio_set_line_out(uint8_t d);

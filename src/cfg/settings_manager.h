@@ -124,8 +124,14 @@ class SettingsManager {
     // Walkie Talkie: a portrait screen instead of the main one (live)
     Parameter<int32_t> p_walkie{"walkie", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
-    // Walkie Talkie: the main knob steps through the channel memories instead of the frequency
+    // Walkie Talkie: the main knob steps through the walkie channels instead of the frequency
     Parameter<int32_t> p_walkie_mem{"walkie_mem", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Walkie Talkie: the walkie channel the main knob is on, 0-31 (walkie.c, /mnt/walkie_channels.json)
+    Parameter<int32_t> p_walkie_ch{"walkie_ch", 0, 0, 31,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Walkie Talkie: the microphone while its screen is up (x6100_mic_sel_t); p_mic stays as saved
+    Parameter<int32_t> p_walkie_mic{"walkie_mic", x6100_mic_builtin, 0, 2,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // S-meter drawn as a needle on a dial instead of the bars
     // Waterfall colours: 0 the theme's, then classic, gauss, grey, fire, ice, rainbow (theme.c)
@@ -281,6 +287,9 @@ class SettingsManager {
     // Detection floor of the decoder (SNR in its ~60 Hz detection bandwidth).
     // New key: the old "cw_decoder_snr_2" value had another meaning.
     Parameter<float, int32_t, 10> p_cw_decoder_snr{"cw_decoder_snr_3", 8.0f, 5.0f, 30.0f,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Decoded words split and coloured: calls, abbreviations, RST (cw_parse.c)
+    Parameter<int32_t> p_cw_parse{"cw_parse", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
 
     // AGC

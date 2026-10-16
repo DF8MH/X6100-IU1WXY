@@ -10,6 +10,7 @@
 #include "digital_modes.h"
 
 #include <atomic>
+#include <cstdio>
 #include <string>
 
 #include "db.h"
@@ -54,4 +55,19 @@ extern "C" const char *cfg_digital_label_get(void) {
 
 extern "C" int32_t cfg_digital_freq_get(void) {
     return last_freq;
+}
+
+extern "C" int cfg_digital_list(cfg_digital_type_t type, cfg_digital_preset_t *out, int max) {
+    int n = 0;
+
+    for (int32_t f = 0; n < max; n++) {
+        auto r = DigitalModesTable::find_next(type, f);
+        if (r.rc != SUCCESS) {
+            break;
+        }
+        f           = r.value.freq;
+        out[n].freq = f;
+        snprintf(out[n].label, sizeof(out[n].label), "%s", r.value.label.c_str());
+    }
+    return n;
 }

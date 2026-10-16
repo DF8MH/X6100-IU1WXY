@@ -16,6 +16,7 @@ extern "C" {
 #include "pubsub_ids.h"
 
 #include <aether_radio/x6100_control/low/gpio.h>
+#include <arpa/inet.h>
 #include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,7 @@ extern "C" {
 
 #include <string>
 #include <map>
+#include <mutex>
 #include <vector>
 #include <array>
 
@@ -63,6 +65,7 @@ static void connection_adding_and_activating_cb(GObject *client, GAsyncResult *r
 static void connection_modify_cb(GObject *connection, GAsyncResult *result, gpointer user_data);
 static void connection_delete_cb(GObject *connection, GAsyncResult *result, gpointer user_data);
 static void connection_activating_cb(GObject *client, GAsyncResult *result, gpointer user_data);
+static void eth_refresh_cb(lv_timer_t *t);
 
 void wifi_power_setup() {
     set_status(WIFI_DISCONNECTED);
@@ -75,6 +78,7 @@ void wifi_power_setup() {
         }
     }
     loop_timer = lv_timer_create(loop_iterations_cb, 30, NULL);
+    lv_timer_create(eth_refresh_cb, 1000, NULL);
 
     if (params.wifi_enabled.x)
         wifi_power_on();
@@ -247,6 +251,11 @@ void wifi_add_connection(const char *ssid, const char *password) {
 				 NULL);
     // clang-format on
     nm_connection_add_setting(connection, NM_SETTING(s_ip4));
+
+    /* No IPv6: the kernel has none, and NetworkManager would retry its address every 2 s */
+    NMSettingIP6Config *s_ip6 = (NMSettingIP6Config *)nm_setting_ip6_config_new();
+    g_object_set(G_OBJECT(s_ip6), NM_SETTING_IP_CONFIG_METHOD, NM_SETTING_IP6_CONFIG_METHOD_DISABLED, NULL);
+    nm_connection_add_setting(connection, NM_SETTING(s_ip6));
 
     LV_LOG_USER("Adding connection");
     nm_client_add_and_activate_connection_async(client, connection, device, NULL, NULL,
@@ -614,4 +623,292 @@ static void device_disconnection_cb(GObject *device, GAsyncResult *result, gpoin
         set_status(WIFI_DISCONNECTED);
     }
     g_main_loop_quit(loop);
+}
+
+/*
+ * Ethernet. One saved profile, "Ethernet", for any wired adapter (no interface name or MAC in it:
+ * a USB adapter can be swapped). Routes keep the NetworkManager metrics: wired 100, WiFi 600, so
+ * with a gateway on both the cable carries the traffic and WiFi stays up. Without a gateway the
+ * cable reaches its own subnet only and the default route stays on WiFi.
+ */
+
+#define ETH_CON_ID "Ethernet"
+
+static std::mutex eth_mutex;
+static eth_info_t eth_info = {false, false, "no adapter"};
+
+static NMDevice *eth_device() {
+    if (!client) {
+        return NULL;
+    }
+    const GPtrArray *devs = nm_client_get_devices(client);
+
+    for (guint i = 0; i < devs->len; i++) {
+        NMDevice *d = NM_DEVICE(g_ptr_array_index(devs, i));
+
+        if (NM_IS_DEVICE_ETHERNET(d)) {
+            return d;
+        }
+    }
+    return NULL;
+}
+
+static void mask_from_prefix(guint prefix, char *out) {
+    struct in_addr a;
+
+    a.s_addr = htonl(prefix ? 0xffffffffu << (32 - prefix) : 0);
+    inet_ntop(AF_INET, &a, out, 16);
+}
+
+static void eth_refresh_cb(lv_timer_t *t) {
+    eth_info_t in = {};
+    NMDevice  *d = eth_device();
+
+    in.cfg.dhcp = true;
+    in.state = "no adapter";
+    if (d) {
+        NMDeviceState st = nm_device_get_state(d);
+
+        in.present = true;
+        in.connected = st == NM_DEVICE_STATE_ACTIVATED;
+        snprintf(in.iface, sizeof(in.iface), "%s", nm_device_get_iface(d));
+        if (in.connected) {
+            in.state = "connected";
+        } else if (!nm_device_ethernet_get_carrier(NM_DEVICE_ETHERNET(d))) {
+            in.state = "no cable";
+        } else if (st > NM_DEVICE_STATE_DISCONNECTED && st < NM_DEVICE_STATE_ACTIVATED) {
+            in.state = "connecting";
+        } else {
+            in.state = "not connected";
+        }
+        NMIPConfig *ip = in.connected ? nm_device_get_ip4_config(d) : NULL;
+
+        if (ip) {
+            GPtrArray  *addrs = nm_ip_config_get_addresses(ip);
+            const char *gw = nm_ip_config_get_gateway(ip);
+
+            if (addrs->len) {
+                NMIPAddress *a = (NMIPAddress *)g_ptr_array_index(addrs, 0);
+
+                snprintf(in.addr, sizeof(in.addr), "%s/%u", nm_ip_address_get_address(a), nm_ip_address_get_prefix(a));
+            }
+            snprintf(in.gw, sizeof(in.gw), "%s", gw ? gw : "");
+        }
+    }
+
+    NMRemoteConnection *rc = client ? nm_client_get_connection_by_id(client, ETH_CON_ID) : NULL;
+    NMSettingIPConfig  *s  = rc ? nm_connection_get_setting_ip4_config(NM_CONNECTION(rc)) : NULL;
+
+    if (s && strcmp(nm_setting_ip_config_get_method(s), NM_SETTING_IP4_CONFIG_METHOD_MANUAL) == 0) {
+        in.cfg.dhcp = false;
+        if (nm_setting_ip_config_get_num_addresses(s)) {
+            NMIPAddress *a = nm_setting_ip_config_get_address(s, 0);
+
+            snprintf(in.cfg.field[ETH_IP], 16, "%s", nm_ip_address_get_address(a));
+            mask_from_prefix(nm_ip_address_get_prefix(a), in.cfg.field[ETH_MASK]);
+        }
+        if (nm_setting_ip_config_get_gateway(s)) {
+            snprintf(in.cfg.field[ETH_GW], 16, "%s", nm_setting_ip_config_get_gateway(s));
+        }
+        if (nm_setting_ip_config_get_num_dns(s)) {
+            snprintf(in.cfg.field[ETH_DNS], 16, "%s", nm_setting_ip_config_get_dns(s, 0));
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(eth_mutex);
+    eth_info = in;
+}
+
+void eth_get_info(eth_info_t *info) {
+    std::lock_guard<std::mutex> lock(eth_mutex);
+    *info = eth_info;
+}
+
+static int mask_prefix(const char *mask) {
+    struct in_addr a;
+
+    inet_pton(AF_INET, mask, &a);
+    return __builtin_popcount(a.s_addr);
+}
+
+const char *eth_check_field(int field, char *val) {
+    static const char *bad[ETH_FIELDS] = {"IP address is not valid", "Netmask is not valid (255.255.255.0 or /24)",
+                                          "Gateway is not valid", "DNS is not valid"};
+    struct in_addr     a;
+    char              *p = val;
+
+    while (*p == ' ') p++;
+    memmove(val, p, strlen(p) + 1);
+    for (p = val + strlen(val); p > val && p[-1] == ' '; p--) p[-1] = 0;
+    if (!*val) {
+        return NULL;    /* eth_check() says which ones are needed */
+    }
+    if (field == ETH_MASK) {
+        const char *digits = val[0] == '/' ? val + 1 : val;
+
+        if (*digits && strlen(digits) <= 2 && strspn(digits, "0123456789") == strlen(digits)) {
+            int prefix = atoi(digits);
+
+            if (prefix < 1 || prefix > 32) {
+                return bad[field];
+            }
+            mask_from_prefix(prefix, val);
+            return NULL;
+        }
+        if (inet_pton(AF_INET, val, &a) != 1) {
+            return bad[field];
+        }
+        uint32_t inv = ~ntohl(a.s_addr);
+
+        return a.s_addr && !(inv & (inv + 1)) ? NULL : bad[field];     /* ones, then zeros */
+    }
+    if (inet_pton(AF_INET, val, &a) != 1) {
+        return bad[field];
+    }
+    uint8_t first = ntohl(a.s_addr) >> 24;
+
+    if (first == 0 || first == 127 || first >= 224) {
+        return bad[field];
+    }
+    inet_ntop(AF_INET, &a, val, 16);
+    return NULL;
+}
+
+const char *eth_check(eth_cfg_t *cfg) {
+    if (cfg->dhcp) {
+        return NULL;
+    }
+    for (int i = 0; i < ETH_FIELDS; i++) {
+        const char *err = eth_check_field(i, cfg->field[i]);
+
+        if (err) {
+            return err;
+        }
+    }
+    if (!cfg->field[ETH_IP][0] || !cfg->field[ETH_MASK][0]) {
+        return "Static needs an IP address and a netmask";
+    }
+    struct in_addr ip, mask, gw;
+
+    inet_pton(AF_INET, cfg->field[ETH_IP], &ip);
+    inet_pton(AF_INET, cfg->field[ETH_MASK], &mask);
+    if (mask_prefix(cfg->field[ETH_MASK]) <= 30) {
+        uint32_t host = ip.s_addr & ~mask.s_addr;
+
+        if (host == 0 || host == ~mask.s_addr) {
+            return "The IP address is the network or broadcast address of its subnet";
+        }
+    }
+    if (cfg->field[ETH_GW][0]) {
+        inet_pton(AF_INET, cfg->field[ETH_GW], &gw);
+        if ((gw.s_addr & mask.s_addr) != (ip.s_addr & mask.s_addr) || gw.s_addr == ip.s_addr) {
+            return "The gateway is not in the subnet of the IP address";
+        }
+    }
+    return NULL;
+}
+
+static NMConnection *eth_connection_new(const eth_cfg_t *cfg, const char *uuid) {
+    NMConnection        *con = nm_simple_connection_new();
+    NMSettingConnection *s_con = (NMSettingConnection *)nm_setting_connection_new();
+    NMSettingIPConfig   *s_ip4 = (NMSettingIPConfig *)nm_setting_ip4_config_new();
+    NMSettingIPConfig   *s_ip6 = (NMSettingIPConfig *)nm_setting_ip6_config_new();
+
+    g_object_set(G_OBJECT(s_con), NM_SETTING_CONNECTION_UUID, uuid, NM_SETTING_CONNECTION_ID, ETH_CON_ID,
+                 NM_SETTING_CONNECTION_TYPE, NM_SETTING_WIRED_SETTING_NAME, NM_SETTING_CONNECTION_AUTOCONNECT, TRUE, NULL);
+    nm_connection_add_setting(con, NM_SETTING(s_con));
+    nm_connection_add_setting(con, nm_setting_wired_new());
+
+    if (cfg->dhcp) {
+        g_object_set(G_OBJECT(s_ip4), NM_SETTING_IP_CONFIG_METHOD, NM_SETTING_IP4_CONFIG_METHOD_AUTO, NULL);
+    } else {
+        NMIPAddress *a = nm_ip_address_new(AF_INET, cfg->field[ETH_IP], mask_prefix(cfg->field[ETH_MASK]), NULL);
+
+        g_object_set(G_OBJECT(s_ip4), NM_SETTING_IP_CONFIG_METHOD, NM_SETTING_IP4_CONFIG_METHOD_MANUAL, NULL);
+        nm_setting_ip_config_add_address(s_ip4, a);
+        nm_ip_address_unref(a);
+        if (cfg->field[ETH_GW][0]) {
+            g_object_set(G_OBJECT(s_ip4), NM_SETTING_IP_CONFIG_GATEWAY, cfg->field[ETH_GW], NULL);
+        }
+        if (cfg->field[ETH_DNS][0]) {
+            nm_setting_ip_config_add_dns(s_ip4, cfg->field[ETH_DNS]);
+        }
+    }
+    nm_connection_add_setting(con, NM_SETTING(s_ip4));
+
+    /* No IPv6, as WiFi */
+    g_object_set(G_OBJECT(s_ip6), NM_SETTING_IP_CONFIG_METHOD, NM_SETTING_IP6_CONFIG_METHOD_DISABLED, NULL);
+    nm_connection_add_setting(con, NM_SETTING(s_ip6));
+    return con;
+}
+
+static void eth_error(const char *what, GError *error) {
+    LV_LOG_ERROR("Ethernet %s: %s", what, error->message);
+    msg_update_text_fmt("Ethernet: %s", error->message);
+    g_error_free(error);
+}
+
+static void eth_activated_cb(GObject *obj, GAsyncResult *result, gpointer user_data) {
+    GError             *error = NULL;
+    NMActiveConnection *ac = nm_client_activate_connection_finish(NM_CLIENT(obj), result, &error);
+
+    if (ac) {
+        g_object_unref(ac);
+    } else {
+        eth_error("activation", error);
+    }
+}
+
+/* Saved: on the adapter now, if there is one. Not add-and-activate: it would tie the profile to this adapter's name */
+static void eth_activate(NMRemoteConnection *rc) {
+    NMDevice *d = eth_device();
+
+    if (d) {
+        nm_client_activate_connection_async(client, NM_CONNECTION(rc), d, NULL, NULL, eth_activated_cb, NULL);
+    }
+}
+
+static void eth_added_cb(GObject *obj, GAsyncResult *result, gpointer user_data) {
+    GError             *error = NULL;
+    NMRemoteConnection *rc = nm_client_add_connection_finish(NM_CLIENT(obj), result, &error);
+
+    if (rc) {
+        eth_activate(rc);
+        g_object_unref(rc);
+    } else {
+        eth_error("save", error);
+    }
+}
+
+static void eth_saved_cb(GObject *obj, GAsyncResult *result, gpointer user_data) {
+    GError *error = NULL;
+
+    if (nm_remote_connection_commit_changes_finish(NM_REMOTE_CONNECTION(obj), result, &error)) {
+        eth_activate(NM_REMOTE_CONNECTION(obj));
+    } else {
+        eth_error("save", error);
+    }
+}
+
+void eth_apply(const eth_cfg_t *cfg) {
+    if (!client) {
+        msg_update_text_fmt("NetworkManager is not running");
+        return;
+    }
+    NMRemoteConnection *rc = nm_client_get_connection_by_id(client, ETH_CON_ID);
+
+    if (rc) {
+        NMConnection *con = eth_connection_new(cfg, nm_connection_get_uuid(NM_CONNECTION(rc)));
+
+        nm_connection_replace_settings_from_connection(NM_CONNECTION(rc), con);
+        g_object_unref(con);
+        nm_remote_connection_commit_changes_async(rc, TRUE, NULL, eth_saved_cb, NULL);
+        return;
+    }
+    char         *uuid = nm_utils_uuid_generate();
+    NMConnection *con = eth_connection_new(cfg, uuid);
+
+    g_free(uuid);
+    nm_client_add_connection_async(client, con, TRUE, NULL, eth_added_cb, NULL);
+    g_object_unref(con);
 }

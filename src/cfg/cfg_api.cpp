@@ -38,6 +38,8 @@ ParamInt         *cfg_digi_text_compact   = nullptr;
 ParamInt         *cfg_cluster_spots_wf    = nullptr;
 ParamInt         *cfg_walkie              = nullptr;
 ParamInt         *cfg_walkie_mem          = nullptr;
+ParamInt         *cfg_walkie_ch           = nullptr;
+ParamInt         *cfg_walkie_mic          = nullptr;
 ParamInt         *cfg_band_plan           = nullptr;
 ParamInt         *cfg_smeter_needle       = nullptr;
 ParamInt         *cfg_smeter_color        = nullptr;
@@ -191,6 +193,8 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_cluster_spots_wf = &cfg_sm.p_cluster_spots_wf;
     cfg_walkie           = &cfg_sm.p_walkie;
     cfg_walkie_mem       = &cfg_sm.p_walkie_mem;
+    cfg_walkie_ch        = &cfg_sm.p_walkie_ch;
+    cfg_walkie_mic       = &cfg_sm.p_walkie_mic;
     cfg_band_plan        = &cfg_sm.p_band_plan;
     cfg_smeter_needle    = &cfg_sm.p_smeter_needle;
     cfg_smeter_color     = &cfg_sm.p_smeter_color;

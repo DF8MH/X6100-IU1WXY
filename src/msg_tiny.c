@@ -34,6 +34,12 @@ static void fade_ready(lv_anim_t * a) {
 }
 
 static void msg_update_cb(lv_event_t * e) {
+    lv_coord_t w = lv_disp_get_hor_res(NULL), h = lv_disp_get_ver_res(NULL);
+
+    /* Walkie Talkie: the display is portrait (480x800), the top layer still landscape (msg.c) */
+    lv_obj_set_size(lv_obj_get_parent(obj), w, h);
+    lv_obj_set_style_max_width(obj, w - 32, 0);    /* longer text wraps */
+    lv_obj_align(obj, LV_ALIGN_TOP_MID, 0, 160 - 66/2 + 36/2);
     lv_label_set_text(obj, buf);
 
     if (!fade_run) {
@@ -55,6 +61,9 @@ lv_obj_t * msg_tiny_init(lv_obj_t *parent) {
 
     lv_obj_remove_style_all(obj);
     lv_obj_add_style(obj, &msg_tiny_style, 0);
+    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);   /* the style's 324x66 at least */
+    lv_obj_set_style_min_width(obj, 324, 0);
+    lv_obj_set_style_min_height(obj, 66, 0);
 
     lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_opa(obj, 0, 0);

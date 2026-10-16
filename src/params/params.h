@@ -70,6 +70,7 @@ typedef enum {
     ACTION_APP_SNAKE, /* appended after BANDS: the hidden game (long press on APP > GPS) */
     ACTION_APP_PSK,     /* 121, appended after SNAKE: PSK31/PSK63 (upstream's 114/115 are MODES/CWTRAINER here) */
     ACTION_APP_OLIVIA,  /* 122 */
+    ACTION_APP_JTTY,    /* 123, appended after OLIVIA */
 } press_action_t;
 
 typedef enum {
@@ -159,7 +160,10 @@ typedef struct {
     params_bool_t       js8_ghostnet;    /* band keys step through GhostNet's frequencies */
     params_bool_t       js8_custom_on;   /* tuned to js8_custom_hz, not a preset */
     params_int32_t      js8_custom_hz;   /* last custom dial frequency, 0 = none */
+    params_bool_t       ft8_custom_on;   /* FT8/FT4/FT2 tuned to ft8_custom_hz, not a preset */
+    params_int32_t      ft8_custom_hz;   /* last custom dial frequency, 0 = none */
     params_str_t        ft8_cq_modifier;
+    params_bool_t       sstv_denoise;    /* clean received pictures, keep the original too */
 
     // FT8 gain offset for different radios/bands/modes
     params_float_t      ft8_output_gain_offset;

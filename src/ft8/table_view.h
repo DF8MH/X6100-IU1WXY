@@ -57,6 +57,7 @@ typedef struct {
     char                    country[24];    /* the sender's country, "" unknown (dxcc.c) */
     char                    cty_prefix[8];  /* its primary prefix ("DL") */
     int16_t                 flag;           /* its flag in flags.h, -1 none */
+    bool                    pota;           /* spotted on POTA now, or a CQ POTA */
 } cell_data_t;
 
 /* Optional dialog-level actions invoked from the table's key handler. */

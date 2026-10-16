@@ -41,8 +41,8 @@ static volatile bool   stop_requested;
 static volatile bool   reconnect_requested; /* new server or callsign */
 
 /* More sources into the same store, whose "same DX within 1 kHz" keeps one spot: EXTRA_LINKS
- * other servers of the list (one node only gets its own region's spots well) and pota.app's
- * activator spots. Their threads leave the state shown, the main server's, alone. */
+ * other servers of the list (one node only gets its own region's spots well) and the
+ * activator spots of pota.app, wwbota.org and cqhota.app. Their threads leave the state shown, the main server's, alone. */
 #define EXTRA_LINKS      4
 #define POTA_SPOTS       "/usr/sbin/x6100-pota-spots"
 #define POTA_POLL_MS     60000
@@ -170,7 +170,7 @@ int cluster_servers_load(cluster_server_t *out, int max) {
 /* Sets the server in use; the saved servers, filters and alerts are kept. */
 bool cluster_config_save(const char *host, int port) {
     static const char *keep[] = {"server=", "filter_modes=", "filter_bands=", "filter_activity=", "max_age=",
-                                 "skip_spotters=", "alert=", "alert_popup=", "alert_beep="};
+                                 "skip_spotters=", "alert=", "alert_off=", "alert_popup=", "alert_beep="};
     static char        servers[24 * 1024];
     servers[0] = '\0';
     FILE *in   = fopen(CLUSTER_CONF, "r");
@@ -277,13 +277,15 @@ static uint16_t parse_bands(char *list) {
     return bits;
 }
 
+const char *const cluster_act_names[CLUSTER_ACT_COUNT] = {"POTA", "SOTA", "WWBOTA", "HOTA"};
+
 /* "POTA,SOTA" -> CLUSTER_ACT_* bits; unknown words are ignored */
 static uint8_t parse_activity(char *list) {
     uint8_t bits = 0;
     for (char *w = strtok(list, ","); w; w = strtok(NULL, ",")) {
         w = trim(w);
-        if (strcasecmp(w, "POTA") == 0) bits |= CLUSTER_ACT_POTA;
-        if (strcasecmp(w, "SOTA") == 0) bits |= CLUSTER_ACT_SOTA;
+        for (int i = 0; i < CLUSTER_ACT_COUNT; i++)
+            if (strcasecmp(w, cluster_act_names[i]) == 0) bits |= (uint8_t)(1u << i);
     }
     return bits;
 }
@@ -323,6 +325,21 @@ static bool summit_ref(const char *w) {
            strlen(r + 3) == 3 && all_digits(r + 3, 3);
 }
 
+/* B/G-0070, B/ON-0733 (WWBOTA) */
+static bool bunker_ref(const char *w) {
+    const char *dash = strchr(w, '-');
+    if (strncmp(w, "B/", 2) != 0 || !dash || !prefix_ok(w + 2, (size_t)(dash - w - 2))) return false;
+    return strlen(dash + 1) == 4 && all_digits(dash + 1, 4);
+}
+
+/* RO-H0390, IT-H0001 (HOTA) */
+static bool hota_ref(const char *w) {
+    const char *dash = strchr(w, '-');
+    if (!dash || dash[1] != 'H' || !prefix_ok(w, (size_t)(dash - w))) return false;
+    size_t d = strlen(dash + 2);
+    return d >= 4 && d <= 5 && all_digits(dash + 2, d);
+}
+
 uint8_t cluster_spot_activity(const cluster_spot_t *s) {
     char    text[sizeof(s->comment)];
     uint8_t bits = 0;
@@ -334,9 +351,13 @@ uint8_t cluster_spot_activity(const cluster_spot_t *s) {
     text[sizeof(text) - 1] = '\0';
     if (strstr(text, "POTA")) bits |= CLUSTER_ACT_POTA;
     if (strstr(text, "SOTA")) bits |= CLUSTER_ACT_SOTA;
+    if (strstr(text, "BOTA")) bits |= CLUSTER_ACT_WWBOTA;
+    if (strstr(text, "HOTA")) bits |= CLUSTER_ACT_HOTA;
     for (char *w = strtok(text, " ,;:()[]!?\t"); w; w = strtok(NULL, " ,;:()[]!?\t")) {
         if (park_ref(w)) bits |= CLUSTER_ACT_POTA;
         if (summit_ref(w)) bits |= CLUSTER_ACT_SOTA;
+        if (bunker_ref(w)) bits |= CLUSTER_ACT_WWBOTA;
+        if (hota_ref(w)) bits |= CLUSTER_ACT_HOTA;
     }
     return bits;
 }
@@ -435,8 +456,14 @@ bool cluster_filter_save(uint8_t modes, uint16_t bands, uint8_t activity) {
         fputs("\n", f);
     }
     if (activity) {
-        fprintf(f, "filter_activity=%s%s%s\n", activity & CLUSTER_ACT_POTA ? "POTA" : "",
-                activity == (CLUSTER_ACT_POTA | CLUSTER_ACT_SOTA) ? "," : "", activity & CLUSTER_ACT_SOTA ? "SOTA" : "");
+        const char *sep = "";
+        fputs("filter_activity=", f);
+        for (int i = 0; i < CLUSTER_ACT_COUNT; i++)
+            if (activity & (1u << i)) {
+                fprintf(f, "%s%s", sep, cluster_act_names[i]);
+                sep = ",";
+            }
+        fputs("\n", f);
     }
     bool ok = fflush(f) == 0 && fsync(fileno(f)) == 0;
     ok      = fclose(f) == 0 && ok;
@@ -787,7 +814,7 @@ static void *extra_cb(void *arg) {
     return NULL;
 }
 
-/* pota.app's activator spots, a minute apart, through POTA_SPOTS */
+/* pota.app's, wwbota.org's and cqhota.app's activator spots, a minute apart, through POTA_SPOTS */
 static void *pota_cb(void *arg) {
     (void)arg;
     extra_link = true;

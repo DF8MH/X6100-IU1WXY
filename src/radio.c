@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <string.h>
+#include <errno.h>
 #include <time.h>
 #include <sys/stat.h>
 
@@ -43,6 +44,7 @@
 #include "cw_encoder.h"
 #include "dialog_msg_voice.h"
 #include "msg.h"
+#include "base_guard.h"
 
 /*********************
  *      DEFINES
@@ -50,6 +52,8 @@
 
 #define FLOW_RESTART_TIMEOUT 300
 #define IDLE_TIMEOUT        (3 * 1000)
+#define RESYNC_RETRY_MS     200     /* the register block again, after one that didn't get through */
+#define MORSE_HANG_MS       3000    /* the base holds TX for the QSK time after the GUI's CW key */
 
 #define FILTER_2_OFFSET 60
 #define FILTER_2_OFFSET_IN 20
@@ -142,6 +146,12 @@ static uint64_t         prev_time;
 static uint64_t         idle_time;
 static bool             mute = false;
 static bool             digi_cap;       /* a digital app is open: never above its cap */
+
+static tx_watch_t       tx_watch;
+static bool             resync_due;     /* resend the whole register block (base_guard.h) */
+static uint64_t         resync_time;
+static volatile bool    morse_on;
+static volatile uint32_t morse_ms;      /* the GUI's CW key last changed */
 
 static void set_txpwr(float w) {
     x6100_control_txpwr_set(digi_cap && w > TX_PLAYER_MAX_PWR_W ? TX_PLAYER_MAX_PWR_W : w);
@@ -504,8 +514,14 @@ bool radio_get_modem(void) {
     return modem_on;
 }
 
+/* Under the lock: the record, PTT, modem, tune and split bits share one register, and the
+ * library's read-modify-write of it from two threads lost a PTT or modem change */
+void radio_set_play_mode(audio_play_mode_t mode) {
+    WITH_RADIO_LOCK(audio_set_play_mode(mode));
+}
+
 void radio_speaker_play(bool on) {
-    WITH_RADIO_LOCK(audio_set_play_mode(on ? AUDIO_PLAY_ON : AUDIO_PLAY_OFF));
+    radio_set_play_mode(on ? AUDIO_PLAY_ON : AUDIO_PLAY_OFF);
 }
 
 void radio_set_line_in(uint8_t d) {
@@ -527,6 +543,8 @@ void radio_set_rec_moni(bool on) {
 }
 
 void radio_set_morse_key(bool on) {
+    morse_on = on;
+    morse_ms = get_time();
     x6100_gpio_set(x6100_pin_morse_key, on ? 0 : 1);
 }
 
@@ -1040,12 +1058,22 @@ static bool radio_tick() {
                 break;
 
             case RADIO_POWEROFF:
-                x6100_control_poweroff();
+                WITH_RADIO_LOCK(x6100_control_poweroff());
                 state = RADIO_OFF;
                 break;
 
             case RADIO_OFF:
                 break;
+        }
+
+        bool gui_tx = (state != RADIO_RX && state != RADIO_TX)
+            || (x6100_control_get(x6100_sple_atue_trx) & BASE_GUARD_TX_BITS)
+            || morse_on || (uint32_t)now_time - morse_ms < MORSE_HANG_MS;
+
+        if (tx_watch_check(&tx_watch, now_time, pack->flag.tx, gui_tx)) {
+            base_guard_log("base still in TX %u ms after an un-key or write error, nothing keying it from the GUI: PTT off resent",
+                           TX_WATCH_HOLD_MS);
+            resync_due = true;
         }
 
         hkey_put(pack->hkey);
@@ -1061,9 +1089,40 @@ static bool radio_tick() {
     return false;
 }
 
+/* Write errors and un-keys seen by base_guard.c: arm the TX watch, resend the registers */
+static void guard_events() {
+    unsigned resent, lost;
+    int      reg;
+    unsigned ev = base_guard_take(&resent, &lost, &reg);
+
+    if (ev & BASE_GUARD_ERROR) {
+        base_guard_log("write to register %d failed: %u resent OK, %u lost; resending all registers", reg, resent, lost);
+        tx_watch_arm(&tx_watch, now_time, TX_WATCH_ERROR_MS);
+    }
+    if (ev & BASE_GUARD_UNKEY) {
+        tx_watch_arm(&tx_watch, now_time, TX_WATCH_UNKEY_MS);
+    }
+    if (ev) {
+        resync_due = true;
+    }
+}
+
+/* The whole register block (the library's copy) to the base; false: it didn't get through.
+ * The library reopens the bus and tries once more on its own, and reports nothing but errno */
+static bool resend_all() {
+    radio_lock();
+    errno = 0;
+    x6100_control_idle();
+    bool ok = errno == 0;
+    radio_unlock();
+    return ok;
+}
+
 static void * radio_thread(void *arg) {
     while (true) {
         now_time = get_time();
+
+        guard_events();
 
         if (radio_tick()) {
             usleep(2000);
@@ -1071,9 +1130,14 @@ static void * radio_thread(void *arg) {
 
         int32_t idle = now_time - idle_time;
 
-        if (idle > IDLE_TIMEOUT && state == RADIO_RX) {
-            WITH_RADIO_LOCK(x6100_control_idle());
-
+        /* Every 3 s in RX as always; after a write error or an un-key at once, in TX too */
+        if ((idle > IDLE_TIMEOUT && state == RADIO_RX) || (resync_due && now_time - resync_time >= RESYNC_RETRY_MS)) {
+            resync_time = now_time;
+            resync_due = !resend_all();
+            if (resync_due) {
+                base_guard_log("register block not sent, again in %u ms", RESYNC_RETRY_MS);
+                tx_watch_arm(&tx_watch, now_time, TX_WATCH_ERROR_MS);
+            }
             idle_time = now_time;
         }
     }

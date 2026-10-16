@@ -1,6 +1,6 @@
 % rebase('base.html', title='Field')
 <h2><svg class="i"><use href="#i-mountain"/></svg>Field Ops</h2>
-<p class="sub">POTA and SOTA portable operation: park and summit lists for the radio, QRZ Logbook upload, activation logs.</p>
+<p class="sub">POTA, SOTA, WWBOTA and HOTA portable operation: reference lists for the radio, QRZ Logbook upload, HOTA spots, activation logs.</p>
 
 <form class="dp-card" id="qrz">
   <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-key"/></svg></span><div><h3>QRZ Logbook</h3><p>API key from your QRZ Logbook settings. Key: <b id="key-state"></b></p></div></div>
@@ -16,11 +16,25 @@
   </div>
 </form>
 
+<form class="dp-card" id="hota">
+  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-key"/></svg></span><div><h3>HOTA spots</h3><p>cqhota.app takes spots with your own key: cqhota.app, My account, Integration API key. Without it HOTA spots go to the DX cluster only. Key: <b id="hkey-state"></b></p></div></div>
+  <div class="dp-row">
+    <div class="dp-lbl"><label for="hkey"><b>Integration key</b></label><span>Empty = remove the key</span></div>
+    <div class="dp-ctl"><input id="hkey" type="password" autocomplete="off" maxlength="128" placeholder="New key (empty = remove)"></div>
+  </div>
+  <div class="dp-body" style="border-top:1px solid #1a283c">
+    <div class="actions" style="margin-top:0">
+      <button type="submit" class="primary">Save</button>
+      <span class="status" id="hstatus"></span>
+    </div>
+  </div>
+</form>
+
 <section class="dp-card">
-  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-pin"/></svg></span><div><h3>Parks and summits</h3><p id="refs"></p></div></div>
+  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-pin"/></svg></span><div><h3>Reference lists</h3><p id="refs"></p></div></div>
   <div class="dp-body">
     <div class="actions" style="margin-top:0">
-      <button type="button" class="primary" id="update"><svg class="i"><use href="#i-sync"/></svg>Update parks and summits</button>
+      <button type="button" class="primary" id="update"><svg class="i"><use href="#i-sync"/></svg>Update the lists</button>
       <span class="status" id="ustatus"></span>
     </div>
   </div>
@@ -52,7 +66,8 @@ var timer = null;
 
 var render = function(data) {
   $("#key-state").text(data.qrz_key ? "set (hidden)" : "not set");
-  $("#refs").text(data.refs ? `${data.refs.parks} parks, ${data.refs.summits} summits · updated ${data.refs.date} · ${data.refs.size}` : "No list yet: press Update (needs internet on the radio).");
+  $("#hkey-state").text(data.hota_key ? "set (hidden)" : "not set");
+  $("#refs").text(data.refs ? `${data.refs.parks} parks, ${data.refs.summits} summits, ${data.refs.bunkers} bunkers, ${data.refs.hota} HOTA · updated ${data.refs.date} · ${data.refs.size}` : "No list yet: press Update (needs internet on the radio).");
   $("#update").prop("disabled", data.update.running);
   if (data.update.running) {
     showStatus("#ustatus", "Downloading… (about a minute)");
@@ -89,6 +104,12 @@ $("#qrz").on("submit", function(e) {
   e.preventDefault();
   post("/api/field/qrz", {key: $("#key").val().trim()}, "Saved", "#status");
   $("#key").val("");
+});
+
+$("#hota").on("submit", function(e) {
+  e.preventDefault();
+  post("/api/field/hota", {key: $("#hkey").val().trim()}, "Saved", "#hstatus");
+  $("#hkey").val("");
 });
 
 $("#update").on("click", function() { post("/api/field/update", {}, null, "#ustatus"); });

@@ -68,6 +68,8 @@ extern ParamInt         *cfg_digi_text_compact;  // p_digi_text_compact
 extern ParamInt         *cfg_cluster_spots_wf;   // p_cluster_spots_wf
 extern ParamInt         *cfg_walkie;             // p_walkie
 extern ParamInt         *cfg_walkie_mem;         // p_walkie_mem
+extern ParamInt         *cfg_walkie_ch;          // p_walkie_ch
+extern ParamInt         *cfg_walkie_mic;         // p_walkie_mic
 extern ParamInt         *cfg_band_plan;          // p_band_plan
 extern ParamInt         *cfg_smeter_needle;      // p_smeter_needle
 extern ParamInt         *cfg_smeter_color;       // p_smeter_color

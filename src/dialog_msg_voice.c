@@ -311,10 +311,10 @@ static void *worker_cb(void *arg) {
         } else {
             /* Preview: on the Bluetooth headphones while they replace the speaker */
             bool bt = audio_play_bt_begin();
-            if (!bt) audio_set_play_mode(AUDIO_PLAY_ON);
+            if (!bt) radio_set_play_mode(AUDIO_PLAY_ON);
             ok = play_file();
             if (bt) audio_play_bt_end();
-            else audio_set_play_mode(AUDIO_PLAY_OFF);
+            else radio_set_play_mode(AUDIO_PLAY_OFF);
         }
         if (!ok || !job_tx || !job_loop || stop_req) break;
 
@@ -392,7 +392,7 @@ static void start_rec(const char *name) {
         msg_update_text_fmt("Cannot create %s", p);
         return;
     }
-    audio_set_play_mode(AUDIO_PLAY_VOICE_REC);
+    radio_set_play_mode(AUDIO_PLAY_VOICE_REC);
     pthread_mutex_lock(&rec_mutex);
     rec_filter_init();
     rec_file   = f;
@@ -410,7 +410,7 @@ static void stop_rec(void) {
     if (rec_file) sf_close(rec_file);
     rec_file = NULL;
     pthread_mutex_unlock(&rec_mutex);
-    audio_set_play_mode(AUDIO_PLAY_OFF);
+    radio_set_play_mode(AUDIO_PLAY_OFF);
     if (dialog.run) load_items(rec_name);   /* the list exists only with the window open */
 }
 

@@ -29,6 +29,7 @@ void audio_mixer_setup(x6100_base_ver_t base_ver);
 int audio_play(int16_t *buf, size_t samples);
 void audio_play_wait();
 void audio_play_flush();
+/* Without the radio lock: call radio_set_play_mode() */
 void audio_set_play_mode(audio_play_mode_t mode);
 
 /* Local playback on the Bluetooth headphones, from the playing thread (see audio.c) */

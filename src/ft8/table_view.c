@@ -430,6 +430,22 @@ static void draw_part_end_cb(lv_event_t *e) {
     lv_coord_t right    = area.x1 - 10;
     lv_coord_t text_end = dsc->draw_area->x1 + lv_obj_get_style_pad_left(obj, LV_PART_ITEMS) +
                           text_width(cd->text, dsc->label_dsc);
+    if (cd->pota) { /* a tag after the message, in the row's text colour */
+        lv_area_t      tag = area;
+        lv_draw_rect_dsc_t rd;
+        lv_draw_rect_dsc_init(&rd);
+        rd.bg_opa       = LV_OPA_TRANSP;
+        rd.border_width = 1;
+        rd.border_color = dsc->label_dsc->color;
+        rd.radius       = 3;
+        tag.x1 = text_end + 10;
+        tag.x2 = tag.x1 + text_width("POTA", dsc->label_dsc) + 7;
+        lv_draw_rect(dsc->draw_ctx, &rd, &tag);
+        tag.x1 += 4;
+        tag.x2 -= 3;
+        lv_draw_label(dsc->draw_ctx, dsc->label_dsc, &tag, "POTA", NULL);
+        text_end = tag.x2 + 3;
+    }
     /* Settings > FT8/FT4 info: 0 km, 1 mi, 2 country, 3 country + km, 4 country + mi (from SP2KMO's upstream 3074180e) */
     int32_t info = param_i_get(cfg_ft8_info);
 

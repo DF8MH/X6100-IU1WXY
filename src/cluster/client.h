@@ -58,8 +58,9 @@ time_t cluster_config_mtime(void);
  *   max_age=30                    minutes (0 or missing: the store's own limit)
  *   skip_spotters=K1TTT-#,*-3     spotter calls hidden, * matches any run
  *   filter_bands=40,20,6          bands shown (missing: all)
- *   filter_activity=POTA,SOTA     only these activations (missing: all spots)
+ *   filter_activity=POTA,SOTA,WWBOTA,HOTA   only these activations (missing: all spots)
  *   alert=PATTERN|bands|mode      e.g. VP8*|20,17,15|CW (bands, mode: empty = any)
+ *   alert_off=PATTERN|bands|mode  an alert turned off: kept in the list, not used
  *   alert_popup=1, alert_beep=1
  * Matching is case-insensitive; an alert pattern must match the whole call. */
 #define CLUSTER_MAX_ALERTS 50
@@ -70,6 +71,10 @@ time_t cluster_config_mtime(void);
 #define CLUSTER_FM_ALL     0xF
 #define CLUSTER_ACT_POTA   (1 << 0)
 #define CLUSTER_ACT_SOTA   (1 << 1)
+#define CLUSTER_ACT_WWBOTA (1 << 2)
+#define CLUSTER_ACT_HOTA   (1 << 3)
+#define CLUSTER_ACT_COUNT  4
+extern const char *const cluster_act_names[CLUSTER_ACT_COUNT]; /* "POTA", "SOTA", "WWBOTA", "HOTA": bit order */
 
 typedef struct {
     char     pattern[32];
@@ -93,7 +98,8 @@ typedef struct {
 uint8_t cluster_spot_mode_class(const cluster_spot_t *s);
 
 /* CLUSTER_ACT_* of a spot, from its comment: "POTA" or a park reference
- * (US-1234, IT-0123), "SOTA" or a summit reference (I/LO-123, W7W/KG-001). */
+ * (US-1234, IT-0123), "SOTA" or a summit reference (I/LO-123, W7W/KG-001),
+ * "WWBOTA"/"BOTA" or a bunker (B/G-0070), "HOTA" or a HOTA reference (RO-H0390). */
 uint8_t cluster_spot_activity(const cluster_spot_t *s);
 
 /* Sets the modes, bands and activity filters in CLUSTER_CONF, keeping the

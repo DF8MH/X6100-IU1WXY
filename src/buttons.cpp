@@ -475,8 +475,19 @@ static button_data_t btn_cw_log = {.type = BTN_TEXT, .label = "Log\nQSO", .press
 static buttons_page_t page_cw_decoder_1 = {
     {&btn_cw_p1, &btn_cw_zap, &btn_cw_peak_on, &btn_cw_peak_q, &btn_cw_log}
 };
+static const char *cw_parse_label() {
+    return cfg_sm.p_cw_parse.get() ? "Parse:\nOn" : "Parse:\nOff";
+}
+
+static void cw_parse_cb(button_data_t *data) {
+    cfg_sm.p_cw_parse.set(!cfg_sm.p_cw_parse.get());
+}
+
+static button_data_t btn_cw_parse = {
+    .type = BTN_TEXT_FN, .label_fn = cw_parse_label, .press = cw_parse_cb, .subj = (Subject *)&cfg_sm.p_cw_parse};
+
 static buttons_page_t page_cw_decoder_2 = {
-    {&btn_cw_p2, &btn_cw_decoder, &btn_cw_tuner, &btn_cw_snr}
+    {&btn_cw_p2, &btn_cw_decoder, &btn_cw_tuner, &btn_cw_snr, &btn_cw_parse}
 };
 
 /* DFN pages */

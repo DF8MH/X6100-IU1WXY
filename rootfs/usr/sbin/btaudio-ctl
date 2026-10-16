@@ -1,6 +1,6 @@
 #!/bin/sh
-# Bluetooth headphones (A2DP) for the RX audio. Used by Settings -> Wireless
-# and Audio. Scan, pair, connect and remove are in the GUI (bt_dev.c, BlueZ
+# Bluetooth headphones (A2DP) for the RX audio. Used by Settings -> Bluetooth
+# (HEADPHONES). Scan, pair, connect and remove are in the GUI (bt_dev.c, BlueZ
 # over D-Bus); this script keeps the audio side.
 #
 #   btaudio-ctl status                   headphone audio state (tab separated)

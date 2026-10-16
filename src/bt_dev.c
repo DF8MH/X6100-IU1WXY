@@ -15,10 +15,13 @@
  *  SP2KMO, alternating scan, keyboards found again at a new address and
  *  recovery after WiFi off/on by randal007.
  *
- *  Differences from upstream: no "one device at a time" (headphones and CAT
- *  phones are used together, so nothing is Blocked); the pairing window is
- *  btcat-ctl's (/tmp/btcat-pairing, the Pairing switch in Settings), and
- *  the log is /tmp/bt_pair.log (read by x6100-diag).
+ *  Differences from upstream: "one device at a time" only for headphones
+ *  (connecting a pair disconnects the others; a CAT phone and a keyboard stay,
+ *  and nothing is Blocked, so the startup list still works); the pairing
+ *  window is btcat-ctl's (/tmp/btcat-pairing, the Pairing switch in
+ *  Settings > Bluetooth), and the log is /tmp/bt_pair.log (read by x6100-diag).
+ *  From upstream's bt-security work (3b8fd331): the window enforced on every
+ *  refresh, the phone tag, the adapter state for the status row.
  *
  *  Our agent, on its own thread and D-Bus connection, is the only one and
  *  the default one. It answers pairing questions only while the window is
@@ -91,6 +94,7 @@ static struct {
 
     bt_dev_t        list[BT_DEV_MAX];
     int             count;
+    bt_adapter_t    adapter;
     bool            scanning;
     char            activity[48];
     char            agent_cap[20];
@@ -347,6 +351,17 @@ static bool props_audio(GVariant *dev) {
            (has_uuid(dev, "0000110b") && !has_uuid(dev, "0000111f"));
 }
 
+/* A phone (Class major 0x02 or Icon "phone"): a CAT client, it pairs and
+ * connects from its own side (upstream's props_phone) */
+static bool props_phone(GVariant *dev) {
+    guint32     cls = 0;
+    const char *icon = NULL;
+
+    g_variant_lookup(dev, "Class", "u", &cls);
+    g_variant_lookup(dev, "Icon", "&s", &icon);
+    return ((cls >> 8) & 0x1F) == 0x02 || (icon && strcmp(icon, "phone") == 0);
+}
+
 /* Device1 properties of path over c (unref), or NULL */
 static GVariant *dev_props(GDBusConnection *c, const char *path) {
     GVariant *props;
@@ -383,7 +398,7 @@ static bool path_is_paired(GDBusConnection *c, const char *path) {
  * everything all the time lets anyone in range pair. So pairing is open
  * only during btcat-ctl's window: the Pairing switch in Settings, or a
  * pairing started here. Paired devices connect at any time. */
-static bool pairing_is_open(void) {
+int bt_dev_visible_s(void) {
     long            end = 0;
     struct timespec now;
     FILE           *f = fopen(PAIR_WIN, "r");
@@ -393,7 +408,11 @@ static bool pairing_is_open(void) {
         fclose(f);
     }
     clock_gettime(CLOCK_BOOTTIME, &now);
-    return end > now.tv_sec;
+    return end > now.tv_sec ? (int)(end - now.tv_sec) : 0;
+}
+
+static bool pairing_is_open(void) {
+    return bt_dev_visible_s() > 0;
 }
 
 /* Visible and pairable for 3 min, with the countdown in Settings */
@@ -406,6 +425,23 @@ static void pairing_open(void) {
 
 /* ---- Device list -------------------------------------------------------- */
 
+/* Paired or connected devices are listed. Not paired: headphones with a name
+ * and keyboards (what Scan is for); phones pair from their side in the
+ * pairing window. Many cheap BT 3.0 keyboards never answer the remote-name
+ * request, so a keyboard without a Name is listed as "Keyboard <addr>".
+ * Fills d->name. */
+static bool dev_listed(bt_dev_t *d, const char *addr, const char *name, bool paired) {
+    if (!paired && !(d->input || (name && d->audio))) {
+        return false;
+    }
+    if (name) {
+        snprintf(d->name, sizeof(d->name), "%s", name);
+    } else {
+        snprintf(d->name, sizeof(d->name), d->input ? "Keyboard %s" : "%s", addr);
+    }
+    return true;
+}
+
 static void do_refresh(void) {
     bt_dev_t      list[BT_DEV_MAX];
     bt_dev_t      rest[BT_DEV_MAX];
@@ -414,11 +450,26 @@ static void do_refresh(void) {
     const char   *path;
     GVariant     *ifaces;
     GVariant     *r = managed_objects();
+    bt_adapter_t  ad = { .seen = true, .bluez = r != NULL };
 
     if (r) {
         g_variant_get(r, "(a{oa{sa{sv}}})", &objs);
         while (g_variant_iter_next(objs, "{&o@a{sa{sv}}}", &path, &ifaces)) {
             GVariant   *dev = g_variant_lookup_value(ifaces, "org.bluez.Device1", G_VARIANT_TYPE("a{sv}"));
+            GVariant   *adp = strcmp(path, ADAPTER_PATH) == 0 ?
+                              g_variant_lookup_value(ifaces, "org.bluez.Adapter1", G_VARIANT_TYPE("a{sv}")) : NULL;
+
+            if (adp) {
+                const char *a = NULL;
+                gboolean    b;
+
+                ad.present = true;
+                if (g_variant_lookup(adp, "Address", "&s", &a)) snprintf(ad.addr, sizeof(ad.addr), "%s", a);
+                if (g_variant_lookup(adp, "Powered", "b", &b)) ad.powered = b;
+                if (g_variant_lookup(adp, "Discoverable", "b", &b)) ad.discoverable = b;
+                if (g_variant_lookup(adp, "Pairable", "b", &b)) ad.pairable = b;
+                g_variant_unref(adp);
+            }
             const char *addr = NULL;
             const char *name = NULL;
             gboolean    paired = FALSE;
@@ -436,11 +487,9 @@ static void do_refresh(void) {
                 d.connected = connected;
                 d.input = props_input(dev);
                 d.audio = !d.input && props_audio(dev);
-                /* Not paired: only headphones and keyboards with a name (what Scan is for);
-                 * phones pair from their side in the pairing window */
-                if (addr && addr_ok(addr) && (paired || connected || (name && (d.audio || d.input)))) {
+                d.phone = !d.input && !d.audio && props_phone(dev);
+                if (addr && addr_ok(addr) && dev_listed(&d, addr, name, paired || connected)) {
                     snprintf(d.addr, sizeof(d.addr), "%s", addr);
-                    snprintf(d.name, sizeof(d.name), "%s", name ? name : addr);
                     if (paired || connected) {
                         if (n < BT_DEV_MAX) list[n++] = d;
                     } else if (nrest < BT_DEV_MAX) {
@@ -458,18 +507,67 @@ static void do_refresh(void) {
         list[n++] = rest[i];
     }
 
+    /* Upstream's pairing_enforce(): outside the window hidden and not
+     * pairable again at once, whatever turned them on (the agent tick does
+     * it too, every 30 s, with the page closed) */
+    if (ad.present && (ad.discoverable || ad.pairable) && !pairing_is_open()) {
+        set_prop(bus(), ADAPTER_PATH, "org.bluez.Adapter1", "Discoverable", false);
+        set_prop(bus(), ADAPTER_PATH, "org.bluez.Adapter1", "Pairable", false);
+        ad.discoverable = ad.pairable = false;
+        plog("pairing closed: hidden, not pairable");
+    }
+
     pthread_mutex_lock(&S.lock);
     memcpy(S.list, list, sizeof(list[0]) * n);
     S.count = n;
+    S.adapter = ad;
     pthread_mutex_unlock(&S.lock);
 }
 
 /* ---- Pair / connect ------------------------------------------------------ */
 
+/* One pair of headphones at a time (upstream's make_exclusive, for audio
+ * only): the others are disconnected, not Blocked, so they still come back
+ * at startup if they are on the startup list */
+static void drop_other_audio(const char *keep) {
+    GVariantIter *objs;
+    const char   *path;
+    GVariant     *ifaces;
+    bool          dropped = false;
+    GVariant     *r = managed_objects();
+
+    if (!r) return;
+    g_variant_get(r, "(a{oa{sa{sv}}})", &objs);
+    while (g_variant_iter_next(objs, "{&o@a{sa{sv}}}", &path, &ifaces)) {
+        GVariant *dev = g_variant_lookup_value(ifaces, "org.bluez.Device1", G_VARIANT_TYPE("a{sv}"));
+        gboolean  connected = FALSE;
+
+        if (dev) {
+            g_variant_lookup(dev, "Connected", "b", &connected);
+            if (connected && strcmp(path, keep) != 0 && !props_input(dev) && props_audio(dev)) {
+                unref(call(path, "org.bluez.Device1", "Disconnect", NULL, NULL, CALL_TIMEOUT_MS, NULL, 0));
+                plog("headphones %s disconnected: one pair at a time", path);
+                dropped = true;
+            }
+            g_variant_unref(dev);
+        }
+        g_variant_unref(ifaces);
+    }
+    g_variant_iter_free(objs);
+    g_variant_unref(r);
+    if (dropped) sleep(2);  /* let the old link go before paging the new one */
+}
+
 /* Device1.Connect, once more after a pause: some headsets refuse the profile
  * connection while still settling after pairing */
 static bool connect_dev(const char *path) {
-    char en[96];
+    char      en[96];
+    GVariant *props = dev_props(bus(), path);
+
+    if (props && !props_input(props) && props_audio(props)) {
+        drop_other_audio(path);
+    }
+    unref(props);
 
     for (int attempt = 1; attempt <= 2; attempt++) {
         GVariant *r = call(path, "org.bluez.Device1", "Connect", NULL, NULL, CONN_TIMEOUT_MS, en, sizeof(en));
@@ -643,7 +741,7 @@ static void do_pair_connect(const char *addr) {
         if (!wait_known(addr, &scanned)) {
             plog("result: not found");
             if (scanned) discovery(false, NULL);
-            set_activity("not found: in pairing mode?");
+            set_activity("not found - is it in pairing mode?");
             return;
         }
         input = path_is_input(bus(), path);
@@ -1083,5 +1181,11 @@ bool bt_dev_busy(void) {
 void bt_dev_activity(char *out, int size) {
     pthread_mutex_lock(&S.lock);
     snprintf(out, size, "%s", S.activity);
+    pthread_mutex_unlock(&S.lock);
+}
+
+void bt_dev_adapter(bt_adapter_t *out) {
+    pthread_mutex_lock(&S.lock);
+    *out = S.adapter;
     pthread_mutex_unlock(&S.lock);
 }

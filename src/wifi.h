@@ -78,6 +78,35 @@ void wifi_disconnect();
 
 bool wifi_get_ipaddr(char **ip_addr, char **gateway);
 
+/* Ethernet: the first wired adapter NetworkManager sees (a USB one), one saved profile */
+
+enum { ETH_IP, ETH_MASK, ETH_GW, ETH_DNS, ETH_FIELDS };
+
+typedef struct {
+    bool dhcp;
+    char field[ETH_FIELDS][16];     /* dotted quads; gateway and DNS may be empty */
+} eth_cfg_t;
+
+typedef struct {
+    bool        present;            /* an adapter is plugged in */
+    bool        connected;
+    const char *state;              /* "connected", "no cable", ... */
+    char        iface[16];
+    char        addr[20];           /* in use: 192.168.1.20/24 */
+    char        gw[16];
+    eth_cfg_t   cfg;                /* saved (DHCP when there is no profile) */
+} eth_info_t;
+
+/* Any thread: the state as of the last second */
+void eth_get_info(eth_info_t *info);
+
+/* Any thread: NULL or what is wrong. A field alone, or the whole set (netmask normalized to dotted) */
+const char *eth_check_field(int field, char *val);
+const char *eth_check(eth_cfg_t *cfg);
+
+/* LVGL thread, a checked set: saves the profile and applies it to the adapter */
+void eth_apply(const eth_cfg_t *cfg);
+
 #ifdef __cplusplus
 }
 #endif

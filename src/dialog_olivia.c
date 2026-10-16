@@ -1107,12 +1107,16 @@ int dialog_olivia_remote_state(char *buf, size_t size)
                     olivia_tx_is_on() ? 1 : 0);
 }
 
-/* Web remote / X6100 Link: olivia_mode 0 8/250, 1 16/500, 2 32/1000; olivia_freq centre Hz */
+/* Web remote / X6100 Link: olivia_mode 0 8/250, 1 16/500, 2 32/1000; olivia_freq centre Hz;
+ * olivia_send text, olivia_stop */
 void dialog_olivia_remote(const char *cmd, int32_t val, const char *text)
 {
-    (void)text;
+    if (alive && !strcmp(cmd, "olivia_stop"))
+        stop_press_cb(NULL);
     if (!alive || olivia_tx_is_on())
         return;
+    if (!strcmp(cmd, "olivia_send"))
+        send_text(text);
     if (!strcmp(cmd, "olivia_mode")) {
         olivia_tx_set_mode((olivia_mode_t)val);
         set_center((int)olivia_tx_get_center());

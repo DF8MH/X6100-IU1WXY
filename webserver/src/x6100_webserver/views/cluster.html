@@ -44,14 +44,14 @@
   </div>
   <label>Bands <small>(none ticked = all bands)</small></label>
   <div class="chips" id="fbands"></div>
-  <div class="grid" style="grid-template-columns:1fr 1fr 2fr">
-    <div><label for="activity">Activity</label>
-    <select id="activity">
-      <option value="">All spots</option>
-      <option value="POTA">POTA</option>
-      <option value="SOTA">SOTA</option>
-      <option value="POTA,SOTA">POTA + SOTA</option>
-    </select></div>
+  <label>Activity <small>(none ticked = all spots)</small></label>
+  <div class="chips" id="activity">
+    <label><input type="checkbox" value="POTA"> POTA</label>
+    <label><input type="checkbox" value="SOTA"> SOTA</label>
+    <label><input type="checkbox" value="WWBOTA"> WWBOTA</label>
+    <label><input type="checkbox" value="HOTA"> HOTA</label>
+  </div>
+  <div class="grid" style="grid-template-columns:1fr 2fr">
     <div><label for="max_age">Max age</label>
       <select id="max_age">
         <option value="0">Off</option>
@@ -140,19 +140,23 @@ var render = function(data) {
   const f = data.filters;
   $("#modes input").each(function() { $(this).prop("checked", f.modes.indexOf(this.value) >= 0); });
   $("#fbands input").each(function() { $(this).prop("checked", f.bands.indexOf(Number(this.value)) >= 0); });
-  $("#activity").val(f.activity.join(","));
+  $("#activity input").each(function() { $(this).prop("checked", f.activity.indexOf(this.value) >= 0); });
   $("#max_age").val(String(f.max_age));
   if ($("#max_age").val() === null) $("#max_age").append($("<option>").val(f.max_age).text(f.max_age + " min")).val(String(f.max_age));
   $("#skip").val(f.skip.split(",").join(", "));
 
   const alerts = $("#alerts>tbody").empty();
   data.alerts.forEach(function(a, i) {
-    const row = $("<tr>");
+    const row = $("<tr>").css("opacity", a.enabled === false ? 0.5 : 1);
     row.append($("<td>").text(a.pattern));
     row.append($("<td>").text(a.bands ? a.bands.split(",").join(", ") + " m" : "All"));
     row.append($("<td>").text(a.mode || "Any"));
     row.append($("<td>").text(a.seen || "—"));
-    row.append($("<td class='action-cell'>").append($("<button class='ghost'>Delete</button>").on("click", function() { call("DELETE", "/api/cluster/alerts/" + i, null, "#astatus"); })));
+    const flip = $("<button class='ghost'>").text(a.enabled === false ? "Turn on" : "Turn off").on("click", function() {
+      call("PUT", "/api/cluster/alerts/" + i, {pattern: a.pattern, bands: a.bands ? a.bands.split(",").map(Number) : [],
+                                               mode: a.mode, enabled: a.enabled === false}, "#astatus");
+    });
+    row.append($("<td class='action-cell'>").append(flip, $("<button class='ghost'>Delete</button>").on("click", function() { call("DELETE", "/api/cluster/alerts/" + i, null, "#astatus"); })));
     alerts.append(row);
   });
   $("#popup").prop("checked", data.popup);
@@ -185,7 +189,7 @@ $("#save-filters").on("click", function() {
   call("POST", "/api/cluster/filters",
        {modes: modes, max_age: Number($("#max_age").val()), skip: $("#skip").val().trim(),
         bands: $("#fbands input:checked").map(function() { return Number(this.value); }).get(),
-        activity: $("#activity").val() ? $("#activity").val().split(",") : []}, "#fstatus");
+        activity: $("#activity input:checked").map(function() { return this.value; }).get()}, "#fstatus");
 });
 
 $("#add-alert").on("submit", function(e) {

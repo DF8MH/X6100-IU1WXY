@@ -148,7 +148,12 @@ static bool fill_grad(void) {
     return params.spectrum_filled.x && (param_i_get(cfg_spectrum_fill_gradient) || theme_shape.deck);   /* deck: always */
 }
 
-static void spectrum_draw_cb(lv_event_t *e) {
+/* The trace is on the primary plane: the main screen's spectrum in direct mode, not the walkie's */
+static bool on_plane(lv_obj_t *o) {
+    return direct && o == obj;
+}
+
+void spectrum_draw_cb(lv_event_t *e) {
     lv_obj_t          *obj      = lv_event_get_target(e);
     lv_draw_ctx_t     *draw_ctx = lv_event_get_draw_ctx(e);
     lv_draw_line_dsc_t main_line_dsc;
@@ -202,7 +207,7 @@ static void spectrum_draw_cb(lv_event_t *e) {
     peak_b.y = y1 + h;
 
     /* Direct mode: the trace is on the primary plane, only the markers here */
-    for (uint16_t i = 0; i < SPECTRUM_SIZE && !direct; i++) {
+    for (uint16_t i = 0; i < SPECTRUM_SIZE && !on_plane(obj); i++) {
         float    v = (spectrum_buf[i] - min) / (max - min);
         uint16_t x = i * w / SPECTRUM_SIZE;
 
@@ -551,7 +556,8 @@ static void direct_render(void) {
 
 static void spectrum_refresh(void *data) {
     if (direct) {
-        direct_render();
+        if (lv_obj_get_screen(obj) == lv_scr_act())    /* not under the walkie screen */
+            direct_render();
     } else {
         lv_obj_invalidate(obj);
     }
@@ -639,6 +645,11 @@ void spectrum_data(float *data_buf, uint16_t size, bool tx, uint32_t base_lo_fre
 
     pthread_mutex_unlock(&data_mux);
     scheduler_put_noargs(spectrum_refresh);
+}
+
+int32_t spectrum_span(float *vfo_at) {
+    *vfo_at = 0.5f + (float)markers_offset_get(SPECTRUM_SIZE) / SPECTRUM_SIZE;
+    return width_hz / zoom_factor;
 }
 
 void spectrum_min_max_reset() {

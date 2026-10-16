@@ -12,6 +12,7 @@
 #include "lv_drivers/display/drm.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
@@ -124,6 +125,7 @@ bool main_display_portrait(bool on) {
 }
 
 int main(void) {
+    setenv("X6100_FW", strrchr(VERSION, 'v') + 1, 1);   /* the helpers' User-Agent (x6100-field, spots) */
     clock_tz_init();
     lv_init();
     // lv_png_init();

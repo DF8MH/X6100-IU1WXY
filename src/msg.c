@@ -52,12 +52,25 @@ static void fade_ready(lv_anim_t * a) {
     fade_run = false;
 }
 
+/* Walkie Talkie turns the display portrait (480x800) and the top layer keeps the landscape size:
+ * the layer as the display, the box within it, the text wrapped in portrait */
+static void place(void) {
+    lv_coord_t w = lv_disp_get_hor_res(NULL), h = lv_disp_get_ver_res(NULL);
+    bool       portrait = h > w;
+
+    lv_obj_set_size(lv_obj_get_parent(obj), w, h);
+    lv_obj_set_width(obj, LV_MIN(603, w - 32));
+    lv_label_set_long_mode(obj, portrait ? LV_LABEL_LONG_WRAP : LV_LABEL_LONG_SCROLL);
+    lv_obj_align(obj, portrait ? LV_ALIGN_CENTER : LV_ALIGN_TOP_MID, 0, portrait ? 0 : 270);
+}
+
 static void msg_show_timer(lv_timer_t *t) {
     delayed_message_t * msg = t->user_data;
     t->user_data = NULL;
     if (fade_out_timer != NULL) {
         lv_timer_del(fade_out_timer);
     }
+    place();
     lv_label_set_text(obj, msg->text);
     lv_obj_move_foreground(obj);
     lv_anim_set_values(&fade, lv_obj_get_style_opa(obj, 0), LV_OPA_COVER);

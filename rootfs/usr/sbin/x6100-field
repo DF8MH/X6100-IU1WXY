@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-# Field Ops (POTA/SOTA) helper for the GUI and the web server.
+# Field Ops (POTA/SOTA/WWBOTA/HOTA) helper for the GUI and the web server.
 # Every command prints one line on stdout: "ok ..." or "error <reason>", exit 0/1.
 #
-#   x6100-field update                      parks and summits -> <dir>/refs.tsv, "ok <parks> <summits>"
+#   x6100-field update                      the four lists -> <dir>/refs.tsv, "ok <parks> <summits> <bunkers> <hota>"
 #   x6100-field pota-spot --call C --freq-khz F --ref R --mode M [--comments T]
+#   x6100-field wwbota-spot --call C --freq-khz F --ref R --mode M [--id ID] [--qrt]   "ok <spot id>"
+#   x6100-field hota-spot --call C --freq-khz F --ref R --mode M [--comments T]     (key in <dir>/hota.conf)
 #   x6100-field qrz-upload FILE.adi         "ok <sent> <dup>"
 #
 # <dir> is /mnt/field (env X6100_FIELD_DIR). refs.tsv, tab separated, no header:
-#   P ref name lat lon "" ""     and     S ref name lat lon alt_m points
+#   P ref name lat lon "" ""     S ref name lat lon alt_m points     B/H ref name lat lon "" ""
+# refs.etag keeps the lists' ETags: an unchanged list is not downloaded again.
 
 import argparse
 import csv
@@ -26,10 +29,16 @@ from datetime import date, datetime
 FIELD_DIR = os.environ.get("X6100_FIELD_DIR", "/mnt/field")
 POTA_CSV = "https://pota.app/all_parks_ext.csv"
 SOTA_CSV = "https://storage.sota.org.uk/summitslist.csv"
+WWBOTA_CSV = "https://api.wwbota.org/bunkers/?format=CSV"
+HOTA_CSV = "https://cqhota.app/api/v1/references/export?format=csv"
+WWBOTA_API = os.environ.get("X6100_WWBOTA_API", "https://api.wwbota.org")
+HOTA_API = os.environ.get("X6100_HOTA_API", "https://cqhota.app/api/v1")
 POTA_API = os.environ.get("X6100_POTA_API", "https://api.pota.app")
 QRZ_API = os.environ.get("X6100_QRZ_API", "https://logbook.qrz.com/api")
 TIMEOUT = 30
 user_agent = "X6100-IU1WXY/unknown"
+# wwbota.org and cqhota.app: the firmware version (the GUI sets X6100_FW) and a contact
+site_agent = f"X6100-IU1WXY/{os.environ.get('X6100_FW') or 'unknown'} (info@x6100-link.it)"
 
 
 class Fail(Exception):
@@ -40,9 +49,9 @@ def one_line(text, n=80):
     return " ".join(str(text).split())[:n]
 
 
-def open_url(url, data=None, headers=None):
+def open_url(url, data=None, headers=None, method=None):
     """Binary response stream; caller closes it."""
-    req = urllib.request.Request(url, data=data, headers=dict(headers or {}, **{"User-Agent": user_agent}))
+    req = urllib.request.Request(url, data=data, headers=dict({"User-Agent": user_agent}, **(headers or {})), method=method)
     return urllib.request.urlopen(req, timeout=TIMEOUT)
 
 
@@ -99,6 +108,26 @@ def write_summits(stream, out, today):
     return n
 
 
+def write_refs(stream, out, kind, ref, name, lat, lon, keep=lambda row: True):
+    """WWBOTA and HOTA: one CSV row a reference"""
+    n = 0
+    for row in csv.DictReader(text_lines(stream)):
+        try:
+            if keep(row):
+                out.write(f"{kind}\t{clean(row[ref])}\t{clean(row[name])}\t{coord(row[lat], row[lon])}\t\t\n")
+                n += 1
+        except (KeyError, TypeError, ValueError):
+            continue
+    return n
+
+
+LISTS = (("P", "parks", lambda: POTA_CSV, write_parks, False),
+         ("S", "summits", lambda: SOTA_CSV, lambda s, o: write_summits(s, o, date.today()), False),
+         ("B", "bunkers", lambda: WWBOTA_CSV, lambda s, o: write_refs(s, o, "B", "Reference", "Name", "Lat", "Long"), True),
+         ("H", "HOTA", lambda: HOTA_CSV,
+          lambda s, o: write_refs(s, o, "H", "code", "name", "lat", "lon", lambda r: r.get("status") == "active"), True))
+
+
 def keep_old(path, kind, out):
     """Copy the lines of one kind from the previous refs.tsv."""
     n = 0
@@ -113,6 +142,28 @@ def keep_old(path, kind, out):
     return n
 
 
+def fetch_list(url, parse, out, path, kind, etags, site):
+    """The list's lines into out, etags[url] updated. Unchanged (304): the lines of the previous refs.tsv."""
+    tag = etags.pop(url, "")
+    headers = {"User-Agent": site_agent} if site else {}
+    if tag:
+        headers["If-None-Match"] = tag
+    try:
+        with open_url(url, headers=headers) as stream:
+            n = parse(stream, out)
+            new = stream.headers.get("ETag")
+    except urllib.error.HTTPError as e:
+        if e.code != 304 or not tag:
+            raise
+        n = keep_old(path, kind, out)
+        if n == 0:   # the previous file lost them: download it all
+            return fetch_list(url, parse, out, path, kind, etags, site)
+        new = tag
+    if n and new:
+        etags[url] = new
+    return n
+
+
 def cmd_update(args):
     os.makedirs(FIELD_DIR, exist_ok=True)
     # One update at a time (the radio and the web page can both start one)
@@ -123,37 +174,43 @@ def cmd_update(args):
         raise Fail("already updating")
     path = os.path.join(FIELD_DIR, "refs.tsv")
     tmp = path + ".tmp"
+    etag_path = os.path.join(FIELD_DIR, "refs.etag")
+    try:
+        with open(etag_path) as f:
+            etags = json.load(f)
+    except (OSError, ValueError):
+        etags = {}
     errors = []
     counts = []
     try:
         with open(tmp, "w", encoding="utf-8", newline="\n") as out:
-            for kind, url, parse in (("P", POTA_CSV, write_parks),
-                                     ("S", SOTA_CSV, lambda s, o: write_summits(s, o, date.today()))):
+            for kind, name, url, parse, site in LISTS:
                 start = out.tell()
                 try:
-                    with open_url(url) as stream:
-                        n = parse(stream, out)
+                    n = fetch_list(url(), parse, out, path, kind, etags, site)
                     if n == 0:
                         raise Fail("empty list")
                 except (Fail, OSError, ValueError, csv.Error, http.client.HTTPException) as e:
-                    errors.append(f"{'parks' if kind == 'P' else 'summits'}: {one_line(getattr(e, 'reason', e), 50)}")
+                    errors.append(f"{name}: {one_line(getattr(e, 'reason', e), 50)}")
                     out.seek(start)
                     out.truncate()
                     n = keep_old(path, kind, out)
                 counts.append(n)
-        if len(errors) == 2:
+        if len(errors) == len(LISTS):
             raise Fail("; ".join(errors))
         os.replace(tmp, path)
+        with open(etag_path, "w") as f:
+            json.dump(etags, f)
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)
-    return f"ok {counts[0]} {counts[1]}"
+    return "ok " + " ".join(map(str, counts))
 
 
-def post(url, body, content_type):
+def post(url, body, content_type, headers=None, method=None):
     """(HTTP code, body text)"""
     try:
-        with open_url(url, body.encode(), {"Content-Type": content_type}) as r:
+        with open_url(url, body.encode(), dict({"Content-Type": content_type}, **(headers or {})), method) as r:
             return r.status, r.read(65536).decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         return e.code, e.read(65536).decode("utf-8", "replace")
@@ -161,18 +218,24 @@ def post(url, body, content_type):
         raise Fail(one_line(getattr(e, "reason", e)))
 
 
-def cmd_pota_spot(args):
+def spot_args(args, ref_re):
+    """(call, ref, mode, kHz), checked"""
     call = (args.call or "").strip().upper()
     ref = args.ref.strip().upper()
     mode = args.mode.strip().upper()
     if not re.fullmatch(r"[A-Z0-9/]{3,20}", call):
         raise Fail("bad callsign")
-    if not re.fullmatch(r"[A-Z0-9]{1,4}-\d{4,5}", ref):
+    if not re.fullmatch(ref_re, ref):
         raise Fail("bad reference")
     try:
-        float(args.freq_khz)
+        khz = float(args.freq_khz)
     except ValueError:
         raise Fail("bad frequency")
+    return call, ref, mode, khz
+
+
+def cmd_pota_spot(args):
+    call, ref, mode, _ = spot_args(args, r"[A-Z0-9]{1,4}-\d{4,5}")
     body = json.dumps({"activator": call, "spotter": call, "frequency": args.freq_khz.strip(), "reference": ref,
                        "mode": mode, "source": "X6100-IU1WXY", "comments": args.comments})
     code, text = post(POTA_API.rstrip("/") + "/spot", body, "application/json")
@@ -181,16 +244,53 @@ def cmd_pota_spot(args):
     return "ok"
 
 
-def read_qrz_key():
+def cmd_wwbota_spot(args):
+    """A new spot, or the activation's spot (--id) moved or ended (--qrt), as Ham2K PoLo does"""
+    call, ref, mode, khz = spot_args(args, r"B/[A-Z0-9]{1,4}-\d{4}")
+    body = json.dumps({"spotter": call, "call": call, "freq": round(khz / 1000, 4), "mode": mode, "comment": ref,
+                       "type": "QRT" if args.qrt else "Live"})
+    url = WWBOTA_API.rstrip("/") + "/spots/"
+    agent = {"User-Agent": site_agent}
+    if re.fullmatch(r"[0-9a-fA-F-]{8,40}", args.id or ""):
+        code, text = post(url + args.id, body, "application/json", agent, "PUT")
+        if code == 200:
+            return f"ok {args.id}"
+    code, text = post(url, body, "application/json", agent)
+    if code not in (200, 201):
+        raise Fail(f"HTTP {code} {one_line(text, 60)}")
     try:
-        with open(os.path.join(FIELD_DIR, "qrz.conf"), errors="replace") as f:
+        spot_id = str(json.loads(text).get("id") or "")
+    except (ValueError, AttributeError):
+        spot_id = ""
+    return f"ok {spot_id}".strip()
+
+
+def cmd_hota_spot(args):
+    """With the user's own integration key (cqhota.app, My account)"""
+    call, ref, mode, khz = spot_args(args, r"[A-Z0-9]{1,3}-H\d{4,5}")
+    key = read_key("hota.conf", "no HOTA key")
+    body = json.dumps({"activators": [call], "references": [ref], "freq_khz": int(khz) if khz == int(khz) else khz,
+                       "mode": mode, "comment": args.comments})
+    code, text = post(HOTA_API.rstrip("/") + "/spots", body, "application/json",
+                      {"User-Agent": site_agent, "X-Integration-Key": key})
+    if code in (401, 403):
+        raise Fail(f"HOTA key refused (HTTP {code})")
+    if code not in (200, 201):
+        raise Fail(f"HTTP {code} {one_line(text, 60)}")
+    return "ok"
+
+
+def read_key(name, missing):
+    """key=... of <dir>/name"""
+    try:
+        with open(os.path.join(FIELD_DIR, name), errors="replace") as f:
             for line in f:
                 key, sep, val = line.strip().partition("=")
                 if sep and key.strip() == "key" and val.strip():
                     return val.strip()
     except OSError:
         pass
-    raise Fail("no QRZ key")
+    raise Fail(missing)
 
 
 def adif_records(text):
@@ -202,7 +302,7 @@ def adif_records(text):
 
 
 def cmd_qrz_upload(args):
-    key = read_qrz_key()
+    key = read_key("qrz.conf", "no QRZ key")
     try:
         with open(args.file, encoding="utf-8", errors="replace") as f:
             records = adif_records(f.read())
@@ -242,6 +342,19 @@ def main(argv):
     p.add_argument("--mode", required=True)
     p.add_argument("--comments", default="")
     p.set_defaults(func=cmd_pota_spot)
+    p = sub.add_parser("wwbota-spot", parents=[common])
+    p.add_argument("--freq-khz", required=True)
+    p.add_argument("--ref", required=True)
+    p.add_argument("--mode", required=True)
+    p.add_argument("--id", default="")
+    p.add_argument("--qrt", action="store_true")
+    p.set_defaults(func=cmd_wwbota_spot)
+    p = sub.add_parser("hota-spot", parents=[common])
+    p.add_argument("--freq-khz", required=True)
+    p.add_argument("--ref", required=True)
+    p.add_argument("--mode", required=True)
+    p.add_argument("--comments", default="")
+    p.set_defaults(func=cmd_hota_spot)
     p = sub.add_parser("qrz-upload", parents=[common])
     p.add_argument("file")
     p.set_defaults(func=cmd_qrz_upload)

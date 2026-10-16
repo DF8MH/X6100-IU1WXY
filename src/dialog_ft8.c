@@ -45,6 +45,7 @@
 #include "pskreporter.h"
 #include "flags.h"
 #include "ft8/tx_worker.h"
+#include "ft8/hound.h"
 #include "tx_player.h"
 #include "widgets/lv_waterfall.h"
 #include "widgets/lv_finder.h"
@@ -55,6 +56,7 @@
 #include "remote_server.h"
 #include "scheduler.h"
 #include "theme.h"
+#include "cluster/client.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -66,6 +68,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <ctype.h>
+#include <strings.h>
 
 #define SAMPLE_RATE     (AUDIO_CAPTURE_RATE / AUDIO_DECIM)
 
@@ -82,6 +85,9 @@
 #define FT2_WIDTH_HZ    167
 
 #define MAX_TX_START_DELAY 1.5f
+
+#define CUSTOM_MIN_HZ    1800000  /* custom dial frequency: 160m ... */
+#define CUSTOM_MAX_HZ    54000000 /* ... to the top of 6m */
 
 /* ---- FT8 / FT4 / FT2 (FT2 from SP2KMO's upstream 76d98ce2) ---------------
  * cfg_ft8_protocol: FTX_PROTOCOL_FT4 (0), FTX_PROTOCOL_FT8 (1) or FTX_PROTOCOL_FT2 (2, ft8/ft2.h) */
@@ -132,6 +138,10 @@ static bool        tx_time_slot;
 static char        slot_time[9] = "--:--:--";
 
 static ftx_tx_msg_t tx_msg;
+
+/* DXpedition Hound mode (FT8 only, off each time the app opens) */
+static bool    hound_on;
+static hound_t hound;
 
 /* The lv_table widget is owned by ft8/table_view; expose its handle as
  * `table` so existing fade/group/anim call sites need no rename. */
@@ -228,23 +238,39 @@ static buttons_page_t btn_page_3;
 static void map_cb(struct button_data_t *btn_data);
 static void heard_map_cb(struct button_data_t *btn_data);
 static lv_obj_t *map_obj;   /* QSO or heard map, when open */
+static lv_obj_t *freq_list; /* Freq: the presets, when open */
 
-static button_data_t button_page_1 = { .type=BTN_TEXT, .label = "(FT8 1:3)", .press = button_next_page_cb, .next=&btn_page_2};
+static buttons_page_t btn_page_4;
+
+static const char * freq_label_getter();
+static const char * hound_label_getter();
+static const char * retries_label_getter();
+static void freq_cb(struct button_data_t *btn_data);
+static void freq_hold_cb(struct button_data_t *btn_data);
+static void hound_cb(struct button_data_t *btn_data);
+static void retries_cb(struct button_data_t *btn_data);
+
+static button_data_t button_page_1 = { .type=BTN_TEXT, .label = "(FT8 1:4)", .press = button_next_page_cb, .next=&btn_page_2};
 static button_data_t button_show_cq_all = { .type=BTN_TEXT_FN, .label_fn = cq_all_label_getter, .press = show_cq_all_cb};
 static button_data_t button_mode_ft4_ft8 = { .type=BTN_TEXT_FN, .label_fn = protocol_label_getter, .press = mode_ft4_ft8_cb};
 static button_data_t button_tx_cq_en_dis = { .type=BTN_TEXT_FN, .label_fn = tx_cq_label_getter, .press = tx_cq_en_dis_cb };
 static button_data_t button_tx_call_en_dis = { .type=BTN_TEXT_FN, .label_fn = tx_call_label_getter, .press = tx_call_en_dis_cb};
 
-static button_data_t button_page_2 = { .type=BTN_TEXT, .label = "(FT8 2:3)", .press = button_next_page_cb, .next=&btn_page_3};
+static button_data_t button_page_2 = { .type=BTN_TEXT, .label = "(FT8 2:4)", .press = button_next_page_cb, .next=&btn_page_3};
 static button_data_t button_hold_freq = { .type=BTN_TEXT_FN, .label_fn = hold_freq_label_getter, .press = hold_tx_freq_cb };
 static button_data_t button_auto_en_dis = { .type=BTN_TEXT_FN, .label_fn = auto_label_getter, .press = mode_auto_cb };
 static button_data_t button_force_save = { .type=BTN_TEXT, .label = "Force QSO\nsave", .press = force_save_qso };
 
-static button_data_t button_page_3 = { .type=BTN_TEXT, .label = "(FT8 3:3)", .press = button_next_page_cb, .next=&btn_page_1};
+static button_data_t button_page_3 = { .type=BTN_TEXT, .label = "(FT8 3:4)", .press = button_next_page_cb, .next=&btn_page_4};
 static button_data_t button_cq_mod = { .type=BTN_TEXT, .label = "CQ\nModifier", .press = cq_modifier_cb };
 static button_data_t button_time_sync = { .type=BTN_TEXT, .label = "Time\nSync", .press = time_sync };
 static button_data_t button_map = { .type=BTN_TEXT, .label = "Log\nMap", .press = map_cb };
 static button_data_t button_heard_map = { .type=BTN_TEXT, .label = "Live\nMap", .press = heard_map_cb };
+
+static button_data_t button_page_4 = { .type=BTN_TEXT, .label = "(FT8 4:4)", .press = button_next_page_cb, .next=&btn_page_1};
+static button_data_t button_freq = { .type=BTN_TEXT_FN, .label_fn = freq_label_getter, .press = freq_cb, .hold = freq_hold_cb };
+static button_data_t button_hound = { .type=BTN_TEXT_FN, .label_fn = hound_label_getter, .press = hound_cb };
+static button_data_t button_retries = { .type=BTN_TEXT_FN, .label_fn = retries_label_getter, .press = retries_cb };
 
 static buttons_page_t btn_page_1 = {
     {&button_page_1, &button_show_cq_all, &button_mode_ft4_ft8, &button_tx_cq_en_dis, &button_tx_call_en_dis}
@@ -256,6 +282,10 @@ static buttons_page_t btn_page_2 = {
 
 static buttons_page_t btn_page_3 = {
     {&button_page_3, &button_cq_mod, &button_time_sync, &button_map, &button_heard_map}
+};
+
+static buttons_page_t btn_page_4 = {
+    {&button_page_4, &button_freq, &button_hound, &button_retries, NULL}
 };
 
 static dialog_t dialog = {
@@ -371,10 +401,24 @@ static void save_qso(const char *remote_callsign, const char *remote_grid, const
     remote_event(o);
 }
 
+/* Activators spotted on POTA now: the cluster store, which x6100-pota-spots feeds (worker thread only) */
+static bool pota_spotted(const char *call) {
+    static cluster_spot_t spots[CLUSTER_MAX_SPOTS];
+    static int            n;
+    static uint32_t       gen;
+    int                   k = cluster_client_snapshot(spots, CLUSTER_MAX_SPOTS, &gen);
+
+    if (k >= 0) n = k;
+    for (int i = 0; i < n; i++)
+        if (!strcasecmp(spots[i].dx, call) && (cluster_spot_activity(&spots[i]) & CLUSTER_ACT_POTA)) return true;
+    return false;
+}
+
 static void worker_init() {
     qso_processor = ftx_qso_processor_init(params.callsign.x, station_qth(),
                                            save_qso,
                                            param_i_get(cfg_ft8_max_repeats));
+    ftx_qso_processor_set_is_pota(qso_processor, pota_spotted);
 
     audio_worker_cb_t cb = {
         .on_message  = on_message_cb,
@@ -504,6 +548,7 @@ static void key_cb(lv_event_t * e) {
 static void destruct_cb() {
     // TODO: check free mem
     map_obj = NULL;     /* deleted with the dialog */
+    freq_list = NULL;
     keyboard_close();
     worker_done();
     /* After the decoder thread, which sends too */
@@ -528,7 +573,7 @@ static void destruct_cb() {
     adif_log_close(ft8_log);
 }
 
-static void load_band(int8_t dir) {
+static bool load_band(int8_t dir) {
     cfg_digital_type_t type;
     switch (param_i_get(cfg_ft8_protocol)) {
         case FTX_PROTOCOL_FT8:
@@ -550,6 +595,38 @@ static void load_band(int8_t dir) {
     if (res) {
         msg_update_text_fmt("%s", cfg_digital_label_get());
     }
+    return res;
+}
+
+/* "14.091" from 14091000 Hz: MHz, 3 decimals at least */
+static void format_mhz(int32_t hz, char *buf, size_t size) {
+    snprintf(buf, size, "%d.%06d", (int)(hz / 1000000), (int)(hz % 1000000));
+    char *end = buf + strlen(buf) - 1;
+    while (*end == '0' && end > strchr(buf, '.') + 3) *end-- = '\0';
+}
+
+/* What the info rows call where we are: the preset's label, or "FT8 Custom 14.091" */
+static const char *where_label(void) {
+    static char buf[40];
+    if (!params.ft8_custom_on.x) return cfg_digital_label_get();
+    char mhz[16];
+    format_mhz(params.ft8_custom_hz.x, mhz, sizeof(mhz));
+    snprintf(buf, sizeof(buf), "%s Custom %s", ftx_mode_name(), mhz);
+    return buf;
+}
+
+/* The band's preset, or the custom frequency (in the preset's mode) */
+static void load_base(void) {
+    load_band(0);
+    if (!params.ft8_custom_on.x) return;
+    if (params.ft8_custom_hz.x < CUSTOM_MIN_HZ || params.ft8_custom_hz.x > CUSTOM_MAX_HZ) {
+        params_bool_set(&params.ft8_custom_on, false);
+        return;
+    }
+    int32_t mode = cparam_i_get(cfg_cur_mode);
+    cparam_i_set(cfg_fg_freq, params.ft8_custom_hz.x);
+    if (cparam_i_get(cfg_cur_mode) != mode) cparam_i_set(cfg_cur_mode, mode); /* another band loads its own mode */
+    msg_update_text_fmt("%s", where_label());
 }
 
 /// @brief Clean waterfall and table
@@ -563,6 +640,16 @@ static void clean_screen() {
     lv_event_send(table, LV_EVENT_KEY, c);
 }
 
+/* After any change of dial frequency */
+static void retuned(void) {
+    hound_stop(&hound);
+    js8_map_heard_clear();
+
+    worker_done();
+    worker_init();
+    clean_screen();
+}
+
 static void band_cb(lv_event_t * e) {
     int8_t dir;
 
@@ -572,12 +659,9 @@ static void band_cb(lv_event_t * e) {
         dir = -1;
     }
 
-    load_band(dir);
-    js8_map_heard_clear();
-
-    worker_done();
-    worker_init();
-    clean_screen();
+    if (!load_band(dir)) return;
+    if (params.ft8_custom_on.x) params_bool_set(&params.ft8_custom_on, false); /* back to the presets */
+    retuned();
 }
 
 static void msg_timer(lv_timer_t *t) {
@@ -668,6 +752,7 @@ static void construct_cb(lv_obj_t *parent) {
     button_mode_ft4_ft8.subj = (Subject*)cfg_ft8_protocol;
     button_hold_freq.subj = (Subject*)cfg_ft8_hold_freq;
     button_auto_en_dis.subj = (Subject*)cfg_ft8_auto;
+    button_retries.subj = (Subject*)cfg_ft8_max_repeats;
 
     if (!cq_enabled) {
         cq_enabled = subject_i_create(false);
@@ -743,7 +828,9 @@ static void construct_cb(lv_obj_t *parent) {
     lv_group_add_obj(keyboard_group, table);
     lv_group_set_editing(keyboard_group, true);
 
-    load_band(0);
+    load_base();
+    hound_on = false;
+    memset(&hound, 0, sizeof(hound));
 
     filter_low = cparam_i_get(cfg_cur_filter_low);
     filter_high = cparam_i_get(cfg_cur_filter_high);
@@ -780,6 +867,185 @@ static void construct_cb(lv_obj_t *parent) {
 }
 
 /* Buttons */
+
+static const char *freq_label_getter() {
+    static char buf[32];
+    if (!params.ft8_custom_on.x) return "Freq:\nPreset";
+    char mhz[16];
+    format_mhz(params.ft8_custom_hz.x, mhz, sizeof(mhz));
+    snprintf(buf, sizeof(buf), "Freq:\n%s", mhz);
+    return buf;
+}
+
+static const char *retries_label_getter() {
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "Retries:\n%i", (int)param_i_get(cfg_ft8_max_repeats));
+    return buf;
+}
+
+/* How many times a message goes out before the QSO is given up: the next step, round */
+static void retries_cb(struct button_data_t *btn_data) {
+    static const int steps[] = {3, 4, 5, 6, 8, 10, 12, 15};
+    int              cur = param_i_get(cfg_ft8_max_repeats), next = steps[0];
+
+    if (disable_buttons) return;
+    for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++)
+        if (steps[i] > cur) {
+            next = steps[i];
+            break;
+        }
+    param_i_set(cfg_ft8_max_repeats, next);
+    ftx_qso_processor_set_max_repeats(qso_processor, next);
+}
+
+static const char *hound_label_getter() {
+    return hound_on ? "Hound:\nOn" : "Hound:\nOff";
+}
+
+/* DXpedition Hound: on or off, a QSO or a CQ in progress stops */
+static void hound_cb(struct button_data_t *btn_data) {
+    if (disable_buttons) return;
+    if (!hound_on && param_i_get(cfg_ft8_protocol) != FTX_PROTOCOL_FT8) {
+        msg_schedule_text_fmt("Hound mode is for FT8 only");
+        return;
+    }
+    hound_on = !hound_on;
+    if (state == TX_PROCESS) state = RX_PROCESS;
+    subject_i_set(cq_enabled, false);
+    tx_msg.msg[0] = '\0';
+    memset(&hound, 0, sizeof(hound));
+    ftx_qso_processor_reset(qso_processor);
+    lv_finder_clear_cursor(finder);
+    buttons_refresh(&button_hound);
+    if (hound_on) {
+        add_info("Hound on: select the Fox's CQ and press, calls go above %d Hz", HOUND_MIN_TX_HZ);
+        msg_schedule_text_fmt("Hound on: select the Fox's CQ and press");
+    } else {
+        add_info("Hound off");
+    }
+}
+
+/* The dial frequency from the keyboard: kHz or MHz, empty for the presets */
+static bool kb_freq;
+
+/* Freq: the mode's preset frequencies, one for each band, from the digital_modes table */
+static cfg_digital_preset_t presets[48];
+
+static void freq_close(void) {
+    if (!freq_list) return;
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(freq_list); i++) lv_group_remove_obj(lv_obj_get_child(freq_list, i));
+    lv_obj_del_async(freq_list);    /* called from one of its buttons */
+    freq_list = NULL;
+    lv_group_add_obj(keyboard_group, table);
+    lv_group_focus_obj(table);
+    lv_group_set_editing(keyboard_group, true);
+}
+
+static void preset_cb(lv_event_t *e) {
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+
+    freq_close();
+    if (i < 0) return;   /* Close */
+    params_bool_set(&params.ft8_custom_on, false);
+    cparam_i_set(cfg_fg_freq, presets[i].freq);
+    load_band(0);
+    retuned();
+    buttons_refresh(&button_freq);
+}
+
+static void preset_key_cb(lv_event_t *e) {
+    uint32_t key = *((uint32_t *)lv_event_get_param(e));
+
+    if (key == LV_KEY_ESC) freq_close();
+    else if (key == LV_KEY_LEFT || key == LV_KEY_UP) lv_group_focus_prev(keyboard_group);
+    else if (key == LV_KEY_RIGHT || key == LV_KEY_DOWN) lv_group_focus_next(keyboard_group);
+}
+
+static void preset_focused_cb(lv_event_t *e) {
+    lv_obj_scroll_to_view(lv_event_get_target(e), LV_ANIM_OFF);
+}
+
+static lv_obj_t *preset_add(const char *label, int i) {
+    lv_obj_t *b = lv_list_add_btn(freq_list, NULL, label);
+    lv_obj_set_style_bg_color(b, TC(row), 0);
+    lv_obj_set_style_bg_color(b, TC(focus_bg), LV_STATE_FOCUSED);
+    lv_obj_set_style_text_color(b, TC(text), 0);
+    lv_obj_set_style_pad_ver(b, 6, 0);
+    lv_obj_clear_flag(b, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+    lv_obj_add_event_cb(b, preset_focused_cb, LV_EVENT_FOCUSED, NULL);
+    lv_obj_add_event_cb(b, preset_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    lv_obj_add_event_cb(b, preset_key_cb, LV_EVENT_KEY, NULL);
+    lv_group_add_obj(keyboard_group, b);
+    return b;
+}
+
+static void freq_cb(struct button_data_t *btn_data) {
+    if (disable_buttons) return;
+    if (freq_list) {    /* Freq again closes it */
+        freq_close();
+        return;
+    }
+    if (state == TX_PROCESS) {
+        msg_schedule_text_fmt("Not while sending");
+        return;
+    }
+    if (map_obj) return;
+
+    cfg_digital_type_t type = param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT8 ? CFG_DIG_TYPE_FT8
+                            : param_i_get(cfg_ft8_protocol) == FTX_PROTOCOL_FT4 ? CFG_DIG_TYPE_FT4 : CFG_DIG_TYPE_FT2;
+    int n = cfg_digital_list(type, presets, ARRAY_SIZE(presets));
+
+    lv_group_remove_obj(table);
+    freq_list = lv_list_create(dialog.obj);
+    lv_obj_set_size(freq_list, 400, WF_HEIGHT - 10);
+    lv_obj_align(freq_list, LV_ALIGN_TOP_RIGHT, -20, 18);
+    lv_obj_set_style_text_font(freq_list, &sony_24, 0);
+    lv_obj_set_style_bg_color(freq_list, TC(list), 0);
+    lv_obj_set_style_border_color(freq_list, TC(text), 0);
+    char line[64];
+    snprintf(line, sizeof(line), "%s frequencies - hold Freq to type", ftx_mode_name());
+    lv_obj_set_style_text_font(lv_list_add_text(freq_list, line), &sony_22, 0);
+
+    lv_obj_t *cur = NULL;
+    for (int i = 0; i < n; i++) {
+        char mhz[16];
+        format_mhz(presets[i].freq, mhz, sizeof(mhz));
+        snprintf(line, sizeof(line), "%s  %s", mhz, presets[i].label);
+        lv_obj_t *b = preset_add(line, i);
+        if (!params.ft8_custom_on.x && presets[i].freq == cfg_digital_freq_get()) {
+            lv_obj_set_style_text_color(b, TC(ok), 0);   /* the one in use */
+            cur = b;
+        }
+    }
+    lv_obj_t *close = preset_add("Close", -1);
+    lv_obj_set_style_text_color(close, TC(action), 0);
+    lv_group_set_editing(keyboard_group, false);
+    lv_group_focus_obj(cur ? cur : close);
+}
+
+/* Hold Freq: the dial frequency from the keyboard */
+static void freq_hold_cb(struct button_data_t *btn_data) {
+    if (disable_buttons) return;
+    freq_close();
+    if (state == TX_PROCESS) {
+        msg_schedule_text_fmt("Not while sending");
+        return;
+    }
+    if (map_obj) return;
+    lv_group_remove_obj(table);
+    textarea_window_open(keyboard_ok_cb, keyboard_cancel_cb);
+    lv_obj_t *text = textarea_window_text();
+    lv_textarea_set_accepted_chars(text, "0123456789.");
+    lv_textarea_set_placeholder_text(text, " 14091 or 14.091, empty: presets");
+    if (params.ft8_custom_hz.x) {
+        char mhz[16];
+        format_mhz(params.ft8_custom_hz.x, mhz, sizeof(mhz));
+        textarea_window_set(mhz);
+    }
+    kb_freq         = true;
+    disable_buttons = true;
+    msg_schedule_text_fmt("Dial frequency (14091 or 14.091), empty for the presets");
+}
 
 const char *cq_all_label_getter() {
     static char buf[32];
@@ -841,6 +1107,8 @@ static void mode_ft4_ft8_cb(struct button_data_t *btn_data) {
     worker_done();
     worker_init();
     clean_screen();
+    if (params.ft8_custom_on.x) params_bool_set(&params.ft8_custom_on, false); /* FT4/FT2 elsewhere */
+    if (proto != FTX_PROTOCOL_FT8) hound_on = false;
     load_band(0);
 }
 
@@ -858,6 +1126,10 @@ static void hold_tx_freq_cb(struct button_data_t *btn_data) {
 
 static void tx_cq_en_dis_cb(struct button_data_t *btn_data) {
     if (disable_buttons) return;
+    if (hound_on && !subject_i_get(cq_enabled)) {
+        msg_schedule_text_fmt("No CQ in Hound mode");
+        return;
+    }
 
     if (!subject_i_get(cq_enabled)){
         if (strlen(params.callsign.x) == 0) {
@@ -965,6 +1237,22 @@ static void on_table_press(const cell_data_t *cell_data) {
         return;
     }
 
+    if (hound_on) {
+        if (!cell_data->meta.call_de[0] || strlen(params.callsign.x) == 0) {
+            msg_schedule_text_fmt(cell_data->meta.call_de[0] ? "Call sign required" : "Select the Fox's CQ");
+            return;
+        }
+        hound_call(&hound, params.callsign.x, station_qth(), cell_data->meta.call_de, cell_data->meta.grid,
+                   time(NULL), tx_msg.msg);
+        tx_msg.repeats = -1;    /* until the Fox answers or the 2 minutes are over */
+        tx_time_slot   = true;  /* the Fox sends first, the Hounds second */
+        lv_finder_set_cursor(finder, cell_data->meta.freq_hz);
+        subject_i_set(tx_enabled, true);
+        add_info("Hound: calling %s above %d Hz", hound.fox, HOUND_MIN_TX_HZ);
+        msg_schedule_text_fmt("Next TX: %s", tx_msg.msg);
+        return;
+    }
+
     ftx_qso_processor_start_qso(qso_processor, (ftx_msg_meta_t *)&cell_data->meta, &tx_msg);
     if (strlen(tx_msg.msg) > 0) {
         lv_finder_set_cursor(finder, cell_data->meta.freq_hz);
@@ -1018,6 +1306,7 @@ static void keyboard_close() {
     lv_group_add_obj(keyboard_group, table);
     lv_group_set_editing(keyboard_group, true);
     disable_buttons = false;
+    kb_freq = false;
 }
 
 static bool keyboard_cancel_cb() {
@@ -1025,7 +1314,28 @@ static bool keyboard_cancel_cb() {
     return true;
 }
 
+static bool freq_ok(void) {
+    const char *text = textarea_window_get();
+    if (text[0]) {
+        char   *end;
+        double  v  = strtod(text, &end);
+        int32_t hz = (int32_t)(v < 100 ? v * 1e6 + 0.5 : v * 1e3 + 0.5);
+        if (end == text || *end || hz < CUSTOM_MIN_HZ || hz > CUSTOM_MAX_HZ) {
+            msg_schedule_text_fmt("Type 1800 - 54000 kHz, e.g. 14091");
+            return false;
+        }
+        params_int32_set(&params.ft8_custom_hz, hz);
+    }
+    params_bool_set(&params.ft8_custom_on, text[0] != '\0');
+    keyboard_close();
+    load_base();
+    retuned();
+    buttons_refresh(&button_freq);
+    return true;
+}
+
 static bool keyboard_ok_cb() {
+    if (kb_freq) return freq_ok();
     char *cq_mod = (char *)textarea_window_get();
     if ((strlen(cq_mod) > 0) && !is_cq_modifier(cq_mod)) {
         msg_schedule_text_fmt("Unsupported CQ modifier");
@@ -1131,6 +1441,40 @@ static void remote_rx_event(int16_t snr, const char *text, bool odd, const ftx_m
     remote_event(o);
 }
 
+/* Hound: the Fox's report gets R+report, its RR73 logs the QSO */
+static void hound_rx_text(const char *text, int snr, float freq_hz, bool odd) {
+    char          tx[sizeof(tx_msg.msg)];
+    hound_stage_t was = hound.stage;
+    hound_event_t ev  = hound_rx(&hound, text, snr, (int)(freq_hz + 0.5f), odd, time(NULL), tx);
+
+    if (ev == HOUND_REPLY) {
+        strcpy(tx_msg.msg, tx);
+        tx_msg.repeats = -1;
+        tx_time_slot   = true;
+        lv_finder_set_cursor(finder, freq_hz);
+        add_info("Hound: %s sent %+03d, answering R%+03d at %d Hz", hound.fox, hound.rcvd, hound.sent, hound.fox_freq);
+        msg_schedule_text_fmt("Next TX: %s", tx_msg.msg);
+    } else if (ev == HOUND_LOGGED) {
+        tx_msg.msg[0] = '\0';
+        save_qso(hound.fox, hound.fox_grid, hound.rcvd, hound.sent);
+        add_info("Hound: QSO with %s logged", hound.fox);
+    } else if (was != HOUND_IDLE && hound.stage == HOUND_IDLE) {
+        tx_msg.msg[0] = '\0';
+        add_info("Hound: %s sent RR73 but its report was missed, not logged", hound.fox);
+    }
+}
+
+/* For the RX rows */
+static const char *hound_state(void) {
+    static char buf[40];
+    switch (hound.stage) {
+        case HOUND_CALLING: snprintf(buf, sizeof(buf), "calling %s", hound.fox); break;
+        case HOUND_REPORT:  snprintf(buf, sizeof(buf), "R%+03d to %s", hound.sent, hound.fox); break;
+        default:            snprintf(buf, sizeof(buf), "select the Fox"); break;
+    }
+    return buf;
+}
+
 /**
  * Parse and add RX messages to the table
  */
@@ -1141,9 +1485,12 @@ static void add_rx_text(int16_t snr, const char * text, slot_info_t *s_info, flo
     meta.freq_hz = freq_hz;
     meta.time_sec = time_sec;
     char * old_msg = strdup(tx_msg.msg);
-    ftx_qso_processor_add_rx_text(qso_processor, text, snr, &meta, &tx_msg);
+    ftx_tx_msg_t unused;
+    ftx_qso_processor_add_rx_text(qso_processor, text, snr, &meta, hound_on ? &unused : &tx_msg);
 
-    if ((strlen(tx_msg.msg) > 0) && (strcmp(old_msg, tx_msg.msg) != 0)) {
+    if (hound_on) {
+        hound_rx_text(text, snr, freq_hz, s_info->odd);
+    } else if ((strlen(tx_msg.msg) > 0) && (strcmp(old_msg, tx_msg.msg) != 0)) {
         lv_finder_set_cursor(finder, meta.freq_hz);
         if (!param_i_get(cfg_ft8_hold_freq)) {
             set_freq(freq_hz);
@@ -1189,6 +1536,7 @@ static void add_rx_text(int16_t snr, const char * text, slot_info_t *s_info, flo
     }
 
     cell_data.cell_type = cell_type;
+    cell_data.pota = meta.call_de[0] && (!strncmp(text, "CQ POTA ", 8) || pota_spotted(meta.call_de));
     snprintf(cell_data.text, sizeof(cell_data.text), "%s %s", slot_time, text);
     cell_data.meta = meta;
     /* The sender's country and flag, from the call (cty.dat), as JTDX (from SP2KMO's upstream PR #282) */
@@ -1302,6 +1650,15 @@ static void on_tick_cb(const slot_info_t *info, bool new_slot,
 
     if ((sec_since_slot_start < ftx_max_tx_start()) && have_tx_msg) {
         if ((tx_time_slot == info->odd) && subject_i_get(tx_enabled)) {
+            if (hound_on) {
+                if (hound_timed_out(&hound, time(NULL))) {
+                    tx_msg.msg[0] = '\0';
+                    add_info("Hound: no answer from %s, TX stopped", hound.fox);
+                    return;
+                }
+                int f = hound_tx_freq(&hound, params.ft8_tx_freq.x, (unsigned)rand());
+                if (f != params.ft8_tx_freq.x) set_freq(f);
+            }
             state = TX_PROCESS;
             add_tx_text(tx_msg.msg);
             tx_worker_run(tx_msg.msg, AUDIO_PLAY_RATE, base_gain_offset,
@@ -1330,7 +1687,10 @@ static void on_tick_cb(const slot_info_t *info, bool new_slot,
 
         /* FT2: an RX line every 3.75 s would fill the table; one every 4th slot (15 s), as FT8 */
         if ((!have_tx_msg || !subject_i_get(tx_enabled)) && (!ftx_is_ft2() || (ft2_slots++ % 4) == 0)) {
-            add_info("RX %s %s", cfg_digital_label_get(), slot_time);
+            if (hound_on)
+                add_info("RX %s %s  Hound: %s", where_label(), slot_time, hound_state());
+            else
+                add_info("RX %s %s", where_label(), slot_time);
         }
     }
 }
@@ -1346,6 +1706,7 @@ void dialog_ft8_remote(const char *cmd, int32_t val, const char *text) {
         tx_call_off();
         subject_i_set(cq_enabled, false);
         tx_msg.msg[0] = '\0';
+        hound_stop(&hound);
     } else if (!strcmp(cmd, "ft8_auto")) {
         if (val != param_i_get(cfg_ft8_auto))
             mode_auto_cb(NULL);
@@ -1370,7 +1731,7 @@ void dialog_ft8_remote(const char *cmd, int32_t val, const char *text) {
         else
             msg_update_text_fmt("FT8: that message is too old");
     } else if (!strcmp(cmd, "app_base")) {
-        load_band(0);
+        load_base();
     }
 }
 
@@ -1378,5 +1739,6 @@ int dialog_ft8_remote_state(char *buf, size_t size) {
     return snprintf(buf, size, "{\"cq\":%i,\"txen\":%i,\"txing\":%i,\"auto\":%i,\"hold\":%i,\"txfreq\":%i,\"base\":%i}",
                     cq_enabled ? subject_i_get(cq_enabled) != 0 : 0, tx_enabled ? subject_i_get(tx_enabled) != 0 : 0,
                     state == TX_PROCESS, param_i_get(cfg_ft8_auto) != 0, param_i_get(cfg_ft8_hold_freq) != 0,
-                    params.ft8_tx_freq.x, (int)cfg_digital_freq_get());
+                    params.ft8_tx_freq.x,
+                    (int)(params.ft8_custom_on.x ? params.ft8_custom_hz.x : cfg_digital_freq_get()));
 }

@@ -2,7 +2,7 @@
  *  SPDX-License-Identifier: LGPL-2.1-or-later
  *
  *  Xiegu X6100 LVGL GUI - Field Ops: the activation log, one ADIF file per activation
- *  (MY_SOTA_REF or MY_SIG POTA / MY_POTA_REF, as SOTA and POTA want them)
+ *  (MY_SOTA_REF, MY_SIG POTA / MY_POTA_REF, MY_SIG WWBOTA or HOTA / MY_SIG_INFO)
  */
 
 #pragma once
@@ -28,7 +28,7 @@ typedef struct {
 typedef struct {
     char call[16];
     char grid[8];
-    char prog;          /* 'S' SOTA, 'P' POTA */
+    char prog;          /* 'S' SOTA, 'P' POTA, 'B' WWBOTA, 'H' HOTA */
     char ref[16];
 } field_station_t;
 

@@ -978,6 +978,37 @@ static Frame *process_req(const Frame *req) {
             }
             break;
 
+        case C_CTL_RIT:
+            /* 21 00 offset (2 BCD bytes Hz + sign), 21 01 RIT on/off, 21 02 XIT on/off. Off = offset 0.
+             * OmniRig polls 21 01/02 every cycle: an NG there makes it time out and drop the rig. */
+            if (data_size >= 1 && req->data[0] == 0x00) {
+                if (data_size == 1) {
+                    int32_t rit = cfg_sm.p_rit.get();
+                    resp->set_payload_len(5);
+                    to_bcd(resp->data.data() + 1, rit < 0 ? -rit : rit, 4);
+                    resp->data[3] = rit < 0 ? 1 : 0;
+                } else if (data_size == 4) {
+                    int32_t hz = from_bcd(req->data.data() + 1, 4);
+                    cfg_sm.p_rit.set(req->data[3] ? -hz : hz);
+                    resp->set_code(CODE_OK);
+                } else {
+                    set_unsupported(req, resp);
+                }
+            } else if (data_size >= 1 && (req->data[0] == 0x01 || req->data[0] == 0x02)) {
+                auto &p = req->data[0] == 0x01 ? cfg_sm.p_rit : cfg_sm.p_xit;
+                if (data_size == 1) {
+                    resp->set_payload_len(3);
+                    resp->data[1] = p.get() != 0;
+                } else {
+                    if (req->data[1] == 0)
+                        p.set(0);
+                    resp->set_code(CODE_OK);
+                }
+            } else {
+                set_unsupported(req, resp);
+            }
+            break;
+
         case C_SEND_SEL_FREQ:
             {
                 ComputedParameter<int32_t> *freq;

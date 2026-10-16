@@ -1118,3 +1118,20 @@ bool channels_move(
 
     return true;
 }
+
+/* The JSON names of the modes and AGC, for the walkie channels (walkie.c), same file format */
+const char *channels_mode_name(x6100_mode_t mode) {
+    return mode_to_string(mode);
+}
+
+bool channels_mode_parse(const char *value, x6100_mode_t *mode) {
+    return string_to_mode(value, mode);
+}
+
+const char *channels_agc_name(x6100_agc_t agc) {
+    return agc_to_string(agc);
+}
+
+bool channels_agc_parse(const char *value, x6100_agc_t *agc) {
+    return string_to_agc(value, agc);
+}

@@ -95,7 +95,7 @@ static void redraw(void) {
             for (int k = 0; k < 2 && labels[p->type][k] && !text; k++) {
                 const char *t = labels[p->type][k];
 
-                if (lv_txt_get_width(t, strlen(t), NF(18), 0, LV_TEXT_FLAG_NONE) + 6 <= b - a) {
+                if (lv_txt_get_width(t, strlen(t), NF(16), 0, LV_TEXT_FLAG_NONE) + 6 <= b - a) {
                     text = t;
                 }
             }
@@ -129,7 +129,7 @@ void band_plan_init(lv_obj_t *parent, lv_coord_t y) {
 
         lv_obj_t *l = lv_label_create(b);
 
-        lv_obj_set_style_text_font(l, NF(18), 0);
+        lv_obj_set_style_text_font(l, NF(16), 0);
         lv_obj_set_style_text_color(l, TC(bp_text), 0);
         lv_obj_clear_flag(l, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);

@@ -19,12 +19,15 @@
 #include "util.h"
 #include "info.h"
 #include "meter.h"
+#include "spectrum.h"
 #include "tx_info.h"
 #include "clock.h"
-#include "dialog_channels.h"
+#include "channels.h"
+#include "cJSON.h"
 #include "buttons.h"
 #include "main.h"
 #include "main_screen.h"
+#include "msg.h"
 #include "params/params.h"
 #include "cfg/cfg_api.h"
 #include "cfg/settings_manager_api.h"
@@ -40,21 +43,31 @@
 #define X0          (SIDE_W + 8)    /* the rest of the screen */
 #define CW          (W - X0 - 8)
 #define XC          ((X0 + CW / 2) - W / 2)     /* centre offset for LV_ALIGN_TOP_MID */
-#define STRIP_H     200
-#define METER_H     170
-#define BAR_H       30
-#define ROW_STEP    110             /* VOL, SQL, PWR: a name and value over a bar */
+#define STRIP_Y     56
+#define STRIP_H     168
+#define SCOPE_Y     232             /* the bandscope, its edges and span under it */
+#define SCOPE_H     176
+#define SCALE_Y     (SCOPE_Y + SCOPE_H + 4)
+#define METER_Y     446
+#define METER_H     140
+#define ROWS_Y      612             /* VOL, SQL, PWR: the name, a bar, the value on one line */
+#define ROW_STEP    62
+#define BAR_H       12
+#define NAME_W      80
+#define VAL_W       108
 
 static lv_obj_t *main_scr;              /* the main screen */
 static lv_obj_t *main_obj;              /* the same while the walkie screen is up */
 static lv_timer_t *timer;
 static lv_obj_t *scr, *clock_label, *bat_label, *chan_label, *freq_label, *mode_label;
+static lv_obj_t *scope, *scope_lo, *scope_span, *scope_hi;
 static lv_obj_t *meter_box, *tx_label, *rxtx, *rxtx_label;
 static lv_obj_t *vol_bar, *vol_val, *sql_bar, *sql_val, *pwr_bar, *pwr_val;
 static lv_style_t scr_style, strip_style, meter_box_style;     /* boxes of the theme */
 static bool     tx;
 static float    tx_pwr, tx_swr, tx_alc;
 static uint8_t  tx_msg_id;
+static cfg_ctrl_t vol_saved;            /* the VOL knob's control before the walkie screen */
 
 static void set_text(lv_obj_t *label, const char *text) {
     if (strcmp(lv_label_get_text(label), text))
@@ -83,22 +96,33 @@ static void freq_set(const char *text) {
     lv_obj_set_style_transform_zoom(freq_label, LV_MIN(LV_IMG_ZOOM_NONE * 3 / 2, LV_IMG_ZOOM_NONE * (CW - 24) / s.x), 0);
 }
 
-/* A level row: the name on the left, the value on the right, a bar under them */
+/* A hairline across the content, as under the header */
+static void rule(lv_coord_t y) {
+    lv_obj_t *o = lv_obj_create(scr);
+
+    lv_obj_remove_style_all(o);
+    lv_obj_set_size(o, CW, 1);
+    lv_obj_set_pos(o, X0, y);
+    lv_obj_set_style_bg_color(o, TC(strip_border), 0);
+    lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+}
+
+/* A level row: the name on the left, a thin bar, the value on the right */
 static lv_obj_t *level_row(const char *name, lv_coord_t y, int32_t max, lv_obj_t **value) {
-    lv_obj_t *l = label(scr, &sony_28, TC(text_head));
+    lv_obj_t *l = label(scr, &sony_26, TC(text_head));
     lv_obj_t *b = lv_bar_create(scr);
 
     lv_label_set_text(l, name);
     lv_obj_set_pos(l, X0 + 2, y);
-    *value = label(scr, &sony_32, TC(text));
-    lv_obj_set_width(*value, 180);
+    *value = label(scr, &sony_28, TC(text));
+    lv_obj_set_width(*value, VAL_W);
     lv_obj_set_style_text_align(*value, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(*value, X0 + CW - 182, y - 2);
-    lv_obj_set_size(b, CW, BAR_H);
-    lv_obj_set_pos(b, X0, y + 44);
+    lv_obj_set_pos(*value, X0 + CW - VAL_W, y - 2);
+    lv_obj_set_size(b, CW - NAME_W - VAL_W - 8, BAR_H);
+    lv_obj_set_pos(b, X0 + NAME_W, y + (lv_font_get_line_height(&sony_26) - BAR_H) / 2);
     lv_bar_set_range(b, 0, max);
-    lv_obj_set_style_radius(b, theme_shape.radius, LV_PART_MAIN);
-    lv_obj_set_style_radius(b, theme_shape.radius, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(b, LV_MIN(theme_shape.radius, BAR_H / 2), LV_PART_MAIN);
+    lv_obj_set_style_radius(b, LV_MIN(theme_shape.radius, BAR_H / 2), LV_PART_INDICATOR);
     lv_obj_set_style_border_width(b, LV_MAX(theme_shape.border, 1), LV_PART_MAIN);
     lv_obj_set_style_border_color(b, TC(bar_border), LV_PART_MAIN);
     lv_obj_set_style_bg_color(b, TC(chip), LV_PART_MAIN);
@@ -143,14 +167,109 @@ static void meter_draw_cb(lv_event_t *e) {
         meter_needle_draw(obj, draw_ctx);
         return;
     }
-    tx_bar(obj, draw_ctx, 24, "PWR", tx_pwr, TC(tx));
-    tx_bar(obj, draw_ctx, 66, "ALC", tx_alc, TC(alc));
+    tx_bar(obj, draw_ctx, 18, "PWR", tx_pwr, TC(tx));
+    tx_bar(obj, draw_ctx, 54, "ALC", tx_alc, TC(alc));
 }
 
-static void mem_step(int dir) {
-    if (dialog_channels_recall_relative(dir))
+/* The walkie channels: its own list of WCH_N slots, apart from the Channel Memory, in a file
+ * of the same format with the slot number ("ch", 1-32) in each entry. freq 0: empty slot */
+#define WCH_N       32
+#ifndef WCH_FILE
+#define WCH_FILE    "/mnt/walkie_channels.json"
+#endif
+
+static channel_t wch[WCH_N];
+
+static void wch_load(void) {
+    FILE  *f = fopen(WCH_FILE, "rb");
+    char  *text = NULL;
+    long   n;
+    cJSON *root = NULL, *it;
+
+    memset(wch, 0, sizeof(wch));
+    if (!f)
         return;
-    param_i_set(cfg_walkie_mem, 0);     /* no memories: stay on the VFO */
+    if (!fseek(f, 0, SEEK_END) && (n = ftell(f)) > 0 && !fseek(f, 0, SEEK_SET) && (text = calloc(1, n + 1)) &&
+        fread(text, 1, n, f) == (size_t)n)
+        root = cJSON_Parse(text);
+    fclose(f);
+    free(text);
+    cJSON_ArrayForEach(it, cJSON_GetObjectItemCaseSensitive(root, "channels")) {
+        cJSON    *ch = cJSON_GetObjectItemCaseSensitive(it, "ch");
+        cJSON    *name = cJSON_GetObjectItemCaseSensitive(it, "name");
+        cJSON    *freq = cJSON_GetObjectItemCaseSensitive(it, "frequency");
+        cJSON    *mode = cJSON_GetObjectItemCaseSensitive(it, "mode");
+        cJSON    *agc = cJSON_GetObjectItemCaseSensitive(it, "agc");
+        channel_t c = {0};
+
+        if (!cJSON_IsNumber(ch) || ch->valueint < 1 || ch->valueint > WCH_N || !cJSON_IsNumber(freq) ||
+            freq->valuedouble < 1 || !channels_mode_parse(cJSON_GetStringValue(mode), &c.mode) ||
+            !channels_agc_parse(cJSON_GetStringValue(agc), &c.agc))
+            continue;
+        if (cJSON_IsString(name))
+            snprintf(c.name, sizeof(c.name), "%s", name->valuestring);
+        c.freq = (uint32_t)freq->valuedouble;
+        c.pre = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(it, "pre"));
+        c.att = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(it, "att"));
+        wch[ch->valueint - 1] = c;
+    }
+    cJSON_Delete(root);
+}
+
+/* Written to a new file, then renamed over the old one: never half a file */
+static void wch_save(void) {
+    cJSON *root = cJSON_CreateObject();
+    cJSON *list;
+    char  *text;
+    FILE  *f;
+
+    cJSON_AddNumberToObject(root, "version", 1);
+    list = cJSON_AddArrayToObject(root, "channels");
+    for (int i = 0; i < WCH_N; i++) {
+        cJSON *it;
+
+        if (!wch[i].freq)
+            continue;
+        it = cJSON_CreateObject();
+        cJSON_AddNumberToObject(it, "ch", i + 1);
+        cJSON_AddStringToObject(it, "name", wch[i].name);
+        cJSON_AddNumberToObject(it, "frequency", wch[i].freq);
+        cJSON_AddStringToObject(it, "mode", channels_mode_name(wch[i].mode));
+        cJSON_AddStringToObject(it, "agc", channels_agc_name(wch[i].agc));
+        cJSON_AddBoolToObject(it, "pre", wch[i].pre);
+        cJSON_AddBoolToObject(it, "att", wch[i].att);
+        cJSON_AddItemToArray(list, it);
+    }
+    text = cJSON_Print(root);
+    cJSON_Delete(root);
+    if (text && (f = fopen(WCH_FILE ".new", "wb"))) {
+        bool ok = fputs(text, f) >= 0;
+
+        if (fclose(f) == 0 && ok)
+            rename(WCH_FILE ".new", WCH_FILE);
+    }
+    free(text);
+}
+
+/* The radio to the slot, as Channel Memory recalls; an empty slot leaves it as it is */
+static void wch_recall(int i) {
+    const channel_t *c = &wch[i];
+
+    if (!c->freq)
+        return;
+    cparam_i_set(cfg_fg_freq, c->freq);
+    cparam_i_set(cfg_cur_mode, c->mode);
+    cparam_i_set(cfg_cur_agc, c->agc);
+    cparam_i_set(cfg_cur_pre, c->pre ? x6100_pre_on : x6100_pre_off);
+    cparam_i_set(cfg_cur_att, c->att ? x6100_att_on : x6100_att_off);
+}
+
+/* The main knob in MEM: every slot in turn, the empty ones too (they can be stored into) */
+static void mem_step(int dir) {
+    int i = (param_i_get(cfg_walkie_ch) + dir + WCH_N) % WCH_N;
+
+    param_i_set(cfg_walkie_ch, i);
+    wch_recall(i);
 }
 
 static void rotary_cb(lv_event_t *e) {
@@ -183,6 +302,28 @@ static void key_hold_cb(button_data_t *d) {
 
 static void mem_toggle_cb(button_data_t *d) {
     param_i_set(cfg_walkie_mem, !param_i_get(cfg_walkie_mem));
+    if (param_i_get(cfg_walkie_mem))
+        wch_recall(param_i_get(cfg_walkie_ch));
+}
+
+/* Store: the VFO (frequency, mode, AGC, PRE, ATT) into the current slot, then MEM. Clear (held): the slot emptied */
+static void store_cb(button_data_t *d) {
+    channel_t *c = &wch[param_i_get(cfg_walkie_ch)];
+
+    *c = (channel_t){
+        .freq = cparam_i_get(cfg_fg_freq),
+        .mode = cparam_i_get(cfg_cur_mode),
+        .agc  = cparam_i_get(cfg_cur_agc),
+        .pre  = cparam_i_get(cfg_cur_pre) != 0,
+        .att  = cparam_i_get(cfg_cur_att) != 0,
+    };
+    wch_save();
+    param_i_set(cfg_walkie_mem, 1);
+}
+
+static void clear_cb(button_data_t *d) {
+    wch[param_i_get(cfg_walkie_ch)] = (channel_t){0};
+    wch_save();
 }
 
 static void exit_cb(button_data_t *d) {
@@ -221,11 +362,13 @@ static void levels_cb(button_data_t *d) {
 }
 
 static button_data_t wlk_levels = { .type = BTN_TEXT, .label = "Vol Sql\nRF Pwr", .press = levels_cb };
+static button_data_t wlk_store = { .type = BTN_TEXT, .label = "Store", .press = store_cb };
+static button_data_t wlk_clear = { .type = BTN_TEXT, .label = "Clear\nhold", .hold = clear_cb };
 
 static buttons_page_t wlk_1 = {{&wlk_p1, &wlk_mem, &wlk_band_up, &wlk_band_down, &btn_tx_pwr}};
 static buttons_page_t wlk_2 = {{&wlk_p2, &wlk_am, &wlk_ssb, &wlk_atu, &wlk_pre}};
 static buttons_page_t wlk_3 = {{&wlk_p3, &wlk_agc, &wlk_ab, &wlk_step, &wlk_lock}};
-static buttons_page_t wlk_4 = {{&wlk_p4, &wlk_levels, &wlk_exit}};
+static buttons_page_t wlk_4 = {{&wlk_p4, &wlk_store, &wlk_clear, &wlk_levels, &wlk_exit}};
 
 static void keypad_cb(lv_event_t *e) {
     event_keypad_t *k = lv_event_get_param(e);
@@ -286,12 +429,15 @@ static void update_cb(lv_timer_t *t) {
     set_text(bat_label, buf);
 
     if (param_i_get(cfg_walkie_mem)) {
-        int16_t i = dialog_channels_last_recalled_index();
+        int              i = param_i_get(cfg_walkie_ch);
+        const channel_t *c = &wch[i];
 
-        if (i < 0)
-            snprintf(buf, sizeof(buf), "MEM --");
+        if (!c->freq)
+            snprintf(buf, sizeof(buf), "CH %02i - empty", i + 1);
+        else if (c->name[0])
+            snprintf(buf, sizeof(buf), "CH %02i - %s", i + 1, c->name);
         else
-            snprintf(buf, sizeof(buf), "MEM %02i - %s", i + 1, dialog_channels_last_recalled_name());
+            snprintf(buf, sizeof(buf), "CH %02i", i + 1);
     } else {
         snprintf(buf, sizeof(buf), "VFO");
     }
@@ -309,6 +455,19 @@ static void update_cb(lv_timer_t *t) {
         snprintf(buf, sizeof(buf), "%s", info_params_mode_label_get());
     }
     set_text(mode_label, buf);
+
+    /* The bandscope: the main screen's spectrum data and drawing (spectrum.c), 10 frames/s */
+    float   vfo_at;
+    int32_t span = spectrum_span(&vfo_at);
+    int32_t lo = cparam_i_get(cfg_fg_freq) - (int32_t)(span * vfo_at);
+
+    snprintf(buf, sizeof(buf), "%.3f", lo / 1e6);
+    set_text(scope_lo, buf);
+    snprintf(buf, sizeof(buf), "%.3f", (lo + span) / 1e6);
+    set_text(scope_hi, buf);
+    snprintf(buf, sizeof(buf), "%g kHz", span / 1000.0);
+    set_text(scope_span, buf);
+    lv_obj_invalidate(scope);
 
     lv_bar_set_value(vol_bar, param_i_get(cfg_volume), LV_ANIM_OFF);
     snprintf(buf, sizeof(buf), "%i", (int)param_i_get(cfg_volume));
@@ -364,12 +523,7 @@ static void build(void) {
     lv_obj_set_pos(clock_label, X0 + 2, 8);
     bat_label = label(scr, &sony_28, TC(text_soft));
     lv_obj_align(bat_label, LV_ALIGN_TOP_RIGHT, -10, 8);
-    o = lv_obj_create(scr);
-    lv_obj_remove_style_all(o);
-    lv_obj_set_size(o, CW, 1);
-    lv_obj_set_pos(o, X0, 50);
-    lv_obj_set_style_bg_color(o, TC(strip_border), 0);
-    lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+    rule(STRIP_Y - 8);
 
     /* The channel panel on the theme's strip: VFO or memory and RX/TX, the frequency, the mode */
     o = lv_obj_create(scr);
@@ -378,7 +532,7 @@ static void build(void) {
                      TI_strip, CW, STRIP_H);
     lv_obj_add_style(o, &strip_style, 0);
     lv_obj_set_size(o, CW, STRIP_H);
-    lv_obj_set_pos(o, X0, 60);
+    lv_obj_set_pos(o, X0, STRIP_Y);
     chan_label = label(o, &sony_28, TC(text_head));
     lv_obj_set_style_max_width(chan_label, CW - 120, 0);     /* a long memory name ends in dots */
     lv_label_set_long_mode(chan_label, LV_LABEL_LONG_DOT);
@@ -399,9 +553,32 @@ static void build(void) {
     lv_obj_center(rxtx_label);
 
     freq_label = label(o, &sony_60, TC(text));
-    lv_obj_align(freq_label, LV_ALIGN_TOP_MID, 0, 74);
-    mode_label = label(o, &sony_32, TC(text_soft));
+    lv_obj_align(freq_label, LV_ALIGN_TOP_MID, 0, 58);
+    mode_label = label(o, &sony_28, TC(text_soft));
     lv_obj_align(mode_label, LV_ALIGN_BOTTOM_MID, 0, -10);
+
+    /* The bandscope on the spectrum's panel colour, framed as the S-meter */
+    scope = lv_obj_create(scr);
+    lv_obj_remove_style_all(scope);
+    lv_obj_set_size(scope, CW, SCOPE_H);
+    lv_obj_set_pos(scope, X0, SCOPE_Y);
+    lv_obj_set_style_bg_color(scope, TC(panel), 0);
+    lv_obj_set_style_bg_opa(scope, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(scope, LV_MAX(theme_shape.border, 1), 0);
+    lv_obj_set_style_border_color(scope, TC(bar_border), 0);
+    lv_obj_set_style_radius(scope, theme_shape.radius, 0);
+    lv_obj_set_style_clip_corner(scope, true, 0);
+    lv_obj_add_event_cb(scope, spectrum_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
+    scope_lo = label(scr, &sony_22, TC(text_soft));
+    lv_obj_set_pos(scope_lo, X0 + 2, SCALE_Y);
+    scope_span = label(scr, &sony_22, TC(text_soft));
+    lv_obj_set_width(scope_span, CW);
+    lv_obj_set_style_text_align(scope_span, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(scope_span, X0, SCALE_Y);
+    scope_hi = label(scr, &sony_22, TC(text_soft));
+    lv_obj_set_width(scope_hi, CW / 3);
+    lv_obj_set_style_text_align(scope_hi, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(scope_hi, X0 + CW - CW / 3 - 2, SCALE_Y);
 
     meter_box = lv_obj_create(scr);
     lv_obj_remove_style_all(meter_box);
@@ -409,17 +586,28 @@ static void build(void) {
                      TI_bar, CW, METER_H);
     lv_obj_add_style(meter_box, &meter_box_style, 0);
     lv_obj_set_size(meter_box, CW, METER_H);
-    lv_obj_set_pos(meter_box, X0, 270);
+    lv_obj_set_pos(meter_box, X0, METER_Y);
     lv_obj_set_style_clip_corner(meter_box, true, 0);
     lv_obj_add_event_cb(meter_box, meter_draw_cb, LV_EVENT_DRAW_MAIN_END, NULL);
-    tx_label = label(meter_box, &sony_32, TC(text));
-    lv_obj_align(tx_label, LV_ALIGN_BOTTOM_MID, 0, -24);
+    tx_label = label(meter_box, &sony_28, TC(text));
+    lv_obj_align(tx_label, LV_ALIGN_BOTTOM_MID, 0, -12);
 
-    vol_bar = level_row("VOL", 458, 55, &vol_val);
-    sql_bar = level_row("SQL", 458 + ROW_STEP, 100, &sql_val);
-    pwr_bar = level_row("PWR", 458 + 2 * ROW_STEP, 100, &pwr_val);
+    rule(ROWS_Y - 14);
+    vol_bar = level_row("VOL", ROWS_Y, 55, &vol_val);
+    sql_bar = level_row("SQL", ROWS_Y + ROW_STEP, 100, &sql_val);
+    pwr_bar = level_row("PWR", ROWS_Y + 2 * ROW_STEP, 100, &pwr_val);
 
     timer = lv_timer_create(update_cb, 100, NULL);
+}
+
+/* No digital modes in walkie: whatever brings one (a band or memory with its own mode, CAT,
+ * the app, the web remote) goes to plain USB/LSB */
+static void no_dig_mode(Subject *subj, void *user_data) {
+    if (!walkie_on()) return;
+    int32_t mode = cparam_i_get(cfg_cur_mode);
+    if (mode != x6100_mode_usb_dig && mode != x6100_mode_lsb_dig) return;
+    cparam_i_set(cfg_cur_mode, mode == x6100_mode_usb_dig ? x6100_mode_usb : x6100_mode_lsb);
+    msg_schedule_text_fmt("No digital modes in walkie mode");
 }
 
 static void enter(void) {
@@ -428,8 +616,11 @@ static void enter(void) {
     }
     main_screen_close_app();                        /* no app or Settings left open under it */
     main_obj = main_scr;
-    vol_set_ctrl(CTRL_VOL);                         /* the VOL knob: the volume, whatever it was on */
-    radio_set_mic_override(x6100_mic_builtin);     /* the PTT key and VOX: the builtin mic */
+    vol_saved = vol_get_ctrl();
+    vol_set_ctrl(CTRL_VOL);                         /* the VOL knob: the volume, given back at leave() */
+    radio_set_mic_override(param_i_get(cfg_walkie_mic));   /* Settings > Walkie, built-in by default */
+    no_dig_mode(NULL, NULL);
+    wch_load();                                     /* each time: the file may have been edited */
     if (!scr) {
         build();
     }
@@ -445,6 +636,7 @@ static void leave(void) {
     main_obj = NULL;                                /* walkie_on() false from here */
     lv_timer_pause(timer);
     radio_set_mic_override(-1);                     /* cfg_mic again, never changed */
+    vol_set_ctrl(vol_saved);
     buttons_horizontal(main_scr);
     buttons_load_page(&buttons_page_vol_1);         /* as at start */
     main_display_portrait(false);
@@ -473,4 +665,5 @@ void walkie_drop(void) {
 void walkie_init(lv_obj_t *main_screen_obj) {
     main_scr = main_screen_obj;
     subject_subscribe_delayed_and_notify((Subject *)cfg_walkie, on_walkie_change, NULL);
+    subject_subscribe_delayed((Subject *)cfg_cur_mode, no_dig_mode, NULL);
 }

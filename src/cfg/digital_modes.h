@@ -39,6 +39,14 @@ const char *cfg_digital_label_get(void);
 // Frequency of the last successfully loaded preset (0 before any). Any thread.
 int32_t cfg_digital_freq_get(void);
 
+typedef struct {
+    int32_t freq;
+    char    label[32];
+} cfg_digital_preset_t;
+
+// The presets of `type` in frequency order, at most `max`: how many were written.
+int cfg_digital_list(cfg_digital_type_t type, cfg_digital_preset_t *out, int max);
+
 #ifdef __cplusplus
 }
 #endif

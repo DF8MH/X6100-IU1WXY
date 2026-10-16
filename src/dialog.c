@@ -119,6 +119,14 @@ void dialog_destruct() {
         current_dialog->run = false;
         freq_strip_set_dialog(false);
 
+        /* Closed from a key (VOL press = ESC): LVGL sends CANCEL to the focused object after
+         * the key. The destruct_cb usually takes it out of the group first, so LVGL can't see
+         * it is being deleted and the CANCEL hit freed memory (crash closing Modes with VOL) */
+        lv_indev_t *indev = lv_indev_get_act();
+        if (indev && current_dialog->obj) {
+            lv_indev_reset(indev, current_dialog->obj);
+        }
+
         if (current_dialog->destruct_cb) {
             current_dialog->destruct_cb();
         }

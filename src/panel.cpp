@@ -21,6 +21,8 @@ extern "C" {
     #include "scheduler.h"
     #include "radio.h"
     #include "params/params.h"
+    #include "cw_parse.h"
+    #include "remote_server.h"
 }
 
 static lv_obj_t    *obj;
@@ -28,7 +30,7 @@ static lv_obj_t    *info;
 static lv_anim_t    dim_anim;
 static char         buf[1024] = "";
 static char        *buf_write = buf;
-static char         shown[1536];    /* buf with the calls coloured (label recolour) */
+static char         shown[6144];    /* buf with the words coloured (label recolour), up to 9 more chars a word */
 static uint8_t      max_line_count;
 static x6100_mode_t prev_mode;
 
@@ -172,51 +174,38 @@ static void check_lines() {
     }
 }
 
-/* A finished word that looks like a callsign: 4-12 letters, digits and '/', a letter, a digit and
- * a letter after it (so 5NN, 599, TU and R5 stay plain), not our own call */
-static bool is_call(const char *w, size_t len) {
-    bool letter = false, digit = false, after = false;
+#define MAX_WORD_K 65   /* a word for cw_parse.c, with its NUL */
 
-    if (len < 4 || len > 12) return false;
-    for (size_t i = 0; i < len; i++) {
-        char c = w[i];
-        if (c >= '0' && c <= '9') {
-            digit = true;
-        } else if (c >= 'A' && c <= 'Z') {
-            if (digit) after = true; else letter = true;
-        } else if (c != '/') {
-            return false;
-        }
-    }
-    return letter && digit && after
+/* CW with Parse on: words split and coloured (cw_parse.c) */
+static bool parse_on() {
+    x6100_mode_t m = (x6100_mode_t)cfg_sm.cp_cur_mode.get();
+
+    return cfg_sm.p_cw_parse.get() && (m == x6100_mode_cw || m == x6100_mode_cwr);
+}
+
+/* A word that looks like a callsign (cw_parse.c), not our own call */
+static bool is_call(const char *w, size_t len) {
+    return cw_parse_is_call(w, len)
         && !(strlen(params.callsign.x) == len && !strncasecmp(w, params.callsign.x, len));
 }
 
-/* Noise decodes into call-shaped words too (TT1SAR, YP4F): a call counts only after DE or when it
+/* Noise decodes into call-shaped words too (TT1SAR, YP4F): a call counts only next to DE or when it
  * comes at least twice, as a station sends it ("CQ CQ DE IK1ABC IK1ABC K") */
 static bool sent_call(const char *w, size_t len) {
-    const char *e = w, *b;
-    size_t      n;
-    int         times = 0;
-
-    if (!is_call(w, len)) return false;
-    while (e > buf && strchr(" \n", e[-1])) e--;       /* the word before */
-    for (b = e; b > buf && !strchr(" \n", b[-1]); b--) {}
-    if (e - b == 2 && !strncmp(b, "DE", 2)) return true;
-    for (const char *p = buf; *p; p += n ? n : 1) {
-        n = strcspn(p, " \n");
-        if (n == len && !strncmp(p, w, len) && ++times >= 2) return true;
-    }
-    return false;
+    return is_call(w, len) && cw_parse_confirmed(buf, w, len);
 }
 
-/* buf into the label, the calls in the heading colour; a word still being decoded stays plain */
+/* buf into the label, the calls coloured; with Parse also abbreviations (dim) and RST. A word still
+ * being decoded stays plain */
 static void show() {
-    char   color[8];
+    char   call[8], abbr[8], rst[8];
     char  *o = shown, *end = shown + sizeof(shown) - 16;
     size_t n;
+    bool   parse = parse_on();
 
-    snprintf(color, sizeof(color), "%06X", (unsigned)(theme_hex(TC_text_head) & 0xFFFFFF));
+    snprintf(call, sizeof(call), "%06X", (unsigned)(theme_hex(parse ? TC_accent : TC_text_head) & 0xFFFFFF));
+    snprintf(abbr, sizeof(abbr), "%06X", (unsigned)(theme_hex(TC_text_dim) & 0xFFFFFF));
+    snprintf(rst, sizeof(rst), "%06X", (unsigned)(theme_hex(TC_text_head) & 0xFFFFFF));
     for (const char *p = buf; *p && o < end; p += n) {
         n = strcspn(p, " \n");
         if (n == 0) {           /* a separator */
@@ -224,14 +213,111 @@ static void show() {
             n = 1;
             continue;
         }
-        bool call = p[n] && sent_call(p, n) && o + n + 10 < end;
-        if (call) o += sprintf(o, "#%s ", color);
+        const char *color = NULL;
+        if (p[n] && sent_call(p, n)) {
+            color = call;
+        } else if (p[n] && parse) {
+            cwp_class_t c = cw_parse_class(p, n);
+            color = c == CWP_ABBR ? abbr : c == CWP_RST ? rst : NULL;
+        }
+        if (color && o + n + 10 >= end) color = NULL;
+        if (color) o += sprintf(o, "#%s ", color);
         for (size_t i = 0; i < n && o < end; i++)
             if (p[i] != '#') *o++ = p[i];       /* '#' is the recolour mark */
-        if (call) *o++ = '#';
+        if (color) *o++ = '#';
     }
     *o = '\0';
     lv_label_set_text_static(obj, shown);
+}
+
+/* X6100 Link: a finished word, its split and classes (c call, a abbreviation, r RST, - other) and
+ * the calls it confirms, its own or the one before ("IK1ABC DE"): docs/REMOTE_API.md of the app */
+static void word_event(const char *raw, size_t rn, const char *w, size_t wn) {
+    char        k[MAX_WORD_K];
+    size_t      nk = 0, n;
+    const char *p, *b;
+    cJSON      *o = cJSON_CreateObject(), *conf = cJSON_CreateArray();
+    char        tmp[MAX_WORD_K];
+
+    for (p = w; p < w + wn && nk < sizeof(k) - 1; p += n + 1) {
+        n = strcspn(p, " \n");
+        cwp_class_t c = is_call(p, n) ? CWP_CALL : cw_parse_class(p, n);
+        k[nk++] = c == CWP_CALL ? 'c' : c == CWP_ABBR ? 'a' : c == CWP_RST ? 'r' : '-';
+        if (c == CWP_CALL && sent_call(p, n)) {
+            snprintf(tmp, sizeof(tmp), "%.*s", (int)n, p);
+            cJSON_AddItemToArray(conf, cJSON_CreateString(tmp));
+        }
+    }
+    k[nk] = '\0';
+    for (p = w; p > buf && strchr(" \n", p[-1]); p--) {}     /* the word before */
+    for (b = p; b > buf && !strchr(" \n", b[-1]); b--) {}
+    if (p > b && sent_call(b, p - b)) {
+        snprintf(tmp, sizeof(tmp), "%.*s", (int)(p - b), b);
+        cJSON_AddItemToArray(conf, cJSON_CreateString(tmp));
+    }
+    cJSON_AddStringToObject(o, "t", "cw_word");
+    snprintf(tmp, sizeof(tmp), "%.*s", (int)rn, raw);
+    cJSON_AddStringToObject(o, "raw", tmp);
+    snprintf(tmp, sizeof(tmp), "%.*s", (int)wn, w);
+    cJSON_AddStringToObject(o, "w", tmp);
+    cJSON_AddStringToObject(o, "k", k);
+    cJSON_AddItemToObject(o, "conf", conf);
+    remote_event(o);
+}
+
+/* CW with Parse: the words this text finished, split in place where they ran together
+ * ("DEIU1WXYK" -> "DE IU1WXY K"); only the tail, cw_parse.c only ever adds spaces */
+static void split_words(char *from) {
+    char   raw[MAX_WORD_K], out[MAX_WORD_K * 2 + 1];
+    char  *p = from;
+    size_t n, m;
+
+    while (p > buf && !strchr(" \n", p[-1])) p--;      /* the word the text went on with */
+    while (*p) {
+        n = strcspn(p, " \n");
+        if (!p[n]) break;                                /* still being decoded */
+        if (n == 0) {
+            p++;
+            continue;
+        }
+        if (n < MAX_WORD_K) {
+            size_t rn = n;
+
+            memcpy(raw, p, n);
+            m = cw_parse_split(raw, n, buf, out, sizeof(out));
+            if (m > n && (size_t)(buf_write - buf) + m - n < sizeof(buf) - 1) {
+                memmove(p + m, p + n, buf_write - (p + n) + 1);
+                memcpy(p, out, m);
+                buf_write += m - n;
+                n = m;
+            }
+            if (remote_subscribed()) word_event(raw, rn, p, n);
+        }
+        p += n + 1;
+    }
+}
+
+void panel_remote(const char *cmd, int32_t val, const char *text) {
+    bool   added = false;
+    size_t n;
+
+    if (!parse_on())
+        return;
+    for (const char *p = text; *p; p += n + (p[n] != '\0')) {
+        n = strcspn(p, ", ");
+        added |= cw_parse_know(p, n);
+    }
+    if (!added)
+        return;
+    show();
+
+    cJSON      *o = cJSON_CreateObject(), *a = cJSON_AddArrayToObject(o, "calls");
+    const char *c;
+
+    cJSON_AddStringToObject(o, "t", "cw_calls");
+    for (size_t i = 0; (c = cw_parse_known_at(i)); i++)
+        cJSON_AddItemToArray(a, cJSON_CreateString(c));
+    remote_event(o);
 }
 
 const char *panel_last_call(void) {
@@ -279,9 +365,27 @@ static void panel_update_text_cb(const char *text) {
         } else {
             lv_txt_get_size(&text_size, buf, lv_obj_get_style_text_font(obj, 0), 0, 0, LV_COORD_MAX, 0);
             if (text_size.x > (lv_obj_get_width(obj) - 20)) {
-                *old_write = '\n';
-                buf_write = stpcpy(old_write + 1, text);
+                char *w = old_write;
+
+                while (w > buf && !strchr(" \n", w[-1])) w--;
+                if (parse_on() && w > buf && w[-1] == ' ') {
+                    w[-1] = '\n';      /* the whole word to the next line: it stays one word */
+                } else {
+                    *old_write = '\n';
+                    buf_write = stpcpy(old_write + 1, text);
+                }
             }
+        }
+    }
+    if (parse_on()) {
+        split_words(old_write);
+        /* split, the line may have got too long: it breaks at its last space */
+        lv_txt_get_size(&text_size, buf, lv_obj_get_style_text_font(obj, 0), 0, 0, LV_COORD_MAX, 0);
+        if (text_size.x > (lv_obj_get_width(obj) - 20)) {
+            char *sp = buf_write;
+
+            while (sp > buf && sp[-1] != '\n' && (sp == buf_write || sp[-1] != ' ')) sp--;
+            if (sp > buf && sp[-1] == ' ') sp[-1] = '\n';
         }
     }
     check_lines();
@@ -290,6 +394,15 @@ static void panel_update_text_cb(const char *text) {
 
 static void panel_update_info_cb(const char *text) {
     lv_label_set_text(info, text);
+}
+
+/* The info (CW WPM) hangs above the panel, over the waterfall: LVGL redraws the panel only
+ * where its area is dirty, so each waterfall refresh drew over the label and hid it.
+ * The extra draw size takes that strip in */
+static void info_ext_draw_cb(lv_event_t *e) {
+    lv_coord_t *s = (lv_coord_t *)lv_event_get_param(e);
+
+    *s = LV_MAX(*s, -lv_obj_get_style_y(info, 0) + lv_font_get_line_height(lv_obj_get_style_text_font(info, 0)));
 }
 
 lv_obj_t * panel_init(lv_obj_t *parent) {
@@ -318,6 +431,8 @@ lv_obj_t * panel_init(lv_obj_t *parent) {
     info = lv_label_create(obj);
     lv_obj_add_style(info, &panel_info_style, 0);
     lv_label_set_text(info, "");
+    lv_obj_add_event_cb(obj, info_ext_draw_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, NULL);
+    lv_obj_refresh_ext_draw_size(obj);
 
     return obj;
 }
@@ -352,6 +467,7 @@ void panel_hide() {
 }
 
 void panel_clear() {
+    cw_parse_forget();      /* the calls the app confirmed: they go with the text */
     if (lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN) == false) {
         buf[0] = '\0';
         buf_write = buf;

@@ -71,6 +71,9 @@ size_t field_adif_record(char *buf, size_t size, const field_qso_t *q, const fie
         n = field(buf, size, n, "MY_SIG", "POTA");
         n = field(buf, size, n, "MY_SIG_INFO", st->ref);
         n = field(buf, size, n, "MY_POTA_REF", st->ref);
+    } else if (st->prog == 'B' || st->prog == 'H') {
+        n = field(buf, size, n, "MY_SIG", st->prog == 'B' ? "WWBOTA" : "HOTA");
+        n = field(buf, size, n, "MY_SIG_INFO", st->ref);
     }
     if (n < size)
         n += (size_t)snprintf(buf + n, size - n, "<eor>\n");
