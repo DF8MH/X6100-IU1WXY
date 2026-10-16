@@ -100,7 +100,7 @@ transmits by itself.
 ### DX Cluster
 
 - Spots drawn **on the waterfall**, in a **column** beside it, and in a full
-  **Cluster app** that follows the VFO; tap or press to tune.
+  **Cluster app** that follows the VFO; press to tune.
 - Filters by mode, band and activity (POTA, SOTA, WWBOTA, HOTA); **alerts** on callsigns and prefixes
   with a popup.
 - **Newest first** and **all bands**: the column and the app can list the
@@ -122,7 +122,7 @@ transmits by itself.
 A second, separate interface made for portable activations, with big tiles and
 big text that read well outdoors and work with gloves: APP (page 2) →
 **Field Ops**, a long-press action, or straight at power on (**Start here**).
-The main knob still tunes, the MFK chooses, a press (or a tap) opens.
+The main knob still tunes, the MFK chooses, a press opens.
 **GEN** goes back to the normal radio screen.
 
 <table>

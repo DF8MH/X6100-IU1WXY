@@ -547,7 +547,7 @@ POTA dopo il messaggio segna una stazione spottata ora su POTA e ogni
 `CQ POTA`. Gli spot sono quelli che il cluster già scarica da pota.app: senza
 spot non c'è tag.
 
-Replying. Turn the MFK onto a row and press it, or touch it. The radio
+Replying. Turn the MFK onto a row and press it. The radio
 answers that station, moves your TX offset there (unless Hold Freq is on) and
 turns TX Call on. A press while transmitting stops TX.
 
@@ -557,7 +557,7 @@ list, so they do not scroll away.
 - Up to 3 stations, one row each, newest at the bottom.
 - A row stays 2 minutes after the station's last message. It leaves earlier
   when you send that station RR73 or 73. A band or mode change clears it.
-- A touch or an MFK press on a row replies, as in the list.
+- An MFK press on a row replies, as in the list.
 - With the MFK: down past the last row of the list enters the strip; up from
   its first row goes back to the list.
 - The strip has no title: a line in the "to you" colour sits on top of it.
@@ -1102,15 +1102,15 @@ Cluster app (APP > Cluster; pages `(CLUSTER 1:2)` and `(CLUSTER 2:2)`):
   selects the nearest spot. Spots within 3 kHz of the VFO are highlighted; a
   green `*` marks spots less than 2 minutes old.
 - Turning the MFK browses the list (this stops the VFO following). An MFK
-  press, the Tune button or a tap on a row tunes to the spot. The mode comes
+  press or the Tune button tunes to the spot. The mode comes
   from the comment (CW, FT8, SSB, ...) or else from the band plan: CW, USB-D
   on the FT8/FT4 frequencies, LSB below 10 MHz, USB above.
 - Page 1: Band / All switches between the current band and all bands (always
   all when the VFO is outside the amateur bands); the button shows the view
   (`Band / 20m`, `Band / All`). Tune, Mode (All > CW > SSB > DIG, a quick
   view filter), Close.
-- Page 2: Server opens the list of saved servers: MFK to choose, press (or
-  tap) to use it, Server again or ESC to close. The choice is saved in
+- Page 2: Server opens the list of saved servers: MFK to choose, press to use
+  it, Server again or ESC to close. The choice is saved in
   `/mnt/cluster.conf`. Order: by frequency around the VFO (`Freq`) or newest
   first (`Time`).
 - Order and band view are saved and shared with the cluster column.
@@ -1186,7 +1186,7 @@ or a long-press action. GEN or Radio goes back to the normal screen.
   were on) is kept on the SD card in `/mnt/field`. Coming back, or a restart
   in the middle of an activation, finds it as it was.
 - Start here (home screen) opens Field Ops at power on.
-- The main knob still tunes; MFK and touch choose.
+- The main knob still tunes; the MFK chooses.
 
 | Home | SOTA, before the activation |
 |---|---|
@@ -1384,8 +1384,8 @@ header text, OK, TX, ...). A theme gives each role a colour, plus corners,
 borders, gradients, the font and the waterfall palette.
 
 Where: Settings > Display > INTERFACE > Theme (also on the web
-configurator's Display page). The radio app restarts at once with it (a few
-seconds; the settings are saved first).
+configurator's Display page). The new theme applies at once, with no
+restart.
 
 | Theme | Look |
 |---|---|
