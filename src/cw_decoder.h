@@ -3,19 +3,15 @@
  *
  *  Xiegu X6100 LVGL GUI
  *
- *  Copyright (c) 2022-2023 Belousov Oleg aka R1CBU
+ *  Where the CW decoder's text and speed go: the panel (and the remote
+ *  clients), or the CW trainer while it runs.
  */
 
 #pragma once
 
 #include <stdbool.h>
 
-typedef struct {
-    char    *morse;
-    char    *character;
-} cw_characters_t;
-
-extern cw_characters_t cw_characters[];
+#include "cw_decoder/morse_code.h"
 
 /* Redirects the decoded text and the WPM estimate (called from the audio
  * thread) instead of the panel; NULL, NULL restores the panel. */

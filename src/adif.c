@@ -69,11 +69,13 @@ adif_log adif_log_init(const char * path) {
 }
 
 void adif_log_close(adif_log l) {
+    if (!l) return;     /* /mnt/ft_log.adi could not be opened (read-only or full microSD) */
     fclose(l->fd);
 }
 
 void adif_add_qso(adif_log l, qso_log_record_t qso)
 {
+    if (!l) return;     /* the day's log says why (dialog_field_day_log) */
     write_str(l->fd, "STATION_CALLSIGN", qso.local_call);
     write_str(l->fd, "OPERATOR", qso.local_call);
     write_str(l->fd, "CALL", qso.remote_call);
@@ -133,9 +135,12 @@ int adif_read(const char * path, qso_log_record_t ** records) {
     size_t val_len;
 
     while ((read = getline(&line, &len, fp)) != -1) {
-        if (strcmp(line + read - 7, "<EOR>\r\n") != 0) continue;
+        if (read < 7 || strcmp(line + read - 7, "<EOR>\r\n") != 0) continue;
         s = line;
         cur_record = &(*records)[cur_record_id];
+        /* From malloc: a field the record lacks, and the seconds, were left random */
+        memset(cur_record, 0, sizeof(*cur_record));
+        memset(&qso_ts, 0, sizeof(qso_ts));
         char * mode = NULL;
         char * submode = NULL;
         for (unsigned int i = 0; ; i++) {
@@ -191,6 +196,9 @@ int adif_read(const char * path, qso_log_record_t ** records) {
             (*records) = realloc((*records), arr_size * sizeof(qso_log_record_t));
         }
     }
+    free(line);
+    fclose(fp);
+    regfree(&regex);
     return cur_record_id--;
 }
 
@@ -241,47 +249,22 @@ static void write_band(FILE *fd, qso_log_band_t band) {
 }
 
 static void write_mode(FILE *fd, qso_log_mode_t mode) {
-    char * mode_str;
-    char * submode_str = NULL;
-    switch (mode) {
-        case MODE_SSB:
-            mode_str = "SSB";
-            // submode_str = "USB";
-            break;
-        case MODE_AM:
-            mode_str = "AM";
-            break;
-        case MODE_FM:
-            mode_str = "FM";
-            break;
-        case MODE_CW:
-            mode_str = "CW";
-            // submode_str = "PCW";
-            break;
-        case MODE_FT8:
-            mode_str = "FT8";
-            break;
-        case MODE_FT4:
-            mode_str = "MFSK";
-            submode_str = "FT4";
-            break;
-        case MODE_RTTY:
-            mode_str = "RTTY";
-            break;
-        case MODE_JS8:
-            mode_str = "MFSK";
-            submode_str = "JS8";
-            break;
-        case MODE_FT2:
-            mode_str = "MFSK";
-            submode_str = "FT2";
-            break;
-        default:
-            mode_str = NULL;
-            break;
-    }
-    write_str(fd, "MODE", mode_str);
-    write_str(fd, "SUBMODE", submode_str);
+    /* ADIF MODE and SUBMODE of each log mode; MODE_OTHER (and anything unknown) writes both empty */
+    static const char *const adif_mode[][2] = {
+        [MODE_SSB]  = {"SSB", NULL},
+        [MODE_AM]   = {"AM", NULL},
+        [MODE_FM]   = {"FM", NULL},
+        [MODE_CW]   = {"CW", NULL},
+        [MODE_FT8]  = {"FT8", NULL},
+        [MODE_FT4]  = {"MFSK", "FT4"},
+        [MODE_RTTY] = {"RTTY", NULL},
+        [MODE_JS8]  = {"MFSK", "JS8"},
+        [MODE_FT2]  = {"MFSK", "FT2"},
+    };
+    bool known = (unsigned)mode < sizeof(adif_mode) / sizeof(adif_mode[0]);
+
+    write_str(fd, "MODE", known ? adif_mode[mode][0] : NULL);
+    write_str(fd, "SUBMODE", known ? adif_mode[mode][1] : NULL);
 }
 
 
@@ -316,7 +299,7 @@ static qso_log_mode_t create_mode(const char * mode, const char * submode) {
     if (strcmp(mode, "RTTY") == 0) return MODE_RTTY;
     if (!submode) return MODE_OTHER;
     if ((strcmp(mode, "MFSK") == 0) && (strcmp(submode, "FT4") == 0)) return MODE_FT4;
-    if ((strcmp(mode, "MFSK") == 0) && (strcmp(submode, "JS8") == 0)) return MODE_JS8;
+    if (!strcmp(mode, "MFSK") && !strcmp(submode, "JS8")) return MODE_JS8;
     if ((strcmp(mode, "MFSK") == 0) && (strcmp(submode, "FT2") == 0)) return MODE_FT2;
     return MODE_OTHER;
 }

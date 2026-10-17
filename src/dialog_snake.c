@@ -5,7 +5,7 @@
  *
  *  Waterfall Snake: a hidden game (long press on APP > GPS). The dialog is transparent, so the
  *  snake moves over the live waterfall; the main knob or the MFK turn it left or right, the MFK
- *  press pauses (or starts again after a game over), VOL press leaves. The edges wrap around:
+ *  press pauses (or starts again after a game over), GEN or ESC leaves. The edges wrap around:
  *  only biting yourself ends the game. The best score stays in /mnt/snake_best.
  */
 #include "dialog_snake.h"

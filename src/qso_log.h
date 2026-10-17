@@ -37,7 +37,7 @@ typedef enum {
     MODE_FT8,
     MODE_FT4,
     MODE_RTTY,
-    MODE_JS8,
+    MODE_JS8,   /* ADIF MFSK / JS8 */
     MODE_FT2,   /* ADIF MFSK / FT2 */
 } qso_log_mode_t;
 

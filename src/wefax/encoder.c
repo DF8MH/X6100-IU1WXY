@@ -4,7 +4,7 @@
 
 #include "encoder.h"
 
-#include "../sstv/encoder.h"
+#include "../sstv/sstv_png.h"
 
 #include <math.h>
 #include <stdio.h>

@@ -139,6 +139,7 @@ class Parameter : public SubjectT<ValueType>, public ParamBase {
         if (validator_) {
             v = validator_(v);
         }
+        v = on_grid(v);
         if (SubjectT<ValueType>::set(v)) {
             sink_.write(StorageKey{storage_, context_id_, db_name_}, to_db_value(v));
         }
@@ -150,7 +151,7 @@ class Parameter : public SubjectT<ValueType>, public ParamBase {
         if (validator_) {
             v = validator_(v);
         }
-        SubjectT<ValueType>::set(v);
+        SubjectT<ValueType>::set(on_grid(v));
     }
 
     // Load from the storage policy matching storage(). Returns rc (SUCCESS or
@@ -203,6 +204,16 @@ class Parameter : public SubjectT<ValueType>, public ParamBase {
     }
 
   private:
+    // A scaled value keeps only what the database can hold (3.7 W, not 3.72 W),
+    // so the value in use is the one read back after a restart.
+    ValueType on_grid(const ValueType &v) const {
+        if constexpr (std::is_floating_point_v<ValueType> && std::is_integral_v<DbType>) {
+            return from_db_value(to_db_value(v));
+        } else {
+            return v;
+        }
+    }
+
     DbType to_db_value(const ValueType &v) const {
         if constexpr (std::is_same_v<ValueType, DbType>) {
             return v;

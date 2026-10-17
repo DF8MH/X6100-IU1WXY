@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <gps.h>
-#include <stdbool.h>
+#include <gps.h>          /* gpsd client library */
+#include <stdbool.h>      /* for the C files that include only this */
 
 typedef enum {
     GPS_STATUS_WAITING=0,
@@ -22,8 +22,8 @@ void gps_init();
 
 gps_status_t gps_status();
 
-/* Latest 2D/3D fix from gpsd and its age in seconds; false if none yet. */
-bool gps_last_fix(double *lat, double *lon, int *age_s);
+/* gpsd's last 2D or 3D position, any thread; age in seconds. False before the first fix */
+bool gps_last_fix(double *lat, double *lon, int *age);
 
 /* The phone's position (companion app, remote "location"), any thread; and the latest one */
 void gps_phone_set(double lat, double lon);

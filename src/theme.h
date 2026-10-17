@@ -214,6 +214,9 @@ int theme_list(char names[][32], int max);
 
 const uint32_t *theme_waterfall(void);
 
+/* Filter passband colour preset (Settings > Display): 0xRRGGBB, -1 for 0 (the theme's) */
+int32_t theme_filter_color(int32_t preset);
+
 /* 256 waterfall colours from n stops (0xRRGGBB, weak to strong), in `steps` bands (0: smooth) */
 void theme_ramp_palette(const uint32_t *stops, int n, int steps, uint32_t *out);
 

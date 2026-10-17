@@ -489,6 +489,13 @@ void theme_init(const char *name) {
     if (theme_shape.waterfall_n >= 2) make_palette();
 }
 
+int32_t theme_filter_color(int32_t preset) {
+    /* Blue, Cyan, Green, Yellow, Orange, Red, Violet, White */
+    static const int32_t c[] = {0x2080ff, 0x00e0ff, 0x00e040, 0xffe000, 0xff8000, 0xff2020, 0xa040ff, 0xffffff};
+
+    return preset >= 1 && preset <= 8 ? c[preset - 1] : -1;
+}
+
 const uint32_t *theme_waterfall(void) {
     if (theme_shape.waterfall_n >= 2) return palette;
     return theme_shape.waterfall_table == 1 ? wf_palette_legacy : wf_palette_gauss;

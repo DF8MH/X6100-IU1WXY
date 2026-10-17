@@ -1,4 +1,4 @@
-% rebase('base.html', title='Time Editor')
+% rebase("base.html", title="Time Editor")
 <h2><svg class="i"><use href="#i-clock"/></svg>Time</h2>
 <p class="sub">Radio clock, timezone and time synchronisation.</p>
 
@@ -19,8 +19,7 @@
     <div class="dp-body">
     <label for="manual-time">Input time (format: YYYY-MM-DD HH:MM:SS)</label>
     <div class="row">
-        <input id="manual-time" type="text" placeholder="Input Time">
-        <button id="manual-update-btn">Manually Update Time</button>
+        <input type="text" id="manual-time" placeholder="Input Time"><button id="manual-update-btn">Manually Update Time</button>
     </div>
     </div>
 </section>
@@ -30,9 +29,8 @@
     <div class="dp-body">
     <label for="ntp-servers">Select or input NTP server</label>
     <div class="row">
-        <select id="ntp-servers"></select>
-        <input id="custom-ntp" type="text" placeholder="Input Custom NTP Server Address" style="display: none;">
-        <button id="update-time-btn">Update Time</button>
+        <select id="ntp-servers"></select><input type="text" id="custom-ntp" placeholder="Input Custom NTP Server Address" hidden>
+        <button id="update-time-btn">Update Time</button><!-- the custom input shows for "Custom NTP Server..." -->
     </div>
     </div>
 </section>
@@ -42,245 +40,104 @@
     <div class="dp-body">
     <label for="timezone-select">Select timezone or input custom timezone</label>
     <div class="row">
-        <select id="timezone-select"></select>
-        <input id="custom-timezone" type="text" placeholder="e.g., Asia/Shanghai" style="display: none;">
-        <button id="set-timezone-btn">Set Timezone</button>
+        <select id="timezone-select"></select><input type="text" id="custom-timezone" placeholder="e.g., Asia/Shanghai" hidden>
+        <button id="set-timezone-btn">Set Timezone</button><!-- the custom input shows for "Custom Timezone..." -->
     </div>
     </div>
 </section>
 
 <script>
-    // Some Constants
-    const ntpServers = [
-        { value: "pool.ntp.org", label: "pool.ntp.org (global)" },
-        { value: "time.windows.com", label: "time.windows.com (global)" },
-        { value: "time.cloudflare.com", label: "time.cloudflare.com (global)" },
-        { value: "ntp.ntsc.ac.cn", label: "ntp.ntsc.ac.cn (China)" },
-        { value: "cn.ntp.org.cn", label: "cn.ntp.org.cn (China)" },
-        { value: "ntp1.aliyun.com", label: "ntp1.aliyun.com (China)" },
-        { value: "ntp.tencent.com", label: "ntp.tencent.com (China)" },
-        { value: "custom", label: "Custom NTP Server..." }
-    ];
+const NTP_SERVERS = [["pool.ntp.org", "global"], ["time.windows.com", "global"], ["time.cloudflare.com", "global"],
+                     ["ntp.ntsc.ac.cn", "China"], ["cn.ntp.org.cn", "China"], ["ntp1.aliyun.com", "China"], ["ntp.tencent.com", "China"]];
+const ZONES = ["UTC", "America/Los_Angeles", "America/New_York", "Asia/Shanghai", "Asia/Tokyo", "Australia/Sydney",
+               "Europe/London", "Europe/Moscow", "Europe/Paris"];
+let radioZone = null;     // as /api/get_timezone says
+let radioOffset = null;   // radio clock - this browser's clock, ms
 
-    const timezones = [
-        "UTC",
-        "America/Los_Angeles",
-        "America/New_York",
-        "Asia/Shanghai",
-        "Asia/Tokyo",
-        "Australia/Sydney",
-        "Europe/London",
-        "Europe/Moscow",
-        "Europe/Paris",
-        "custom" // Custom Timezone option
-    ];
+const hms = d => [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, "0")).join(":");
 
-    // Timezone Functions
-    function fetchCurrentTimezone() {
-        $.ajax({
-            url: "/api/get_timezone",
-            method: "GET",
-            success: function (response) {
-                $("#server-timezone").text(response.timezone || "Unknown");
-            },
-            error: function () {
-                $("#server-timezone").text("Error fetching timezone");
-            }
-        });
-    }
+function tick() {
+  const t = new Date();
+  $("#local-time").text(hms(t));
+  if (radioOffset !== null) $("#server-time").text(hms(new Date(t.getTime() + radioOffset)));
+}
 
-    function setTimezone(timezone) {
-        $.ajax({
-            url: "/api/set_timezone",
-            method: "POST",
-            contentType: "application/json",
-            data: JSON.stringify({ timezone: timezone }),
-            success: function (response) {
-                if (response.status === "success") {
-                    alert("Timezone updated successfully!");
-                    fetchCurrentTimezone();
-                } else {
-                    alert("Failed to update timezone: " + response.msg);
-                }
-            },
-            error: function () {
-                alert("Failed to update timezone. Please try again.");
-            }
-        });
-    }
+function readClock() {
+  $.getJSON("/api/get_time")
+    .done(r => {
+      if (!r.server_time) return $("#server-time").text("Server Time: Unfetched");
+      radioOffset = new Date(r.server_time) - new Date();
+      tick();
+    })
+    .fail(() => $("#server-time").text("Server Time: Unfetched"));
+}
 
-    // Update Local Time Every Second
-    let serverTimeOffset = null;
+function readZone() {
+  $.getJSON("/api/get_timezone")
+    .done(r => { radioZone = r.timezone || null; $("#server-timezone").text(r.timezone || "Unknown"); })
+    .fail(() => $("#server-timezone").text("Error fetching timezone"));
+}
 
-    function getLocalTime() {
-        const now = new Date();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-        document.getElementById('local-time').textContent = `${hours}:${minutes}:${seconds}`;
-    }
+// POST body to url: then(reply) on {"status": "success"}, else an alert with failText + the reason
+function post(url, body, then, failText, httpErrorText) {
+  $.ajax({url: url, method: "POST", contentType: "application/json", data: JSON.stringify(body)})
+    .done(r => r.status === "success" ? then(r) : alert(failText + r.msg))
+    .fail(() => alert(httpErrorText));
+}
 
-    function updateServerTime() {
-        if (serverTimeOffset !== null) {
-            const now = new Date();
-            const serverTime = new Date(now.getTime() + serverTimeOffset);
-            const hours = String(serverTime.getHours()).padStart(2, '0');
-            const minutes = String(serverTime.getMinutes()).padStart(2, '0');
-            const seconds = String(serverTime.getSeconds()).padStart(2, '0');
-            document.getElementById('server-time').textContent = `${hours}:${minutes}:${seconds}`;
-        }
-    }
+function setClock(time) {
+  post("/api/update_time", {update_mode: "manual", manual_time: time},
+       () => { alert("Server time updated manually."); readClock(); },
+       "Manual time update failed: ", "Manual time update failed. Please check the time format and try again.");
+}
 
-    function getServerTime() {
-        $.ajax({
-            url: "/api/get_time",
-            method: "GET",
-            contentType: "application/json",
-            success: function (response) {
-                if (response.server_time) {
-                    const serverTime = new Date(response.server_time);
-                    const localTime = new Date();
-                    serverTimeOffset = serverTime - localTime;
-                    updateServerTime();
-                } else {
-                    $("#server-time").text("Server Time: Unfetched");
-                }
-            },
-            error: function () {
-                $("#server-time").text("Server Time: Unfetched");
-            },
-        });
-    }
+// The radio takes the time as its local time: this moment written in the radio's zone
+// (UTC when the browser does not know that zone)
+function nowOnTheRadio() {
+  const t = new Date();
+  try {
+    if (radioZone) return t.toLocaleString("sv-SE", {timeZone: radioZone, hourCycle: "h23"}).slice(0, 19);
+  } catch (e) { /* unknown zone name */ }
+  return t.toISOString().slice(0, 19).replace("T", " ");
+}
 
-    function updateTimeToServer(ntpServer) {
-        $.ajax({
-            url: "/api/update_time",
-            method: "POST",
-            contentType: "application/json",
-            data: JSON.stringify({ update_mode: "ntp", server_address: ntpServer }),
-            success: function (response) {
-                if (response.status === "success") {
-                    alert(`Update time successfully with ${ntpServer}`);
-                    getServerTime();
-                } else {
-                    alert("Update time failed with " + response.msg);
-                }
-            },
-            error: function () {
-                alert("Time update failed. Please check the NTP server address or network connection!");
-            },
-        });
-    }
+function fillChoice(sel, options, customLabel, input) {
+  options.forEach(([value, label]) => sel.append($("<option>").val(value).text(label)));
+  sel.append($("<option value='custom'>").text(customLabel));
+  sel.on("change", () => input.prop("hidden", sel.val() !== "custom"));
+}
 
-    function updateTimeManually(manualTime) {
-        $.ajax({
-            url: "/api/update_time",
-            method: "POST",
-            contentType: "application/json",
-            data: JSON.stringify({ update_mode: "manual", manual_time: manualTime }),
-            success: function (response) {
-                if (response.status === "success") {
-                    alert("Server time updated manually.");
-                    getServerTime();
-                } else {
-                    alert("Manual time update failed: " + response.msg);
-                }
-            },
-            error: function () {
-                alert("Manual time update failed. Please check the time format and try again.");
-            }
-        });
-    }
+fillChoice($("#ntp-servers"), NTP_SERVERS.map(([host, where]) => [host, host + " (" + where + ")"]), "Custom NTP Server...", $("#custom-ntp"));
+fillChoice($("#timezone-select"), ZONES.map(z => [z, z]), "Custom Timezone...", $("#custom-timezone"));
 
-    function syncLocalTime() {
-        const now = new Date();
-        const localTime = now.toISOString().slice(0, 19).replace("T", " ");
-        updateTimeManually(localTime);
-    }
+// the value of a select, or of its input when "custom" is chosen ("" when empty)
+const chosen = (sel, input) => $(sel).val() === "custom" ? $(input).val().trim() : $(sel).val();
 
-    // Dynamic Dropdown for NTP Servers
-    const ntpSelect = document.getElementById("ntp-servers");
-    ntpServers.forEach(server => {
-        const option = document.createElement("option");
-        option.value = server.value;
-        option.textContent = server.label;
-        ntpSelect.appendChild(option);
-    });
+$("#sync-local-time-btn").on("click", () => setClock(nowOnTheRadio()));
 
-    ntpSelect.addEventListener("change", function () {
-        const customInput = document.getElementById("custom-ntp");
-        if (this.value === "custom") {
-            customInput.style.display = "block";
-        } else {
-            customInput.style.display = "none";
-        }
-    });
+$("#manual-update-btn").on("click", () => {
+  const time = $("#manual-time").val().trim();
+  if (!time) return alert("Please input a valid time.");
+  setClock(time);
+});
 
-    // Populate Timezone Dropdown
-    const timezoneSelect = document.getElementById("timezone-select");
-    timezones.forEach(tz => {
-        const option = document.createElement("option");
-        option.value = tz;
-        option.textContent = tz === "custom" ? "Custom Timezone..." : tz;
-        timezoneSelect.appendChild(option);
-    });
+$("#update-time-btn").on("click", () => {
+  const server = chosen("#ntp-servers", "#custom-ntp");
+  if (!server) return alert("Please input custom NTP server address!");
+  post("/api/update_time", {update_mode: "ntp", server_address: server},
+       () => { alert("Update time successfully with " + server); readClock(); },
+       "Update time failed with ", "Time update failed. Please check the NTP server address or network connection!");
+});
 
-    timezoneSelect.addEventListener("change", function () {
-        const customInput = document.getElementById("custom-timezone");
-        if (this.value === "custom") {
-            customInput.style.display = "block";
-        } else {
-            customInput.style.display = "none";
-        }
-    });
+$("#set-timezone-btn").on("click", () => {
+  const zone = chosen("#timezone-select", "#custom-timezone");
+  if (!zone) return alert("Please select or input a timezone.");
+  post("/api/set_timezone", {timezone: zone}, () => { alert("Timezone updated successfully!"); readZone(); },
+       "Failed to update timezone: ", "Failed to update timezone. Please try again.");
+});
 
-    // Event Listeners
-    $("#set-timezone-btn").click(function () {
-        const selectedTimezone = $("#timezone-select").val();
-        const customTimezone = $("#custom-timezone").val().trim();
-
-        // Use custom timezone if selected, else use dropdown selection
-        const timezone = selectedTimezone === "custom" ? customTimezone : selectedTimezone;
-
-        if (!timezone) {
-            alert("Please select or input a timezone.");
-            return;
-        }
-
-        setTimezone(timezone);
-    });
-
-    // Event Listeners
-    $("#update-time-btn").click(function () {
-        const selectedNtp = $("#ntp-servers").val();
-        let ntpServer = selectedNtp;
-
-        if (selectedNtp === "custom") {
-            ntpServer = $("#custom-ntp").val().trim();
-            if (!ntpServer) {
-                alert("Please input custom NTP server address!");
-                return;
-            }
-        }
-
-        updateTimeToServer(ntpServer);
-    });
-
-    $("#manual-update-btn").click(function () {
-        const manualTime = $("#manual-time").val().trim();
-        if (!manualTime) {
-            alert("Please input a valid time.");
-            return;
-        }
-        updateTimeManually(manualTime);
-    });
-
-    $("#sync-local-time-btn").click(syncLocalTime);
-
-    // Initialize Local Time and Server Time
-    fetchCurrentTimezone();
-    getLocalTime();
-    getServerTime();
-    setInterval(getLocalTime, 1000);
-    setInterval(updateServerTime, 1000);
+readZone();
+readClock();
+tick();
+setInterval(tick, 1000);
 </script>

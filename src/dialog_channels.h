@@ -1,37 +1,26 @@
-#pragma once
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//
+// Xiegu X6100 LVGL GUI - the CHANNELS window (Channel Memory) and channel recall by key.
+//
+// Copyright (c) 2026 Giovanni Ricciardi IU1WXY, own code of the IU1WXY firmware
 
-#include <stdbool.h>
-#include <stdint.h>
+#ifndef X6100_DIALOG_CHANNELS_H
+#define X6100_DIALOG_CHANNELS_H
 
-#include "dialog.h"
+#include <stdbool.h>     /* the bool answers */
+#include <stdint.h>      /* int8_t step */
 
-extern dialog_t *dialog_channels;
+#include "dialog.h"      /* dialog_t */
 
-/*
- * Recall the previous/next Channel Memory entry.
- * direction < 0: previous; direction > 0: next.
- */
-bool dialog_channels_recall_relative(int8_t direction);
+extern dialog_t *dialog_channels;       /* opened by the hand mic V/M key */
 
-/*
- * Name of the last successfully recalled Channel Memory entry.
- * Returns an empty string if no channel is currently recalled.
- */
-const char *dialog_channels_last_recalled_name(void);
+/* Tune the channel before (step < 0) or after (> 0) the last one recalled, wrapping around.
+   With nothing recalled yet: the last channel going back, the first going on */
+bool dialog_channels_recall_relative(int8_t step);
 
-/*
- * Request that the next opening of Channel Memory immediately
- * adds the current radio settings as a new channel.
- */
-void dialog_channels_add_on_open(void);
+const char *dialog_channels_last_recalled_name(void);   /* "CHANNEL n" if unnamed, "" if none */
 
-/*
- * Periodic check for changes made by the web configurator.
- * Does nothing while the dialog is open.
- */
+/* Called by a timer: pick up changes from the web configurator, not while the window is open */
 void dialog_channels_poll(void);
 
-/*
- * Index of the last recalled Channel Memory entry, -1 if none.
- */
-int16_t dialog_channels_last_recalled_index(void);
+#endif /* X6100_DIALOG_CHANNELS_H */

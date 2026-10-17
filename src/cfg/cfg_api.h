@@ -34,7 +34,7 @@ extern "C" {
 
 // --- Opaque extern globals, filled by cfg_api_init() ---
 // Each maps to a concrete public SettingsManager member. Int params map to
-// ParamInt, scaled-float params to ParamFloat, and p_encoder_bind (a string)
+// ParamInt, scaled-float params to ParamFloat (read-only), and p_encoder_bind (a string)
 // to ParamText. The extern list is the exhaustive set of C-reachable
 // parameters — every SettingsManager parameter is exposed so migrating C/C++
 // consumers can read/write the same values through one API.
@@ -46,13 +46,13 @@ extern "C" {
 extern ParamInt         *cfg_volume;            // p_volume
 extern ParamInt         *cfg_squelch;           // p_squelch
 extern ParamInt         *cfg_rfgain;            // p_rfgain
-extern ParamInt         *cfg_wefax_align;       // p_wefax_align
-extern ParamInt         *cfg_wefax_tilt;        // p_wefax_tilt
 extern ParamInt         *cfg_rit;               // p_rit
 extern ParamInt         *cfg_xit;               // p_xit
 extern ParamFloat       *cfg_pwr;               // p_pwr
 extern ParamInt         *cfg_band_id;           // p_band_id (persisted current band)
 extern ParamInt         *cfg_mic;               // p_mic
+extern ParamInt         *cfg_wefax_align;       // p_wefax_align, WEFAX picture shift
+extern ParamInt         *cfg_wefax_tilt;        // p_wefax_tilt, WEFAX picture slant
 extern ParamInt         *cfg_hmic;              // p_hmic
 extern ParamInt         *cfg_imic;              // p_imic
 extern ParamInt         *cfg_moni;              // p_moni
@@ -74,6 +74,7 @@ extern ParamInt         *cfg_band_plan;          // p_band_plan
 extern ParamInt         *cfg_smeter_needle;      // p_smeter_needle
 extern ParamInt         *cfg_smeter_color;       // p_smeter_color
 extern ParamInt         *cfg_wf_palette;         // p_wf_palette
+extern ParamInt         *cfg_filter_color;       // p_filter_color
 extern ParamInt         *cfg_spectrum_line_color; // p_spectrum_line_color
 extern ParamInt         *cfg_spectrum_fill_color; // p_spectrum_fill_color
 extern ParamInt         *cfg_spectrum_fill_gradient; // p_spectrum_fill_gradient
@@ -81,11 +82,12 @@ extern ParamInt         *cfg_smeter_bar_color;   // p_smeter_bar_color
 extern ParamInt         *cfg_swr_color;          // p_swr_color
 extern ParamInt         *cfg_swr_protect;        // p_swr_protect
 extern ParamInt         *cfg_smeter_lamp;        // p_smeter_lamp
+extern ParamInt         *cfg_broadcast_name;     // p_broadcast_name
 extern ParamInt         *cfg_cluster_column;     // p_cluster_column
 extern ParamInt         *cfg_cluster_order;      // p_cluster_order
 extern ParamInt         *cfg_cluster_all_bands;  // p_cluster_all_bands
 extern ParamInt         *cfg_waterfall_ref;      // p_waterfall_ref
-extern ParamInt         *cfg_smeter_cal;         // p_smeter_cal
+extern ParamInt         *cfg_smeter_cal;         // p_band_smeter_cal (current band)
 extern ParamInt         *cfg_waterfall_speed;    // p_waterfall_speed
 extern ParamInt         *cfg_wf_mode;            // p_wf_mode
 extern ParamText        *cfg_encoder_bind;       // p_encoder_bind
@@ -101,6 +103,7 @@ extern ParamInt *cfg_ft8_show_all;   // p_ft8_show_all
 extern ParamInt *cfg_ft8_protocol;   // p_ft8_protocol
 extern ParamInt *cfg_ft8_auto;       // p_ft8_auto
 extern ParamInt *cfg_ft8_hold_freq;  // p_ft8_hold_freq
+extern ParamInt *cfg_ft8_foryou;     // p_ft8_foryou
 extern ParamInt *cfg_wspr_tx_pct;    // p_wspr_tx_pct
 extern ParamInt *cfg_spot_snap_hold; // p_spot_snap_hold
 extern ParamInt *cfg_spot_snap_slow; // p_spot_snap_slow
@@ -109,6 +112,7 @@ extern ParamInt *cfg_wspr_tx_freq;   // p_wspr_tx_freq
 extern ParamInt *cfg_wspr_upload;    // p_wspr_upload
 extern ParamInt *cfg_pskreporter;    // p_pskreporter
 extern ParamInt *cfg_field_boot;     // p_field_boot
+extern ParamInt *cfg_field_respot;   // p_field_respot
 extern ParamInt *cfg_voice_msg_gain; // p_voice_msg_gain
 extern ParamInt *cfg_ft8_max_repeats; // p_ft8_max_repeats
 extern ParamInt *cfg_ft8_info;       // p_ft8_info
@@ -128,12 +132,16 @@ extern ParamInt   *cfg_qsk_time;            // p_qsk_time
 extern ParamFloat *cfg_key_ratio;           // p_key_ratio
 extern ParamInt   *cfg_cw_peak_on;          // p_cw_peak_on
 extern ParamInt   *cfg_cw_peak_q;           // p_cw_peak_q
+extern ParamInt   *cfg_paddle_map[4];       // p_paddle_kbd, _btn, _midi, _ser (paddle_src_t order)
+extern ParamInt   *cfg_paddle_swap;         // p_paddle_swap
+extern ParamInt   *cfg_paddle_serial;       // p_paddle_serial
 
 // CW decoder
 extern ParamInt   *cfg_cwt_level;           // p_cwt_level
 extern ParamInt   *cfg_cwt_group;           // p_cwt_group
 extern ParamInt   *cfg_cw_decoder;         // p_cw_decoder
 extern ParamInt   *cfg_cw_tune;            // p_cw_tune
+extern ParamInt   *cfg_cw_live;            // p_cw_live
 extern ParamFloat *cfg_cw_decoder_snr;     // p_cw_decoder_snr
 
 // AGC
@@ -208,6 +216,10 @@ extern ComputedParamInt *cfg_cur_filter_low;   // cp_cur_filter_low
 extern ComputedParamInt *cfg_cur_filter_high;  // cp_cur_filter_high
 extern ComputedParamInt *cfg_cur_filter_bw;    // cp_cur_filter_bw
 extern ComputedParamInt *cfg_mode_lo_offset;   // cp_mode_lo_offset
+
+// S-meter calibration for the site ping: *start = the value of bands never calibrated, then up to
+// max bands whose own value differs from it (name, dB). Returns how many
+int cfg_smeter_cal_bands(int *start, char (*names)[16], int *vals, int max);
 
 #ifdef __cplusplus
 } // extern "C"

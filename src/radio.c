@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <errno.h>
+#include <math.h>
 #include <time.h>
 #include <sys/stat.h>
 
@@ -35,7 +36,6 @@
 #include "tx_player.h"
 #include "cw.h"
 #include "btaudio.h"
-#include "audio.h"
 #include "pubsub_ids.h"
 #include "scheduler.h"
 #include "backlight.h"
@@ -45,6 +45,11 @@
 #include "dialog_msg_voice.h"
 #include "msg.h"
 #include "base_guard.h"
+#include "audio.h"          /* audio_set_play_mode */
+#include "bat_est.h"
+#include "clock.h"
+#include "wifi.h"
+#include "remote_server.h"
 
 /*********************
  *      DEFINES
@@ -144,6 +149,10 @@ static radio_state_t    state = RADIO_RX;
 static uint64_t         now_time;
 static uint64_t         prev_time;
 static uint64_t         idle_time;
+static uint64_t         start_time;     /* radio_init() */
+static uint64_t         pack_time;      /* last packet from the base */
+static uint8_t          pack_vbat, pack_vext;   /* its voltages, 0.1 V */
+static volatile int8_t  bat_pct = -1;   /* the battery %, -1 on external power or not measured yet */
 static bool             mute = false;
 static bool             digi_cap;       /* a digital app is open: never above its cap */
 
@@ -323,6 +332,8 @@ void radio_start() {
 
     prev_time = get_time();
     idle_time = prev_time;
+    start_time = prev_time;
+    pack_time = prev_time;
 
     pthread_mutex_init(&control_mux, NULL);
 
@@ -450,20 +461,18 @@ void radio_set_digi_cap(bool on) {
     radio_set_pwr(param_f_get(cfg_pwr));
 }
 
-void radio_set_tx_filter(uint16_t low, uint16_t high) {
-    radio_lock();
-    x6100_control_tx_filter_low_set(low);
-    x6100_control_tx_filter_high_set(high);
-    radio_unlock();
+void radio_set_tx_filter(uint16_t from_hz, uint16_t to_hz) {
+    WITH_RADIO_LOCK(x6100_control_tx_filter_low_set(from_hz); x6100_control_tx_filter_high_set(to_hz));
 }
 
-void radio_set_rx_dsp_off(bool off) {
-    radio_lock();
-    x6100_control_nr_set(!off && param_i_get(cfg_nr));
-    x6100_control_nb_set(!off && param_i_get(cfg_nb));
-    x6100_control_dnf_set(!off && param_i_get(cfg_dnf));
-    x6100_control_dnf_update_set(!off && param_i_get(cfg_dnf_auto));
-    radio_unlock();
+void radio_set_rx_dsp_off(bool all_off) {
+    bool nr = param_i_get(cfg_nr), nb = param_i_get(cfg_nb);
+    bool dnf = param_i_get(cfg_dnf), dnf_auto = param_i_get(cfg_dnf_auto);
+
+    WITH_RADIO_LOCK(x6100_control_nr_set(nr && !all_off);
+                    x6100_control_nb_set(nb && !all_off);
+                    x6100_control_dnf_set(dnf && !all_off);
+                    x6100_control_dnf_update_set(dnf_auto && !all_off));
 }
 
 x6100_vfo_t radio_toggle_vfo() {
@@ -520,8 +529,8 @@ void radio_set_play_mode(audio_play_mode_t mode) {
     WITH_RADIO_LOCK(audio_set_play_mode(mode));
 }
 
-void radio_speaker_play(bool on) {
-    radio_set_play_mode(on ? AUDIO_PLAY_ON : AUDIO_PLAY_OFF);
+void radio_speaker_play(bool speaker) {
+    radio_set_play_mode(speaker ? AUDIO_PLAY_ON : AUDIO_PLAY_OFF);
 }
 
 void radio_set_line_in(uint8_t d) {
@@ -856,19 +865,56 @@ static void recover_processing_audio_inputs() {
     radio_unlock();
 }
 
-/* Battery log for the discharge curve of the pack, every 30 s: the base
- * gives the voltage (0.1 V steps) and its own %, no current */
-#define BATTERY_LOG "/mnt/battery_log.csv"
+/* Battery log for the discharge curve of the pack and the time left (bat_est.c), every
+ * minute: the base gives the voltage (0.1 V steps) and its own %, no current. Called about
+ * every 0.4 s: TX seconds and watts add up in between */
+#define BATTERY_LOG     "/mnt/battery_log.csv"
+#define BATTERY_MODEL   "/mnt/battery_model.json"
+#define BATTERY_HEADER  "time,vbat,batcap,vext,charging,tx,backlight,cpu_mhz,tx_s,tx_w,wifi,bt,hp\n"
+
+/* GUI thread: arg = { % , minutes left or -1 }. Short texts: longer ones scroll */
+static void battery_warn_cb(void *arg) {
+    int *w = arg;
+
+    if (w[0] <= 5) {
+        msg_schedule_long_text_fmt("Battery %d%%: connect power", w[0]);
+    } else if (w[1] >= 0) {
+        msg_schedule_long_text_fmt("Battery %d%%: about %d min left", w[0], w[1]);
+    } else {
+        msg_schedule_long_text_fmt("Battery %d%%", w[0]);
+    }
+}
 
 static void battery_log(const x6100_flow_t *p) {
     static time_t   last;
+    static uint64_t prev_ms;
+    static float    tx_s, tx_ws;
+    static int      rows;
     time_t          t = time(NULL);
     struct stat     st;
     unsigned        mhz = 0;
     FILE            *f;
+    char            head[sizeof(BATTERY_HEADER)];
 
-    if (t - last < 30) {
+    if (p->flag.tx && prev_ms && now_time > prev_ms) {
+        float dt = (now_time - prev_ms) / 1000.0f;
+
+        dt = dt > 1 ? 1 : dt;
+        tx_s += dt;
+        tx_ws += p->tx_power * 0.1f * dt;
+    }
+    prev_ms = now_time;
+    if (t - last < 60) {
         return;
+    }
+    /* At start the log is fed again: the stretch on battery goes on across a GUI restart (the
+     * model learns only what is newer than it). No model yet: learn from the old log too */
+    if (!last) {
+        if (!bat_est_load(BATTERY_MODEL)) {
+            bat_est_replay(BATTERY_LOG ".1");
+        }
+        bat_est_replay(BATTERY_LOG);
+        bat_est_save(BATTERY_MODEL);
     }
     last = t;
     if ((f = fopen("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq", "r"))) {
@@ -877,8 +923,42 @@ static void battery_log(const x6100_flow_t *p) {
         }
         fclose(f);
     }
+    bat_sample_t s = {
+        .t = t, .vbat = p->vbat * 0.1f, .cap = p->batcap, .vext = p->vext * 0.1f, .charging = p->flag.charging,
+        .tx_s = tx_s, .tx_w = tx_s > 0 ? tx_ws / tx_s : 0, .bl = backlight_level(),
+        .wifi = wifi_get_status() != WIFI_OFF,
+        .bt = access("/sys/class/bluetooth/hci0", F_OK) == 0,
+        .hp = access("/tmp/btaudio-hp", F_OK) == 0,
+    };
+    bool chg, approx;
+
+    tx_s = tx_ws = 0;
+    bat_est_feed(&s);
+    int min = bat_est_minutes(0, &chg, &approx);
+
+    clock_update_estimate(min, approx);
+
+    /* On battery at 10% or less: a warning every minute (the 30 s power-off comes at 6.0 V) */
+    if (s.vext < 3.0f && s.vbat >= 3.0f && p->batcap <= 10) {
+        int w[2] = { p->batcap, min };
+
+        scheduler_put(battery_warn_cb, w, sizeof(w));
+    }
+    if (++rows % 5 == 0) {      /* a GUI restart loses at most 5 minutes of learning */
+        bat_est_save(BATTERY_MODEL);
+    }
+
+    /* A new file past 2 MB (about 3 weeks), or when it still has the old columns */
     bool fresh = stat(BATTERY_LOG, &st) != 0;
 
+    if (!fresh && rows == 1 && (f = fopen(BATTERY_LOG, "r"))) {
+        bool same = fgets(head, sizeof(head), f) && strcmp(head, BATTERY_HEADER) == 0;
+
+        fclose(f);
+        if (!same) {
+            st.st_size = INT32_MAX;
+        }
+    }
     if (!fresh && st.st_size > 2 * 1024 * 1024) {
         rename(BATTERY_LOG, BATTERY_LOG ".1");
         fresh = true;
@@ -887,10 +967,10 @@ static void battery_log(const x6100_flow_t *p) {
         return;
     }
     if (fresh) {
-        fputs("time,vbat,batcap,vext,charging,tx,backlight,cpu_mhz\n", f);
+        fputs(BATTERY_HEADER, f);
     }
-    fprintf(f, "%ld,%.1f,%u,%.1f,%u,%u,%d,%u\n", (long) t, p->vbat * 0.1f, p->batcap, p->vext * 0.1f,
-            p->flag.charging, p->flag.tx, backlight_level(), mhz);
+    fprintf(f, "%ld,%.1f,%u,%.1f,%u,%u,%d,%u,%.0f,%.1f,%u,%u,%u\n", (long) t, s.vbat, p->batcap, s.vext,
+            p->flag.charging, s.tx_s > 0, s.bl, mhz, s.tx_s, s.tx_w, s.wifi, s.bt, s.hp);
     fclose(f);
 }
 
@@ -906,6 +986,15 @@ static void swr_trip_cb(void *arg) {
     radio_set_modem(false);     /* the digital apps see it and stop (tx_player.c) */
     radio_set_ptt(false);
     msg_schedule_text_fmt("TX stopped: SWR %.1f", *(float *)arg);
+
+    cJSON *ev = cJSON_CreateObject();   /* X6100 Link's alert */
+    cJSON_AddStringToObject(ev, "t", "swr_trip");
+    cJSON_AddNumberToObject(ev, "swr", lroundf(*(float *)arg * 10));
+    remote_event(ev);
+}
+
+int radio_get_battery() {
+    return bat_pct;
 }
 
 static bool radio_tick() {
@@ -917,6 +1006,9 @@ static bool radio_tick() {
 
     if (x6100_flow_read(pack)) {
         prev_time = now_time;
+        pack_time = now_time;
+        pack_vbat = pack->vbat;
+        pack_vext = pack->vext;
 
         static uint8_t delay;
 
@@ -930,7 +1022,16 @@ static bool radio_tick() {
              * empty battery it stayed clear with 11.7 V on the jack and the
              * radio switched itself off on the charger */
             bool ext = pack->flag.vext || pack->flag.charging || pack->vext >= 90;
-            bool enter_low = !ext && (pack->vbat <= LOW_BATTERY_VBAT_LOW);
+            /* At power-on the base sends a few packets before it has measured anything (0 V on both):
+             * one of them alone started "Low battery!" with a full battery on the charger. Low only
+             * after 3 readings in a row (about 1.2 s), and never on a reading of nothing */
+            static uint8_t low_reads;
+            bool           measured = pack->vbat > 0 || pack->vext > 0;
+
+            bat_pct = measured && !ext ? pack->batcap : -1;   /* the % on the screen (clock.c) */
+
+            low_reads = measured && !ext && pack->vbat <= LOW_BATTERY_VBAT_LOW ? (low_reads < 3 ? low_reads + 1 : 3) : 0;
+            bool enter_low = low_reads >= 3;
             bool leave_low = ext || (pack->vbat >= LOW_BATTERY_VBAT_HIGH);
 
             if ((!low_power && enter_low) || (low_power && leave_low)) {
@@ -1013,7 +1114,6 @@ static bool radio_tick() {
                 } else {
                     // printf("%d, %d\n", pack->tx_power, pack->alc_level);
                     tx_info_update(pack->tx_power * 0.1f, pack->vswr * 0.1f, pack->alc_level * 0.1f);
-
                     float swr = pack->vswr * 0.1f;
                     if (swr_guard_check(&swr_guard, pack->tx_power * 0.1f, swr, param_i_get(cfg_swr_protect) * 0.1f, now_time)) {
                         scheduler_put(swr_trip_cb, &swr, sizeof(swr));
@@ -1076,10 +1176,35 @@ static bool radio_tick() {
             resync_due = true;
         }
 
+        switch (tx_watch_power(&tx_watch, now_time, pack->flag.tx)) {
+            case TX_WATCH_CUT:
+                WITH_RADIO_LOCK(x6100_control_txpwr_set(0.0f));
+                base_guard_log("base still in TX %u ms after PTT off and a write error: TX power set to 0 (vext %.1f V, vbat %.1f V)",
+                               TX_WATCH_CUT_MS, pack->vext * 0.1f, pack->vbat * 0.1f);
+                break;
+            case TX_WATCH_RESTORE:
+                WITH_RADIO_LOCK(set_txpwr(param_f_get(cfg_pwr)));
+                base_guard_log("base back in RX: TX power %.1f W restored (vext %.1f V, vbat %.1f V)",
+                               param_f_get(cfg_pwr), pack->vext * 0.1f, pack->vbat * 0.1f);
+                break;
+        }
+
         hkey_put(pack->hkey);
     } else {
         if (d > FLOW_RESTART_TIMEOUT) {
             LV_LOG_WARN("Flow reset");
+            static uint64_t silent_logged;
+            if (base_silent_due(now_time, start_time, &silent_logged)) {
+                char vb[8] = "n/a", ve[8] = "n/a";
+                if (pack_vbat) {
+                    snprintf(vb, sizeof(vb), "%.1f V", pack_vbat * 0.1f);
+                }
+                if (pack_vext) {
+                    snprintf(ve, sizeof(ve), "%.1f V", pack_vext * 0.1f);
+                }
+                base_guard_log("base silent for %u ms, battery %s, external %s",
+                               (unsigned)(now_time - pack_time), vb, ve);
+            }
             prev_time = now_time;
             x6100_flow_restart();
             dsp_reset();
@@ -1097,7 +1222,7 @@ static void guard_events() {
 
     if (ev & BASE_GUARD_ERROR) {
         base_guard_log("write to register %d failed: %u resent OK, %u lost; resending all registers", reg, resent, lost);
-        tx_watch_arm(&tx_watch, now_time, TX_WATCH_ERROR_MS);
+        tx_watch_error(&tx_watch, now_time);
     }
     if (ev & BASE_GUARD_UNKEY) {
         tx_watch_arm(&tx_watch, now_time, TX_WATCH_UNKEY_MS);
@@ -1136,7 +1261,7 @@ static void * radio_thread(void *arg) {
             resync_due = !resend_all();
             if (resync_due) {
                 base_guard_log("register block not sent, again in %u ms", RESYNC_RETRY_MS);
-                tx_watch_arm(&tx_watch, now_time, TX_WATCH_ERROR_MS);
+                tx_watch_error(&tx_watch, now_time);
             }
             idle_time = now_time;
         }

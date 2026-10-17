@@ -13,14 +13,13 @@
 extern "C" {
 #endif
 
-// Protocol type as stored in the digital_modes.type column (0 = FT8, 1 = FT4,
-// 2 = JS8, 3 = JS8 on GhostNet's frequencies, 4 = WSPR, 5 = FT2). Values are part of the DB
-// format and must not be changed.
+// The digital_modes.type column, FT8 0 up to FT2 5: the numbers are stored in params.db,
+// never renumber them.
 typedef enum {
     CFG_DIG_TYPE_FT8,
     CFG_DIG_TYPE_FT4,
-    CFG_DIG_TYPE_JS8,
-    CFG_DIG_TYPE_JS8_GHOSTNET,
+    CFG_DIG_TYPE_JS8 = 2,           /* JS8Call dial frequencies */
+    CFG_DIG_TYPE_JS8_GHOSTNET = 3,  /* JS8 on the GhostNet nets */
     CFG_DIG_TYPE_WSPR,
     CFG_DIG_TYPE_FT2,   /* 5 (upstream's 4 is WSPR here) */
 } cfg_digital_type_t;

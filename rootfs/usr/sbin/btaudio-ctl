@@ -58,9 +58,11 @@ apply_rx() {
 		for s in $sinks; do
 			pactl list short modules 2>/dev/null | grep -q "sink=$s " && continue
 			# Lowest radio-side latency, one reason per option:
-			# - latency_msec=10: end-to-end target of the loopback; pulse raises it
-			#   by itself to what the ALSA source/sink can sustain, so a value this
-			#   low means "as low as it can go without crackling".
+			# - latency_msec=400: end-to-end target of the loopback. At 10 ms the
+			#   buffer ran dry every time the radio (WiFi and BT share the chip)
+			#   held the BT link for a moment: "Too many underruns" and the audio
+			#   skipped; pulse only raises it 5 ms at a time. 120 and 200 ms still
+			#   skipped with WiFi traffic; 400 rides it out.
 			# - adjust_time=1: re-measure and re-sync every second (default 10) so
 			#   the buffer does not drift up between corrections.
 			# - latency offset 0 on the bluez sink port: no extra delay is added to
@@ -70,10 +72,10 @@ apply_rx() {
 			pactl set-port-latency-offset "$card" headphone-output 0 2>/dev/null
 			# - max_latency_msec / fast_adjust_threshold_msec: every underrun raises
 			#   the loopback latency and it never comes down (seen growing to 2 s);
-			#   cap it at target + 200 ms and drop the excess at once. Values from
-			#   openx6100's bt_audio.c (LOOP_MAX_EXTRA_MS, LOOP_FAST_ADJUST_MS).
-			pactl load-module module-loopback source=$SOURCE sink="$s" latency_msec=10 adjust_time=1 \
-				max_latency_msec=210 fast_adjust_threshold_msec=200 \
+			#   cap it at target + 300 ms and drop the excess at once (as openx6100's
+			#   bt_audio.c, LOOP_MAX_EXTRA_MS / LOOP_FAST_ADJUST_MS, with more room).
+			pactl load-module module-loopback source=$SOURCE sink="$s" latency_msec=400 adjust_time=1 \
+				max_latency_msec=700 fast_adjust_threshold_msec=600 \
 				source_dont_move=true sink_dont_move=true >/dev/null
 		done
 	else
@@ -114,7 +116,8 @@ status() {
 # on /mnt (vfat, so as a tarball), restored at boot by S39btpairings.
 save_pairings() {
 	mkdir -p /mnt/backups
-	tar czf /mnt/backups/bluetooth.tgz -C / var/lib/bluetooth 2>/dev/null
+	# BusyBox tar has no -z: through gzip
+	tar cf - -C / var/lib/bluetooth 2>/dev/null | gzip > /mnt/backups/bluetooth.tgz
 	sync
 }
 
@@ -138,6 +141,9 @@ monitor() {
 }
 
 boot() {
+	# Pairings made while the copy on /mnt could not be written (0.126: this
+	# script was not executable) have no copy: make it once, a new image needs it
+	[ -f /mnt/backups/bluetooth.tgz ] || ! ls /var/lib/bluetooth/*/??:* >/dev/null 2>&1 || save_pairings
 	pid=$(cat $PIDFILE 2>/dev/null)
 	if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
 		monitor </dev/null >/dev/null 2>&1 &

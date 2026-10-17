@@ -12,11 +12,14 @@
  *    {"cmd":"pre|att|nb|nr","val":0|1} {"cmd":"agc"} (next) {"cmd":"rfgain","val":0..100} {"cmd":"filter","val":Hz}
  *    {"cmd":"nb_level|nb_width","val":0..100} {"cmd":"nr_level","val":0..60} {"cmd":"agc_mode","val":0..3} (OFF SLOW FAST AUTO)
  *    {"cmd":"pwr","val":1..100} (TX power, tenths of a watt)
+ *    {"cmd":"band_step","val":-1|1} (band down / up, as the radio's keys) {"cmd":"vol_step","val":-10..10}
  *    {"cmd":"location","text":"45.0,7.7"} (the phone's position, for Field Ops)
+ *    {"cmd":"cluster_spot","val":14025000,"text":"CALL|comment"} (a DX spot through the radio's cluster links)
  *    {"cmd":"app","text":"FT8"} and the app commands (app_cmds[]), with "val" and/or "text"
  *                                  -> {"t":"ok"} or {"t":"err","err":"..."}
- *  Commands are applied on the LVGL thread through the scheduler. There is no PTT: only the
- *  apps transmit. While the radio transmits only the stop/close commands are taken.
+ *    {"cmd":"voice_open","val":token} (the phone's voice session, voice_tx.c: its UDP packets carry the token)
+ *  Commands are applied on the LVGL thread through the scheduler. The phone's PTT goes with its
+ *  voice packets (voice_tx.c), not here. While the radio transmits only the stop/close commands are taken.
  */
 
 #include "ft8/ft2.h"
@@ -42,6 +45,9 @@
 
 extern "C" {
     #include "cJSON.h"
+    #include "cluster/client.h"
+    #include "cw_parse.h"
+    #include "msg.h"
     #include "dialog.h"
     #include "cw_tune_ui.h"
     #include "dialog_cw_kbd.h"
@@ -50,11 +56,12 @@ extern "C" {
     #include "dialog_snake.h"
     #include "dialog_ft8.h"
     #include "dialog_js8.h"
+    #include "events.h"
     #include "dialog_psk.h"
     #include "dialog_olivia.h"
     #include "dialog_jtty.h"
     #include "dialog_navtex.h"
-    #include "dialog_sstv.h"
+    #include "app_sstv.h"
     #include "dialog_wefax.h"
     #include "dialog_wspr.h"
     #include "gps.h"
@@ -70,6 +77,7 @@ extern "C" {
     #include "backlight.h"
     #include "theme.h"
     #include "tx_info.h"
+    #include "voice_tx.h"
 
     #include "lvgl/lvgl.h"
     #include <ctype.h>
@@ -93,7 +101,7 @@ extern "C" {
 #endif
 #define MAX_CLIENTS     6
 #define MAX_SUBS        3
-#define IN_SIZE         512
+#define IN_SIZE         2048    /* a js8_send of JS8_TEXT_MAX characters, escaped, fits */
 #define OUT_SIZE        (32 * 1024)
 #define NBINS           800
 #define FRAME_MS        50      /* below dsp.cpp 66 ms: all its 15 lines a second go out, not every other one (7.5) */
@@ -105,6 +113,8 @@ extern "C" {
 #define MAX_EVENTS      64      /* events waiting for the socket thread */
 #define TEXT_MS         300     /* decoded text (remote_text) waits at most this */
 #define TEXT_MAX        200     /* or this many characters */
+#define CMD_TEXT_MAX    200     /* a command's text; js8_send takes up to JS8_TEXT_MAX */
+#define JS8_TEXT_MAX    500     /* TX_TEXT_MAX, js8_window.c: past 20 frames, the JS8 app refuses what is longer */
 
 typedef struct {
     int      fd;
@@ -119,7 +129,7 @@ typedef struct {
 typedef enum {
     CMD_FREQ, CMD_TUNE, CMD_MODE, CMD_BAND, CMD_PRE, CMD_ATT, CMD_AGC, CMD_NB, CMD_NR, CMD_RFGAIN, CMD_FILTER, CMD_PWR,
     CMD_NB_LEVEL, CMD_NB_WIDTH, CMD_NR_LEVEL, CMD_AGC_MODE, CMD_SQL,
-    CMD_APP, CMD_APP_CMD, CMD_LOCATION, CMD_QSO_LOG
+    CMD_APP, CMD_APP_CMD, CMD_LOCATION, CMD_QSO_LOG, CMD_CLUSTER_SPOT, CMD_BAND_STEP, CMD_VOL_STEP
 } cmd_id_t;
 
 typedef struct {
@@ -127,7 +137,7 @@ typedef struct {
     int32_t  val;
     size_t   app_cmd;   /* CMD_APP_CMD: index in app_cmds[] */
     double   lat, lon;  /* CMD_LOCATION */
-    char     text[201];
+    char     text[JS8_TEXT_MAX + 1];
 } cmd_t;
 
 /* x6100_mode_t and x6100_agc_t order */
@@ -421,6 +431,14 @@ static void apply_cmd(void *arg) {
             if (!main_screen_band_locked())
                 remote_set_band(c->val);
             break;
+        case CMD_BAND_STEP:   /* as the radio's band keys: an app that locks the band moves its own */
+            if (!main_screen_band_locked())
+                cfg_band_load_next(c->val > 0);
+            dialog_send((lv_event_code_t)(c->val > 0 ? EVENT_BAND_UP : EVENT_BAND_DOWN), NULL);
+            break;
+        case CMD_VOL_STEP:
+            cfg_sm.p_volume.set(std::clamp<int32_t>(cfg_sm.p_volume.get() + c->val, 0, 55));   /* p_volume's range */
+            break;
         case CMD_PRE:
             cfg_sm.cp_cur_pre.set(c->val);
             break;
@@ -466,6 +484,13 @@ static void apply_cmd(void *arg) {
         case CMD_QSO_LOG:
             dialog_field_qso_log(c->text);
             break;
+        case CMD_CLUSTER_SPOT: {
+            char *comment = strchr(c->text, '|');
+            *comment++    = 0;   /* parse_cmd: there is one */
+            if (cluster_client_send_spot(c->val / 1000.0, c->text, comment))
+                msg_update_text_fmt("Spot from the phone: %s %.1f %s", c->text, c->val / 1000.0, comment);
+            break;
+        }
     }
 }
 
@@ -616,7 +641,7 @@ static int state_line(char *buf, size_t size) {
                     "{\"t\":\"state\",\"vfo\":\"%s\",\"freq\":%i,\"freq_bg\":%i,\"mode\":\"%s\",\"band\":\"%s\","
                     "\"filter\":%i,\"flo\":%i,\"fhi\":%i,\"rfgain\":%i,\"sql\":%i,\"vol\":%i,\"pre\":%i,\"att\":%i,\"agc\":\"%s\",\"nb\":%i,\"nr\":%i,"
                     "\"nb_level\":%i,\"nb_width\":%i,\"nr_level\":%i,\"pwr\":%i,\"db\":%i,\"tx\":%s,\"app\":\"%s\",\"ax\":%s,"
-                    "\"cwt\":%s,\"logrev\":%u,\"did\":\"%s\",\"spot\":\"%s\",\"spotseq\":%u,\"fwd\":%i,\"swr\":%i,\"fw\":\"%s\"}\n",
+                    "\"cwt\":%s,\"logrev\":%u,\"did\":\"%s\",\"spot\":\"%s\",\"spotseq\":%u,\"fwd\":%i,\"swr\":%i,\"bat\":%i,\"fw\":\"%s\"}\n",
                     cfg_sm.p_band_current_vfo.get() == X6100_VFO_A ? "A" : "B",
                     cfg_sm.cp_fg_freq.get(), cfg_sm.cp_bg_freq.get(),
                     (mode >= 0 && mode <= x6100_mode_nfm) ? mode_names[mode] : "?", band_name(),
@@ -627,7 +652,7 @@ static int state_line(char *buf, size_t size) {
                     cfg_sm.p_nb.get() != 0, cfg_sm.p_nr.get() != 0,
                     cfg_sm.p_nb_level.get(), cfg_sm.p_nb_width.get(), cfg_sm.p_nr_level.get(),
                     (int)lroundf(cfg_sm.p_pwr.get() * 10), meter_get_raw_db(), radio_get_state() == RADIO_RX ? "false" : "true", app, ax, cwt, log_rev(), device_id(), spot, spot_seq,
-                    (int)lroundf(tx_pwr * 10), (int)lroundf(tx_swr * 10),
+                    (int)lroundf(tx_pwr * 10), (int)lroundf(tx_swr * 10), radio_get_battery(),
                     strrchr(VERSION, 'v') + 1);   /* "0.125": Link hides what this firmware doesn't have */
 }
 
@@ -760,6 +785,8 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
         {"nb_width", CMD_NB_WIDTH, 0, 100},
         {"nr_level", CMD_NR_LEVEL, 0, 60},
         {"agc_mode", CMD_AGC_MODE, 0, x6100_agc_auto},   /* agc_names[] */
+        {"band_step", CMD_BAND_STEP, -1, 1},              /* band down / up, as the radio's keys */
+        {"vol_step", CMD_VOL_STEP, -10, 10},              /* volume down / up by this much */
     };
 
     cJSON *text = cJSON_GetObjectItemCaseSensitive(req, "text");
@@ -767,7 +794,8 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
 
     cmd->text[0] = 0;
     if (text) {
-        if (!cJSON_IsString(text) || strlen(text->valuestring) >= sizeof(cmd->text))
+        size_t max = strcmp(name, "js8_send") ? CMD_TEXT_MAX : JS8_TEXT_MAX;
+        if (!cJSON_IsString(text) || strlen(text->valuestring) > max)
             return "Invalid text";
         strcpy(cmd->text, text->valuestring);
     }
@@ -793,6 +821,23 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
                 return NULL;
             }
         return "Unknown app";
+    }
+    if (!strcmp(name, "cluster_spot")) {
+        /* "CALL|comment": a call as the CW parser knows them, a short plain comment (it goes on a telnet line) */
+        char *bar = strchr(cmd->text, '|');
+        if (!bar || !cw_parse_is_call(cmd->text, bar - cmd->text))
+            return "Invalid call";
+        if (strlen(bar + 1) > 60)
+            return "Comment too long";
+        for (const char *p = bar + 1; *p; p++)
+            if (*p < 0x20 || *p > 0x7e)
+                return "Invalid comment";
+        if (!get_int(req, 100000, 500000000, &cmd->val))
+            return "Invalid frequency";
+        if (cluster_client_state(NULL, 0) != CLUSTER_CONNECTED)
+            return "Not connected to a cluster";
+        cmd->id = CMD_CLUSTER_SPOT;
+        return NULL;
     }
     bool app_cmd = false;
     for (size_t i = 0; i < sizeof(app_cmds) / sizeof(app_cmds[0]); i++) {
@@ -822,7 +867,7 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
         if (!strcmp(name, "wspr_txpct") && cmd->val != 0 && cmd->val != 10 && cmd->val != 20 && cmd->val != 33 &&
             cmd->val != 50)   /* the steps of the TX % button */
             return "Invalid value";
-        if (!strcmp(name, "js8_send") && (!cmd->text[0] || strlen(cmd->text) > 160))   /* TX_TEXT_MAX, dialog_js8.c */
+        if (!strcmp(name, "js8_send") && !cmd->text[0])
             return "Invalid text";
         if ((!strcmp(name, "field_screen") || !strcmp(name, "field_ref") || !strcmp(name, "field_log")) &&
             !cmd->text[0])
@@ -858,7 +903,8 @@ static const char *parse_cmd(cJSON *req, const char *name, cmd_t *cmd) {
     for (size_t i = 0; i < sizeof(ints) / sizeof(ints[0]); i++) {
         if (strcmp(name, ints[i].name))
             continue;
-        if (!get_int(req, ints[i].min, ints[i].max, &cmd->val) || (ints[i].id == CMD_TUNE && !cmd->val))
+        if (!get_int(req, ints[i].min, ints[i].max, &cmd->val) ||
+            ((ints[i].id == CMD_TUNE || ints[i].id == CMD_BAND_STEP || ints[i].id == CMD_VOL_STEP) && !cmd->val))
             return "Invalid value";
         cmd->id = ints[i].id;
         if (cmd->id == CMD_FREQ && !cfg_sm.is_valid_hw_freq(cmd->val))
@@ -891,6 +937,7 @@ static const struct {
     {"smeter_needle", &cfg_sm.p_smeter_needle, 0, 1},
     {"smeter_color", &cfg_sm.p_smeter_color, 0, 2},
     {"wf_palette", &cfg_sm.p_wf_palette, 0, 6},
+    {"filter_color", &cfg_sm.p_filter_color, 0, 8},
     {"spectrum_line_color", &cfg_sm.p_spectrum_line_color, -1, 0xffffff},
     {"spectrum_fill_color", &cfg_sm.p_spectrum_fill_color, -1, 0xffffff},
     {"spectrum_fill_gradient", &cfg_sm.p_spectrum_fill_gradient, 0, 1},
@@ -1099,6 +1146,12 @@ static void handle_line(client_t *c, const char *line) {
             scheduler_put(eth_apply_cb, &cfg, sizeof(cfg));
             client_send(c, "{\"t\":\"ok\"}\n", 11);
         }
+    } else if (!strcmp(name->valuestring, "voice_open")) {
+        int32_t token;
+        if (!get_int(req, 1, INT32_MAX, &token))
+            err = "Invalid value";
+        else if (!(err = voice_tx_open((uint32_t)token)))
+            client_send(c, "{\"t\":\"ok\"}\n", 11);
     } else if (!strcmp(name->valuestring, "sub")) {
         if (!c->sub && subscribers >= MAX_SUBS) {
             err = "Too many remote pages open";

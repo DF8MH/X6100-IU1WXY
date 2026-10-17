@@ -42,6 +42,7 @@ static cfg_ctrl_t prev_mfk;             /* the MFK's control before the field to
 static char      input[LINE_MAX + 1];  /* typed */
 static char      sending[512];         /* being keyed */
 static char      queue[512];           /* waiting */
+static char      done[LINE_MAX + 1];   /* Live: the line keyed so far, until Enter or Esc */
 
 /* CW / CW-R, VFO in a CW segment, no app open: what is queued goes on air */
 static bool can_send(void) {
@@ -63,11 +64,11 @@ static bool busy(void) {
 /* Like karaoke: the chars keyed so far (the one on the key included) turn yellow, the rest of the line stays white,
    the queue grey, then what is typed */
 static void update_view(void) {
-    static char buf[sizeof(sending) + sizeof(queue) + LINE_MAX + 64];
+    static char buf[sizeof(sending) + sizeof(queue) + sizeof(done) + LINE_MAX + 64];
     int         sent = busy() ? cw_encoder_sent() + 1 : 0;
     int         n    = strlen(sending);
 
-    if (!input[0] && !sending[0] && !queue[0]) {
+    if (!input[0] && !sending[0] && !queue[0] && !done[0]) {
         if (!lv_obj_has_flag(field, LV_OBJ_FLAG_HIDDEN)) {
             lv_obj_add_flag(field, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(arrow, LV_OBJ_FLAG_HIDDEN);
@@ -79,11 +80,11 @@ static void update_view(void) {
     if (sent > n) {
         sent = n;
     }
-    snprintf(buf, sizeof(buf), "#%06x %.*s##%06x %s##%06x %s#%s_", theme_hex(TC_accent), sent, sending,
+    snprintf(buf, sizeof(buf), "#%06x %s%.*s##%06x %s##%06x %s#%s_", theme_hex(TC_accent), done, sent, sending,
              theme_hex(TC_text), sending + sent, theme_hex(TC_text_faint), queue, input);
     lv_label_set_text(text_lbl, buf);
     /* A long line shows its end */
-    snprintf(buf, sizeof(buf), "%s%s%s_", sending, queue, input);
+    snprintf(buf, sizeof(buf), "%s%s%s%s_", done, sending, queue, input);
     lv_obj_set_style_text_align(text_lbl,
                                 lv_txt_get_width(buf, strlen(buf), &FIELD_FONT, 0, LV_TEXT_FLAG_NONE) > FIELD_W - 20 - WPM_W
                                     ? LV_TEXT_ALIGN_RIGHT : LV_TEXT_ALIGN_LEFT, 0);
@@ -102,10 +103,23 @@ static void timer_cb(lv_timer_t *t) {
     if (!can_send()) {
         queue[0] = 0;
         if (!busy()) {
-            input[0] = sending[0] = 0;
+            input[0] = sending[0] = done[0] = 0;
         }
     }
     if (!busy()) {
+        if (param_i_get(cfg_cw_live)) {     /* the keyed letters stay on the line, its end when long */
+            size_t d = strlen(done), n = strlen(sending);
+
+            if (n >= LINE_MAX) {
+                d = 0;
+            } else if (d + n > LINE_MAX) {
+                memmove(done, done + d + n - LINE_MAX, LINE_MAX - n);
+                d = LINE_MAX - n;
+            }
+            snprintf(done + d, sizeof(done) - d, "%s", sending + (n > LINE_MAX ? n - LINE_MAX : 0));
+        } else {
+            done[0] = 0;
+        }
         sending[0] = 0;
         if (queue[0]) {
             snprintf(sending, sizeof(sending), "%s", queue);
@@ -121,7 +135,14 @@ static void timer_cb(lv_timer_t *t) {
     update_view();
 }
 
+static void add_text(const char *text, bool space);
+
 void cw_field_send_text(const char *text) {
+    add_text(text, true);
+}
+
+/* space: a word space after the text; without it the Link paddle sends letter by letter */
+static void add_text(const char *text, bool space) {
     size_t q = strlen(queue);
 
     /* '#' would break the colours */
@@ -130,7 +151,9 @@ void cw_field_send_text(const char *text) {
             queue[q++] = toupper((unsigned char)*text);
         }
     }
-    queue[q++] = ' ';
+    if (space) {
+        queue[q++] = ' ';
+    }
     queue[q]   = 0;
 }
 
@@ -200,6 +223,7 @@ bool cw_field_key(uint32_t key) {
     switch (key) {
         case LV_KEY_ENTER:
         case '\r':
+            done[0] = 0;    /* Live: a new line */
             if (input[0]) {
                 cw_field_send_text(input);
                 input[0] = 0;
@@ -208,10 +232,12 @@ bool cw_field_key(uint32_t key) {
         case LV_KEY_BACKSPACE:
             if (len) {
                 input[len - 1] = 0;
+            } else if (param_i_get(cfg_cw_live) && queue[0]) {   /* Live: the last letter not keyed yet */
+                queue[strlen(queue) - 1] = 0;
             }
             break;
         case LV_KEY_ESC:
-            input[0] = queue[0] = 0;
+            input[0] = queue[0] = done[0] = 0;
             if (sending[0]) {
                 cw_encoder_stop();
                 sending[0] = 0;
@@ -222,7 +248,10 @@ bool cw_field_key(uint32_t key) {
             if (key < ' ' || key >= 127 || key == '#') {
                 return false;
             }
-            if (len < LINE_MAX) {
+            if (param_i_get(cfg_cw_live)) {      /* keyed at once, letter by letter; a space is the word gap */
+                char c[2] = {(char)key, 0};
+                add_text(c, false);
+            } else if (len < LINE_MAX) {
                 input[len]     = toupper((int)key);
                 input[len + 1] = 0;
             }
@@ -235,7 +264,7 @@ bool cw_field_key(uint32_t key) {
 /* The X6100 Link CW tab with the CW Keyboard app closed (remote_server.cpp): the same line as typed */
 void cw_field_remote(const char *cmd, int32_t val, const char *text) {
     if (!strcmp(cmd, "cw_send") && can_send()) {
-        cw_field_send_text(text);
+        add_text(text, val != 1);
     } else if (!strcmp(cmd, "cw_stop")) {
         queue[0] = 0;
         if (sending[0]) {

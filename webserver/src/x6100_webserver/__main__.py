@@ -28,6 +28,11 @@ class RequestHandler(WSGIRequestHandler):
     # let one of them hold a worker for long.
     timeout = 10
 
+    def get_environ(self):
+        env = super().get_environ()
+        env["x6100.socket"] = self.connection   # the remote streams watch its send queue (apps.send_backlog)
+        return env
+
 
 class ThreadedServer(bottle.ServerAdapter):
     """One thread per connection: bottle's default wsgiref server serves
@@ -115,29 +120,33 @@ def start_https(app, host, port, cert_dir):
     settings.HTTPS_PORT = port
 
 
-def run():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--db", help="path to SQLite3 database", required=True)
-    parser.add_argument("--host", help="ip address to listen", default="localhost")
-    parser.add_argument("--port", type=int, help="port to listen", default=8080)
-    parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--filebrowser-path", help="path file browser root", default="/mnt")
-    parser.add_argument("--cluster-conf", help="path to DX cluster config", default=settings.CLUSTER_CONF)
-    parser.add_argument("--wfview-conf", help="path to wfview server config", default=settings.WFVIEW_CONF)
-    parser.add_argument("--channels-file", help="path to channels.json", default=settings.CHANNELS_FILE)
-    parser.add_argument("--https-port", type=int, help="port for HTTPS (0 = off)", default=443)
-    parser.add_argument("--cert-dir", help="directory of the self-signed cert.pem and key.pem", default="/mnt/https")
-    args = parser.parse_args()
-    plugin = bottle.ext.sqlite.Plugin(dbfile=args.db, keyword="dbcon")
-    apps.app.install(plugin)
-    settings.FILEBROWSER_PATH = args.filebrowser_path
-    settings.DB_PATH = args.db
-    settings.CLUSTER_CONF = args.cluster_conf
-    settings.WFVIEW_CONF = args.wfview_conf
-    settings.CHANNELS_FILE = args.channels_file
-    if args.https_port and not (args.debug and "BOTTLE_CHILD" not in os.environ):   # not in the reloader's parent
-        start_https(apps.app, args.host, args.https_port, args.cert_dir)
-    settings.HTTP_PORT = args.port
-    apps.app.run(server=ThreadedServer, host=args.host, port=args.port, debug=args.debug, reloader=args.debug)
+def options():
+    p = argparse.ArgumentParser(description="X6100 web configurator and X6100 Link API")
+    p.add_argument("--db", required=True, help="params.db of the radio GUI")
+    p.add_argument("--host", default="localhost", help="address to listen on")
+    p.add_argument("--port", type=int, default=8080, help="HTTP port")
+    p.add_argument("--debug", action="store_true", help="bottle debug mode, reloads changed sources")
+    p.add_argument("--filebrowser-path", default="/mnt", help="root of the Files page")
+    p.add_argument("--cluster-conf", help="path to DX cluster config", default=settings.CLUSTER_CONF)
+    p.add_argument("--wfview-conf", help="path to wfview server config", default=settings.WFVIEW_CONF)
+    p.add_argument("--channels-file", help="path to channels.json", default=settings.CHANNELS_FILE)
+    p.add_argument("--https-port", type=int, help="port for HTTPS (0 = off)", default=443)
+    p.add_argument("--cert-dir", help="directory of the self-signed cert.pem and key.pem", default="/mnt/https")
+    return p.parse_args()
 
-run()
+
+def serve():
+    opts = options()
+    # params.db for the routes that take a "dbcon" argument: a connection per request, committed after it
+    apps.app.install(bottle.ext.sqlite.Plugin(dbfile=opts.db, keyword="dbcon"))
+    settings.FILEBROWSER_PATH, settings.DB_PATH = opts.filebrowser_path, opts.db
+    settings.CLUSTER_CONF = opts.cluster_conf
+    settings.WFVIEW_CONF = opts.wfview_conf
+    settings.CHANNELS_FILE = opts.channels_file
+    if opts.https_port and not (opts.debug and "BOTTLE_CHILD" not in os.environ):   # not in the reloader's parent
+        start_https(apps.app, opts.host, opts.https_port, opts.cert_dir)
+    settings.HTTP_PORT = opts.port
+    apps.app.run(server=ThreadedServer, host=opts.host, port=opts.port, debug=opts.debug, reloader=opts.debug)
+
+
+serve()

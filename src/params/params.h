@@ -56,9 +56,7 @@ typedef enum {
     ACTION_APP_QTH,
     ACTION_APP_CALLSIGN,
     ACTION_APP_WIFI,
-    ACTION_APP_WEFAX,
-    ACTION_APP_NAVTEX,
-    ACTION_APP_JS8,     /* appended: these values are stored in settings */
+    ACTION_APP_WEFAX, ACTION_APP_NAVTEX, ACTION_APP_JS8,  /* from JS8 on, appended: the values are stored in settings */
     ACTION_APP_SSTV,    /* appended after JS8 */
     ACTION_APP_CLUSTER, /* appended after SSTV */
     ACTION_APP_MODES,   /* appended after CLUSTER */
@@ -71,6 +69,7 @@ typedef enum {
     ACTION_APP_PSK,     /* 121, appended after SNAKE: PSK31/PSK63 (upstream's 114/115 are MODES/CWTRAINER here) */
     ACTION_APP_OLIVIA,  /* 122 */
     ACTION_APP_JTTY,    /* 123, appended after OLIVIA */
+    ACTION_APP_CHANNELS, /* 124: the CHANNELS window, as the hand mic V/M key */
 } press_action_t;
 
 typedef enum {
@@ -107,6 +106,7 @@ typedef struct {
     uint8_t             line_out;
     params_bool_t       spmode;
     params_uint8_t      freq_accel;
+    params_uint8_t      screen_rec_split;   /* file length: 60, 45, 30, 15, 5 min */
 
     /* main screen */
 
@@ -117,6 +117,7 @@ typedef struct {
     params_bool_t       spectrum_filled;
     params_bool_t       waterfall_smooth_scroll;
     params_bool_t       update_alert;
+    params_bool_t       remote_update;
     params_bool_t       waterfall_center_line;
     params_bool_t       waterfall_zoom;
     params_bool_t       mag_freq;
@@ -143,23 +144,18 @@ typedef struct {
 
     /* FT8 */
 
-    params_uint16_t     ft8_tx_freq;
-    params_uint16_t     js8_tx_freq;
-    params_bool_t       js8_hold_offset;
-    params_bool_t       js8_auto;
-    params_bool_t       js8_hb;
-    params_bool_t       js8_hb_ack;
-    params_bool_t       js8_relay;       /* pass relays (>) on and hold MSG TO: for others, as desktop */
-    params_uint16_t     js8_hb_interval;
-    params_uint16_t     js8_cq_interval; /* auto CQ: minutes after each CQ ends */
-    params_bool_t       js8_log_prompt;  /* offer to log when a QSO ends */
-    params_uint8_t      js8_log_activation; /* 0 off, 1 POTA, 2 SOTA */
-    params_uint8_t      js8_alerts;      /* JS8_ALERT_* bits in dialog_js8.c */
-    params_uint8_t      js8_speed;       /* js8_speed_t we transmit at */
-    params_bool_t       js8_rx_all;      /* decode every speed (desktop's multi-decoder) */
-    params_bool_t       js8_ghostnet;    /* band keys step through GhostNet's frequencies */
-    params_bool_t       js8_custom_on;   /* tuned to js8_custom_hz, not a preset */
-    params_int32_t      js8_custom_hz;   /* last custom dial frequency, 0 = none */
+    params_uint16_t     ft8_tx_freq, js8_tx_freq;
+    params_bool_t       js8_hold_offset, js8_auto, js8_hb, js8_hb_ack;
+    params_bool_t       js8_relay;       /* relays (>) passed on, MSG TO: held for others, as JS8Call does */
+    params_uint16_t     js8_hb_interval, js8_cq_interval;  /* minutes; auto CQ counts from the end of each CQ */
+    params_bool_t       js8_log_prompt;  /* the log form offered when a QSO ends */
+    params_uint8_t      js8_log_activation; /* activation logged: 0 none, 1 POTA, 2 SOTA */
+    params_uint8_t      js8_alerts;      /* JS8_ALERT_* bits in js8_window.c */
+    params_uint8_t      js8_speed;       /* the js8_speed_t sent at */
+    params_bool_t       js8_rx_all;      /* every speed decoded, as JS8Call's multi-decoder */
+    params_bool_t       js8_ghostnet;    /* band keys go through the GhostNet frequencies */
+    params_bool_t       js8_custom_on;   /* on js8_custom_hz rather than a preset */
+    params_int32_t      js8_custom_hz;   /* the last custom dial frequency, 0 none */
     params_bool_t       ft8_custom_on;   /* FT8/FT4/FT2 tuned to ft8_custom_hz, not a preset */
     params_int32_t      ft8_custom_hz;   /* last custom dial frequency, 0 = none */
     params_str_t        ft8_cq_modifier;
@@ -262,7 +258,7 @@ void params_flush();
 void params_bool_set(params_bool_t *var, bool x);
 void params_uint8_set(params_uint8_t *var, uint8_t x);
 void params_uint16_set(params_uint16_t *var, uint16_t x);
-void params_int32_set(params_int32_t *var, int32_t x);
+void params_int32_set(params_int32_t *p, int32_t value);
 void params_str_set(params_str_t *var, const char *x);
 void params_float_set(params_float_t *var, float x);
 

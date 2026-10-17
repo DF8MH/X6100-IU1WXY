@@ -646,7 +646,8 @@ static NMDevice *eth_device() {
     for (guint i = 0; i < devs->len; i++) {
         NMDevice *d = NM_DEVICE(g_ptr_array_index(devs, i));
 
-        if (NM_IS_DEVICE_ETHERNET(d)) {
+        /* a phone's USB tethering is not the adapter: it has its own profile (usb-tether) */
+        if (NM_IS_DEVICE_ETHERNET(d) && g_strcmp0(nm_device_get_driver(d), "rndis_host") != 0) {
             return d;
         }
     }

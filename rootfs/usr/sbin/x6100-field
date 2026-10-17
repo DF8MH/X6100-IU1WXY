@@ -11,6 +11,8 @@
 # <dir> is /mnt/field (env X6100_FIELD_DIR). refs.tsv, tab separated, no header:
 #   P ref name lat lon "" ""     S ref name lat lon alt_m points     B/H ref name lat lon "" ""
 # refs.etag keeps the lists' ETags: an unchanged list is not downloaded again.
+# While updating, .update.progress has one line for the GUI: "<list n> <lists> <bytes> <total> <retry> <name>"
+# (total 0: not known). A stalled download goes on from the byte reached (HTTP Range) where the server allows it.
 
 import argparse
 import csv
@@ -21,10 +23,11 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date, datetime
+from datetime import date
 
 FIELD_DIR = os.environ.get("X6100_FIELD_DIR", "/mnt/field")
 POTA_CSV = "https://pota.app/all_parks_ext.csv"
@@ -36,6 +39,8 @@ HOTA_API = os.environ.get("X6100_HOTA_API", "https://cqhota.app/api/v1")
 POTA_API = os.environ.get("X6100_POTA_API", "https://api.pota.app")
 QRZ_API = os.environ.get("X6100_QRZ_API", "https://logbook.qrz.com/api")
 TIMEOUT = 30
+LIST_TIMEOUT = 60   # per read: the radio's WiFi can stall for a while
+RETRIES = 5
 user_agent = "X6100-IU1WXY/unknown"
 # wwbota.org and cqhota.app: the firmware version (the GUI sets X6100_FW) and a contact
 site_agent = f"X6100-IU1WXY/{os.environ.get('X6100_FW') or 'unknown'} (info@x6100-link.it)"
@@ -49,10 +54,10 @@ def one_line(text, n=80):
     return " ".join(str(text).split())[:n]
 
 
-def open_url(url, data=None, headers=None, method=None):
+def open_url(url, data=None, headers=None, method=None, timeout=TIMEOUT):
     """Binary response stream; caller closes it."""
     req = urllib.request.Request(url, data=data, headers=dict({"User-Agent": user_agent}, **(headers or {})), method=method)
-    return urllib.request.urlopen(req, timeout=TIMEOUT)
+    return urllib.request.urlopen(req, timeout=timeout)
 
 
 def text_lines(stream):
@@ -81,7 +86,11 @@ def write_parks(stream, out):
 
 
 def sota_date(s):
-    return datetime.strptime(s.strip()[:10], "%d/%m/%Y").date()
+    """dd/mm/yyyy, cut by hand: strptime doubles the reading time of the SOTA list on the radio"""
+    s = s.strip()
+    if len(s) < 10 or s[2] != "/" or s[5] != "/":
+        raise ValueError(s)
+    return date(int(s[6:10]), int(s[3:5]), int(s[:2]))
 
 
 def sota_valid(valid_from, valid_to, today):
@@ -121,6 +130,7 @@ def write_refs(stream, out, kind, ref, name, lat, lon, keep=lambda row: True):
     return n
 
 
+PROGS = {"P": "POTA", "S": "SOTA", "B": "WWBOTA", "H": "HOTA"}
 LISTS = (("P", "parks", lambda: POTA_CSV, write_parks, False),
          ("S", "summits", lambda: SOTA_CSV, lambda s, o: write_summits(s, o, date.today()), False),
          ("B", "bunkers", lambda: WWBOTA_CSV, lambda s, o: write_refs(s, o, "B", "Reference", "Name", "Lat", "Long"), True),
@@ -142,23 +152,102 @@ def keep_old(path, kind, out):
     return n
 
 
-def fetch_list(url, parse, out, path, kind, etags, site):
+class Progress:
+    """<dir>/.update.progress, written at most twice a second"""
+    def __init__(self):
+        self.path = os.path.join(FIELD_DIR, ".update.progress")
+        self.n, self.name, self.retry, self.last = 0, "", 0, 0.0
+
+    def list(self, n, name):
+        self.n, self.name, self.retry = n, name, 0
+        self.write(0, 0, True)
+
+    def write(self, done, total, now=False):
+        t = time.monotonic()
+        if not now and t - self.last < 0.5:
+            return
+        self.last = t
+        try:
+            with open(self.path + ".tmp", "w") as f:
+                f.write(f"{self.n} {len(LISTS)} {done} {total} {self.retry} {self.name}\n")
+            os.replace(self.path + ".tmp", self.path)
+        except OSError:
+            pass
+
+    def remove(self):
+        for p in (self.path, self.path + ".tmp"):
+            if os.path.exists(p):
+                os.remove(p)
+
+
+def download(url, headers, dest, progress):
+    """url into the file dest; the response headers, None if unchanged (304). After a stall or a dropped
+    connection it goes on from the byte reached (Range, if the server answers 206) or starts again, RETRIES times."""
+    got = total = 0
+    resp = None
+    for attempt in range(RETRIES + 1):
+        h = dict(headers)
+        if got:
+            h.pop("If-None-Match", None)
+            h["Range"] = f"bytes={got}-"
+            if resp.get("ETag", "").startswith('"'):   # strong ETag: the rest of the same file, or all of the new one
+                h["If-Range"] = resp["ETag"]
+        try:
+            with open_url(url, headers=h, timeout=LIST_TIMEOUT) as r, open(dest, "r+b" if got else "wb") as f:
+                if got and r.status != 206:   # no ranges, or the file changed: from the start
+                    got = 0
+                if not got:
+                    resp = r.headers
+                    total = int(r.headers.get("Content-Length") or 0)
+                f.seek(got)
+                f.truncate()
+                while True:
+                    chunk = r.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    got += len(chunk)
+                    progress.write(got, total)
+            if total and got < total:
+                raise http.client.IncompleteRead(b"", total - got)
+            progress.write(got, total, True)
+            return resp
+        except urllib.error.HTTPError as e:
+            if e.code == 304:
+                return None
+            if e.code < 500 or attempt == RETRIES:
+                raise
+        except (OSError, http.client.HTTPException):   # timeout, connection reset, short body
+            if attempt == RETRIES:
+                raise
+        progress.retry = attempt + 1
+        progress.write(got, total, True)
+        time.sleep(5)
+
+
+def fetch_list(url, parse, out, path, kind, etags, site, progress):
     """The list's lines into out, etags[url] updated. Unchanged (304): the lines of the previous refs.tsv."""
     tag = etags.pop(url, "")
     headers = {"User-Agent": site_agent} if site else {}
     if tag:
         headers["If-None-Match"] = tag
+    dest = os.path.join(FIELD_DIR, ".update.download")   # the raw list: a resumed download goes on in it
     try:
-        with open_url(url, headers=headers) as stream:
-            n = parse(stream, out)
-            new = stream.headers.get("ETag")
-    except urllib.error.HTTPError as e:
-        if e.code != 304 or not tag:
-            raise
-        n = keep_old(path, kind, out)
-        if n == 0:   # the previous file lost them: download it all
-            return fetch_list(url, parse, out, path, kind, etags, site)
-        new = tag
+        resp = download(url, headers, dest, progress)
+        if resp is None:
+            if not tag:
+                raise Fail("HTTP 304")
+            n = keep_old(path, kind, out)
+            if n == 0:   # the previous file lost them: download it all
+                return fetch_list(url, parse, out, path, kind, etags, site, progress)
+            new = tag
+        else:
+            with open(dest, "rb") as stream:
+                n = parse(stream, out)
+            new = resp.get("ETag")
+    finally:
+        if os.path.exists(dest):
+            os.remove(dest)
     if n and new:
         etags[url] = new
     return n
@@ -182,12 +271,14 @@ def cmd_update(args):
         etags = {}
     errors = []
     counts = []
+    progress = Progress()
     try:
         with open(tmp, "w", encoding="utf-8", newline="\n") as out:
-            for kind, name, url, parse, site in LISTS:
+            for i, (kind, name, url, parse, site) in enumerate(LISTS):
+                progress.list(i + 1, PROGS[kind])
                 start = out.tell()
                 try:
-                    n = fetch_list(url(), parse, out, path, kind, etags, site)
+                    n = fetch_list(url(), parse, out, path, kind, etags, site, progress)
                     if n == 0:
                         raise Fail("empty list")
                 except (Fail, OSError, ValueError, csv.Error, http.client.HTTPException) as e:
@@ -202,6 +293,7 @@ def cmd_update(args):
         with open(etag_path, "w") as f:
             json.dump(etags, f)
     finally:
+        progress.remove()
         if os.path.exists(tmp):
             os.remove(tmp)
     return "ok " + " ".join(map(str, counts))

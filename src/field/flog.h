@@ -41,6 +41,9 @@ size_t field_adif_record(char *buf, size_t size, const field_qso_t *q, const fie
 /* Appends the QSO (a header first when the file is new) */
 bool field_log_add(const char *path, const field_qso_t *q, const field_station_t *st);
 
+/* What went wrong with field_log_add, from its errno, in words for the operator */
+const char *field_log_error(int err);
+
 /* The QSOs of the file, oldest first; returns the count (0 when missing) */
 int field_log_read(const char *path, field_qso_t *out, int max);
 

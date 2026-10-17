@@ -6406,6 +6406,25 @@ static const uint8_t flag_px[][FLAG_W * FLAG_H * 3] = {  /* RGB */
     },
 };
 
+static const char flag_iso[][3] = {  /* ISO 3166 code of each flag, as flag_px (xi: Northern Ireland) */
+    "mc", "mu", "gq", "fj", "sz", "tn", "vn", "gn", "bv", "az", "ge", "me", "lk", "un", "tl", "il",
+    "ly", "cy", "tz", "ng", "mg", "mr", "ne", "tg", "ws", "ug", "ke", "sn", "jm", "ye", "ls", "mw",
+    "dz", "bb", "mv", "gy", "hr", "gh", "mt", "zm", "kw", "sl", "my", "np", "cd", "bi", "sg", "rw",
+    "tt", "bw", "to", "om", "bt", "ae", "qa", "bh", "pk", "cn", "tw", "nr", "ad", "gm", "bs", "mz",
+    "cl", "aq", "cu", "ma", "bo", "pt", "uy", "ca", "ao", "cv", "km", "de", "ph", "er", "ps", "ck",
+    "nu", "ba", "es", "ie", "am", "lr", "ir", "md", "ee", "et", "by", "kg", "tj", "tm", "fr", "gp",
+    "yt", "nc", "mq", "pf", "pm", "wf", "gf", "gb", "im", "xi", "je", "gg", "sb", "hu", "ch", "li",
+    "ec", "ht", "do", "co", "kr", "pa", "hn", "th", "va", "sa", "it", "dj", "gd", "gw", "lc", "dm",
+    "vc", "jp", "mn", "sj", "jo", "us", "mp", "um", "gu", "as", "vi", "pr", "no", "ar", "lu", "lt",
+    "bg", "pe", "lb", "at", "fi", "ax", "cz", "sk", "be", "gl", "fo", "dk", "pg", "aw", "kp", "nl",
+    "cw", "bq", "sx", "br", "sr", "ru", "eh", "bd", "si", "sc", "st", "se", "pl", "sd", "eg", "gr",
+    "tv", "ki", "so", "sm", "pw", "tr", "is", "gt", "cr", "cm", "cf", "cg", "ga", "td", "ci", "bj",
+    "ml", "uz", "kz", "ua", "ag", "bz", "kn", "na", "fm", "mh", "bn", "au", "hm", "cc", "cx", "ai",
+    "ms", "vg", "tc", "pn", "fk", "bm", "io", "hk", "in", "mx", "bf", "kh", "la", "mo", "mm", "af",
+    "id", "iq", "vu", "sy", "lv", "ni", "ro", "sv", "rs", "ve", "zw", "mk", "xk", "ss", "al", "gi",
+    "sh", "ky", "tk", "nz", "py", "za",
+};
+
 static const struct { const char *prefix; uint16_t flag; } flag_of[] = {  /* by prefix */
     {"3A", 0},
     {"3B6", 1},

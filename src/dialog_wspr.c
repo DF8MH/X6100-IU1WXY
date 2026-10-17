@@ -108,13 +108,14 @@ static button_data_t btn_tx_pct  = {.type = BTN_TEXT_FN, .label_fn = tx_pct_labe
 static button_data_t btn_tx_next = {.type = BTN_TEXT_FN, .label_fn = tx_next_label, .press = tx_next_cb};
 static button_data_t btn_upload  = {.type = BTN_TEXT_FN, .label_fn = upload_label, .press = upload_cb};
 static button_data_t btn_clear   = {.type = BTN_TEXT, .label = "Clear", .press = clear_cb};
+static button_data_t btn_tx_pct2 = {.type = BTN_TEXT_FN, .label_fn = tx_pct_label, .press = tx_pct_cb};  /* TX % seen on page 2 too */
 
 static buttons_page_t btn_page_1 = {
     .items = {&btn_page, &btn_tx_pct, &btn_tx_next, &btn_upload, &btn_clear},
 };
 
 static buttons_page_t btn_page_2 = {
-    .items = {&btn_page2, &btn_dig_pwr},
+    .items = {&btn_page2, &btn_dig_pwr, &btn_tx_pct2},
 };
 
 static dialog_t dialog = {
@@ -608,6 +609,7 @@ static void construct_cb(lv_obj_t *parent) {
         btn_tx_next.subj = (Subject *)tx_next_subj;
     }
     btn_tx_pct.subj = (Subject *)cfg_wspr_tx_pct;
+    btn_tx_pct2.subj = (Subject *)cfg_wspr_tx_pct;
     btn_upload.subj = (Subject *)cfg_wspr_upload;
     atomic_store(&tx_next, false);
     subject_i_set(tx_next_subj, false);

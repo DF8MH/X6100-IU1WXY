@@ -1,3 +1,4 @@
+# cmake run straight in this folder instead of build/
 CMakeCache.txt
 CMakeFiles/
 Makefile

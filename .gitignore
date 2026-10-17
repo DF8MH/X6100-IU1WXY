@@ -1,46 +1,37 @@
+# X6100 IU1WXY firmware: files git leaves out
 
-# Object files
+# Compiler and linker output
 *.o
-*.ko
 *.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
 *.a
+*.lib
 *.la
 *.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
 *.so
 *.so.*
+*.dll
 *.dylib
-
-# Executables
+*.elf
 *.exe
 *.out
 *.app
+*.hex
 *.i*86
 *.x86_64
-*.hex
+*.map
+*.ilk
+*.exp
+*.gch
+*.pch
 
-# Debug files
+# Debug symbols and stack usage
 *.dSYM/
-*.su
-*.idb
 *.pdb
+*.idb
+*.su
 
-# Kernel Module Compile Results
+# Kernel module builds
+*.ko
 *.mod*
 *.cmd
 .tmp_versions/
@@ -49,13 +40,13 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
-
-# Misc
-.vscode
-images/*.png
-_build/
+# Build folders (radio build, PC tests) and editor settings
 build/
+_build/
 build_test/
+.vscode
+# PNG copies next to the panel images
+images/*.png
 
 # Developer tools and tests: private repo IU1WXY/X6100-IU1WXY-dev
 /tests/

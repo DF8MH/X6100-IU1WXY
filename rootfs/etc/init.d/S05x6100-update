@@ -1,0 +1,14 @@
+#!/bin/sh
+#
+# App update at boot: undo an install cut by a power loss, install packages copied into /mnt/update/
+#
+
+case "$1" in
+	start)
+		/usr/sbin/x6100-update boot;;
+	stop|restart|reload)
+		;;
+	*)
+		echo "Usage: $0 {start}"
+		exit 1
+esac

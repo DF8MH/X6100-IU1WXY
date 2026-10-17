@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "rotary.h"
-#include "encoder.h"
+#include "knob_device.h"
+#include "mfk_device.h"
 
-#define VERSION "x6100 IU1WXY firmware - v0.126"
+#define VERSION "x6100 IU1WXY firmware - v0.127"
 
-
+/* The VOL knob and the MFK, opened at start */
 extern rotary_t     *vol;
 extern encoder_t    *mfk;
 

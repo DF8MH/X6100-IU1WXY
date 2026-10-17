@@ -33,6 +33,7 @@ int freq_strip_step_char(const char *text, int32_t step, bool *big) {
 
 #include "freq_strip.h"
 
+#include "broadcast_db.h"
 #include "cfg/cfg_api.h"
 #include "cluster/spots.h"
 #include "info.h"
@@ -43,14 +44,24 @@ int freq_strip_step_char(const char *text, int32_t step, bool *big) {
 #include "theme.h"
 #include "util.h"
 
+#include <math.h>
 #include <stdio.h>
+#include <time.h>
 
 #define QTH_POLL_MS 3000
+#define BC_TOLERANCE_HZ 2000    /* as the SWL panel of the GENE key */
 
 static char      app[16];
 static lv_obj_t *strip, *band_label, *freq_label, *mode_label, *qth_dot, *qth_label, *tx_label;
 static lv_obj_t *nr_label, *nb_label, *dnf_label, *rit_label, *xit_label;
 static lv_obj_t *freq_small, *other_label, *vfo_badge;   /* deck: the 10 Hz digits, the other VFO, A or B */
+static lv_obj_t *mid, *col;
+static bool      bc_tagged;         /* VISION: the band label is the broadcast tag */
+
+static void vision_fit(void);
+static char      bc[260];           /* the broadcast on air on the VFO, "" none */
+static int32_t   bc_freq = -1;
+static time_t    bc_minute = -1;
 static char      note[64];
 static int32_t   note_freq;
 static int32_t   tx_offset = -1;
@@ -118,6 +129,7 @@ static void ind_update_cb(Subject *subj, void *user_data) {
     else lv_obj_add_flag(rit_label, LV_OBJ_FLAG_HIDDEN);
     if (param_i_get(cfg_xit)) lv_obj_clear_flag(xit_label, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(xit_label, LV_OBJ_FLAG_HIDDEN);
+    vision_fit();
 }
 
 static lv_obj_t *ind_create(lv_obj_t *parent, const char *text) {
@@ -130,11 +142,86 @@ static lv_obj_t *ind_create(lv_obj_t *parent, const char *text) {
     return l;
 }
 
+/* The station nearest the VFO among those on air (EiBi), looked up only when the frequency or
+ * the minute changed: "Name (language)" */
+static void bc_lookup(int32_t f) {
+    broadcast_match_t m[BROADCAST_MAX_MATCHES];
+    time_t            minute = time(NULL) / 60;
+    size_t            n = 0, best = 0;
+
+    if (f == bc_freq && minute == bc_minute) return;
+    bc_freq = f;
+    bc_minute = minute;
+    if (param_i_get(cfg_broadcast_name)) n = broadcast_db_find_matches(f, BC_TOLERANCE_HZ, m, BROADCAST_MAX_MATCHES);
+    for (size_t i = 1; i < n; i++)
+        if (fabs(m[i].freq_khz * 1000.0 - f) < fabs(m[best].freq_khz * 1000.0 - f)) best = i;
+    if (!n) bc[0] = 0;
+    else if (m[best].language[0]) snprintf(bc, sizeof(bc), "%s (%s)", m[best].station, m[best].language);
+    else snprintf(bc, sizeof(bc), "%s", m[best].station);
+}
+
+/* A broadcast station in a tag, "BC" in front, so it is not read as a band or a memory */
+static void bc_tag(bool on) {
+    lv_obj_set_style_border_width(band_label, on ? 1 : 0, 0);
+    lv_obj_set_style_border_color(band_label, TC(info), 0);
+    lv_obj_set_style_radius(band_label, 4, 0);
+    lv_obj_set_style_pad_hor(band_label, on ? 6 : 0, 0);
+}
+
+/* The tag's text, the name cut with dots to fit w px (the label's own dots broke on the colour
+ * tag: an empty box in VISION) */
+static void bc_fit(lv_coord_t w) {
+    const lv_font_t *font = lv_obj_get_style_text_font(band_label, 0);
+    lv_coord_t       ls = lv_obj_get_style_text_letter_space(band_label, 0);
+    size_t           len = strlen(bc), n = len;
+    char             s[sizeof(bc) + 8];
+
+    w -= 2 * 6 + 2;   /* the tag's padding and border */
+    for (;;) {
+        snprintf(s, sizeof(s), "BC  %.*s%s", (int)n, bc, n < len ? "..." : "");
+        if (!n || lv_txt_get_width(s, strlen(s), font, ls, LV_TEXT_FLAG_NONE) <= w) break;
+        do n--; while (n && (bc[n] & 0xc0) == 0x80);   /* whole UTF-8 letters */
+    }
+    lv_label_set_text_fmt(band_label, "#%06x BC#  %s", theme_hex(TC_info), s + 4);
+}
+
+/* VISION's big type: the frequency and the mode move left of the column on the right when it
+ * grows (NR NB DNF RIT XIT, the TX offset of the apps), a long note (NAVTEX, a memory) or
+ * station ends in dots before them */
+static void vision_fit(void) {
+    if (!theme_shape.vision) return;
+    lv_obj_align(mid, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_update_layout(strip);
+
+    lv_coord_t over = lv_obj_get_x(mid) + lv_obj_get_width(mid) + 12 - lv_obj_get_x(col);
+
+    if (over > 0) {
+        lv_obj_align(mid, LV_ALIGN_CENTER, -over, 0);
+        lv_obj_update_layout(strip);
+    }
+
+    lv_coord_t room = lv_obj_get_x(mid) - lv_obj_get_x(band_label) - 12;
+
+    if (bc_tagged) {
+        bc_fit(room);
+        return;
+    }
+    lv_label_set_long_mode(band_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_size(band_label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_update_layout(strip);
+    if (!app[0] && lv_obj_get_width(band_label) > room) {   /* the app's two lines are short */
+        lv_label_set_long_mode(band_label, LV_LABEL_LONG_DOT);
+        lv_obj_set_size(band_label, room, lv_font_get_line_height(lv_obj_get_style_text_font(band_label, 0)));
+    }
+}
+
 static void update_cb(Subject *subj, void *user_data) {
     (void)subj;
     (void)user_data;
     uint16_t mhz, khz, hz;
     int32_t  f = cparam_i_get(cfg_fg_freq);
+
+    bc_lookup(f);
 
     split_freq(f, &mhz, &khz, &hz);
     if (theme_shape.deck) {     /* the other VFO at the top right, the current one in the badge */
@@ -155,7 +242,8 @@ static void update_cb(Subject *subj, void *user_data) {
     } else {
         lv_label_set_text_fmt(freq_label, "%i.%03i.%03i", mhz, khz, hz);
     }
-    const char *band = note[0] && f == note_freq ? note : cluster_band_name(cluster_band_of(f));
+    /* An open app: the band (a broadcast has nothing to do with the digital apps) */
+    const char *band = note[0] && f == note_freq ? note : bc[0] && !app[0] ? bc : cluster_band_name(cluster_band_of(f));
 
     /* The open app in front of the band, so it's clear where the keys go */
     if (theme_shape.deck) {
@@ -168,6 +256,17 @@ static void update_cb(Subject *subj, void *user_data) {
         if (theme_shape.vision) lv_obj_set_style_text_font(band_label, &sony_36, 0);
         lv_label_set_text(band_label, band);
     }
+    /* A station: in its tag, on one line up to the frequency (deck: 300 px, before the other
+     * VFO), cut with dots */
+    if (theme_shape.deck ? bc[0] && !app[0] : band == bc) {
+        bc_tag(true);
+        lv_obj_set_size(band_label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_update_layout(strip);
+        bc_fit(theme_shape.deck ? 300 : lv_obj_get_x(mid) - lv_obj_get_x(band_label) - 12);
+    } else {
+        bc_tag(false);
+        lv_obj_set_size(band_label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    }
     lv_label_set_text(mode_label, info_params_mode_label_get());
 
     if (tx_offset >= 0) {
@@ -176,6 +275,14 @@ static void update_cb(Subject *subj, void *user_data) {
     } else {
         lv_obj_add_flag(tx_label, LV_OBJ_FLAG_HIDDEN);
     }
+    bc_tagged = band == bc;
+    vision_fit();
+}
+
+/* Settings: the name on or off now */
+static void bc_setting_cb(Subject *subj, void *user_data) {
+    bc_freq = -1;
+    update_cb(subj, user_data);
 }
 
 /* The GPS locator (green dot) while there is a fix, else the saved QTH */
@@ -184,6 +291,7 @@ static void qth_update_cb(lv_timer_t *t) {
     const char *qth = station_qth();
 
     lv_label_set_text(qth_label, qth);
+    if (time(NULL) / 60 != bc_minute) update_cb(NULL, NULL);   /* a station starts or stops */
     if (qth != params.qth.x) {
         lv_obj_clear_flag(qth_dot, LV_OBJ_FLAG_HIDDEN);
     } else {
@@ -213,7 +321,7 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     band_label = make_label(strip, LV_ALIGN_LEFT_MID, 14, v ? &sony_36 : &sony_24, theme_hex(TC_text_head));
     lv_label_set_recolor(band_label, true);
     /* Centre: frequency, then the mode */
-    lv_obj_t *mid = lv_obj_create(strip);
+    mid = lv_obj_create(strip);
     lv_obj_remove_style_all(mid);
     lv_obj_set_size(mid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(mid, LV_FLEX_FLOW_ROW);
@@ -242,7 +350,7 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     }
 
     /* Right: the TX offset (digital apps) over [dot] locator */
-    lv_obj_t *col = lv_obj_create(strip);
+    col = lv_obj_create(strip);
     lv_obj_remove_style_all(col);
     lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
@@ -319,6 +427,7 @@ lv_obj_t *freq_strip_init(lv_obj_t *parent) {
     subject_subscribe_delayed((Subject *)cfg_bg_freq, update_cb, NULL);
     subject_subscribe_delayed((Subject *)cfg_band_split, update_cb, NULL);
     subject_subscribe_delayed((Subject *)cfg_cur_mode, update_cb, NULL);
+    subject_subscribe_delayed((Subject *)cfg_broadcast_name, bc_setting_cb, NULL);
     subject_subscribe_delayed((Subject *)cfg_mode_freq_step, step_change_cb, NULL);
     lv_obj_add_event_cb(freq_label, step_mark_draw_cb, LV_EVENT_DRAW_POST, NULL);
     update_cb(NULL, NULL);

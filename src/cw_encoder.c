@@ -78,17 +78,23 @@ static bool wait_nsec(long nsec) {
     return !stop_req;
 }
 
-static void send_morse(char *str, long dit_nsec, long dah_nsec) {
+static void hold_tx(long world_space_nsec, bool on);
+
+/* last: the final character of the text. Its last element puts the break-in delay set back
+ * while the key is down, so the receiver returns after that delay and not the held one */
+static void send_morse(char *str, long dit_nsec, long dah_nsec, bool last) {
     while (*str && !stop_req) {
         switch (*str) {
             case '.':
                 if (!key_down()) return;
+                if (last && !str[1]) hold_tx(0, false);
                 wait_nsec(dit_nsec);
                 radio_set_morse_key(false);
                 break;
 
             case '-':
                 if (!key_down()) return;
+                if (last && !str[1]) hold_tx(0, false);
                 wait_nsec(dah_nsec);
                 radio_set_morse_key(false);
                 break;
@@ -104,7 +110,7 @@ static void send_morse(char *str, long dit_nsec, long dah_nsec) {
 
 /* A message holds the transmitter through its gaps: the break-in delay set (100-130 ms for
  * the key) dropped the relay between letters and words, which clicked on and off. Longer
- * than a word space, 1 s at most; the setting is back when the message is over. */
+ * than a word space, 1 s at most; the setting is back from the last element on (send_morse). */
 static void hold_tx(long world_space_nsec, bool on) {
     long ms = world_space_nsec / 1000000L + 150;
     radio_set_qsk_time(on ? (ms > 1000 ? 1000 : (uint16_t)ms) : (uint16_t)param_i_get(cfg_qsk_time));
@@ -129,7 +135,7 @@ static void * endecode_thread(void *arg) {
         } else {
             len = get_morse(current_char, &morse);
             if (len) {
-                send_morse(morse, dit_nsec, dah_nsec);
+                send_morse(morse, dit_nsec, dah_nsec, !current_char[len + strspn(current_char + len, " ")]);
                 current_char += len;
             } else {
                 current_char++;

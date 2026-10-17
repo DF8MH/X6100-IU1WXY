@@ -15,7 +15,11 @@
 #include "parameter.h"
 
 using ParamInt   = Parameter<int32_t>;
-using ParamFloat = Parameter<float>;
+// Every float setting is stored scaled (Parameter<float, int32_t, N>, N differs),
+// so the C handle is a read-only view of the value: no cast to a wrong scale,
+// no set() that would write the float unscaled. Set them from C++ through the
+// typed cfg_sm member.
+using ParamFloat = const SubjectT<float>;
 using ParamText  = Parameter<std::string>;
 #else
 // Opaque C handles (resolved to real C++ types in C++ builds).

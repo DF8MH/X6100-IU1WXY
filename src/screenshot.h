@@ -1,11 +1,2 @@
-/*
- *  SPDX-License-Identifier: LGPL-2.1-or-later
- *
- *  Xiegu X6100 LVGL GUI
- *
- *  Copyright (c) 2022-2023 Belousov Oleg aka R1CBU
- */
-
-#pragma once
-
-void screenshot_take();
+/* Old name of screen_shot.h, for the files that still include it */
+#include "screen_shot.h"

@@ -1,9 +1,13 @@
-# CW decoder (ported from upstream x6100_gui): C++17, liquid-dsp for the FFT,
-# NCO and resampler. Used by the app (src/cw.cpp) and by tests/cw_decoder.
+# CW receiver: C++17 with liquid-dsp for the FFT, NCO, filters and resampler.
+# Used by the app (src/cw.cpp, the Morse table also by the keyer) and by tests/cw_decoder.
 add_library(CW_DECODER STATIC
-    time_classifier.cpp
-    morse_decoder.cpp
-    cw_receiver.cpp
+    morse_code.c
+    morse_text.cpp
+    tone_finder.cpp
+    tone_lock.cpp
+    key_detector.cpp
+    element_timer.cpp
+    receiver.cpp
 )
 
 target_compile_features(CW_DECODER PUBLIC cxx_std_17)

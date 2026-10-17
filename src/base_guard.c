@@ -70,6 +70,14 @@ unsigned base_guard_take(unsigned *r, unsigned *l, int *reg) {
     return atomic_exchange(&events, 0);
 }
 
+bool base_silent_due(uint64_t now_ms, uint64_t start_ms, uint64_t *last_ms) {
+    if (now_ms - start_ms < BASE_SILENT_START_MS || (*last_ms && now_ms - *last_ms < BASE_SILENT_EVERY_MS)) {
+        return false;
+    }
+    *last_ms = now_ms;
+    return true;
+}
+
 void base_guard_log(const char *fmt, ...) {
     static time_t   last;
     static unsigned skipped;
@@ -117,6 +125,9 @@ void tx_watch_arm(tx_watch_t *w, uint64_t now_ms, uint32_t ms) {
  * are keyed by the base itself. Resending is safe anyway: PTT off is already what the GUI
  * holds, it can't unkey what the base keys on its own */
 bool tx_watch_check(tx_watch_t *w, uint64_t now_ms, bool base_tx, bool gui_tx) {
+    bool gui_keyed = w->gui_keyed;
+
+    w->gui_keyed = base_tx && gui_tx;
     if (!base_tx || gui_tx) {
         w->run = false;
         return false;
@@ -124,6 +135,7 @@ bool tx_watch_check(tx_watch_t *w, uint64_t now_ms, bool base_tx, bool gui_tx) {
     if (!w->run) {
         w->run = true;
         w->run_start = now_ms;
+        w->ours = gui_keyed;
     }
     if (w->run_start > w->armed_until) {
         return false;
@@ -133,4 +145,29 @@ bool tx_watch_check(tx_watch_t *w, uint64_t now_ms, bool base_tx, bool gui_tx) {
     }
     w->last_fix = now_ms;
     return true;
+}
+
+void tx_watch_error(tx_watch_t *w, uint64_t now_ms) {
+    tx_watch_arm(w, now_ms, TX_WATCH_ERROR_MS);
+    w->error_seen = true;
+    w->error_at = now_ms;
+}
+
+/* PTT off may not be enough: a base that missed it can keep the carrier up. Power goes to 0
+ * only for a TX the GUI keyed that didn't stop on our un-key, near a write error. A hand mic
+ * or VOX TX starts from RX, the GUI not keying it: never ours, never cut */
+int tx_watch_power(tx_watch_t *w, uint64_t now_ms, bool base_tx) {
+    if (w->cut) {
+        if (base_tx) {
+            return 0;
+        }
+        w->cut = false;
+        return TX_WATCH_RESTORE;
+    }
+    if (w->run && w->ours && w->error_seen && w->error_at + TX_WATCH_ERROR_MS >= w->run_start
+        && now_ms - w->run_start >= TX_WATCH_CUT_MS) {
+        w->cut = true;
+        return TX_WATCH_CUT;
+    }
+    return 0;
 }

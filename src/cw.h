@@ -3,28 +3,23 @@
  *
  *  Xiegu X6100 LVGL GUI
  *
- *  Copyright (c) 2022-2023 Belousov Oleg aka R1CBU
+ *  CW receive: the decoder and the tuning indicator fed from the RX audio.
  */
 
 #pragma once
 
-#include "helpers.h"
-#include "dsp.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "audio.h"
+void cw_init(void);
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <liquid/liquid.h>
-
-void cw_init();
-
+/* Audio thread: RX audio after the app decimation (AUDIO_CAPTURE_RATE / AUDIO_DECIM) */
 void cw_put_audio_samples(unsigned int n, float *samples);
 
+/* Received tone (Hz), smoothed: what the tuning indicator shows */
 float cw_get_tone_freq(void);
 
 /* Decoded speed (WPM), the last one measured */

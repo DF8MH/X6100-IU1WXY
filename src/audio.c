@@ -255,11 +255,76 @@ static void loop_mute(bool mute) {
     pa_operation_unref(pa_context_get_sink_input_info_list(ctx, loop_mute_cb, NULL));
 }
 
+/* A playback stream on sink, ready, or NULL. With the mainloop locked */
+static pa_stream *stream_open(const char *name, const char *sink, const pa_buffer_attr *attr) {
+    pa_sample_spec    spec = { .format = PA_SAMPLE_S16NE, .rate = AUDIO_PLAY_RATE, .channels = 1 };
+    pa_stream_state_t st = PA_STREAM_FAILED;
+    pa_stream         *s = pa_stream_new(ctx, name, &spec, NULL);
+
+    pa_stream_set_state_callback(s, on_stream_state, NULL);
+    if (pa_stream_connect_playback(s, sink, attr, PA_STREAM_ADJUST_LATENCY | PA_STREAM_DONT_MOVE, NULL, NULL) == 0) {
+        while ((st = pa_stream_get_state(s)) == PA_STREAM_CREATING) {
+            pa_threaded_mainloop_wait(mloop);
+        }
+    }
+    pa_stream_set_state_callback(s, NULL, NULL);
+    if (st != PA_STREAM_READY) {
+        LV_LOG_ERROR("Play on %s failed", sink);
+        pa_stream_disconnect(s);
+        pa_stream_unref(s);
+        s = NULL;
+    }
+    return s;
+}
+
+/* The phone's voice (voice_tx.c) into the codec, from the playing thread as audio_play_bt_begin:
+ * 100 ms queued at most and playing from 60 ms, where play_stm queues 800 ms */
+bool audio_play_lowlat_begin(void) {
+    pa_sample_spec spec = { .format = PA_SAMPLE_S16NE, .rate = AUDIO_PLAY_RATE, .channels = 1 };
+    pa_buffer_attr attr;
+
+    if (bt_stm) {
+        return false;
+    }
+    memset(&attr, 0xff, sizeof(attr));
+    attr.tlength = pa_usec_to_bytes(100 * PA_USEC_PER_MSEC, &spec);
+    attr.prebuf  = pa_usec_to_bytes(60 * PA_USEC_PER_MSEC, &spec);
+    attr.minreq  = pa_usec_to_bytes(10 * PA_USEC_PER_MSEC, &spec);
+
+    pa_threaded_mainloop_lock(mloop);
+    bt_stm = stream_open("X6100 GUI Phone voice", play_device, &attr);
+    pa_threaded_mainloop_unlock(mloop);
+    return bt_stm != NULL;
+}
+
+void audio_play_lowlat_end(void) {
+    if (!bt_stm) {
+        return;
+    }
+    pa_threaded_mainloop_lock(mloop);
+    pa_stream_disconnect(bt_stm);
+    pa_stream_unref(bt_stm);
+    pa_threaded_mainloop_unlock(mloop);
+    bt_stm = NULL;
+}
+
+/* audio_play without waiting: writes what fits and drops the rest, false when nothing fitted.
+ * Not all or nothing: the server may cut the buffer to the prebuf size, and a stream that never
+ * has room for a whole block never reaches its prebuf and never starts */
+bool audio_play_if_room(int16_t *samples_buf, size_t samples) {
+    pa_threaded_mainloop_lock(mloop);
+    size_t bytes = LV_MIN(pa_stream_writable_size(cur_stm()), samples * 2) & ~(size_t)1;
+    if (bytes) {
+        pa_stream_write(cur_stm(), samples_buf, bytes, NULL, 0, PA_SEEK_RELATIVE);
+    }
+    pa_threaded_mainloop_unlock(mloop);
+    return bytes > 0;
+}
+
 bool audio_play_bt_begin(void) {
     char              sink[128];
     pa_sample_spec    spec = { .format = PA_SAMPLE_S16NE, .rate = AUDIO_PLAY_RATE, .channels = 1 };
     pa_buffer_attr    attr;
-    pa_stream_state_t st = PA_STREAM_FAILED;
     pa_stream         *s;
 
     if (bt_stm || !btaudio_hp_sink(sink, sizeof(sink))) {
@@ -269,20 +334,7 @@ bool audio_play_bt_begin(void) {
     attr.tlength = pa_usec_to_bytes(AUDIO_RATE_MS * PA_USEC_PER_MSEC, &spec) * 8;
 
     pa_threaded_mainloop_lock(mloop);
-    s = pa_stream_new(ctx, "X6100 GUI Local", &spec, NULL);
-    pa_stream_set_state_callback(s, on_stream_state, NULL);
-    if (pa_stream_connect_playback(s, sink, &attr, PA_STREAM_ADJUST_LATENCY | PA_STREAM_DONT_MOVE, NULL, NULL) == 0) {
-        while ((st = pa_stream_get_state(s)) == PA_STREAM_CREATING) {
-            pa_threaded_mainloop_wait(mloop);
-        }
-    }
-    pa_stream_set_state_callback(s, NULL, NULL);
-    if (st != PA_STREAM_READY) {
-        LV_LOG_ERROR("Local play on %s failed", sink);
-        pa_stream_disconnect(s);
-        pa_stream_unref(s);
-        s = NULL;
-    }
+    s = stream_open("X6100 GUI Local", sink, &attr);
     bt_stm = s;
     if (s) {
         loop_mute(true);

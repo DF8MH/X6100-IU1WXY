@@ -36,8 +36,10 @@
 #include "radio.h"
 #include "buttons.h"
 #include "msg.h"
+#include "remote_server.h"
 #include "styles.h"
 #include "theme.h"
+#include "params/params.h"
 #include "lvgl/lvgl.h"
 #include "lv_drivers/display/fbdev.h"
 
@@ -47,6 +49,9 @@
 #define SCREEN_REC_DIR      "/mnt/screenrec"
 #endif
 #define SCREEN_REC_MIN_MB   50
+#define SCREEN_REC_MB_MIN   45              /* about 42 MB a minute measured on the radio */
+#define SCREEN_REC_WARN_MIN 10              /* "almost full" when less than this is left */
+#define SPLIT_BYTES         3000000000u     /* a new file well before the 4 GB AVI limit */
 
 #define W       800
 #define H       480
@@ -64,9 +69,12 @@ static pthread_mutex_t  mut = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t   cond = PTHREAD_COND_INITIALIZER;
 
 static int              state = IDLE;   /* RUN/STOP set by the LVGL thread, IDLE by the writer */
-static int              error;          /* writer: 1 disk full, 2 encoder, 3 open */
+static int              error;          /* writer: 1 write, 2 encoder, 3 open, 4 card full (file closed) */
 static char             path[128];
 static int64_t          t0;
+static uint32_t         split_frames;   /* file length, set by start() */
+static int              files;          /* files written by this recording */
+static int              low_min = -1;   /* writer: minutes left on the card, when low */
 
 /* Under mut */
 static frame_t          queue[QUEUE];
@@ -80,6 +88,7 @@ static bool             active;
 static lv_timer_t       *timer;
 static lv_obj_t         *label;
 static int              shown = -1;
+static int              warned_min = -1;
 
 static int64_t now_ms() {
     struct timespec ts;
@@ -162,11 +171,31 @@ static bool write_audio(avi_t *avi, int16_t *buf, size_t max) {
     return n == 0 || avi_write_audio(avi, buf, n);
 }
 
+static void make_path() {
+    char    name[32];
+    time_t  now = time(NULL);
+
+    strftime(name, sizeof(name), "screen-%Y%m%d-%H%M%S.avi", localtime(&now));
+    snprintf(path, sizeof(path), SCREEN_REC_DIR "/%s", name);
+}
+
+/* MB free on the card, -1 when unknown */
+static int64_t free_mb() {
+    struct statvfs fs;
+
+    if (statvfs(SCREEN_REC_DIR, &fs) != 0) {
+        return -1;
+    }
+    return (uint64_t) fs.f_bavail * fs.f_frsize / (1024 * 1024);
+}
+
 static void * writer_thread(void *arg) {
     static int16_t  abuf[8192];
     uint8_t         *cur = NULL, *prev = NULL;      /* JPEG data */
     unsigned long   cur_n = 0, prev_n = 0;
     uint32_t        next = 0;                       /* next frame index */
+    uint32_t        file_start = 0;                 /* first frame index of this file */
+    int64_t         checked = 0;                    /* last free space check */
     bool            ok = true;
 
     setpriority(PRIO_PROCESS, 0, 10);               /* Linux: this thread only */
@@ -178,6 +207,7 @@ static void * writer_thread(void *arg) {
         set_state(IDLE);
         return NULL;
     }
+    files = 1;
 
     while (ok && get_state() == RUN) {
         struct timespec ts;
@@ -237,13 +267,42 @@ static void * writer_thread(void *arg) {
         }
 
         ok = ok && write_audio(avi, abuf, sizeof(abuf) / 2);
+
+        /* Every 5 s: stop with the file closed before the card is full */
+        if (ok && now_ms() - checked >= 5000) {
+            int64_t mb = free_mb();
+
+            checked = now_ms();
+
+            if (mb >= 0 && mb < SCREEN_REC_MIN_MB) {
+                error = 4;
+                break;
+            }
+            low_min = (mb >= 0 && mb < SCREEN_REC_WARN_MIN * SCREEN_REC_MB_MIN) ? mb / SCREEN_REC_MB_MIN : -1;
+        }
+
+        /* File length reached: close this file and go on in a new one */
+        if (ok && (next - file_start >= split_frames || avi_size(avi) > SPLIT_BYTES)) {
+            ok = avi_close(avi);
+            avi = NULL;
+            if (ok) {
+                make_path();
+                avi = avi_open(path, W, H, SCREEN_REC_FPS, AUDIO_CAPTURE_RATE);
+                if (!avi) {
+                    error = 3;
+                    break;
+                }
+                files++;
+                file_start = next;
+            }
+        }
     }
 
-    while (ok && ring_w != ring_r) {
+    while (ok && avi && ring_w != ring_r) {
         ok = write_audio(avi, abuf, sizeof(abuf) / 2);
     }
 
-    if (!avi_close(avi) || !ok) {
+    if ((avi && !avi_close(avi)) || !ok) {
         error = error ? error : 1;
     }
 
@@ -317,21 +376,37 @@ static void timer_cb(lv_timer_t *t) {
             shown = ms / 1000;
             lv_label_set_text_fmt(label, "REC %02d:%02d", shown / 60, shown % 60);
         }
+
+        int low = __atomic_load_n(&low_min, __ATOMIC_RELAXED);
+
+        if (low >= 0 && low != warned_min) {        /* again each minute less */
+            warned_min = low;
+            msg_schedule_long_text_fmt("SD card: about %d min left", low);
+        }
     } else if (s == IDLE) {                         /* the writer is done, or failed */
         if (active) {
             active = false;
             radio_set_rec_moni(false);
             buttons_screen_rec_update();
         }
-        if (error == 1) {
-            msg_update_text_fmt("Disk full, recording stopped");
+        if (error == 4) {
+            msg_schedule_long_text_fmt("SD card full, recording saved");
+        } else if (error == 1) {
+            msg_schedule_long_text_fmt("SD card write error: the last file may be damaged");
         } else if (error == 3) {
-            msg_update_text_fmt("Error write file");
+            msg_schedule_long_text_fmt("Cannot create the file on the SD card");
         } else if (error) {
             msg_update_text_fmt("Screen rec error");
+        } else if (files > 1) {
+            msg_update_text_fmt("Saved %d files", files);
         } else {
             msg_update_text_fmt("Saved %s", strrchr(path, '/') + 1);
         }
+        cJSON *ev = cJSON_CreateObject();   /* X6100 Link's alert: err as above, 0 saved */
+        cJSON_AddStringToObject(ev, "t", "rec_done");
+        cJSON_AddStringToObject(ev, "kind", "screen");
+        cJSON_AddNumberToObject(ev, "err", error);
+        remote_event(ev);
         lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
         lv_timer_del(timer);
         timer = NULL;
@@ -360,9 +435,7 @@ static bool on_sd_card(const char *dir) {
 }
 
 static bool start() {
-    struct statvfs  fs;
-    char            name[32];
-    time_t          now = time(NULL);
+    static const uint8_t split_min[] = { 60, 45, 30, 15, 5 };
 
     if (get_state() != IDLE || timer) {
         msg_update_text_fmt("Saving previous recording");
@@ -375,8 +448,8 @@ static bool start() {
         msg_update_text_fmt("Screen rec: no SD card");
         return false;
     }
-    if (statvfs(SCREEN_REC_DIR, &fs) != 0 || (uint64_t) fs.f_bavail * fs.f_frsize < SCREEN_REC_MIN_MB * 1024ULL * 1024) {
-        msg_update_text_fmt("Disk full");
+    if (free_mb() < SCREEN_REC_MIN_MB) {
+        msg_update_text_fmt("SD card full");
         return false;
     }
 
@@ -393,7 +466,7 @@ static bool start() {
         lv_obj_set_style_bg_opa(label, LV_OPA_70, 0);
         lv_obj_set_style_pad_left(label, 26, 0);
         lv_obj_set_style_pad_right(label, 6, 0);
-        lv_obj_align(label, LV_ALIGN_TOP_RIGHT, -4, 130);      /* under the frequency strip */
+        lv_obj_align(label, LV_ALIGN_TOP_RIGHT, -4, 130 + METER_ROW_H);   /* under the frequency strip (VISION: and the S-meter) */
 
         lv_obj_t *dot = lv_obj_create(label);       /* the fonts have no bullet */
 
@@ -410,12 +483,15 @@ static bool start() {
         return false;
     }
 
-    strftime(name, sizeof(name), "screen-%Y%m%d-%H%M%S.avi", localtime(&now));
-    snprintf(path, sizeof(path), SCREEN_REC_DIR "/%s", name);
+    make_path();
+    split_frames = split_min[params.screen_rec_split.x % 5] * 60 * SCREEN_REC_FPS;
 
     q_head = q_tail = q_count = 0;
     ring_r = ring_w = 0;
     error = 0;
+    files = 0;
+    low_min = -1;
+    warned_min = -1;
     shown = -1;
     t0 = now_ms();
     active = true;

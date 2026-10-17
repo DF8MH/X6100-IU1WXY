@@ -41,9 +41,11 @@ static void send_btn_cb(button_data_t *btn);
 static void stop_btn_cb(button_data_t *btn);
 static void clear_btn_cb(button_data_t *btn);
 static void close_btn_cb(button_data_t *btn);
+static void live_btn_cb(button_data_t *btn);
 
 static void msg_btn_cb(button_data_t *btn);
 static void enqueue(const char *text);
+static void enqueue_raw(const char *text, bool space);
 
 static button_data_t btn_p1    = {.type = BTN_TEXT, .label = "(CW KBD 1:1)", .press = NULL};
 static button_data_t btn_send  = {.type = BTN_TEXT, .label = "Send", .press = send_btn_cb};
@@ -52,6 +54,15 @@ static button_data_t btn_clear = {.type = BTN_TEXT, .label = "Clear", .press = c
 static button_data_t btn_close = {.type = BTN_TEXT, .label = "Close", .press = close_btn_cb};
 
 static buttons_page_t page = {{&btn_p1, &btn_send, &btn_stop, &btn_clear, &btn_close}};
+
+/* The last page: Live, each letter keyed as typed (the main screen CW line too) */
+static const char *live_label(void) {
+    return param_i_get(cfg_cw_live) ? "Live:\nOn" : "Live:\nOff";
+}
+
+static button_data_t  btn_pl   = {.type = BTN_TEXT, .press = button_next_page_cb, .next = &page};
+static button_data_t  btn_live = {.type = BTN_TEXT_FN, .label_fn = live_label, .press = live_btn_cb};
+static buttons_page_t page_live = {{&btn_pl, &btn_live}};
 
 /* The MSG > CW messages (also on the web page CW messages), 4 a page after the first: a press
  * sends one as a typed line */
@@ -69,11 +80,12 @@ static void msg_btn_cb(button_data_t *btn) {
     enqueue(msgs[btn - btn_msg]);
 }
 
-/* Buttons and page labels for the messages there are (none: one page, as before) */
+/* Buttons and page labels for the messages there are, then the Live page */
 static void msgs_load(void) {
-    static char p_label[3][16];
+    static char p_label[4][16];
     int         n     = params_msg_cw_list(msgs, MSGS);
-    int         pages = 1 + (n + 3) / 4;
+    int         np    = (n + 3) / 4;
+    int         pages = 2 + np;
 
     for (int i = 0; i < MSGS; i++) {
         btn_msg[i] = (button_data_t){.type = BTN_TEXT, .label = msg_label[i], .press = msg_btn_cb};
@@ -82,14 +94,16 @@ static void msgs_load(void) {
     }
     snprintf(p_label[0], sizeof(p_label[0]), "(CW KBD 1:%d)", pages);
     btn_p1.label = p_label[0];
-    btn_p1.press = pages > 1 ? button_next_page_cb : NULL;
-    btn_p1.next  = &page_msg[0];
+    btn_p1.press = button_next_page_cb;
+    btn_p1.next  = np ? &page_msg[0] : &page_live;
     for (int k = 0; k < 2; k++) {
         snprintf(p_label[k + 1], sizeof(p_label[k + 1]), "(CW KBD %d:%d)", k + 2, pages);
         btn_pm[k].label   = p_label[k + 1];
-        btn_pm[k].next    = k + 2 < pages ? &page_msg[k + 1] : &page;
+        btn_pm[k].next    = k + 1 < np ? &page_msg[k + 1] : &page_live;
         page_msg[k].items[0] = &btn_pm[k];
     }
+    snprintf(p_label[3], sizeof(p_label[3]), "(CW KBD %d:%d)", pages, pages);
+    btn_pl.label = p_label[3];
 }
 
 static dialog_t dialog = {
@@ -190,6 +204,11 @@ static void timer_cb(lv_timer_t *t) {
 
 /* A line to send: upper case, '#' dropped (it would break the colours) */
 static void enqueue(const char *text) {
+    enqueue_raw(text, true);
+}
+
+/* space: a word space after the text (a typed line); without it the Link paddle sends letter by letter */
+static void enqueue_raw(const char *text, bool space) {
     size_t len = strlen(queue);
 
     text = cw_encoder_expand(text);
@@ -203,7 +222,9 @@ static void enqueue(const char *text) {
             queue[len++] = toupper((unsigned char)*text);
         }
     }
-    queue[len++] = ' ';
+    if (space) {
+        queue[len++] = ' ';
+    }
     queue[len]   = 0;
     timer_cb(NULL);
 }
@@ -279,7 +300,12 @@ static void key_cb(lv_event_t *e) {
             send_input();
             break;
         case LV_KEY_BACKSPACE:
-            lv_textarea_del_char(input);
+            if (*lv_textarea_get_text(input)) {
+                lv_textarea_del_char(input);
+            } else if (param_i_get(cfg_cw_live) && queue[0]) {   /* Live: the last letter not keyed yet */
+                queue[strlen(queue) - 1] = 0;
+                update_view();
+            }
             break;
         case LV_KEY_ESC:
             if (busy() || queue[0]) {
@@ -307,7 +333,12 @@ static void key_cb(lv_event_t *e) {
         default:
             if (key >= ' ' && key < 127 && key != '#') {
                 char c[2] = {(char)toupper((int)key), 0};
-                lv_textarea_add_text(input, c);
+
+                if (param_i_get(cfg_cw_live)) {   /* keyed at once, letter by letter; a space is the word gap */
+                    enqueue_raw(c, false);
+                } else {
+                    lv_textarea_add_text(input, c);
+                }
             }
             break;
     }
@@ -352,6 +383,16 @@ static void clear_btn_cb(button_data_t *btn) {
 static void close_btn_cb(button_data_t *btn) {
     (void)btn;
     dialog_destruct();
+}
+
+static void set_placeholder(void) {
+    lv_textarea_set_placeholder_text(input, param_i_get(cfg_cw_live) ? "Live: keyed as typed" : "type, Enter sends");
+}
+
+static void live_btn_cb(button_data_t *btn) {
+    param_i_set(cfg_cw_live, !param_i_get(cfg_cw_live));
+    buttons_refresh(btn);
+    set_placeholder();
 }
 
 static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, uint32_t color) {
@@ -410,7 +451,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_style_bg_opa(input, LV_OPA_80, LV_PART_CURSOR);
     lv_textarea_set_one_line(input, true);
     lv_textarea_set_max_length(input, LINE_MAX);
-    lv_textarea_set_placeholder_text(input, "type, Enter sends");
+    set_placeholder();
     lv_obj_add_state(input, LV_STATE_FOCUSED);   /* shows the cursor; not in the group */
     lv_obj_clear_flag(input, LV_OBJ_FLAG_CLICKABLE);
 
@@ -453,7 +494,7 @@ static void destruct_cb(void) {
 /* Web remote (X6100 Link) */
 void dialog_cw_kbd_remote(const char *cmd, int32_t val, const char *text) {
     if (!strcmp(cmd, "cw_send")) {
-        enqueue(text);
+        enqueue_raw(text, val != 1);
     } else if (!strcmp(cmd, "cw_stop")) {
         stop();
     } else if (!strcmp(cmd, "cw_wpm")) {

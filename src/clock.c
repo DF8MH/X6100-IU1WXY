@@ -34,6 +34,8 @@ static float            v_ext;
 static float            v_bat;
 static uint8_t          cap_bat;
 static bool             charging;
+static int              est_min = -1;
+static bool             est_approx;
 
 static void check_time_sync_cb(lv_timer_t * t);
 static time_t get_last_sync_time();
@@ -77,14 +79,30 @@ static void show_time() {
         ext_sym = LV_SYMBOL_POWER;
     }
 
-    lv_label_set_text(power_labels[0], bat_sym);
-    lv_label_set_text_fmt(power_labels[1], "%.1fv", v_bat);
-    if (v_ext < 3.0f) {
-        lv_label_set_text(power_labels[2], "");
-        lv_label_set_text_fmt(power_labels[3], "%i%%", cap_bat);
-    } else {
+    /* The % and the time left or to full (bat_est.c); the voltages are in Settings > Info */
+    if (v_bat < 3.0f) {     /* external power, no battery */
+        lv_label_set_text(power_labels[0], "");
+        lv_label_set_text(power_labels[1], "");
         lv_label_set_text(power_labels[2], ext_sym);
         lv_label_set_text_fmt(power_labels[3], "%.1fv", v_ext);
+    } else {
+        bool ext = v_ext >= 3.0f;
+
+        lv_label_set_text(power_labels[0], ext && est_min >= 0 ? LV_SYMBOL_CHARGE : bat_sym);
+        lv_label_set_text_fmt(power_labels[1], "%i%%", cap_bat);
+        lv_label_set_text(power_labels[2], ext && est_min < 0 ? LV_SYMBOL_POWER : "");  /* charged */
+        if (est_min >= 0) {
+            lv_label_set_text_fmt(power_labels[3], "%s%ih%02i", est_approx ? "~" : "", est_min / 60, est_min % 60);
+        } else {
+            lv_label_set_text(power_labels[3], "");
+        }
+
+        /* On battery below the guard level (20% or under half an hour left): red */
+        bool low = !ext && (cap_bat <= 20 || (est_min >= 0 && est_min < 30));
+
+        for (int i = 0; i < 4; i++)
+            lv_obj_set_style_text_color(power_labels[i], low ? TC(tx)
+                                        : (theme_shape.deck && i % 2) ? TC(text_mute) : TC(text_soft), 0);
     }
 
     pthread_mutex_unlock(&power_mux);
@@ -129,8 +147,18 @@ lv_obj_t * clock_init(lv_obj_t * parent) {
         lv_obj_set_style_text_color(power_labels[i], TC(text_soft), 0);
     }
     lv_obj_set_style_pad_left(power_labels[2], 4, 0);
-    if (theme_shape.vision)
-        lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);   /* VISION: the time only */
+    if (theme_shape.vision) {   /* VISION: the time only here, the battery in a box of its own at the right end of the S-meter's row */
+        lv_obj_t *box = lv_obj_create(parent);
+
+        lv_obj_add_style(box, &clock_style, 0);
+        lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_size(box, VISION_POWER_W, METER_ROW_H - 2 * TOP_BAR_MARGIN);
+        lv_obj_set_y(box, FREQ_STRIP_Y + FREQ_STRIP_H + TOP_BAR_MARGIN);
+        lv_obj_set_parent(row, box);
+        lv_obj_center(row);
+        for (int i = 0; i < 4; i++)
+            lv_obj_set_style_text_font(power_labels[i], i % 2 ? &sony_20 : &lv_font_montserrat_22, 0);
+    }
     if (theme_shape.deck) {     /* "13:03:02" at the right of the first row, the voltages in the second */
         lv_obj_set_style_text_font(time_label, &sony_24, 0);
         lv_obj_set_style_text_font(sec_label, &sony_24, 0);
@@ -158,6 +186,13 @@ void clock_update_power(float ext, float bat, uint8_t cap, bool charge_flag) {
     v_bat = bat;
     cap_bat = cap;
     charging = charge_flag;
+    pthread_mutex_unlock(&power_mux);
+}
+
+void clock_update_estimate(int minutes, bool approx) {
+    pthread_mutex_lock(&power_mux);
+    est_min = minutes > 5999 ? 5999 : minutes;
+    est_approx = approx;
     pthread_mutex_unlock(&power_mux);
 }
 
@@ -207,6 +242,15 @@ void clock_tz_set(const char *posix) {
     if (time_label) {
         show_time();
     }
+}
+
+void clock_power_get(float *ext, float *bat, uint8_t *cap, bool *charge) {
+    pthread_mutex_lock(&power_mux);
+    *ext = v_ext;
+    *bat = v_bat;
+    *cap = cap_bat;
+    *charge = charging;
+    pthread_mutex_unlock(&power_mux);
 }
 
 float clock_battery_volts(void) {

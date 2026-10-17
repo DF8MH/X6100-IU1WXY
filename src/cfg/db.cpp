@@ -412,6 +412,26 @@ void BandParamsTable::Shutdown() {
     db_                    = nullptr;
 }
 
+std::vector<std::pair<std::string, int32_t>> BandParamsTable::all_int(const char *name) {
+    std::vector<std::pair<std::string, int32_t>> result;
+    sqlite3_stmt                                *stmt = nullptr;
+
+    if (!db_ || sqlite3_prepare_v2(db_,
+                                   "SELECT bands.name, band_params.val FROM band_params "
+                                   "JOIN bands ON bands.id = band_params.bands_id "
+                                   "WHERE band_params.name = ? ORDER BY bands.start_freq",
+                                   -1, &stmt, 0) != SQLITE_OK) {
+        return result;
+    }
+    sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char *txt = sqlite3_column_text(stmt, 0);
+        result.emplace_back(txt ? reinterpret_cast<const char *>(txt) : "", sqlite3_column_int(stmt, 1));
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
 // ---------------------------------------------------------------------------
 // ModeParamsTable
 // ---------------------------------------------------------------------------

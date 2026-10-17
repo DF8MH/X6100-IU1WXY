@@ -57,6 +57,7 @@ dialog_t *dialog_bands = &dialog;
 static app_frame_t frame;
 static lv_timer_t *timer;
 static int         sel;
+static lv_coord_t  bar_w;
 
 static struct {
     lv_obj_t *cell, *name, *bar, *word, *counts, *heard;
@@ -88,7 +89,7 @@ static void fill(void) {
         /* The best band framed */
         lv_obj_set_style_border_width(rows[b].cell, b == fb.best ? 1 : 0, 0);
 
-        lv_obj_set_width(rows[b].bar, 6 + lv * (BAR_W - 6) / 6);
+        lv_obj_set_width(rows[b].bar, 6 + lv * (bar_w - 6) / 6);
         lv_obj_set_style_bg_color(rows[b].bar, lv ? lv_color_hex(color) : TC(track), 0);
         lv_label_set_text(rows[b].word, field_band_word(lv));
         lv_obj_set_style_text_color(rows[b].word, on ? TC(sel_text) : lv_color_hex(color), 0);
@@ -184,6 +185,15 @@ static void construct_cb(lv_obj_t *parent) {
     app_frame_body(body);
     lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
 
+    /* The columns as wide as their longest text: VISION's bigger type ran "HIGH" into "5 / 0" and
+     * "160m" into the bar. The bar gives way */
+    lv_coord_t name_w  = LV_MAX(62, lv_txt_get_width("160m", 4, &sony_22, 0, LV_TEXT_FLAG_NONE) + 8);
+    lv_coord_t word_w  = LV_MAX(50, lv_txt_get_width("HIGH", 4, &sony_18, 0, LV_TEXT_FLAG_NONE) + 10);
+    lv_coord_t count_w = LV_MAX(62, lv_txt_get_width("99 / 99", 7, &sony_18, 0, LV_TEXT_FLAG_NONE) + 8);
+    lv_coord_t bar_x   = 8 + name_w + 4;
+    bar_w              = LV_MIN(BAR_W, COL_W - bar_x - 10 - word_w - 2 - count_w - 4 - 60);   /* 60: room for who heard you */
+    lv_coord_t word_x  = bar_x + bar_w + 10, count_x = word_x + word_w + 2, heard_x = count_x + count_w + 4;
+
     for (int b = 0; b < FIELD_RBN_BANDS; b++) {
         lv_obj_t *c = lv_obj_create(body);
 
@@ -198,13 +208,13 @@ static void construct_cb(lv_obj_t *parent) {
         lv_obj_add_event_cb(c, cell_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)b);
         rows[b].cell = c;
 
-        rows[b].name = label(c, &sony_22, 8, 62);
+        rows[b].name = label(c, &sony_22, 8, name_w);
         lv_label_set_text(rows[b].name, field_band_name(b));
 
         lv_obj_t *track = lv_obj_create(c);
         lv_obj_remove_style_all(track);
-        lv_obj_set_size(track, BAR_W, 8);
-        lv_obj_align(track, LV_ALIGN_LEFT_MID, 74, 0);
+        lv_obj_set_size(track, bar_w, 8);
+        lv_obj_align(track, LV_ALIGN_LEFT_MID, bar_x, 0);
         lv_obj_set_style_radius(track, 4, 0);
         lv_obj_set_style_bg_color(track, TC(track), 0);
         lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
@@ -214,9 +224,9 @@ static void construct_cb(lv_obj_t *parent) {
         lv_obj_set_style_radius(rows[b].bar, 4, 0);
         lv_obj_set_style_bg_opa(rows[b].bar, LV_OPA_COVER, 0);
 
-        rows[b].word   = label(c, &sony_18, 74 + BAR_W + 10, 50);
-        rows[b].counts = label(c, &sony_18, 74 + BAR_W + 62, 62);
-        rows[b].heard  = label(c, &sony_18, 74 + BAR_W + 128, COL_W - (74 + BAR_W + 128) - 4);
+        rows[b].word   = label(c, &sony_18, word_x, word_w);
+        rows[b].counts = label(c, &sony_18, count_x, count_w);
+        rows[b].heard  = label(c, &sony_18, heard_x, COL_W - heard_x - 4);
         lv_obj_set_style_text_color(rows[b].heard, TC(ok), 0);
     }
     /* Columns: band, activity, cluster / RBN spots, heard you (skimmers, best SNR) */

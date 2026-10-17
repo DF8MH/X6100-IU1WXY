@@ -1,1840 +1,405 @@
-/*
- * Channel Memory Manager
- */
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//
+// Xiegu X6100 LVGL GUI - the CHANNELS window (dialog_channels.h).
+//
+// A one-column table, one row per channel: the MFK moves the cursor, a press tunes the
+// channel and closes the window. Each cell holds a blank and the row is painted at the end
+// of its draw (name on the left, frequency and mode on the right), so the cursor and the
+// scrolling stay LVGL's own. Keys: Close, Add, Delete, Edit (name) and Drag: while
+// dragging the MFK carries the channel up and down the list, Drop writes the new order.
+//
+// Copyright (c) 2026 Giovanni Ricciardi IU1WXY, own code of the IU1WXY firmware
 
-#include "dialog_channels.h"
-#include "channels.h"
-#include "keyboard.h"
-#include "textarea_window.h"
-#include "cfg/cfg_api.h"
-#include "styles.h"
+#include "dialog_channels.h"     /* dialog_channels */
+
+#include <stdio.h>       /* snprintf */
+
+#include "channels.h"            /* the list and its file */
+#include "keyboard.h"            /* keyboard_group */
+#include "textarea_window.h"     /* the name editor */
+#include "cfg/cfg_api.h"         /* the current frequency */
+#include "styles.h"              /* fonts */
 #include "theme.h"
 
-#include <stdio.h>
-#include <stdint.h>
-#include <stdbool.h>
+static void window_open_cb(lv_obj_t *parent);
+static void window_close_cb(void);
+static void key_close_cb(button_data_t *data);
+static void key_add_cb(button_data_t *data);
+static void key_delete_cb(button_data_t *data);
+static void key_edit_cb(button_data_t *data);
+static void key_drag_cb(button_data_t *data);
+static void key_drop_cb(button_data_t *data);
 
+static button_data_t btn_close  = { .type = BTN_TEXT, .label = "Close",  .press = key_close_cb };
+static button_data_t btn_add    = { .type = BTN_TEXT, .label = "Add",    .press = key_add_cb };
+static button_data_t btn_delete = { .type = BTN_TEXT, .label = "Delete", .press = key_delete_cb };
+static button_data_t btn_edit   = { .type = BTN_TEXT, .label = "Edit",   .press = key_edit_cb };
+static button_data_t btn_drag   = { .type = BTN_TEXT, .label = "Drag",   .press = key_drag_cb };
+static button_data_t btn_drop   = { .type = BTN_TEXT, .label = "Drop",   .press = key_drop_cb };
 
-static void construct_cb(lv_obj_t *parent);
-static void destruct_cb(void);
-static void close_cb(button_data_t *data);
-static void add_cb(button_data_t *data);
-static void delete_cb(button_data_t *data);
-static void edit_cb(button_data_t *data);
-static void drag_cb(button_data_t *data);
-static void drop_cb(button_data_t *data);
-static bool edit_ok_cb(void);
-static bool edit_cancel_cb(void);
-static void rebuild_after_edit(void *data);
-static void channel_pressed_cb(lv_event_t *e);
-static void channel_changed_cb(lv_event_t *e);
-static void channel_draw_cb(lv_event_t *e);
-static const char *mode_to_string(x6100_mode_t mode);
-static void refresh_table(void);
-static void build_table(void);
-static void select_row(int16_t row, bool center);
-static bool recall_row(int16_t row, bool close_dialog);
-
-static lv_obj_t *table = NULL;
-static lv_obj_t *channels_frame = NULL;
-
-
-/*
- * Last channel actually recalled with MFK.
- *
- * This is intentionally kept in RAM only:
- * reopening the dialog restores the selection,
- * while restarting x6100-gui starts fresh.
- */
-static int16_t last_recalled_row = LV_TABLE_CELL_NONE;
-
-
-/*
- * Channel currently being edited.
- */
-static int16_t edit_row = LV_TABLE_CELL_NONE;
-static int16_t edit_restore_row = LV_TABLE_CELL_NONE;
-
-
-/*
- * Drag & Drop state.
- */
-static bool drag_active = false;
-
-/* Add a new channel immediately after the dialog is opened. */
-static bool add_on_construct = false;
-static int16_t drag_row = LV_TABLE_CELL_NONE;
-
-
-/*
- * Soft-key F1: Close
- */
-static button_data_t btn_close = {
-    .type = BTN_TEXT,
-    .label = "Close",
-    .press = close_cb
+static buttons_page_t keys_page = {
+    .items = { &btn_close, &btn_add, &btn_delete, &btn_edit, &btn_drag }
 };
 
-
-/*
- * Soft-key F2: Add
- */
-static button_data_t btn_add = {
-    .type = BTN_TEXT,
-    .label = "Add",
-    .press = add_cb
+static dialog_t win = {
+    .btn_page       = &keys_page,
+    .construct_cb   = window_open_cb,
+    .destruct_cb    = window_close_cb,
 };
 
+dialog_t *dialog_channels = &win;   /* the hand mic V/M key opens it */
 
-/*
- * Soft-key F3: Delete
- */
-static button_data_t btn_delete = {
-    .type = BTN_TEXT,
-    .label = "Delete",
-    .press = delete_cb
-};
+static lv_obj_t *table;
 
+/* Rows, -1 for none. recalled lives as long as the GUI (not saved): the window
+   opens on it, the hand mic UP/DOWN step from it */
+static int16_t recalled = -1;
+static int16_t renaming = -1;       /* row whose name is in the keyboard window */
+static int16_t renamed = -1;        /* row to put the cursor back on after a rename */
+static int16_t dragging = -1;       /* row the dragged channel is on, -1 when not dragging */
 
-/*
- * Soft-key F4: Edit
- */
-static button_data_t btn_edit = {
-    .type = BTN_TEXT,
-    .label = "Edit",
-    .press = edit_cb
-};
+/* Mode as shown in the list: "?" for one the file can't hold */
+static const char *mode_label(x6100_mode_t mode) {
+    const char *name = channels_mode_name(mode);
+    x6100_mode_t back;
 
-
-/*
- * Soft-key F5: Drag
- */
-static button_data_t btn_drag = {
-    .type = BTN_TEXT,
-    .label = "Drag",
-    .press = drag_cb
-};
-
-
-/*
- * Soft-key F5 while dragging: Drop
- */
-static button_data_t btn_drop = {
-    .type = BTN_TEXT,
-    .label = "Drop",
-    .press = drop_cb
-};
-
-
-static buttons_page_t btn_page = {
-    .items = {
-        &btn_close,
-        &btn_add,
-        &btn_delete,
-        &btn_edit,
-        &btn_drag
-    }
-};
-
-
-static dialog_t dialog = {
-    .run = false,
-    .construct_cb = construct_cb,
-    .destruct_cb = destruct_cb,
-    .audio_cb = NULL,
-    .key_cb = NULL,
-    .btn_page = &btn_page
-};
-
-
-dialog_t *dialog_channels = &dialog;
-
-
-/*
- * Convert mode enum to text for display.
- */
-static const char *mode_to_string(x6100_mode_t mode) {
-
-    switch (mode) {
-
-        case x6100_mode_lsb:
-            return "LSB";
-
-        case x6100_mode_usb:
-            return "USB";
-
-        case x6100_mode_lsb_dig:
-            return "LSB-D";
-
-        case x6100_mode_usb_dig:
-            return "USB-D";
-
-        case x6100_mode_cw:
-            return "CW";
-
-        case x6100_mode_cwr:
-            return "CWR";
-
-        case x6100_mode_am:
-            return "AM";
-
-        case x6100_mode_nfm:
-            return "NFM";
-
-        default:
-            return "?";
-    }
+    return channels_mode_parse(name, &back) && back == mode ? name : "?";
 }
 
+static void fill_table(void) {
+    uint16_t n = channels_count();
 
-/*
- * Rebuild channel list from current database.
- */
-static void refresh_table(void) {
-
-    if (!table) {
-        return;
-    }
-
-
-    uint16_t count = channels_count();
-
-
-    /*
-     * The table intentionally contains only one
-     * logical column.
-     *
-     * Each cell contains a single blank character:
-     * the visible row is drawn by channel_draw_cb().
-     * Keeping one real LVGL cell per channel preserves
-     * the existing MFK navigation and Drag/Drop logic.
-     */
-    for (uint16_t i = 0; i < count; i++) {
-
-        lv_table_set_cell_value(
-            table,
-            i,
-            0,
-            " "
-        );
-    }
-
-
-    lv_table_set_row_cnt(
-        table,
-        count
-    );
+    if (!table) return;
+    /* One empty row when there are no channels: LVGL crashes on a table cut to zero rows */
+    for (uint16_t i = 0; i < (n ? n : 1); i++) lv_table_set_cell_value(table, i, 0, " ");
+    lv_table_set_row_cnt(table, n ? n : 1);
 }
 
+static void draw_row_cb(lv_event_t *e) {
+    lv_obj_draw_part_dsc_t *dsc = lv_event_get_draw_part_dsc(e);
 
-/*
- * Custom row drawing.
- *
- * The LVGL table still has exactly one selectable cell
- * per channel, but the visible contents are drawn as
- * three independent fields:
- *
- *   name       left aligned
- *   frequency  right aligned
- *   mode       right aligned
- *
- * This gives pixel-accurate alignment without changing
- * encoder navigation or Drag/Drop behaviour.
- */
-static void channel_draw_cb(lv_event_t *e) {
+    if (!dsc || dsc->part != LV_PART_ITEMS) return;
 
-    lv_obj_draw_part_dsc_t *dsc =
-        lv_event_get_draw_part_dsc(e);
+    lv_obj_t *obj = lv_event_get_target(e);
+    uint16_t cols = lv_table_get_col_cnt(obj);
 
+    if (!cols) return;
 
-    if (!dsc ||
-        dsc->part != LV_PART_ITEMS) {
+    const channel_t *c = channels_get(dsc->id / cols);
 
-        return;
-    }
+    if (!c) return;
 
+    lv_draw_label_dsc_t text = *dsc->label_dsc;
+    const lv_area_t *cell = dsc->draw_area;
+    lv_area_t a = {
+        .y1 = cell->y1 + lv_obj_get_style_pad_top(obj, LV_PART_ITEMS),
+        .y2 = cell->y2 - lv_obj_get_style_pad_bottom(obj, LV_PART_ITEMS),
+    };
+    char mhz[24];
 
-    lv_obj_t *obj =
-        lv_event_get_target(e);
+    text.opa = LV_OPA_COVER;
 
+    a.x1 = cell->x1 + lv_obj_get_style_pad_left(obj, LV_PART_ITEMS);
+    a.x2 = cell->x2 - 340;
+    text.align = LV_TEXT_ALIGN_LEFT;
+    lv_draw_label(dsc->draw_ctx, &text, &a, c->name, NULL);
 
-    uint32_t col_count =
-        lv_table_get_col_cnt(obj);
+    snprintf(mhz, sizeof(mhz), "%u.%03u.%03u", c->freq / 1000000, c->freq / 1000 % 1000, c->freq % 1000);
+    a.x1 = cell->x2 - 335;
+    a.x2 = cell->x2 - 110;
+    text.align = LV_TEXT_ALIGN_RIGHT;
+    lv_draw_label(dsc->draw_ctx, &text, &a, mhz, NULL);
 
-
-    if (col_count == 0) {
-        return;
-    }
-
-
-    uint32_t row =
-        dsc->id / col_count;
-
-
-    if (row >= channels_count()) {
-        return;
-    }
-
-
-    const channel_t *channel =
-        channels_get((uint16_t)row);
-
-
-    if (!channel) {
-        return;
-    }
-
-
-    /*
-     * LVGL has already drawn the cell background and
-     * selection state.  The normal cell text is only a
-     * blank character, so we now draw the real contents.
-     */
-    lv_draw_label_dsc_t label_dsc =
-        *dsc->label_dsc;
-
-
-    label_dsc.opa = LV_OPA_COVER;
-
-
-    const lv_coord_t pad_top =
-        lv_obj_get_style_pad_top(
-            obj,
-            LV_PART_ITEMS
-        );
-
-
-    const lv_coord_t pad_bottom =
-        lv_obj_get_style_pad_bottom(
-            obj,
-            LV_PART_ITEMS
-        );
-
-
-    const lv_coord_t pad_left =
-        lv_obj_get_style_pad_left(
-            obj,
-            LV_PART_ITEMS
-        );
-
-
-    lv_area_t area;
-
-
-    area.y1 =
-        dsc->draw_area->y1 + pad_top;
-
-    area.y2 =
-        dsc->draw_area->y2 - pad_bottom;
-
-
-    /*
-     * Channel name.
-     * Leave enough room on the right for frequency
-     * and mode so a long name cannot overlap them.
-     */
-    area.x1 =
-        dsc->draw_area->x1 + pad_left;
-
-    area.x2 =
-        dsc->draw_area->x2 - 340;
-
-
-    label_dsc.align =
-        LV_TEXT_ALIGN_LEFT;
-
-
-    lv_draw_label(
-        dsc->draw_ctx,
-        &label_dsc,
-        &area,
-        channel->name,
-        NULL
-    );
-
-
-    /*
-     * Frequency.
-     */
-    char freq[24];
-
-
-    uint32_t mhz =
-        channel->freq / 1000000;
-
-    uint32_t khz =
-        (channel->freq / 1000) % 1000;
-
-    uint32_t hz =
-        channel->freq % 1000;
-
-
-    snprintf(
-        freq,
-        sizeof(freq),
-        "%u.%03u.%03u",
-        mhz,
-        khz,
-        hz
-    );
-
-
-    area.x1 =
-        dsc->draw_area->x2 - 335;
-
-    area.x2 =
-        dsc->draw_area->x2 - 110;
-
-
-    label_dsc.align =
-        LV_TEXT_ALIGN_RIGHT;
-
-
-    lv_draw_label(
-        dsc->draw_ctx,
-        &label_dsc,
-        &area,
-        freq,
-        NULL
-    );
-
-
-    /*
-     * Operating mode.
-     */
-    area.x1 =
-        dsc->draw_area->x2 - 105;
-
-    area.x2 =
-        dsc->draw_area->x2 - 12;
-
-
-    label_dsc.align =
-        LV_TEXT_ALIGN_RIGHT;
-
-
-    lv_draw_label(
-        dsc->draw_ctx,
-        &label_dsc,
-        &area,
-        mode_to_string(channel->mode),
-        NULL
-    );
+    a.x1 = cell->x2 - 105;
+    a.x2 = cell->x2 - 12;
+    lv_draw_label(dsc->draw_ctx, &text, &a, mode_label(c->mode), NULL);
 }
 
+/* Row under the cursor, -1 when there is none */
+static int16_t cursor_row(void) {
+    uint16_t row = LV_TABLE_CELL_NONE, col;
 
-/*
- * Create the channel table from scratch.
- */
-static void build_table(void) {
-
-    /*
-     * Remove old table if present.
-     */
-    if (table) {
-
-        lv_group_remove_obj(
-            table
-        );
-
-        lv_obj_del(
-            table
-        );
-
-        table = NULL;
-    }
-
-
-    /*
-     * Create new table.
-     */
-    table = lv_table_create(
-        dialog.obj
-    );
-
-
-    lv_obj_set_style_border_width(
-        table,
-        0,
-        LV_PART_MAIN
-    );
-
-
-    lv_obj_set_size(
-        table,
-        700,
-        270
-    );
-
-
-    lv_obj_align(
-        table,
-        LV_ALIGN_TOP_MID,
-        0,
-        50
-    );
-
-
-    /*
-     * One selectable item per row.
-     */
-    lv_table_set_col_cnt(
-        table,
-        1
-    );
-
-
-    lv_table_set_col_width(
-        table,
-        0,
-        690
-    );
-
-
-    /*
-     * Table background.
-     */
-    lv_obj_set_style_bg_color(
-        table,
-        TC(bg),
-        LV_PART_MAIN
-    );
-
-
-    lv_obj_set_style_bg_opa(
-        table,
-        LV_OPA_COVER,
-        LV_PART_MAIN
-    );
-
-
-    /*
-     * Normal channels:
-     * white text.
-     */
-    lv_obj_set_style_border_width(
-        table,
-        0,
-        LV_PART_ITEMS
-    );
-
-
-    lv_obj_set_style_bg_opa(
-        table,
-        LV_OPA_TRANSP,
-        LV_PART_ITEMS
-    );
-
-
-    lv_obj_set_style_text_color(
-        table,
-        TC(text),
-        LV_PART_ITEMS
-    );
-
-
-    lv_obj_set_style_text_font(
-        table,
-        &sony_24,
-        LV_PART_ITEMS
-    );
-
-
-    /*
-     * Row spacing.
-     */
-    lv_obj_set_style_pad_top(
-        table,
-        5,
-        LV_PART_ITEMS
-    );
-
-
-    lv_obj_set_style_pad_bottom(
-        table,
-        5,
-        LV_PART_ITEMS
-    );
-
-
-    lv_obj_set_style_pad_left(
-        table,
-        12,
-        LV_PART_ITEMS
-    );
-
-
-    /*
-     * Selected channel:
-     * grey text, same background.
-     */
-    lv_obj_set_style_text_color(
-        table,
-        TC(text_mute),
-        LV_PART_ITEMS | LV_STATE_EDITED
-    );
-
-
-    lv_obj_set_style_bg_opa(
-        table,
-        LV_OPA_TRANSP,
-        LV_PART_ITEMS | LV_STATE_EDITED
-    );
-
-
-    /*
-     * Populate table AFTER styles have
-     * been applied.
-     */
-    refresh_table();
-
-
-    /*
-     * MFK PRESS:
-     * activate selected channel.
-     */
-    lv_obj_add_event_cb(
-        table,
-        channel_pressed_cb,
-        LV_EVENT_PRESSED,
-        NULL
-    );
-
-
-    /*
-     * MFK rotation changes the selected row.
-     *
-     * During Drag mode this event is used
-     * to physically move the selected channel
-     * inside the in-memory database.
-     */
-    lv_obj_add_event_cb(
-        table,
-        channel_changed_cb,
-        LV_EVENT_VALUE_CHANGED,
-        NULL
-    );
-
-
-    /*
-     * Draw name, frequency and mode independently
-     * while keeping a single logical table column.
-     */
-    lv_obj_add_event_cb(
-        table,
-        channel_draw_cb,
-        LV_EVENT_DRAW_PART_END,
-        NULL
-    );
-
-
-    /*
-     * Give the table to the MFK encoder.
-     */
-    lv_group_add_obj(
-        keyboard_group,
-        table
-    );
-
-
-    lv_group_focus_obj(
-        table
-    );
-
-
-    lv_group_set_editing(
-        keyboard_group,
-        true
-    );
+    if (!table) return -1;
+    lv_table_get_selected_cell(table, &row, &col);
+    return row < channels_count() ? row : -1;
 }
 
-
-
-/*
- * Select a table row using the same LVGL encoder
- * mechanism used by the MFK.
- *
- * This avoids relying on lv_table_set_selected_cell(),
- * which is not available in the LVGL version used
- * by this firmware.
- *
- * If center is true, try to place the selected row
- * approximately in the middle of the visible table.
- */
-static void select_row(int16_t row, bool center) {
-
-    if (!table ||
-        row < 0 ||
-        row >= channels_count()) {
-
-        return;
-    }
-
-
-    /*
-     * build_table() leaves the one-column table focused
-     * with the first row selected. Move down until the
-     * requested row is reached.
-     */
-    for (int16_t i = 0; i < row; i++) {
-
-        lv_group_send_data(
-            keyboard_group,
-            LV_KEY_DOWN
-        );
-    }
-
-
-    /*
-     * Let LVGL calculate the final row geometry before
-     * applying our optional centering scroll.
-     */
-    lv_obj_update_layout(
-        table
-    );
-
-
-    if (center) {
-
-        const lv_font_t *font =
-            lv_obj_get_style_text_font(
-                table,
-                LV_PART_ITEMS
-            );
-
-
-        lv_coord_t row_height =
-            lv_font_get_line_height(font) +
-            lv_obj_get_style_pad_top(
-                table,
-                LV_PART_ITEMS
-            ) +
-            lv_obj_get_style_pad_bottom(
-                table,
-                LV_PART_ITEMS
-            );
-
-
-        lv_coord_t visible_height =
-            lv_obj_get_content_height(
-                table
-            );
-
-
-        lv_coord_t target_y =
-            (row * row_height) +
-            (row_height / 2) -
-            (visible_height / 2);
-
-
-        if (target_y < 0) {
-            target_y = 0;
-        }
-
-
-        lv_obj_scroll_to_y(
-            table,
-            target_y,
-            LV_ANIM_OFF
-        );
-    }
+static void give_table_the_mfk(void) {
+    lv_group_add_obj(keyboard_group, table);
+    lv_group_focus_obj(table);
+    lv_group_set_editing(keyboard_group, true);
 }
 
+static void moved_cb(lv_event_t *e);
+static void pressed_cb(lv_event_t *e);
 
-/*
- * Dialog destruction callback.
- */
-static void destruct_cb(void) {
+/* A new table each time: rows are never left empty after a delete. The cursor starts on row 0 */
+static void make_table(void) {
+    if (table != NULL) {
+        lv_group_remove_obj(table);
+        lv_obj_del(table);
+    }
+    table = lv_table_create(win.obj);
+    lv_obj_set_style_border_width(table, 0, LV_PART_MAIN);
+    lv_obj_set_size(table, 700, 270);
+    lv_obj_align(table, LV_ALIGN_TOP_MID, 0, 50);
+    lv_table_set_col_cnt(table, 1);
+    lv_table_set_col_width(table, 0, 690);
+    lv_obj_set_style_bg_color(table, TC(bg), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(table, LV_OPA_COVER, LV_PART_MAIN);
 
+    lv_obj_set_style_border_width(table, 0, LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(table, LV_OPA_TRANSP, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(table, TC(text), LV_PART_ITEMS);
+    lv_obj_set_style_text_font(table, &sony_24, LV_PART_ITEMS);
+    lv_obj_set_style_pad_top(table, 5, LV_PART_ITEMS);
+    lv_obj_set_style_pad_bottom(table, 5, LV_PART_ITEMS);
+    lv_obj_set_style_pad_left(table, 12, LV_PART_ITEMS);
+    /* The cursor row: dimmed text, no highlight */
+    lv_obj_set_style_text_color(table, TC(text_mute), LV_PART_ITEMS | LV_STATE_EDITED);
+    lv_obj_set_style_bg_opa(table, LV_OPA_TRANSP, LV_PART_ITEMS | LV_STATE_EDITED);
+
+    fill_table();
+    lv_obj_add_event_cb(table, pressed_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(table, moved_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(table, draw_row_cb, LV_EVENT_DRAW_PART_END, NULL);
+    give_table_the_mfk();
+}
+
+/* Move the cursor to a row as the MFK would, optionally scrolling it to mid-list */
+static void cursor_to(int16_t row, bool middle) {
+    if (!table || row < 0 || row >= channels_count()) return;
+
+    for (int16_t i = 0; i < row; i++) lv_group_send_data(keyboard_group, LV_KEY_DOWN);
+    lv_obj_update_layout(table);
+    if (!middle) return;
+
+    lv_coord_t h = lv_font_get_line_height(lv_obj_get_style_text_font(table, LV_PART_ITEMS))
+        + lv_obj_get_style_pad_top(table, LV_PART_ITEMS) + lv_obj_get_style_pad_bottom(table, LV_PART_ITEMS);
+    lv_coord_t y = row * h + h / 2 - lv_obj_get_content_height(table) / 2;
+
+    lv_obj_scroll_to_y(table, y < 0 ? 0 : y, LV_ANIM_OFF);
+}
+
+static bool tune(int16_t row, bool close) {
+    const channel_t *c = row < 0 ? NULL : channels_get(row);
+
+    if (!c) return false;
+
+    recalled = row;
+    cparam_i_set(cfg_fg_freq, c->freq);
+    cparam_i_set(cfg_cur_mode, c->mode);
+    cparam_i_set(cfg_cur_agc, c->agc);
+    cparam_i_set(cfg_cur_pre, c->pre ? x6100_pre_on : x6100_pre_off);
+    cparam_i_set(cfg_cur_att, c->att ? x6100_att_on : x6100_att_off);
+    if (close) dialog_destruct();
+    return true;        /* tuned */
+}
+
+static void set_f5(button_data_t *btn) {
+    keys_page.items[4] = btn;
+    buttons_load(4, btn);
+}
+
+static void pressed_cb(lv_event_t *e) {
+    if (dragging >= 0) return;
+
+    uint16_t row = LV_TABLE_CELL_NONE, col;
+
+    lv_table_get_selected_cell(table, &row, &col);
+    if (row != LV_TABLE_CELL_NONE) tune(row, true);
+}
+
+/* While dragging, the channel follows the cursor; the order is saved on Drop */
+static void moved_cb(lv_event_t *e) {
+    int16_t to = dragging < 0 ? -1 : cursor_row();
+    int16_t from = dragging;
+
+    if (to < 0 || to == from || !channels_move(from, to)) return;
+
+    if (recalled == from)
+        recalled = to;
+    else if (from < to && recalled > from && recalled <= to)
+        recalled--;
+    else if (from > to && recalled >= to && recalled < from)
+        recalled++;
+    dragging = to;
+    fill_table();
+}
+
+static void key_close_cb(button_data_t *data) {
+    dialog_destruct();      /* window_close_cb does the rest */
+}
+
+static void key_add_cb(button_data_t *data) {
+    if (dragging >= 0 || !channels_add_current()) return;
+
+    make_table();
+    cursor_to(channels_count() - 1, false);
+    lv_obj_scroll_to_y(table, LV_COORD_MAX, LV_ANIM_OFF);
+}
+
+static void key_delete_cb(button_data_t *data) {
+    int16_t row = dragging >= 0 ? -1 : cursor_row();
+
+    if (row < 0 || !channels_delete(row)) return;
+
+    if (recalled == row)
+        recalled = -1;
+    else if (recalled > row)
+        recalled--;
+
+    make_table();
+
+    int16_t n = channels_count();
+    int16_t next = row > 0 ? row - 1 : 0;
+
+    if (n > 0) cursor_to(next < n ? next : n - 1, true);
+}
+
+static void rename_done(void *arg) {
+    int16_t row = renamed;
+
+    renamed = -1;
+    if (!win.run || !win.obj) return;
+    make_table();
+    cursor_to(row, true);
+}
+
+static bool rename_ok_cb(void) {
+    if (renaming < 0 || renaming >= channels_count()) {
+        renaming = -1;
+        give_table_the_mfk();
+        return true;    /* nothing to rename: the keyboard closes */
+    }
+    if (!channels_set_name(renaming, textarea_window_get())) return false;
+
+    /* The table is rebuilt once the keyboard window is done with its own OK */
+    renamed = renaming;
+    renaming = -1;
+    lv_async_call(rename_done, NULL);
+    return true;        /* the keyboard closes */
+}
+
+static bool rename_cancel_cb(void) {
+    renaming = -1;
+    give_table_the_mfk();
+    return true;        /* closes, the name as it was */
+}
+
+static void key_edit_cb(button_data_t *data) {
+    int16_t row = dragging >= 0 ? -1 : cursor_row();
+
+    if (row < 0) return;
+
+    renaming = row;
+    lv_group_remove_obj(table);
+    textarea_window_open(rename_ok_cb, rename_cancel_cb);
+    lv_textarea_set_max_length(textarea_window_text(), CHANNEL_NAME_MAX - 1);
+    lv_textarea_set_placeholder_text(textarea_window_text(), "Channel name");
+    textarea_window_set(channels_get(row)->name);
+}
+
+static void key_drag_cb(button_data_t *data) {
+    int16_t row = cursor_row();
+
+    if (row < 0) return;
+    dragging = row;
+    set_f5(&btn_drop);
+}
+
+static void key_drop_cb(button_data_t *data) {
+    if (dragging < 0) return;
+
+    /* A failed write: go back to what the file holds */
+    bool saved = channels_save();
+
+    if (!saved) channels_load();
+    dragging = -1;
+    set_f5(&btn_drag);
+    if (!saved) make_table();
+}
+
+static void window_open_cb(lv_obj_t *parent) {
+    channels_load();        /* the file may have changed since the last time */
+    dragging = -1;
+    keys_page.items[4] = &btn_drag;
+
+    /* Same size and frame as the WEFAX big view; dialog_init's own background is turned
+       off or its outline would show under the frame */
+    win.obj = dialog_init(parent);
+    lv_obj_set_size(win.obj, 795, 350);
+    lv_obj_center(win.obj);
+    lv_obj_set_style_bg_img_src(win.obj, NULL, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(win.obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(win.obj, 0, LV_PART_MAIN);
+
+    lv_obj_t *frame = lv_obj_create(win.obj);
+
+    lv_obj_remove_style_all(frame);
+    lv_obj_set_size(frame, 795, 350);
+    lv_obj_center(frame);
+    lv_obj_set_style_bg_color(frame, TC(frame), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(frame, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(frame, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(frame, TC(dialog_border), LV_PART_MAIN);
+    lv_obj_set_style_border_opa(frame, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(frame, 8, LV_PART_MAIN);
+    lv_obj_clear_flag(frame, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(frame, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_move_background(frame);
+
+    lv_obj_t *title = lv_label_create(win.obj);
+
+    lv_label_set_text(title, "CHANNELS");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 12);
+
+    make_table();
+
+    cursor_to(recalled, true);
+}
+
+static void window_close_cb(void) {
     table = NULL;
-    channels_frame = NULL;
-
-    edit_row = LV_TABLE_CELL_NONE;
-
-    drag_active = false;
-    drag_row = LV_TABLE_CELL_NONE;
-
-
-    /*
-     * Restore F5 for the next opening
-     * of the dialog.
-     */
-    btn_page.items[4] =
-        &btn_drag;
+    renaming = -1;
+    dragging = -1;
+    keys_page.items[4] = &btn_drag;
 }
-
-
-/*
- * F1 - Close
- */
-static void close_cb(button_data_t *data) {
-
-    dialog_destruct();
-}
-
-
-/*
- * F2 - Add
- */
-static void add_cb(button_data_t *data) {
-
-    /*
-     * Database modifications are disabled
-     * while a channel is being dragged.
-     */
-    if (drag_active) {
-        return;
-    }
-
-
-    if (!channels_add_current()) {
-        return;
-    }
-
-
-    /*
-     * Recreate the table completely.
-     */
-    build_table();
-
-
-    /*
-     * Select the newly added channel.
-     *
-     * channels_add_current() appends it to the end,
-     * so the new row is count - 1.
-     */
-    int16_t new_row =
-        (int16_t)channels_count() - 1;
-
-
-    select_row(
-        new_row,
-        false
-    );
-
-
-    /*
-     * Keep the existing ADD behaviour:
-     * show the bottom of the list.
-     */
-    lv_obj_scroll_to_y(
-        table,
-        LV_COORD_MAX,
-        LV_ANIM_OFF
-    );
-}
-
-
-/*
- * F3 - Delete
- */
-static void delete_cb(button_data_t *data) {
-
-    if (drag_active) {
-        return;
-    }
-
-
-    if (!table) {
-        return;
-    }
-
-
-    int16_t row = LV_TABLE_CELL_NONE;
-    int16_t col = LV_TABLE_CELL_NONE;
-
-
-    lv_table_get_selected_cell(
-        table,
-        &row,
-        &col
-    );
-
-
-    if (row == LV_TABLE_CELL_NONE) {
-        return;
-    }
-
-
-    if (row < 0 ||
-        row >= channels_count()) {
-
-        return;
-    }
-
-
-    int16_t select_after_delete =
-    (row > 0) ? row - 1 : 0;
-
-
-    if (!channels_delete((uint16_t)row)) {
-        return;
-    }
-
-
-    /*
-     * Keep the remembered recalled channel coherent
-     * with the compacted database.
-     */
-    if (last_recalled_row == row) {
-
-        last_recalled_row =
-            LV_TABLE_CELL_NONE;
-
-    } else if (last_recalled_row != LV_TABLE_CELL_NONE &&
-               last_recalled_row > row) {
-
-        last_recalled_row--;
-    }
-
-
-    /*
-     * Recreate complete table so there are
-     * no empty rows and spacing stays correct.
-     */
-    build_table();
-
-    if (channels_count() > 0) {
-
-    if (select_after_delete >= channels_count()) {
-        select_after_delete =
-            (int16_t)channels_count() - 1;
-    }
-
-    select_row(
-        select_after_delete,
-        true
-    );
-}
-}
-
-
-/*
- * F4 - Edit
- */
-static void edit_cb(button_data_t *data) {
-
-    if (drag_active) {
-        return;
-    }
-
-
-    if (!table) {
-        return;
-    }
-
-
-    int16_t row = LV_TABLE_CELL_NONE;
-    int16_t col = LV_TABLE_CELL_NONE;
-
-
-    /*
-     * Get selected channel BEFORE opening
-     * the text-entry window.
-     */
-    lv_table_get_selected_cell(
-        table,
-        &row,
-        &col
-    );
-
-
-    if (row == LV_TABLE_CELL_NONE) {
-        return;
-    }
-
-
-    if (row < 0 ||
-        row >= channels_count()) {
-
-        return;
-    }
-
-
-    const channel_t *channel =
-        channels_get((uint16_t)row);
-
-
-    if (!channel) {
-        return;
-    }
-
-
-    /*
-     * Remember which database record
-     * is being edited.
-     */
-    edit_row = row;
-
-
-    /*
-     * Temporarily remove the table from
-     * the MFK encoder group.
-     */
-    lv_group_remove_obj(
-        table
-    );
-
-
-    /*
-     * Open standard R1CBU keyboard.
-     */
-    textarea_window_open(
-        edit_ok_cb,
-        edit_cancel_cb
-    );
-
-
-    /*
-     * Channel names are limited by
-     * CHANNEL_NAME_MAX.
-     */
-    lv_textarea_set_max_length(
-        textarea_window_text(),
-        CHANNEL_NAME_MAX - 1
-    );
-
-
-    lv_textarea_set_placeholder_text(
-        textarea_window_text(),
-        "Channel name"
-    );
-
-
-    /*
-     * Load current name into editor.
-     */
-    textarea_window_set(
-        channel->name
-    );
-}
-
-
-/*
- * F5 - Drag
- *
- * Start moving the currently selected channel.
- */
-static void drag_cb(button_data_t *data) {
-
-    if (!table ||
-        channels_count() == 0) {
-
-        return;
-    }
-
-
-    int16_t row = LV_TABLE_CELL_NONE;
-    int16_t col = LV_TABLE_CELL_NONE;
-
-
-    lv_table_get_selected_cell(
-        table,
-        &row,
-        &col
-    );
-
-
-    if (row == LV_TABLE_CELL_NONE ||
-        row < 0 ||
-        row >= channels_count()) {
-
-        return;
-    }
-
-
-    /*
-     * Remember current position.
-     */
-    drag_row = row;
-    drag_active = true;
-
-
-    /*
-     * Change F5 from Drag to Drop.
-     */
-    btn_page.items[4] =
-        &btn_drop;
-
-    buttons_load(
-        4,
-        &btn_drop
-    );
-}
-
-
-/*
- * F5 - Drop
- *
- * Save the final in-memory order to JSON.
- */
-static void drop_cb(button_data_t *data) {
-
-    if (!drag_active) {
-        return;
-    }
-
-
-    /*
-     * Write the final channel order.
-     */
-    if (!channels_save()) {
-
-        /*
-         * Saving failed.
-         *
-         * Reload the last valid database
-         * from disk so RAM and JSON remain
-         * consistent.
-         */
-        channels_load();
-
-        drag_active = false;
-        drag_row = LV_TABLE_CELL_NONE;
-
-
-        btn_page.items[4] =
-            &btn_drag;
-
-        buttons_load(
-            4,
-            &btn_drag
-        );
-
-
-        build_table();
-
-        return;
-    }
-
-
-    /*
-     * Drag operation completed.
-     */
-    drag_active = false;
-    drag_row = LV_TABLE_CELL_NONE;
-
-
-    /*
-     * Restore normal F5 button.
-     */
-    btn_page.items[4] =
-        &btn_drag;
-
-    buttons_load(
-        4,
-        &btn_drag
-    );
-}
-
-
-/*
- * Called asynchronously after the Edit
- * callback has finished.
- */
-static void rebuild_after_edit(void *data) {
-
-    if (!dialog.run ||
-        !dialog.obj) {
-
-        edit_restore_row = LV_TABLE_CELL_NONE;
-        return;
-    }
-
-
-    build_table();
-
-
-    /*
-     * Restore selection to the channel
-     * that has just been edited.
-     */
-    if (edit_restore_row != LV_TABLE_CELL_NONE &&
-        edit_restore_row >= 0 &&
-        edit_restore_row < channels_count()) {
-
-        select_row(
-            edit_restore_row,
-            true
-        );
-    }
-
-
-    edit_restore_row = LV_TABLE_CELL_NONE;
-}
-
-/*
- * Edit keyboard - OK
- */
-static bool edit_ok_cb(void) {
-
-    if (edit_row == LV_TABLE_CELL_NONE ||
-        edit_row < 0 ||
-        edit_row >= channels_count()) {
-
-        edit_row = LV_TABLE_CELL_NONE;
-
-
-        lv_group_add_obj(
-            keyboard_group,
-            table
-        );
-
-
-        lv_group_focus_obj(
-            table
-        );
-
-
-        lv_group_set_editing(
-            keyboard_group,
-            true
-        );
-
-
-        return true;
-    }
-
-
-    const char *name =
-        textarea_window_get();
-
-
-    /*
-     * Update channel name and JSON database.
-     */
-    if (!channels_set_name(
-            (uint16_t)edit_row,
-            name)) {
-        return false;
-    }
-
-
-    /*
-     * Remember the edited row so it can be
-     * restored after rebuilding the table.
-     */
-
-    edit_restore_row = edit_row;
-    edit_row = LV_TABLE_CELL_NONE;
-
-    /*
-     * Rebuild after textarea_window has
-     * completed processing its OK event.
-     */
-    lv_async_call(
-        rebuild_after_edit,
-        NULL
-    );
-
-
-    return true;
-}
-
-
-/*
- * Edit keyboard - Cancel
- */
-static bool edit_cancel_cb(void) {
-
-    edit_row = LV_TABLE_CELL_NONE;
-
-
-    /*
-     * Give control back to channel table.
-     */
-    lv_group_add_obj(
-        keyboard_group,
-        table
-    );
-
-
-    lv_group_focus_obj(
-        table
-    );
-
-
-    lv_group_set_editing(
-        keyboard_group,
-        true
-    );
-
-
-    return true;
-}
-
-
-/*
- * Selected table row changed.
- *
- * Normally LVGL simply changes the selection.
- *
- * During Drag mode, however, the newly selected
- * row becomes the new position of the channel
- * being dragged.
- */
-static void channel_changed_cb(lv_event_t *e) {
-
-    if (!drag_active ||
-        !table) {
-
-        return;
-    }
-
-
-    int16_t row = LV_TABLE_CELL_NONE;
-    int16_t col = LV_TABLE_CELL_NONE;
-
-
-    lv_table_get_selected_cell(
-        table,
-        &row,
-        &col
-    );
-
-
-    if (row == LV_TABLE_CELL_NONE ||
-        row < 0 ||
-        row >= channels_count()) {
-
-        return;
-    }
-
-
-    /*
-     * No actual movement.
-     */
-    if (row == drag_row) {
-        return;
-    }
-
-
-    /*
-     * Move the dragged database record
-     * to the newly selected position.
-     *
-     * This modifies RAM only.
-     */
-    int16_t old_drag_row =
-        drag_row;
-
-
-    if (!channels_move(
-            (uint16_t)old_drag_row,
-            (uint16_t)row)) {
-
-        return;
-    }
-
-
-    /*
-     * Keep last_recalled_row attached to the same
-     * logical channel while records are reordered.
-     */
-    if (last_recalled_row != LV_TABLE_CELL_NONE) {
-
-        if (last_recalled_row == old_drag_row) {
-
-            last_recalled_row = row;
-
-        } else if (old_drag_row < row &&
-                   last_recalled_row > old_drag_row &&
-                   last_recalled_row <= row) {
-
-            last_recalled_row--;
-
-        } else if (old_drag_row > row &&
-                   last_recalled_row >= row &&
-                   last_recalled_row < old_drag_row) {
-
-            last_recalled_row++;
-        }
-    }
-
-
-    /*
-     * The dragged record now lives at
-     * this position.
-     */
-    drag_row = row;
-
-
-    /*
-     * Update displayed strings.
-     *
-     * Do NOT recreate the table here:
-     * keeping the same LVGL object preserves
-     * encoder selection and automatic scrolling.
-     */
-    refresh_table();
-}
-
-
-/*
- * MFK PRESS
- */
-static bool recall_row(int16_t row, bool close_dialog) {
-
-    if (row < 0 ||
-        row >= channels_count()) {
-
-        return false;
-    }
-
-
-    const channel_t *channel =
-        channels_get((uint16_t)row);
-
-
-    if (!channel) {
-        return false;
-    }
-
-
-    /*
-     * Remember the channel actually recalled.
-     */
-    last_recalled_row = row;
-
-
-    /* Frequency */
-    cparam_i_set(
-        cfg_fg_freq,
-        channel->freq
-    );
-
-
-    /* Operating mode */
-    cparam_i_set(
-        cfg_cur_mode,
-        channel->mode
-    );
-
-
-    /* AGC */
-    cparam_i_set(
-        cfg_cur_agc,
-        channel->agc
-    );
-
-
-    /* PRE */
-    cparam_i_set(
-        cfg_cur_pre,
-        channel->pre
-            ? x6100_pre_on
-            : x6100_pre_off
-    );
-
-
-    /* ATT */
-    cparam_i_set(
-        cfg_cur_att,
-        channel->att
-            ? x6100_att_on
-            : x6100_att_off
-    );
-
-
-    if (close_dialog) {
-        dialog_destruct();
-    }
-
-
-    return true;
-}
-
-
-/*
- * Recall previous/next channel without opening
- * the Channel Memory dialog.
- *
- * direction < 0 : previous channel (FIL)
- * direction > 0 : next channel     (GENE)
- *
- * Wrap-around is intentional.
- * If no channel has been recalled yet:
- *   FIL  -> last channel
- *   GENE -> first channel
- */
 
 void dialog_channels_poll(void) {
-
-    if (dialog.run) {
-        return;
-    }
-
-    channels_reload_if_changed();
+    if (!win.run) channels_reload_if_changed();
 }
 
+const char *dialog_channels_last_recalled_name(void) {    /* see dialog_channels.h */
+    static char numbered[32];
+    const channel_t *c = recalled < 0 ? NULL : channels_get(recalled);
 
-const char *dialog_channels_last_recalled_name(void) {
-
-    static char fallback_name[32];
-
-    if (last_recalled_row == LV_TABLE_CELL_NONE ||
-        last_recalled_row < 0 ||
-        last_recalled_row >= channels_count()) {
-
-        return "";
-    }
-
-    const channel_t *channel =
-        channels_get((uint16_t)last_recalled_row);
-
-    if (!channel) {
-        return "";
-    }
-
-    if (channel->name[0] != '\0') {
-        return channel->name;
-    }
-
-    snprintf(
-        fallback_name,
-        sizeof(fallback_name),
-        "CHANNEL %d",
-        last_recalled_row + 1
-    );
-
-    return fallback_name;
+    if (!c) return "";
+    if (c->name[0]) return c->name;
+    snprintf(numbered, sizeof(numbered), "CHANNEL %d", recalled + 1);
+    return numbered;
 }
 
+bool dialog_channels_recall_relative(int8_t step) {
+    /* Read the file every time: the hand mic UP/DOWN keys work before the window was ever
+       opened and see edits made by hand */
+    if (!step || !channels_load()) return false;
 
-static void sync_table_to_recalled_channel(void) {
+    int16_t n = channels_count();
+    int16_t row = 0;
 
-    if (!dialog.run ||
-        !dialog.obj ||
-        !table ||
-        last_recalled_row == LV_TABLE_CELL_NONE) {
+    if (n <= 0) return false;
+    if (recalled < 0 || recalled >= n)
+        row = step < 0 ? n - 1 : 0;
+    else
+        row = (recalled + (step < 0 ? n - 1 : 1)) % n;
 
-        return;
+    if (!tune(row, false)) return false;
+
+    /* The window is open: rebuild it with the cursor on the new channel */
+    if (win.run && win.obj && table) {
+        make_table();
+        cursor_to(recalled, true);
     }
-
-    build_table();
-
-    select_row(
-        last_recalled_row,
-        true
-    );
-}
-
-
-bool dialog_channels_recall_relative(int8_t direction) {
-
-    if (direction == 0) {
-        return false;
-    }
-
-
-    /*
-     * Reload the database so FIL/GENE also work
-     * before the Channel Memory dialog has ever
-     * been opened, and see manual JSON changes.
-     */
-    if (!channels_load()) {
-        return false;
-    }
-
-
-    int16_t count =
-        (int16_t)channels_count();
-
-
-    if (count <= 0) {
-        return false;
-    }
-
-
-    int16_t row;
-
-
-    if (last_recalled_row == LV_TABLE_CELL_NONE ||
-        last_recalled_row < 0 ||
-        last_recalled_row >= count) {
-
-        row = (direction < 0)
-            ? count - 1
-            : 0;
-
-    } else if (direction < 0) {
-
-        row = last_recalled_row - 1;
-
-        if (row < 0) {
-            row = count - 1;
-        }
-
-    } else {
-
-        row = last_recalled_row + 1;
-
-        if (row >= count) {
-            row = 0;
-        }
-    }
-
-
-
-    /*
-    return recall_row(
-        row,
-        false
-    ); */
-
-    bool recalled = recall_row(
-        row,
-        false
-    );
-
-    if (recalled) {
-        sync_table_to_recalled_channel();
-    }
-
-
-return recalled;
-
-
-}
-
-
-/*
- * MFK PRESS
- */
-static void channel_pressed_cb(lv_event_t *e) {
-
-    if (drag_active) {
-        return;
-    }
-
-
-    int16_t row = LV_TABLE_CELL_NONE;
-    int16_t col = LV_TABLE_CELL_NONE;
-
-
-    lv_table_get_selected_cell(
-        table,
-        &row,
-        &col
-    );
-
-
-    if (row == LV_TABLE_CELL_NONE) {
-        return;
-    }
-
-
-    recall_row(
-        row,
-        true
-    );
-}
-
-
-/*
- * Request that the next opening of the Channel Memory dialog
- * immediately adds the current radio settings as a new channel.
- */
-void dialog_channels_add_on_open(void) {
-
-    add_on_construct = true;
-}
-
-
-/*
- * Build Channel Manager window
- */
-static void construct_cb(lv_obj_t *parent) {
-
-    channels_load();
-
-
-    /*
-     * Always start in normal mode.
-     */
-    drag_active = false;
-    drag_row = LV_TABLE_CELL_NONE;
-
-
-    /*
-     * F5 must always start as Drag.
-     */
-    btn_page.items[4] =
-        &btn_drag;
-
-
-    dialog.obj = dialog_init(
-        parent
-    );
-
-
-    /*
-     * Use the same outer geometry and frame as WEFAX BIG/FULL.
-     * dialog_init()'s background image is disabled because its own outline
-     * would otherwise remain visible underneath the new frame.
-     */
-    lv_obj_set_size(
-        dialog.obj,
-        795,
-        350
-    );
-
-    lv_obj_center(
-        dialog.obj
-    );
-
-    lv_obj_set_style_bg_img_src(
-        dialog.obj,
-        NULL,
-        LV_PART_MAIN
-    );
-
-    lv_obj_set_style_bg_opa(
-        dialog.obj,
-        LV_OPA_TRANSP,
-        LV_PART_MAIN
-    );
-
-    lv_obj_set_style_border_width(
-        dialog.obj,
-        0,
-        LV_PART_MAIN
-    );
-
-
-    /*
-     * Same frame used by WEFAX BIG/FULL.
-     */
-    channels_frame = lv_obj_create(
-        dialog.obj
-    );
-
-    lv_obj_remove_style_all(
-        channels_frame
-    );
-
-    lv_obj_set_size(
-        channels_frame,
-        795,
-        350
-    );
-
-    lv_obj_center(
-        channels_frame
-    );
-
-    lv_obj_set_style_bg_color(
-        channels_frame,
-        TC(frame),
-        LV_PART_MAIN
-    );
-
-    lv_obj_set_style_bg_opa(
-        channels_frame,
-        LV_OPA_COVER,
-        LV_PART_MAIN
-    );
-
-    lv_obj_set_style_border_width(
-        channels_frame,
-        1,
-        LV_PART_MAIN
-    );
-
-    lv_obj_set_style_border_color(
-        channels_frame,
-        TC(dialog_border),
-        LV_PART_MAIN
-    );
-
-    lv_obj_set_style_border_opa(
-        channels_frame,
-        LV_OPA_COVER,
-        LV_PART_MAIN
-    );
-
-    lv_obj_set_style_radius(
-        channels_frame,
-        8,
-        LV_PART_MAIN
-    );
-
-    lv_obj_clear_flag(
-        channels_frame,
-        LV_OBJ_FLAG_SCROLLABLE
-    );
-
-    lv_obj_clear_flag(
-        channels_frame,
-        LV_OBJ_FLAG_CLICKABLE
-    );
-
-    lv_obj_move_background(
-        channels_frame
-    );
-
-
-    /*
-     * Title
-     */
-    lv_obj_t *title =
-        lv_label_create(
-            dialog.obj
-        );
-
-
-    lv_label_set_text(
-        title,
-        "CHANNELS"
-    );
-
-
-    lv_obj_align(
-        title,
-        LV_ALIGN_TOP_MID,
-        0,
-        12
-    );
-
-
-    /*
-     * Build channel list.
-     */
-    build_table();
-
-
-    /*
-     * A long press of the microphone V/M key requests
-     * an immediate Add after opening the dialog.
-     * Reuse the exact same code path as F2 Add.
-     */
-    if (add_on_construct) {
-
-        add_on_construct = false;
-        add_cb(NULL);
-        return;
-    }
-
-
-    /*
-     * Restore the last channel recalled with MFK.
-     * When possible, place it approximately in the
-     * middle of the visible list.
-     */
-    if (last_recalled_row != LV_TABLE_CELL_NONE &&
-        last_recalled_row >= 0 &&
-        last_recalled_row < channels_count()) {
-
-        select_row(
-            last_recalled_row,
-            true
-        );
-    }
-}
-
-
-int16_t dialog_channels_last_recalled_index(void) {
-
-    return last_recalled_row < channels_count() ? last_recalled_row : -1;
+    return true;
 }

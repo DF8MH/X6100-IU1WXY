@@ -1,2272 +1,734 @@
-/*
- * DWD WeFax decoder
- *
- * APT start/stop detection and phasing alignment from 1KO125's x6100_gui
- * 1.0.2 (Hany El Imam)
- *
- * Fixed format:
- *
- *   Sample rate : 11025 Hz
- *   Center      : 1500 Hz
- *   Shift       : 850 Hz
- *   IOC         : 576
- *   LPM         : 120
- *   Width       : 1809 pixels
- */
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//
+// Xiegu X6100 LVGL GUI - WeFax receiver, see decoder.h
+//
+// The Auto logic follows the approach of 1KO125's x6100_gui 1.0.2 (Hany El
+// Imam): the APT tones are measured on the demodulated grey signal, a start
+// only counts once the black band after it shows up, and the line is
+// aligned on the white pulse of the phasing lines.
 
-#include "decoder.h"
+#include "decoder.h"     /* wefax_decoder_t, WEFAX_* */
 
-#include <stdlib.h>
+#include <math.h>        /* sinf, cosf */
+#include <stddef.h>
+#include <stdio.h>       /* printf, the Auto log lines */
+#include <stdlib.h>      /* calloc, free */
 #include <string.h>
-#include <math.h>
-#include <stdio.h>
 
+#define PI_F            3.14159265358979323846f
+#define TWO_PI_F        (2.0f * PI_F)
 
-#define WEFAX_PI       3.14159265358979323846f
-#define WEFAX_LPF_HZ   600.0f
+/* Front end: mix the centre to 0 Hz, low-pass, phase difference of two samples */
+#define NCO_STEP        (2.0f * PI_F * (float)WEFAX_CENTER_HZ / (float)WEFAX_SAMPLE_RATE)
+#define LPF_HZ          600.0f
+#define LPF_TAPS        63
+#define GREY_PER_RAD    (((float)WEFAX_SAMPLE_RATE / (float)WEFAX_SHIFT_HZ) / (2.0f * PI_F))
 
-/*
- * Complex baseband FIR low-pass.
- *
- * 63 taps, Hamming-windowed sinc, generated once when the
- * decoder is created.  Cutoff remains 600 Hz: this experiment
- * changes only the filter shape, not the nominal bandwidth.
- */
-#define WEFAX_FIR_TAPS  63
-
+/* Share of a line per sample */
+#define LINE_STEP       ((double)WEFAX_LPM / (60.0 * (double)WEFAX_SAMPLE_RATE))
 
 /*
- * Tone histogram used only for diagnostics.
- *
- * We are interested in the useful WEFAX audio
- * region. 500..2500 Hz gives plenty of margin
- * around the nominal 1075..1925 Hz range.
- *
- * One bin = 1 Hz.
+ * APT tones (black/white square wave on the grey signal: 300 Hz start, 450
+ * Hz stop), measured on half second windows in two ways:
+ *  - rising edges through fixed levels (start) or levels taken from the
+ *    window itself, 5th..95th percentile (stop: still works with the radio
+ *    mistuned by 100 Hz and more; a window with less swing is no tone);
+ *  - the share of the grey power in the three 2 Hz bins around the tone:
+ *    survives far more noise than the edges. Real picture rows stay below
+ *    0.03 at 300 Hz and 0.017 at 450 Hz, the tones give 0.3..0.6.
  */
-#define TONE_HIST_MIN_HZ     500
-#define TONE_HIST_MAX_HZ    2500
-#define TONE_HIST_SIZE       \
-    (TONE_HIST_MAX_HZ - TONE_HIST_MIN_HZ + 1)
-
+#define TONE_WINDOW     (WEFAX_SAMPLE_RATE / 2)
+#define TONE_WHITE      215
+#define TONE_BLACK      40
+#define START_HZ        300.0f
+#define START_TOL_HZ    30.0f
+#define START_SHARE     0.12f
+#define START_WINDOWS   2
+#define STOP_HZ         450.0f
+#define STOP_TOL_HZ     30.0f
+#define STOP_SHARE      0.10f
+#define STOP_MIN_SWING  150
 
 /*
- * DWD IOC 576 APT START detector.
+ * A start is real when 4 rows in a row are black (85% of the pixels below
+ * 80: a phasing row is black but for its 5% pulse). Measured on saved faxes:
+ * this passes 34 of 39 phasing rows on the worst one, no picture or noise
+ * row. The rows must come within 10 s of the last start window (4.3..6.5 s
+ * seen on real faxes; longer lets a stray 300 Hz hit reach some other black
+ * band).
  */
-#define WEFAX_APT_START_HZ          300.0f
-#define WEFAX_APT_START_TOLERANCE     30.0f
-#define WEFAX_APT_WINDOW_SAMPLES    (WEFAX_SAMPLE_RATE / 2)
-#define WEFAX_APT_WHITE_THRESHOLD   215
-#define WEFAX_APT_BLACK_THRESHOLD    40
-#define WEFAX_APT_START_WINDOWS       2
-#define WEFAX_APT_STOP_HZ           450.0f
-#define WEFAX_APT_STOP_TOLERANCE      30.0f // 6.0f
-#define WEFAX_APT_STOP_WINDOWS        1
+#define BLACK_LEVEL     80
+#define BLACK_PERCENT   85
+#define BLACK_ROWS      4
+#define START_TIMEOUT   (WEFAX_SAMPLE_RATE * 10)
 
 /*
- * APT STOP is measured with thresholds derived from the window itself
- * (5th/95th percentile of the demodulated gray level), so that a receiver
- * mistuned by more than ~110 Hz does not hide the 450 Hz tone.  The fixed
- * 215/40 thresholds are kept for START.  A window whose gray range is
- * narrower than this is not a black/white tone and counts as 0 Hz.
+ * After a stop the app saves and re-arms while the stop tone is still on
+ * the air. A worn stop tone can read as 300 Hz and the 10 s of black after
+ * it would confirm a fax that is not there: no start for this long.
  */
-#define WEFAX_APT_STOP_MIN_RANGE     150
+#define STOP_HOLDOFF    (WEFAX_SAMPLE_RATE * 8)
 
 /*
- * Second, independent STOP criterion: narrow-band energy at 450 Hz.
- *
- * Counting black->white transitions collapses as soon as noise makes the
- * demodulated square wave miss a few thresholds, while the 450 Hz spectral
- * line of the gray signal survives far lower SNR (simulation: still 100%
- * of the windows at -2 dB where the transition count is at 0% below ~3 dB).
- * The measure is the fraction of the window's gray-level power found in the
- * three 2 Hz bins around 450 Hz (2.0002 Hz at 11025 Hz).  Measured on
- * real saved faxes: image rows never exceed ~0.017, rows carrying the stop tone are 0.5..0.6 (0.10 or
- * more even when the tone fills only part of the row).
+ * Phasing (Auto, after the confirmation): black rows with a white pulse at
+ * the line start. Columns of 4 black rows are averaged and the pulse is
+ * looked for, circularly. When 5 of the last 8 groups agree within 8 px the
+ * line is moved once, so that each row starts right after the pulse (the
+ * white bar ends up on the right border: right for GYA, DWD charts are
+ * narrower than the line anyway). If it is not clear nothing moves.
+ * Measured on 3 saved faxes and 2 recordings: pulse 84..90 px wide,
+ * contrast 180..220 (noise <= 53, picture <= 83), the picture starts with
+ * bright rows (mean >= 141), which ends the search.
  */
-#define WEFAX_APT_STOP_LINE_MIN      0.10f
+#define PH_GROUP        4
+#define PH_WINDOW       64
+#define PH_CONTRAST     100
+#define PH_WIDTH_MIN    30
+#define PH_WIDTH_MAX    130
+#define PH_AGREE        8
+#define PH_VOTES        5
+#define PH_KEEP         8
+#define PH_ROWS_MAX     40
+#define PH_BRIGHT_ROWS  3
+#define PH_BRIGHT_MEAN  135
+#define PH_EDGE_SPAN    150
 
+struct wefax_decoder {                      /* opaque in decoder.h */
+    wefax_mode_t            mode;           /* IDLE, CONT or AUTO */
+    wefax_row_callback_t    row_cb;
+    void                   *row_cb_data;
+    float                   taps[LPF_TAPS];
 
+    /* everything below is cleared by a reset */
+    float       nco;
+    float       hist_i[2 * LPF_TAPS];       /* each sample twice: no wrap in the filter */
+    float       hist_q[2 * LPF_TAPS];
+    unsigned    hist_pos;
+    float       last_i, last_q;
+    bool        primed;
 
-/* Confirm a provisional START only after a sustained black band. */
-/*
- * A phasing row is black except for its ~5% white pulse, so at most ~95%
- * of the pixels can be dark.  Measured on real faxes (3 saved images) the
- * old 50/90% test passed only 20 of 39 phasing rows on the worst one, the
- * 80/85% test passes 34 of 39, and not a single one of ~3900 image rows
- * nor of the no-signal noise rows.
- */
-#define WEFAX_CONFIRM_BLACK_THRESHOLD  80
-#define WEFAX_CONFIRM_BLACK_PERCENT    85
+    /* tone meter */
+    bool        tone_level_known, tone_white;
+    unsigned    tone_n, tone_rises;
+    uint8_t     tone_buf[TONE_WINDOW];
 
-/*
- * Narrow-band START criterion (300 Hz), independent of the gray swing.
- * Real image rows reach at most ~0.03; the tone gives 0.3 and more.
- */
-#define WEFAX_APT_START_LINE_MIN     0.12f
-#define WEFAX_CONFIRM_BLACK_ROWS        4
-/*
- * START state machine, identical for the first fax and for a new fax that
- * starts while another one is being decoded:
- *
- *   SEARCH      two consecutive START windows -> WAIT_BLACK
- *   WAIT_BLACK  further START windows only mean "still inside the same
- *               START" (they refresh the timeout, they reset nothing);
- *               4 black rows -> CONFIRMED;
- *               no START window for this long and no confirmation
- *               -> back to SEARCH.
- */
-/*
- * Counted from the LAST START window: the phasing band follows the tone
- * immediately.  Real data: black confirmation came 4.3 s after the tone
- * on the recorded WAV, at most 6.5 s on the saved faxes.  Longer values
- * keep a spurious 300 Hz match alive into an unrelated black band.
- */
-#define WEFAX_APT_START_TIMEOUT_SAMPLES (WEFAX_SAMPLE_RATE * 10)
+    /* Auto */
+    bool        started, confirmed, stopped;
+    unsigned    start_hits, black_rows;
+    uint32_t    start_age, generation, holdoff;
+    bool        next_seen;                  /* start tone over a confirmed fax, waiting for its black band */
+    unsigned    next_hits, next_black_rows;
+    uint32_t    next_age;
 
-/*
- * Grace period after a verified STOP.  The GUI saves the fax and re-arms
- * AUTO while the 450 Hz STOP tone is still on the air (it is usually
- * detected in its first second).  A degraded STOP tone can be read by the
- * transition counter as 300 Hz, and the 10 s of black that follow would
- * then confirm a ghost fax.  START detection is therefore paused for this
- * long after a reset that follows a STOP.  The next real START cannot
- * arrive earlier: residual STOP tone + 10 s black come first.
- */
-#define WEFAX_APT_STOP_HOLDOFF_SAMPLES (WEFAX_SAMPLE_RATE * 8)
+    /* line */
+    double      line_pos;
+    unsigned    px, px_n;
+    double      px_sum;
+    uint32_t    rows;
+    uint8_t     row[WEFAX_WIDTH];       /* the line being built */
 
-/*
- * Automatic horizontal alignment from the phasing band (AUTO only).
- *
- * After FAX CONFIRMED the phasing lines are still on the air: black with a
- * short white pulse at the line start.  Groups of 4 consecutive black rows
- * are averaged column by column and the white pulse is located
- * (circularly, it may wrap around x=0).  When enough groups agree, the
- * line generator phase is shifted once so that the line starts right after
- * the pulse: the RIGHT edge of the white pulse falls on the right border
- * of the image (white bar at the end of every phasing row).  This is the
- * correct framing for GYA Northwood; DWD charts are narrower than the
- * line, so they are complete either way.  If the measurement is not
- * convincing nothing is changed.
- *
- * Calibrated on 3 saved faxes and 2 recordings (2 stations):
- *   pulse width 84..90 px, left-edge scatter between groups <= 7 px,
- *   pulse contrast 180..220 on phasing, <= 53 on noise, <= 83 on image
- *   rows, ~3 on a black band without pulse.  The phasing band can be
- *   interrupted by fading (rows mean 57..129); the image starts with
- *   bright rows (mean >= 141), which is what ends the measurement.
- */
-#define WEFAX_PHASE_GROUP_ROWS        4
-#define WEFAX_PHASE_SEARCH_PX        64
-#define WEFAX_PHASE_MIN_CONTRAST    100
-#define WEFAX_PHASE_MIN_WIDTH        30
-#define WEFAX_PHASE_MAX_WIDTH       130
-#define WEFAX_PHASE_AGREE_PX          8
-#define WEFAX_PHASE_NEEDED            5
-#define WEFAX_PHASE_LAST              8
-#define WEFAX_PHASE_MAX_ROWS         40
-#define WEFAX_PHASE_END_BRIGHT_ROWS   3
-#define WEFAX_PHASE_BRIGHT_MEAN     135
-
-
-struct wefax_decoder {
-
-    wefax_mode_t mode;
-
-    uint64_t sample_count;
-    uint64_t block_count;
-
-
-    /*
-     * Complex mixer.
-     */
-    float oscillator_phase;
-
-
-    /*
-     * Complex baseband FIR low-pass.
-     */
-    float fir_coeff[WEFAX_FIR_TAPS];
-    float fir_i[WEFAX_FIR_TAPS];
-    float fir_q[WEFAX_FIR_TAPS];
-
-    unsigned int fir_pos;
-
-
-    /*
-     * Previous complex sample for
-     * phase discriminator.
-     */
-    float previous_i;
-    float previous_q;
-
-    bool previous_valid;
-
-
-    /*
-     * Grayscale diagnostics.
-     */
-    uint8_t gray_min;
-    uint8_t gray_max;
-
-    double gray_sum;
-    uint64_t gray_count;
-
-
-    /*
-     * Tone-frequency diagnostics.
-     */
-    double tone_sum;
-    uint64_t tone_count;
-
-    unsigned int tone_print_samples;
-
-    uint32_t tone_histogram[TONE_HIST_SIZE];
-
-
-    /*
-     * WEFAX line generator.
-     */
-    double line_position;
-
-    unsigned int current_pixel;
-
-    double pixel_sum;
-    unsigned int pixel_samples;
-
-    uint8_t row[WEFAX_WIDTH];
-
-    uint32_t row_count;
-
-
-    /*
-     * Completed-row callback.
-     */
-    /* AUTO / APT START detector. */
-    bool apt_is_white;
-    bool apt_level_valid;
-    unsigned int apt_window_samples;
-    unsigned int apt_transitions;
-    unsigned int apt_start_windows;
-    unsigned int apt_stop_windows;
-    float apt_frequency;
-    float apt_stop_frequency;
-    float apt_stop_line;
-    float apt_start_line;
-    uint8_t apt_buf[WEFAX_APT_WINDOW_SAMPLES];
-    bool apt_start_detected;
-    uint32_t apt_start_generation;
-    bool apt_fax_confirmed;
-    unsigned int apt_black_rows;
-    bool apt_stop_detected;
-
-    /*
-     * Confirmed-fax restart detector.  A fresh APT START seen while a fax
-     * is already confirmed is only a candidate.  It must be followed by
-     * the same four 90%-black half-second bands used by the normal START
-     * confirmation before the current fax is discarded.
-     */
-    bool apt_restart_candidate;
-    uint32_t apt_restart_age;
-    uint32_t apt_start_age;
-    uint32_t apt_start_holdoff;
-
-    /* phasing alignment */
-    bool phase_active;
-    bool phase_skip_row;
-    uint8_t phase_ring[WEFAX_PHASE_GROUP_ROWS][WEFAX_WIDTH];
-    unsigned int phase_ring_pos;
-    unsigned int phase_black_run;
-    unsigned int phase_bright_run;
-    unsigned int phase_rows;
-    unsigned int phase_groups;
-    int phase_left[WEFAX_PHASE_LAST];
-    int phase_width[WEFAX_PHASE_LAST];
-    unsigned int phase_count;
-    unsigned int apt_restart_start_windows;
-    unsigned int apt_restart_black_rows;
-
-
-    wefax_row_callback_t row_callback;
-    void *row_callback_data;
+    /* phasing */
+    bool        ph_on, ph_skip;
+    unsigned    ph_rows, ph_black_run, ph_bright_run, ph_found;
+    uint8_t     ph_ring[PH_GROUP][WEFAX_WIDTH];
+    int         ph_left[PH_KEEP], ph_width[PH_KEEP];
 };
 
-
-/*
- * Return a percentile from the current
- * one-second tone histogram.
- */
-static float tone_percentile(
-    const wefax_decoder_t *decoder,
-    float percentile)
+static void make_taps(float *taps)
 {
-    uint64_t total = 0;
+    const float fc  = LPF_HZ / (float)WEFAX_SAMPLE_RATE;
+    float       sum = 0.0f;
 
+    /* windowed sinc (Hamming), unity gain at DC */
+    for (int n = 0; n < LPF_TAPS; n++) {
+        int   k = n - (LPF_TAPS - 1) / 2;
+        float s = k ? sinf(2.0f * PI_F * fc * (float)k) / (PI_F * (float)k) : 2.0f * fc;
+        float w = 0.54f - 0.46f * cosf(2.0f * PI_F * (float)n / (float)(LPF_TAPS - 1));
 
-    for (
-        unsigned int i = 0;
-        i < TONE_HIST_SIZE;
-        i++
-    ) {
-
-        total += decoder->tone_histogram[i];
+        taps[n] = s * w;
+        sum += taps[n];
     }
-
-
-    if (total == 0) {
-        return 0.0f;
-    }
-
-
-    uint64_t target =
-        (uint64_t)(
-            percentile *
-            (double)(total - 1)
-        );
-
-
-    uint64_t accumulated = 0;
-
-
-    for (
-        unsigned int i = 0;
-        i < TONE_HIST_SIZE;
-        i++
-    ) {
-
-        accumulated +=
-            decoder->tone_histogram[i];
-
-
-        if (accumulated > target) {
-
-            return
-                (float)(
-                    TONE_HIST_MIN_HZ + i
-                );
-        }
-    }
-
-
-    return (float)TONE_HIST_MAX_HZ;
+    for (int n = 0; n < LPF_TAPS; n++)
+        taps[n] /= sum;
 }
 
-
-/*
- * Clear only the one-second tone
- * diagnostic window.
- */
-static void reset_tone_window(
-    wefax_decoder_t *decoder)
+static void clear_state(wefax_decoder_t *d)
 {
-    decoder->tone_sum = 0.0;
-    decoder->tone_count = 0;
+    size_t keep = offsetof(struct wefax_decoder, nco);
 
-    decoder->tone_print_samples = 0;
-
-
-    memset(
-        decoder->tone_histogram,
-        0,
-        sizeof(decoder->tone_histogram)
-    );
+    memset((char *)d + keep, 0, sizeof(*d) - keep);
 }
-
-
-/*
- * Build a unity-DC-gain low-pass FIR using a windowed sinc.
- */
-static void init_fir(
-    wefax_decoder_t *decoder)
-{
-    const int middle =
-        (WEFAX_FIR_TAPS - 1) / 2;
-
-    const float fc =
-        WEFAX_LPF_HZ /
-        (float)WEFAX_SAMPLE_RATE;
-
-    float sum = 0.0f;
-
-
-    for (
-        int n = 0;
-        n < WEFAX_FIR_TAPS;
-        n++
-    ) {
-
-        const int k =
-            n - middle;
-
-        float sinc;
-
-
-        if (k == 0) {
-
-            sinc =
-                2.0f * fc;
-        }
-        else {
-
-            sinc =
-                sinf(
-                    2.0f *
-                    WEFAX_PI *
-                    fc *
-                    (float)k
-                ) /
-                (
-                    WEFAX_PI *
-                    (float)k
-                );
-        }
-
-
-        const float window =
-            0.54f -
-            0.46f *
-            cosf(
-                2.0f *
-                WEFAX_PI *
-                (float)n /
-                (float)(
-                    WEFAX_FIR_TAPS - 1
-                )
-            );
-
-
-        decoder->fir_coeff[n] =
-            sinc * window;
-
-        sum +=
-            decoder->fir_coeff[n];
-    }
-
-
-    /*
-     * Normalize DC gain to exactly 1.
-     */
-    if (sum != 0.0f) {
-
-        for (
-            int n = 0;
-            n < WEFAX_FIR_TAPS;
-            n++
-        ) {
-
-            decoder->fir_coeff[n] /=
-                sum;
-        }
-    }
-}
-
-
-static void reset_dsp(
-    wefax_decoder_t *decoder)
-{
-    decoder->oscillator_phase = 0.0f;
-
-    memset(
-        decoder->fir_i,
-        0,
-        sizeof(decoder->fir_i)
-    );
-
-    memset(
-        decoder->fir_q,
-        0,
-        sizeof(decoder->fir_q)
-    );
-
-    decoder->fir_pos = 0;
-
-    decoder->previous_i = 0.0f;
-    decoder->previous_q = 0.0f;
-
-    decoder->previous_valid = false;
-
-
-    decoder->gray_min = 255;
-    decoder->gray_max = 0;
-
-    decoder->gray_sum = 0.0;
-    decoder->gray_count = 0;
-
-
-    reset_tone_window(decoder);
-
-    decoder->apt_is_white = false;
-    decoder->apt_level_valid = false;
-    decoder->apt_window_samples = 0;
-    decoder->apt_transitions = 0;
-    decoder->apt_start_windows = 0;
-    decoder->apt_stop_windows = 0;
-    decoder->apt_frequency = 0.0f;
-    decoder->apt_stop_frequency = 0.0f;
-    decoder->apt_stop_line = 0.0f;
-    decoder->apt_start_line = 0.0f;
-    decoder->apt_start_detected = false;
-    decoder->apt_start_generation = 0;
-    decoder->apt_fax_confirmed = false;
-    decoder->apt_black_rows = 0;
-    decoder->apt_stop_detected = false;
-    decoder->apt_restart_candidate = false;
-    decoder->apt_restart_age = 0;
-    decoder->apt_start_age = 0;
-    decoder->apt_start_holdoff = 0;
-    decoder->phase_active = false;
-    decoder->phase_skip_row = false;
-    decoder->phase_ring_pos = 0;
-    decoder->phase_black_run = 0;
-    decoder->phase_bright_run = 0;
-    decoder->phase_rows = 0;
-    decoder->phase_groups = 0;
-    decoder->phase_count = 0;
-    decoder->apt_restart_start_windows = 0;
-    decoder->apt_restart_black_rows = 0;
-
-
-    decoder->line_position = 0.0;
-
-    decoder->current_pixel = 0;
-
-    decoder->pixel_sum = 0.0;
-    decoder->pixel_samples = 0;
-
-
-    memset(
-        decoder->row,
-        0,
-        sizeof(decoder->row)
-    );
-
-
-    decoder->row_count = 0;
-}
-
 
 wefax_decoder_t *wefax_decoder_create(void)
 {
-    wefax_decoder_t *decoder =
-        calloc(
-            1,
-            sizeof(wefax_decoder_t)
-        );
+    wefax_decoder_t *d = calloc(1, sizeof(*d));
 
-
-    if (!decoder) {
-        return NULL;
-    }
-
-
-    decoder->mode = WEFAX_MODE_IDLE;
-
-
-    init_fir(decoder);
-
-
-    reset_dsp(decoder);
-
-
-    return decoder;
-}
-
-
-void wefax_decoder_destroy(
-    wefax_decoder_t *decoder)
-{
-    if (!decoder) {
-        return;
-    }
-
-
-    free(decoder);
-}
-
-
-void wefax_decoder_reset(
-    wefax_decoder_t *decoder)
-{
-    if (!decoder) {
-        return;
-    }
-
-
-    /*
-     * A reset that follows a detected STOP in AUTO (the GUI re-arm after
-     * saving the fax) starts with the STOP grace period.  Any other reset
-     * (AUTO/CONT/CLEAR/Save pressed by the user) does not.
-     */
-    const bool after_stop =
-        decoder->mode == WEFAX_MODE_AUTO &&
-        decoder->apt_stop_detected;
-
-    decoder->sample_count = 0;
-    decoder->block_count = 0;
-
-    reset_dsp(decoder);
-
-    if (after_stop) {
-        decoder->apt_start_holdoff = WEFAX_APT_STOP_HOLDOFF_SAMPLES;
-
-        printf(
-            "WEFAX AUTO: START detection paused for %u s after STOP\n",
-            (unsigned int)(WEFAX_APT_STOP_HOLDOFF_SAMPLES / WEFAX_SAMPLE_RATE)
-        );
-    }
-}
-
-
-void wefax_decoder_set_mode(
-    wefax_decoder_t *decoder,
-    wefax_mode_t mode)
-{
-    if (!decoder) {
-        return;
-    }
-
-
-    decoder->mode = mode;
-
-
-    wefax_decoder_reset(decoder);
-}
-
-
-wefax_mode_t wefax_decoder_get_mode(
-    const wefax_decoder_t *decoder)
-{
-    if (!decoder) {
-        return WEFAX_MODE_IDLE;
-    }
-
-
-    return decoder->mode;
-}
-
-
-void wefax_decoder_set_row_callback(
-    wefax_decoder_t *decoder,
-    wefax_row_callback_t callback,
-    void *user_data)
-{
-    if (!decoder) {
-        return;
-    }
-
-
-    decoder->row_callback = callback;
-    decoder->row_callback_data = user_data;
-}
-
-
-/*
- * Measure the black<->white toggle rate of one APT window with thresholds
- * adapted to the window itself.  Returns 0 if the gray range is too small.
- */
-static float apt_measure_adaptive(
-    const uint8_t *buf,
-    unsigned int n)
-{
-    unsigned int hist[256] = { 0 };
-
-    for (unsigned int i = 0; i < n; i++) {
-        hist[buf[i]]++;
-    }
-
-    const unsigned int t05 = (n * 5U + 99U) / 100U;
-    const unsigned int t95 = (n * 95U + 99U) / 100U;
-    unsigned int acc = 0;
-    int p05 = -1;
-    int p95 = 255;
-
-    for (int v = 0; v < 256; v++) {
-        acc += hist[v];
-        if (p05 < 0 && acc >= t05) {
-            p05 = v;
-        }
-        if (acc >= t95) {
-            p95 = v;
-            break;
-        }
-    }
-
-    const int range = p95 - p05;
-
-    if (p05 < 0 || range < WEFAX_APT_STOP_MIN_RANGE) {
-        return 0.0f;
-    }
-
-    const float mid = 0.5f * (float)(p05 + p95);
-    const float hi = mid + 0.25f * (float)range;
-    const float lo = mid - 0.25f * (float)range;
-
-    bool high = (float)buf[0] > mid;
-    unsigned int transitions = 0;
-
-    for (unsigned int i = 0; i < n; i++) {
-        const float v = (float)buf[i];
-
-        if (v > hi && !high) {
-            high = true;
-            transitions++;
-        }
-        else if (v < lo && high) {
-            high = false;
-        }
-    }
-
-    return (float)WEFAX_SAMPLE_RATE *
-           (float)transitions / (float)n;
-}
-
-
-/*
- * Fraction (0..1) of the window's gray-level power located in the three
- * DFT bins nearest to `hz` (bin width = sample_rate / n: 11025 / 5512,
- * 2.0002 Hz, so the bins are 448..452 Hz and 298..302 Hz).
- */
-static float apt_line_fraction(
-    const uint8_t *buf,
-    unsigned int n,
-    float hz)
-{
-    double mean = 0.0;
-
-    for (unsigned int i = 0; i < n; i++) {
-        mean += buf[i];
-    }
-    mean /= (double)n;
-
-    double energy = 0.0;
-
-    for (unsigned int i = 0; i < n; i++) {
-        const double v = (double)buf[i] - mean;
-        energy += v * v;
-    }
-
-    if (energy < 1.0) {
-        return 0.0f;
-    }
-
-    const double bin_hz = (double)WEFAX_SAMPLE_RATE / (double)n;
-    const int center = (int)(hz / bin_hz + 0.5);
-    double line = 0.0;
-
-    for (int k = center - 1; k <= center + 1; k++) {
-        const double w = 2.0 * 3.14159265358979323846 *
-                         (double)k / (double)n;
-        const double coeff = 2.0 * cos(w);
-        double s1 = 0.0;
-        double s2 = 0.0;
-
-        for (unsigned int i = 0; i < n; i++) {
-            const double s0 = ((double)buf[i] - mean) + coeff * s1 - s2;
-            s2 = s1;
-            s1 = s0;
-        }
-
-        line += s1 * s1 + s2 * s2 - coeff * s1 * s2;
-    }
-
-    /* one-sided spectrum: total power = n * energy / 2 */
-    return (float)(2.0 * line / ((double)n * energy));
-}
-
-
-/* ------------------------------------------------------------------ */
-/* Phasing alignment                                                    */
-/* ------------------------------------------------------------------ */
-
-static void phase_begin(
-    wefax_decoder_t *decoder)
-{
-    decoder->phase_active = true;
-    decoder->phase_skip_row = false;
-    decoder->phase_ring_pos = 0;
-    decoder->phase_black_run = 0;
-    decoder->phase_bright_run = 0;
-    decoder->phase_rows = 0;
-    decoder->phase_groups = 0;
-    decoder->phase_count = 0;
-}
-
-
-/* signed circular distance a - b in (-W/2, W/2] */
-static int phase_circ_diff(
-    int a,
-    int b)
-{
-    int d = (a - b) % WEFAX_WIDTH;
-
-    if (d > WEFAX_WIDTH / 2) {
-        d -= WEFAX_WIDTH;
-    }
-    else if (d <= -WEFAX_WIDTH / 2) {
-        d += WEFAX_WIDTH;
-    }
-
+    if (d)
+        make_taps(d->taps);
     return d;
 }
 
+void wefax_decoder_destroy(wefax_decoder_t *decoder)
+{
+    free(decoder);
+}
 
-/*
- * Locate the white pulse in the column-wise mean of the last group of
- * rows.  Returns true and the pulse left edge / width if the pulse is
- * clear enough.
- */
-static bool phase_estimate(
-    const wefax_decoder_t *decoder,
-    int *left,
-    int *width,
-    int *contrast_out)
+void wefax_decoder_reset(wefax_decoder_t *d)
+{
+    if (!d)
+        return;
+
+    bool after_stop = d->mode == WEFAX_MODE_AUTO && d->stopped;
+
+    clear_state(d);
+    if (after_stop) {
+        d->holdoff = STOP_HOLDOFF;
+        printf("WEFAX AUTO: no start for %u s after the stop\n", STOP_HOLDOFF / WEFAX_SAMPLE_RATE);
+    }
+}
+
+void wefax_decoder_set_mode(wefax_decoder_t *d, wefax_mode_t mode)
+{
+    if (!d)
+        return;
+    d->mode = mode;
+    wefax_decoder_reset(d);
+}
+
+wefax_mode_t wefax_decoder_get_mode(const wefax_decoder_t *d)
+{
+    return d ? d->mode : WEFAX_MODE_IDLE;
+}
+
+void wefax_decoder_set_row_callback(wefax_decoder_t *d, wefax_row_callback_t callback, void *user_data)
+{
+    if (!d)
+        return;
+    d->row_cb      = callback;
+    d->row_cb_data = user_data;
+}
+
+bool wefax_decoder_auto_stop_detected(const wefax_decoder_t *d)
+{
+    return d && d->stopped;
+}
+
+uint32_t wefax_decoder_auto_start_generation(const wefax_decoder_t *d)
+{
+    return d ? d->generation : 0;
+}
+
+bool wefax_decoder_auto_fax_confirmed(const wefax_decoder_t *d)
+{
+    return d && d->confirmed;
+}
+
+/* ---- tone measurements on a window of grey samples ---- */
+
+/* Rising edges per second, levels from the window's own 5th/95th percentile; 0 without enough swing */
+static float tone_rate_own_levels(const uint8_t *buf, unsigned n)
+{
+    unsigned count[256] = {0};
+    unsigned lo_at = (n * 5U + 99U) / 100U, hi_at = (n * 95U + 99U) / 100U, acc = 0;
+    int      lo = -1, hi = 255;
+
+    for (unsigned i = 0; i < n; i++)
+        count[buf[i]]++;
+    for (int v = 0; v < 256; v++) {
+        acc += count[v];
+        if (lo < 0 && acc >= lo_at)
+            lo = v;
+        if (acc >= hi_at) {
+            hi = v;
+            break;
+        }
+    }
+
+    int swing = hi - lo;
+
+    if (lo < 0 || swing < STOP_MIN_SWING)
+        return 0.0f;
+
+    float    mid   = 0.5f * (float)(lo + hi);
+    float    up    = mid + 0.25f * (float)swing;
+    float    down  = mid - 0.25f * (float)swing;
+    bool     high  = (float)buf[0] > mid;
+    unsigned rises = 0;
+
+    for (unsigned i = 0; i < n; i++) {
+        float v = (float)buf[i];
+
+        if (v > up && !high) {
+            high = true;
+            rises++;
+        } else if (v < down && high) {
+            high = false;
+        }
+    }
+    return (float)WEFAX_SAMPLE_RATE * (float)rises / (float)n;
+}
+
+/* Share (0..1) of the window's grey power in the 3 DFT bins nearest to hz (Goertzel) */
+static float tone_share(const uint8_t *buf, unsigned n, float hz)
+{
+    double mean = 0.0, power = 0.0, line = 0.0;
+
+    for (unsigned i = 0; i < n; i++)
+        mean += buf[i];
+    mean /= (double)n;
+    for (unsigned i = 0; i < n; i++) {
+        double v = (double)buf[i] - mean;
+
+        power += v * v;
+    }
+    if (power < 1.0)
+        return 0.0f;
+
+    int bin = (int)(hz / ((double)WEFAX_SAMPLE_RATE / (double)n) + 0.5);
+
+    for (int k = bin - 1; k <= bin + 1; k++) {
+        double c  = 2.0 * cos(2.0 * 3.14159265358979323846 * (double)k / (double)n);
+        double s1 = 0.0, s2 = 0.0;
+
+        for (unsigned i = 0; i < n; i++) {
+            double s0 = ((double)buf[i] - mean) + c * s1 - s2;
+
+            s2 = s1;
+            s1 = s0;
+        }
+        line += s1 * s1 + s2 * s2 - c * s1 * s2;
+    }
+    return (float)(2.0 * line / ((double)n * power));      /* one-sided: total n * power / 2 */
+}
+
+/* ---- phasing ---- */
+
+static void phasing_begin(wefax_decoder_t *d)
+{
+    d->ph_on         = true;
+    d->ph_skip       = false;
+    d->ph_rows       = 0;
+    d->ph_black_run  = 0;
+    d->ph_bright_run = 0;
+    d->ph_found      = 0;
+}
+
+/* a - b around the line, in (-W/2, W/2] */
+static int wrap_diff(int a, int b)
+{
+    int d = (a - b) % WEFAX_WIDTH;
+
+    if (d > WEFAX_WIDTH / 2)
+        d -= WEFAX_WIDTH;
+    else if (d <= -WEFAX_WIDTH / 2)
+        d += WEFAX_WIDTH;
+    return d;
+}
+
+static float column_mean(const float *mean, int x)
+{
+    return mean[(x + 2 * WEFAX_WIDTH) % WEFAX_WIDTH];
+}
+
+/* The pulse in the column means of the last PH_GROUP black rows: left edge and width */
+static bool pulse_find(const wefax_decoder_t *d, int *left, int *width)
 {
     static float mean[WEFAX_WIDTH];
-    float total = 0.0f;
+    float        total = 0.0f;
 
-    for (unsigned int x = 0; x < WEFAX_WIDTH; x++) {
-        unsigned int sum = 0;
+    for (unsigned x = 0; x < WEFAX_WIDTH; x++) {
+        unsigned sum = 0;
 
-        for (unsigned int r = 0; r < WEFAX_PHASE_GROUP_ROWS; r++) {
-            sum += decoder->phase_ring[r][x];
-        }
-
-        mean[x] = (float)sum / (float)WEFAX_PHASE_GROUP_ROWS;
+        for (unsigned r = 0; r < PH_GROUP; r++)
+            sum += d->ph_ring[r][x];
+        mean[x] = (float)sum / (float)PH_GROUP;
         total += mean[x];
     }
 
-    /* circular sliding window */
-    float win = 0.0f;
+    /* brightest PH_WINDOW columns */
+    float    win = 0.0f, best;
+    unsigned at  = 0;
 
-    for (unsigned int x = 0; x < WEFAX_PHASE_SEARCH_PX; x++) {
+    for (unsigned x = 0; x < PH_WINDOW; x++)
         win += mean[x];
-    }
-
-    float best = win;
-    unsigned int best_start = 0;
-
-    for (unsigned int start = 1; start < WEFAX_WIDTH; start++) {
-        win += mean[(start + WEFAX_PHASE_SEARCH_PX - 1) % WEFAX_WIDTH] -
-               mean[start - 1];
-
+    best = win;
+    for (unsigned x = 1; x < WEFAX_WIDTH; x++) {
+        win += mean[(x + PH_WINDOW - 1) % WEFAX_WIDTH] - mean[x - 1];
         if (win > best) {
             best = win;
-            best_start = start;
+            at   = x;
         }
     }
 
-    const float inside = best / (float)WEFAX_PHASE_SEARCH_PX;
-    const float rest = (total - best) /
-                       (float)(WEFAX_WIDTH - WEFAX_PHASE_SEARCH_PX);
-    const float contrast = inside - rest;
+    float rest     = (total - best) / (float)(WEFAX_WIDTH - PH_WINDOW);
+    float contrast = best / (float)PH_WINDOW - rest;
 
-    *contrast_out = (int)(contrast + 0.5f);
-
-    if (contrast < (float)WEFAX_PHASE_MIN_CONTRAST) {
+    if (contrast < (float)PH_CONTRAST)
         return false;
-    }
 
-    /* pulse edges at half level around the window centre */
-    const float half = rest + contrast / 2.0f;
-    const int centre = (int)((best_start + WEFAX_PHASE_SEARCH_PX / 2) %
-                             WEFAX_WIDTH);
+    float half   = rest + contrast / 2.0f;
+    int   centre = (int)((at + PH_WINDOW / 2) % WEFAX_WIDTH);
 
-    if (mean[centre] <= half) {
+    if (mean[centre] <= half)
         return false;
-    }
 
-    /*
-     * Edges are searched from OUTSIDE the pulse inwards (first 3
-     * consecutive pixels above half level), so noise dips inside the
-     * pulse do not cut it short.
-     */
-    int l = -150;
-    bool found_l = false;
+    /* edges: from outside inwards, the first 3 columns above half (dips inside the pulse don't cut it) */
+    int l, r;
 
-    for (; l <= 0; l++) {
-        unsigned int above = 0;
-
-        for (int j = 0; j < 3; j++) {
-            if (mean[(centre + l + j + 2 * WEFAX_WIDTH) % WEFAX_WIDTH] > half) {
-                above++;
-            }
-        }
-
-        if (above == 3) {
-            found_l = true;
+    for (l = -PH_EDGE_SPAN; l <= 0; l++)
+        if (column_mean(mean, centre + l) > half && column_mean(mean, centre + l + 1) > half &&
+            column_mean(mean, centre + l + 2) > half)
             break;
-        }
-    }
-
-    int r = 150;
-    bool found_r = false;
-
-    for (; r >= 0; r--) {
-        unsigned int above = 0;
-
-        for (int j = 0; j < 3; j++) {
-            if (mean[(centre + r - j + 2 * WEFAX_WIDTH) % WEFAX_WIDTH] > half) {
-                above++;
-            }
-        }
-
-        if (above == 3) {
-            found_r = true;
+    for (r = PH_EDGE_SPAN; r >= 0; r--)
+        if (column_mean(mean, centre + r) > half && column_mean(mean, centre + r - 1) > half &&
+            column_mean(mean, centre + r - 2) > half)
             break;
-        }
-    }
-
-    if (!found_l || !found_r) {
+    if (l > 0 || r < 0)
         return false;
-    }
 
     *width = r - l + 1;
-    *left = (centre + l + 2 * WEFAX_WIDTH) % WEFAX_WIDTH;
-
-    return *width >= WEFAX_PHASE_MIN_WIDTH &&
-           *width <= WEFAX_PHASE_MAX_WIDTH;
+    *left  = (centre + l + 2 * WEFAX_WIDTH) % WEFAX_WIDTH;
+    return *width >= PH_WIDTH_MIN && *width <= PH_WIDTH_MAX;
 }
 
-
-/*
- * Feed one finished row (AUTO, fax confirmed, alignment still pending).
- * Returns the x (current line grid) where the new line must start, i.e.
- * the first pixel after the pulse, or -1
- * while undecided / when giving up.
- */
-static int phase_process_row(
-    wefax_decoder_t *decoder,
-    const uint8_t *row)
+static void sort_ints(int *v, unsigned n)
 {
-    if (decoder->phase_skip_row) {
-        decoder->phase_skip_row = false;
+    for (unsigned i = 1; i < n; i++)
+        for (unsigned j = i; j > 0 && v[j - 1] > v[j]; j--) {
+            int t = v[j];
+
+            v[j]     = v[j - 1];
+            v[j - 1] = t;
+        }
+}
+
+static bool row_is_black(const uint8_t *row)
+{
+    unsigned dark = 0;
+
+    for (unsigned x = 0; x < WEFAX_WIDTH; x++)
+        dark += row[x] < BLACK_LEVEL;
+    return dark * 100U >= WEFAX_WIDTH * BLACK_PERCENT;
+}
+
+/* One finished row while phasing: the column where the next line must start, or -1 */
+static int phasing_row(wefax_decoder_t *d, const uint8_t *row)
+{
+    if (d->ph_skip) {
+        d->ph_skip = false;
         return -1;
     }
+    d->ph_rows++;
 
-    decoder->phase_rows++;
+    bool     black = row_is_black(row);
+    unsigned sum   = 0;
 
-    unsigned int black = 0;
+    for (unsigned x = 0; x < WEFAX_WIDTH; x++)
+        sum += row[x];
+    d->ph_bright_run = sum >= (unsigned)PH_BRIGHT_MEAN * WEFAX_WIDTH ? d->ph_bright_run + 1 : 0;
 
-    for (unsigned int x = 0; x < WEFAX_WIDTH; x++) {
-        if (row[x] < WEFAX_CONFIRM_BLACK_THRESHOLD) {
-            black++;
-        }
-    }
+    if (!black) {
+        d->ph_black_run = 0;
+    } else {
+        memcpy(d->ph_ring[d->ph_black_run++ % PH_GROUP], row, WEFAX_WIDTH);
 
-    const bool is_black =
-        black * 100U >= WEFAX_WIDTH * WEFAX_CONFIRM_BLACK_PERCENT;
+        int left, width;
 
-    unsigned int row_sum = 0;
+        if (d->ph_black_run >= PH_GROUP && pulse_find(d, &left, &width)) {
+            d->ph_left[d->ph_found % PH_KEEP]  = left;
+            d->ph_width[d->ph_found % PH_KEEP] = width;
+            d->ph_found++;
 
-    for (unsigned int x = 0; x < WEFAX_WIDTH; x++) {
-        row_sum += row[x];
-    }
+            /* the estimate with most others within PH_AGREE */
+            unsigned n     = d->ph_found < PH_KEEP ? d->ph_found : PH_KEEP;
+            unsigned votes = 0;
+            int      ref   = 0;
 
-    if (row_sum >= (unsigned int)WEFAX_PHASE_BRIGHT_MEAN * WEFAX_WIDTH) {
-        decoder->phase_bright_run++;
-    }
-    else {
-        decoder->phase_bright_run = 0;
-    }
+            for (unsigned i = 0; i < n; i++) {
+                unsigned v = 0;
 
-    if (is_black) {
-        memcpy(
-            decoder->phase_ring[decoder->phase_ring_pos],
-            row,
-            WEFAX_WIDTH
-        );
-        decoder->phase_ring_pos =
-            (decoder->phase_ring_pos + 1) % WEFAX_PHASE_GROUP_ROWS;
-        decoder->phase_black_run++;
-    }
-    else {
-        decoder->phase_black_run = 0;
-    }
+                for (unsigned j = 0; j < n; j++) {
+                    int dx = wrap_diff(d->ph_left[j], d->ph_left[i]);
 
-    if (is_black &&
-        decoder->phase_black_run >= WEFAX_PHASE_GROUP_ROWS) {
-        int left = 0;
-        int width = 0;
-        int contrast = 0;
-        const bool ok = phase_estimate(decoder, &left, &width, &contrast);
-
-        decoder->phase_groups++;
-
-        if (ok) {
-            const unsigned int slot =
-                decoder->phase_count % WEFAX_PHASE_LAST;
-
-            decoder->phase_left[slot] = left;
-            decoder->phase_width[slot] = width;
-            decoder->phase_count++;
-
-            const unsigned int n =
-                decoder->phase_count < WEFAX_PHASE_LAST ?
-                decoder->phase_count : WEFAX_PHASE_LAST;
-
-            /* the estimate with most neighbours within the tolerance */
-            unsigned int best_votes = 0;
-            int ref = 0;
-
-            for (unsigned int i = 0; i < n; i++) {
-                unsigned int votes = 0;
-
-                for (unsigned int j = 0; j < n; j++) {
-                    const int d = phase_circ_diff(
-                        decoder->phase_left[j],
-                        decoder->phase_left[i]
-                    );
-
-                    if (d >= -WEFAX_PHASE_AGREE_PX &&
-                        d <= WEFAX_PHASE_AGREE_PX) {
-                        votes++;
-                    }
+                    v += dx >= -PH_AGREE && dx <= PH_AGREE;
                 }
-
-                if (votes > best_votes) {
-                    best_votes = votes;
-                    ref = decoder->phase_left[i];
+                if (v > votes) {
+                    votes = v;
+                    ref   = d->ph_left[i];
                 }
             }
 
-            if (best_votes >= WEFAX_PHASE_NEEDED) {
-                /* median of the agreeing estimates, relative to ref */
-                int d[WEFAX_PHASE_LAST];
-                int w[WEFAX_PHASE_LAST];
-                unsigned int m = 0;
+            if (votes >= PH_VOTES) {
+                /* medians of the agreeing ones */
+                int      dl[PH_KEEP], w[PH_KEEP];
+                unsigned m = 0;
 
-                for (unsigned int j = 0; j < n; j++) {
-                    const int dd = phase_circ_diff(
-                        decoder->phase_left[j],
-                        ref
-                    );
+                for (unsigned j = 0; j < n; j++) {
+                    int dx = wrap_diff(d->ph_left[j], ref);
 
-                    if (dd >= -WEFAX_PHASE_AGREE_PX &&
-                        dd <= WEFAX_PHASE_AGREE_PX) {
-                        d[m] = dd;
-                        w[m] = decoder->phase_width[j];
+                    if (dx >= -PH_AGREE && dx <= PH_AGREE) {
+                        dl[m] = dx;
+                        w[m]  = d->ph_width[j];
                         m++;
                     }
                 }
+                sort_ints(dl, m);
+                sort_ints(w, m);
 
-                for (unsigned int i = 1; i < m; i++) {
-                    for (unsigned int j = i; j > 0 && d[j - 1] > d[j]; j--) {
-                        const int t = d[j]; d[j] = d[j - 1]; d[j - 1] = t;
-                    }
-                    for (unsigned int j = i; j > 0 && w[j - 1] > w[j]; j--) {
-                        const int t = w[j]; w[j] = w[j - 1]; w[j - 1] = t;
-                    }
-                }
+                int start = (ref + dl[m / 2] + WEFAX_WIDTH) % WEFAX_WIDTH;
+                int end   = (start + w[m / 2]) % WEFAX_WIDTH;     /* first column after the pulse */
 
-                const int pulse_left =
-                    (ref + d[m / 2] + WEFAX_WIDTH) % WEFAX_WIDTH;
-
-                /* first pixel after the pulse: becomes the new x=0 */
-                const int pulse_end =
-                    (pulse_left + w[m / 2]) % WEFAX_WIDTH;
-
-                decoder->phase_active = false;
-
-                printf(
-                    "WEFAX AUTO: PHASING aligned - pulse at x=%d..%d "
-                    "(width %d px, %u/%u groups agree), "
-                    "white bar moved to the right border\n",
-                    pulse_left,
-                    (pulse_end + WEFAX_WIDTH - 1) % WEFAX_WIDTH,
-                    w[m / 2],
-                    best_votes,
-                    n
-                );
-
-                return pulse_end;
+                d->ph_on = false;
+                printf("WEFAX AUTO: phasing pulse at %d..%d (%d px, %u of %u groups), line moved\n", start,
+                       (end + WEFAX_WIDTH - 1) % WEFAX_WIDTH, w[m / 2], votes, n);
+                return end;
             }
         }
     }
 
-    /* the image has started: never shift the line inside the image */
-    const bool band_over =
-        decoder->phase_bright_run >= WEFAX_PHASE_END_BRIGHT_ROWS;
-
-    if (band_over || decoder->phase_rows >= WEFAX_PHASE_MAX_ROWS) {
-        decoder->phase_active = false;
-
-        printf(
-            "WEFAX AUTO: PHASING not reliable (%u good groups) - "
-            "alignment unchanged\n",
-            decoder->phase_count
-        );
+    /* never move the line once the picture has begun */
+    if (d->ph_bright_run >= PH_BRIGHT_ROWS || d->ph_rows >= PH_ROWS_MAX) {
+        d->ph_on = false;
+        printf("WEFAX AUTO: phasing unclear (%u good groups), line not moved\n", d->ph_found);
     }
-
     return -1;
 }
 
+/* ---- Auto ---- */
 
-void wefax_decoder_process(
-    wefax_decoder_t *decoder,
-    const float *samples,
-    unsigned int count)
+static void line_restart(wefax_decoder_t *d, double pos)
 {
-    if (
-        !decoder ||
-        !samples ||
-        count == 0
-    ) {
+    d->line_pos = pos;
+    d->px       = 0;
+    d->px_sum   = 0.0;
+    d->px_n     = 0;
+    d->rows     = 0;
+    memset(d->row, 0, sizeof(d->row));
+}
 
+/* Half a second of grey measured */
+static void tone_window(wefax_decoder_t *d)
+{
+    float rate  = (float)WEFAX_SAMPLE_RATE * (float)d->tone_rises / (float)d->tone_n;
+    bool  start = d->holdoff == 0 && (fabsf(rate - START_HZ) <= START_TOL_HZ ||
+                                      tone_share(d->tone_buf, d->tone_n, START_HZ) >= START_SHARE);
+
+    if (!d->confirmed) {
+        if (d->started) {
+            if (start)
+                d->start_age = 0;       /* still the same start tone */
+        } else if (!start) {
+            d->start_hits = 0;
+        } else if (++d->start_hits >= START_WINDOWS) {
+            d->started    = true;
+            d->generation++;
+            d->start_hits = 0;
+            d->start_age  = 0;
+            d->black_rows = 0;
+            line_restart(d, 0.0);
+            printf("WEFAX AUTO: start tone (%.1f Hz), waiting for the black band\n", rate);
+        }
         return;
     }
 
+    float stop_rate = tone_rate_own_levels(d->tone_buf, d->tone_n);
 
-    if (decoder->mode == WEFAX_MODE_IDLE) {
+    if (fabsf(stop_rate - STOP_HZ) <= STOP_TOL_HZ || tone_share(d->tone_buf, d->tone_n, STOP_HZ) >= STOP_SHARE) {
+        d->stopped = true;
+        printf("WEFAX AUTO: stop tone (%.1f Hz)\n", stop_rate);
         return;
     }
 
+    /* a new start over the current fax: it takes over only after its own black band */
+    if (d->next_seen) {
+        if (start)
+            d->next_age = 0;
+    } else if (!start) {
+        d->next_hits = 0;
+    } else if (++d->next_hits >= START_WINDOWS) {
+        d->next_seen       = true;
+        d->next_age        = 0;
+        d->next_black_rows = 0;
+        d->next_hits       = 0;
+        printf("WEFAX AUTO: start tone over the current fax (%.1f Hz)\n", rate);
+    }
+}
 
-    const float phase_step =
-        2.0f *
-        WEFAX_PI *
-        (float)WEFAX_CENTER_HZ /
-        (float)WEFAX_SAMPLE_RATE;
+static void auto_sample(wefax_decoder_t *d, uint8_t grey)
+{
+    if (d->holdoff && --d->holdoff == 0)
+        printf("WEFAX AUTO: start detection back on\n");
 
+    if (d->started && !d->confirmed && ++d->start_age >= START_TIMEOUT) {
+        d->started    = false;
+        d->start_hits = 0;
+        d->black_rows = 0;
+        d->start_age  = 0;
+        printf("WEFAX AUTO: no black band after the start tone, searching again\n");
+    }
+    if (d->confirmed && d->next_seen && ++d->next_age >= START_TIMEOUT) {
+        d->next_seen       = false;
+        d->next_black_rows = 0;
+        d->next_hits       = 0;
+        d->next_age        = 0;
+        printf("WEFAX AUTO: no black band after the new start tone\n");
+    }
+    if (d->stopped)
+        return;
 
-    const float deviation_ratio =
-        (
-            (float)WEFAX_SAMPLE_RATE /
-            (float)WEFAX_SHIFT_HZ
-        ) /
-        (2.0f * WEFAX_PI);
-
-
-    const double line_step =
-        (double)WEFAX_LPM /
-        (
-            60.0 *
-            (double)WEFAX_SAMPLE_RATE
-        );
-
-
-    for (
-        unsigned int n = 0;
-        n < count;
-        n++
-    ) {
-
-        const float sample =
-            samples[n];
-
-
-        /*
-         * Mix center frequency to complex DC.
-         */
-        const float c =
-            cosf(
-                decoder->oscillator_phase
-            );
-
-        const float s =
-            sinf(
-                decoder->oscillator_phase
-            );
-
-
-        const float i =
-            sample * c;
-
-        const float q =
-            -sample * s;
-
-
-        decoder->oscillator_phase +=
-            phase_step;
-
-
-        if (
-            decoder->oscillator_phase >=
-            2.0f * WEFAX_PI
-        ) {
-
-            decoder->oscillator_phase -=
-                2.0f * WEFAX_PI;
+    /* rising edges through the fixed levels, with hysteresis */
+    if (!d->tone_level_known) {
+        if (grey > TONE_WHITE || grey < TONE_BLACK) {
+            d->tone_white       = grey > TONE_WHITE;
+            d->tone_level_known = true;
         }
+    } else if (!d->tone_white && grey > TONE_WHITE) {
+        d->tone_white = true;
+        d->tone_rises++;
+    } else if (d->tone_white && grey < TONE_BLACK) {
+        d->tone_white = false;
+    }
 
+    d->tone_buf[d->tone_n++] = grey;
+    if (d->tone_n >= TONE_WINDOW) {
+        tone_window(d);
+        d->tone_n     = 0;
+        d->tone_rises = 0;
+    }
+}
 
-        /*
-         * Complex FIR low-pass.
-         *
-         * Store newest I/Q pair in the circular buffer, then
-         * convolve newest -> oldest with the symmetric FIR.
-         */
-        decoder->fir_i[
-            decoder->fir_pos
-        ] = i;
+/* ---- rows ---- */
 
-        decoder->fir_q[
-            decoder->fir_pos
-        ] = q;
+static void row_done(wefax_decoder_t *d)
+{
+    if (d->px_n)
+        d->row[d->px] = (uint8_t)(d->px_sum / d->px_n + 0.5);
 
+    if (d->mode == WEFAX_MODE_AUTO && (d->started || d->next_seen)) {
+        bool black = row_is_black(d->row);
 
-        float filtered_i = 0.0f;
-        float filtered_q = 0.0f;
-
-        unsigned int fir_index =
-            decoder->fir_pos;
-
-
-        for (
-            unsigned int tap = 0;
-            tap < WEFAX_FIR_TAPS;
-            tap++
-        ) {
-
-            const float coefficient =
-                decoder->fir_coeff[tap];
-
-
-            filtered_i +=
-                coefficient *
-                decoder->fir_i[fir_index];
-
-            filtered_q +=
-                coefficient *
-                decoder->fir_q[fir_index];
-
-
-            if (fir_index == 0) {
-
-                fir_index =
-                    WEFAX_FIR_TAPS - 1;
+        if (!d->confirmed && d->started) {
+            d->black_rows = black ? d->black_rows + 1 : 0;
+            if (d->black_rows >= BLACK_ROWS) {
+                d->confirmed       = true;
+                d->start_hits      = 0;
+                d->next_seen       = false;
+                d->next_black_rows = 0;
+                printf("WEFAX AUTO: fax confirmed\n");
+                phasing_begin(d);
             }
-            else {
-
-                fir_index--;
+        } else if (d->confirmed && d->next_seen) {
+            d->next_black_rows = black ? d->next_black_rows + 1 : 0;
+            if (d->next_black_rows >= BLACK_ROWS) {
+                /* 1.0: the end of the row below takes one line off */
+                line_restart(d, 1.0);
+                d->generation++;
+                d->next_hits       = 0;
+                d->next_seen       = false;
+                d->next_black_rows = 0;
+                printf("WEFAX AUTO: new fax confirmed, the current one ends here\n");
+                phasing_begin(d);
+                d->ph_skip = true;      /* this row was just blanked */
             }
         }
+    }
 
+    int cut = -1;
 
-        decoder->fir_pos++;
+    if (d->mode == WEFAX_MODE_AUTO && d->confirmed && d->ph_on)
+        cut = phasing_row(d, d->row);
 
-        if (
-            decoder->fir_pos >=
-            WEFAX_FIR_TAPS
-        ) {
+    if (d->row_cb)
+        d->row_cb(d->row, WEFAX_WIDTH, d->rows, d->row_cb_data);
+    d->rows++;
 
-            decoder->fir_pos = 0;
+    /* next line, keeping the fraction */
+    d->line_pos -= 1.0;
+    if (cut > 1 && cut < WEFAX_WIDTH - 1) {
+        /* this row ends right after the pulse, the next ones start there */
+        d->line_pos += (double)(WEFAX_WIDTH - cut) / (double)WEFAX_WIDTH;
+        if (d->line_pos >= 1.0)
+            d->line_pos -= 1.0;
+    }
+    d->px = (unsigned)(d->line_pos * (double)WEFAX_WIDTH);
+    if (d->px >= WEFAX_WIDTH)
+        d->px = 0;
+    d->px_sum = 0.0;
+    d->px_n   = 0;
+    memset(d->row, 0, sizeof(d->row));
+}
+
+/* Grey sample into the line: each pixel is the mean of its samples, a skipped pixel takes the next one */
+static void line_sample(wefax_decoder_t *d, uint8_t grey)
+{
+    d->line_pos += LINE_STEP;
+
+    unsigned x   = (unsigned)(d->line_pos * (double)WEFAX_WIDTH);
+    bool     end = x >= WEFAX_WIDTH;
+
+    if (end)
+        x = WEFAX_WIDTH - 1;
+
+    if (x == d->px) {
+        d->px_sum += grey;
+        d->px_n++;
+    } else {
+        if (d->px_n && d->px < WEFAX_WIDTH)
+            d->row[d->px] = (uint8_t)(d->px_sum / d->px_n + 0.5);
+        while (d->px + 1 < x && d->px + 1 < WEFAX_WIDTH)
+            d->row[++d->px] = grey;
+        d->px     = x;
+        d->px_sum = grey;
+        d->px_n   = 1;
+    }
+    if (end)
+        row_done(d);
+}
+
+/* ---- audio ---- */
+
+void wefax_decoder_process(wefax_decoder_t *d, const float *samples, unsigned int count)
+{
+    if (!d || !samples || d->mode == WEFAX_MODE_IDLE)
+        return;
+
+    for (unsigned n = 0; n < count; n++) {
+        float x = samples[n];
+        float c = cosf(d->nco);
+        float s = sinf(d->nco);
+
+        d->nco += NCO_STEP;
+        if (d->nco >= TWO_PI_F)
+            d->nco -= TWO_PI_F;
+
+        /* low-pass, newest sample first */
+        unsigned p = d->hist_pos;
+
+        d->hist_i[p] = d->hist_i[p + LPF_TAPS] = x * c;
+        d->hist_q[p] = d->hist_q[p + LPF_TAPS] = -x * s;
+        d->hist_pos  = p + 1 < LPF_TAPS ? p + 1 : 0;
+
+        float i = 0.0f, q = 0.0f;
+
+        for (unsigned t = 0; t < LPF_TAPS; t++) {
+            i += d->taps[t] * d->hist_i[p + LPF_TAPS - t];
+            q += d->taps[t] * d->hist_q[p + LPF_TAPS - t];
         }
 
-
-        if (decoder->previous_valid) {
-
-            /*
-             * arg(conj(previous) * current)
-             */
-            const float real =
-                decoder->previous_i *
-                filtered_i +
-                decoder->previous_q *
-                filtered_q;
-
-
-            const float imag =
-                decoder->previous_i *
-                filtered_q -
-                decoder->previous_q *
-                filtered_i;
-
-
-            const float phase_difference =
-                atan2f(
-                    imag,
-                    real
-                );
-
-
-            /*
-             * ------------------------------------------------
-             * Actual tone frequency
-             * ------------------------------------------------
-             */
-            const float baseband_hz =
-                phase_difference *
-                (float)WEFAX_SAMPLE_RATE /
-                (2.0f * WEFAX_PI);
-
-
-            const float tone_hz =
-                (float)WEFAX_CENTER_HZ -
-                baseband_hz;
-
-
-            /*
-             * ------------------------------------------------
-             * Tone diagnostic
-             * ------------------------------------------------
-             *
-             * Store only values inside a sensible
-             * WEFAX audio range. This prevents large
-             * discriminator glitches from destroying
-             * the percentile measurement.
-             */
-            if (
-                tone_hz >=
-                    (float)TONE_HIST_MIN_HZ &&
-                tone_hz <=
-                    (float)TONE_HIST_MAX_HZ
-            ) {
-
-                unsigned int bin =
-                    (unsigned int)(
-                        tone_hz -
-                        (float)TONE_HIST_MIN_HZ +
-                        0.5f
-                    );
-
-
-                if (bin >= TONE_HIST_SIZE) {
-                    bin = TONE_HIST_SIZE - 1;
-                }
-
-
-                decoder->tone_histogram[bin]++;
-
-
-                decoder->tone_sum +=
-                    tone_hz;
-
-                decoder->tone_count++;
-            }
-
-
-            decoder->tone_print_samples++;
-
-
-            /*
-             * Print approximately once per second.
-             */
-            if (
-                decoder->tone_print_samples >=
-                WEFAX_SAMPLE_RATE
-            ) {
-
-                if (
-                    decoder->tone_count > 0
-                ) {
-
-                    const double average_tone =
-                        decoder->tone_sum /
-                        (double)
-                            decoder->tone_count;
-
-
-                    const float p01 =
-                        tone_percentile(
-                            decoder,
-                            0.01f
-                        );
-
-                    const float p05 =
-                        tone_percentile(
-                            decoder,
-                            0.05f
-                        );
-
-                    const float p50 =
-                        tone_percentile(
-                            decoder,
-                            0.50f
-                        );
-
-                    const float p95 =
-                        tone_percentile(
-                            decoder,
-                            0.95f
-                        );
-
-                    const float p99 =
-                        tone_percentile(
-                            decoder,
-                            0.99f
-                        );
-
-
-                    /*
-                    printf(
-                        "WEFAX: tone avg=%.1f "
-                        "P01=%.0f P05=%.0f "
-                        "P50=%.0f P95=%.0f "
-                        "P99=%.0f Hz\n",
-
-                        average_tone,
-                        p01,
-                        p05,
-                        p50,
-                        p95,
-                        p99
-                    );
-                    */
-                }
-
-
-                reset_tone_window(
-                    decoder
-                );
-            }
-
-
-            /*
-             * ------------------------------------------------
-             * WEFAX grayscale demodulation
-             * ------------------------------------------------
-             *
-             * Polarity corrected for DWD:
-             * low tone -> white,
-             * high tone -> black.
-             */
-            float gray_f =
-                255.0f *
-                (
-                    0.5f +
-                    deviation_ratio *
-                    phase_difference
-                );
-
-
-            if (gray_f < 0.0f) {
-                gray_f = 0.0f;
-            }
-
-
-            if (gray_f > 255.0f) {
-                gray_f = 255.0f;
-            }
-
-
-            const uint8_t gray =
-                (uint8_t)(
-                    gray_f + 0.5f
-                );
-
-
-            /*
-             * Grayscale diagnostics.
-             */
-            if (
-                gray <
-                decoder->gray_min
-            ) {
-
-                decoder->gray_min =
-                    gray;
-            }
-
-
-            if (
-                gray >
-                decoder->gray_max
-            ) {
-
-                decoder->gray_max =
-                    gray;
-            }
-
-
-            decoder->gray_sum +=
-                gray;
-
-            decoder->gray_count++;
-
-
-            /*
-             * AUTO: DWD APT detector.
-             *
-             * Before START we look for two consecutive 0.5 s windows
-             * around 300 Hz.  After START has been acquired, the same
-             * hysteretic transition counter looks for two consecutive
-             * windows around 450 Hz to identify APT STOP.
-             *
-             * Thresholds and counting follow the fldigi WEFAX approach:
-             * white > 215, black < 40, count black->white transitions.
-             */
-            /* STOP grace period */
-            if (
-                decoder->mode == WEFAX_MODE_AUTO &&
-                decoder->apt_start_holdoff > 0
-            ) {
-                decoder->apt_start_holdoff--;
-
-                if (decoder->apt_start_holdoff == 0) {
-                    printf(
-                        "WEFAX AUTO: START detection resumed\n"
-                    );
-                }
-            }
-
-            /* WAIT_BLACK timeout, first fax */
-            if (
-                decoder->mode == WEFAX_MODE_AUTO &&
-                decoder->apt_start_detected &&
-                !decoder->apt_fax_confirmed
-            ) {
-                if (++decoder->apt_start_age >=
-                    WEFAX_APT_START_TIMEOUT_SAMPLES) {
-                    decoder->apt_start_detected = false;
-                    decoder->apt_start_windows = 0;
-                    decoder->apt_black_rows = 0;
-                    decoder->apt_start_age = 0;
-
-                    printf(
-                        "WEFAX AUTO: provisional START expired - "
-                        "searching again\n"
-                    );
-                }
-            }
-
-            /* WAIT_BLACK timeout, new fax during a confirmed one */
-            if (
-                decoder->mode == WEFAX_MODE_AUTO &&
-                decoder->apt_fax_confirmed &&
-                decoder->apt_restart_candidate
-            ) {
-                if (++decoder->apt_restart_age >=
-                    WEFAX_APT_START_TIMEOUT_SAMPLES) {
-                    decoder->apt_restart_candidate = false;
-                    decoder->apt_restart_black_rows = 0;
-                    decoder->apt_restart_start_windows = 0;
-                    decoder->apt_restart_age = 0;
-
-                    printf(
-                        "WEFAX AUTO: new START candidate expired\n"
-                    );
-                }
-            }
-
-            if (
-                decoder->mode == WEFAX_MODE_AUTO &&
-                !decoder->apt_stop_detected
-            ) {
-                bool transition = false;
-
-                if (!decoder->apt_level_valid) {
-                    if (gray > WEFAX_APT_WHITE_THRESHOLD) {
-                        decoder->apt_is_white = true;
-                        decoder->apt_level_valid = true;
-                    }
-                    else if (gray < WEFAX_APT_BLACK_THRESHOLD) {
-                        decoder->apt_is_white = false;
-                        decoder->apt_level_valid = true;
-                    }
-                }
-                else if (
-                    !decoder->apt_is_white &&
-                    gray > WEFAX_APT_WHITE_THRESHOLD
-                ) {
-                    decoder->apt_is_white = true;
-                    transition = true;
-                }
-                else if (
-                    decoder->apt_is_white &&
-                    gray < WEFAX_APT_BLACK_THRESHOLD
-                ) {
-                    decoder->apt_is_white = false;
-                }
-
-                if (transition) {
-                    decoder->apt_transitions++;
-                }
-
-                decoder->apt_buf[decoder->apt_window_samples] = gray;
-                decoder->apt_window_samples++;
-
-                if (
-                    decoder->apt_window_samples >=
-                    WEFAX_APT_WINDOW_SAMPLES
-                ) {
-                    decoder->apt_frequency =
-                        (float)WEFAX_SAMPLE_RATE *
-                        (float)decoder->apt_transitions /
-                        (float)decoder->apt_window_samples;
-
-                    decoder->apt_stop_frequency =
-                        apt_measure_adaptive(
-                            decoder->apt_buf,
-                            decoder->apt_window_samples
-                        );
-
-                    decoder->apt_stop_line =
-                        decoder->apt_fax_confirmed ?
-                        apt_line_fraction(
-                            decoder->apt_buf,
-                            decoder->apt_window_samples,
-                            WEFAX_APT_STOP_HZ
-                        ) : 0.0f;
-
-                    decoder->apt_start_line =
-                        apt_line_fraction(
-                            decoder->apt_buf,
-                            decoder->apt_window_samples,
-                            WEFAX_APT_START_HZ
-                        );
-
-                    const bool start_window =
-                        decoder->apt_start_holdoff == 0 &&
-                        (fabsf(
-                            decoder->apt_frequency -
-                            WEFAX_APT_START_HZ
-                        ) <= WEFAX_APT_START_TOLERANCE ||
-                        decoder->apt_start_line >=
-                            WEFAX_APT_START_LINE_MIN);
-
-                    /*
-                    printf(
-                        "WEFAX AUTO: APT %.1f Hz, transitions=%u\n",
-                        decoder->apt_frequency,
-                        decoder->apt_transitions
-                    );
-                    */
-
-                    if (
-                        !decoder->apt_fax_confirmed &&
-                        decoder->apt_start_detected
-                    ) {
-                        /*
-                         * WAIT_BLACK: a START window here is the same START
-                         * we already acquired (possibly degraded).  Keep it
-                         * alive, reset nothing.
-                         */
-                        if (start_window) {
-                            decoder->apt_start_age = 0;
-                        }
-                    }
-                    else if (!decoder->apt_fax_confirmed) {
-                        /* SEARCH */
-                        if (start_window) {
-                            decoder->apt_start_windows++;
-
-                            /*
-                            printf(
-                                "WEFAX AUTO: APT START candidate "
-                                "%.1f Hz (%u/%u)\n",
-                                decoder->apt_frequency,
-                                decoder->apt_start_windows,
-                                WEFAX_APT_START_WINDOWS
-                            );
-                            */
-                        }
-                        else {
-                            decoder->apt_start_windows = 0;
-                        }
-
-                        if (
-                            decoder->apt_start_windows >=
-                            WEFAX_APT_START_WINDOWS
-                        ) {
-                            decoder->apt_start_detected = true;
-                            decoder->apt_start_generation++;
-                            decoder->apt_start_windows = 0;
-                            decoder->apt_start_age = 0;
-                            decoder->apt_stop_windows = 0;
-                            decoder->apt_black_rows = 0;
-
-                            /*
-                             * Start (or restart) provisional image
-                             * acquisition exactly at this START.
-                             */
-                            decoder->line_position = 0.0;
-                            decoder->current_pixel = 0;
-                            decoder->pixel_sum = 0.0;
-                            decoder->pixel_samples = 0;
-                            decoder->row_count = 0;
-
-                            memset(
-                                decoder->row,
-                                0,
-                                sizeof(decoder->row)
-                            );
-
-                            printf(
-                                "WEFAX AUTO: APT START DETECTED - "
-                                "provisional fax (%.1f Hz, line=%.3f)\n",
-                                decoder->apt_frequency,
-                                decoder->apt_start_line
-                            );
-                        }
-                    }
-                    else {
-                        /*
-                         * A confirmed fax keeps looking for STOP as before.
-                         * After a short grace period it also watches for a
-                         * completely new START.  A 300 Hz match alone never
-                         * disturbs the current image: it merely opens a
-                         * restart candidate.  The candidate is accepted only
-                         * after the same four 90%-black half-second bands
-                         * required by the normal initial START.
-                         */
-                        if (
-                            fabsf(
-                                decoder->apt_stop_frequency -
-                                WEFAX_APT_STOP_HZ
-                            ) <= WEFAX_APT_STOP_TOLERANCE ||
-                            decoder->apt_stop_line >=
-                                WEFAX_APT_STOP_LINE_MIN
-                        ) {
-                            decoder->apt_stop_windows++;
-                        }
-                        else {
-                            decoder->apt_stop_windows = 0;
-                        }
-
-                        if (
-                            decoder->apt_stop_windows >=
-                            WEFAX_APT_STOP_WINDOWS
-                        ) {
-                            decoder->apt_stop_detected = true;
-
-                            printf(
-                                "WEFAX AUTO: APT STOP DETECTED "
-                                "(%.1f Hz, line=%.3f)\n",
-                                decoder->apt_stop_frequency,
-                                decoder->apt_stop_line
-                            );
-                        }
-
-                        if (!decoder->apt_stop_detected) {
-                            /*
-                             * Use the same START detector while a fax is
-                             * already confirmed.  The 300 Hz sequence only
-                             * opens a restart candidate; it never disturbs
-                             * the current fax.  Black confirmation is done
-                             * later, on completed WEFAX rows, exactly like
-                             * the initial START confirmation.
-                             */
-                            if (decoder->apt_restart_candidate) {
-                                /* WAIT_BLACK: same START, keep it alive */
-                                if (start_window) {
-                                    decoder->apt_restart_age = 0;
-                                }
-                            }
-                            else if (start_window) {
-                                decoder->apt_restart_start_windows++;
-                            }
-                            else {
-                                decoder->apt_restart_start_windows = 0;
-                            }
-
-                            if (
-                                !decoder->apt_restart_candidate &&
-                                decoder->apt_restart_start_windows >=
-                                WEFAX_APT_START_WINDOWS
-                            ) {
-                                decoder->apt_restart_candidate = true;
-                                decoder->apt_restart_age = 0;
-                                decoder->apt_restart_black_rows = 0;
-                                decoder->apt_restart_start_windows = 0;
-
-                                printf(
-                                    "WEFAX AUTO: NEW APT START DETECTED - "
-                                    "waiting for normal black-row confirmation "
-                                    "(%.1f Hz)\n",
-                                    decoder->apt_frequency
-                                );
-                            }
-                        }
-                    }
-
-                    decoder->apt_window_samples = 0;
-                    decoder->apt_transitions = 0;
-                }
-            }
-
-
-            /*
-             * ------------------------------------------------
-             * WEFAX line generation
-             * ------------------------------------------------
-             *
-             * CONT starts immediately.
-             * AUTO must remain completely idle visually until APT START
-             * has actually been detected.  The demodulator above keeps
-             * running so the START detector can do its job.
-             */
-            if (
-                decoder->mode == WEFAX_MODE_AUTO &&
-                !decoder->apt_start_detected
-            ) {
-                /*
-                 * The discriminator compares every sample with the
-                 * previous one: the reference MUST advance even while
-                 * no line is generated.  Skipping this update (as the
-                 * bare `continue` did) froze previous_i/q at the first
-                 * sample, so before START the gray signal measured the
-                 * phase against a fixed phasor instead of the tone
-                 * frequency, and the START detector worked on garbage.
-                 */
-                decoder->previous_i = filtered_i;
-                decoder->previous_q = filtered_q;
-                decoder->previous_valid = true;
-                continue;
-            }
-
-            decoder->line_position +=
-                line_step;
-
-
-            bool line_finished =
-                false;
-
-
-            unsigned int pixel =
-                (unsigned int)(
-                    decoder->line_position *
-                    (double)WEFAX_WIDTH
-                );
-
-
-            if (
-                pixel >=
-                WEFAX_WIDTH
-            ) {
-
-                pixel =
-                    WEFAX_WIDTH - 1;
-
-                line_finished =
-                    true;
-            }
-
-
-            if (
-                pixel ==
-                decoder->current_pixel
-            ) {
-
-                decoder->pixel_sum +=
-                    gray;
-
-                decoder->pixel_samples++;
-            }
-            else {
-
-                if (
-                    decoder->pixel_samples > 0 &&
-                    decoder->current_pixel <
-                        WEFAX_WIDTH
-                ) {
-
-                    decoder->row[
-                        decoder->current_pixel
-                    ] =
-                        (uint8_t)(
-                            decoder->pixel_sum /
-                            decoder->pixel_samples +
-                            0.5
-                        );
-                }
-
-
-                while (
-                    decoder->current_pixel + 1 <
-                        pixel &&
-                    decoder->current_pixel + 1 <
-                        WEFAX_WIDTH
-                ) {
-
-                    decoder->current_pixel++;
-
-
-                    decoder->row[
-                        decoder->current_pixel
-                    ] = gray;
-                }
-
-
-                decoder->current_pixel =
-                    pixel;
-
-                decoder->pixel_sum =
-                    gray;
-
-                decoder->pixel_samples =
-                    1;
-            }
-
-
-            if (line_finished) {
-
-                if (
-                    decoder->pixel_samples > 0
-                ) {
-
-                    decoder->row[
-                        decoder->current_pixel
-                    ] =
-                        (uint8_t)(
-                            decoder->pixel_sum /
-                            decoder->pixel_samples +
-                            0.5
-                        );
-                }
-
-
-                /*
-                 * AUTO provisional START confirmation.
-                 *
-                 * The DWD fax START sequence is followed by a long black
-                 * band.  A completed row is considered black when at least
-                 * 90% of its pixels are below gray level 50.  Four such
-                 * consecutive rows (2 seconds at 120 LPM) confirm that the
-                 * START was real.  Until then the START detector remains
-                 * armed and another START can restart acquisition.
-                 */
-                if (
-                    decoder->mode == WEFAX_MODE_AUTO &&
-                    decoder->apt_start_detected &&
-                    !decoder->apt_fax_confirmed
-                ) {
-                    unsigned int black_pixels = 0;
-
-                    for (
-                        unsigned int x = 0;
-                        x < WEFAX_WIDTH;
-                        x++
-                    ) {
-                        if (
-                            decoder->row[x] <
-                            WEFAX_CONFIRM_BLACK_THRESHOLD
-                        ) {
-                            black_pixels++;
-                        }
-                    }
-
-                    if (
-                        black_pixels * 100U >=
-                        WEFAX_WIDTH * WEFAX_CONFIRM_BLACK_PERCENT
-                    ) {
-                        decoder->apt_black_rows++;
-
-                        /*
-                        printf(
-                            "WEFAX AUTO: BLACK %u/%u\n",
-                            decoder->apt_black_rows,
-                            WEFAX_CONFIRM_BLACK_ROWS
-                        );
-                        */
-
-                        if (
-                            decoder->apt_black_rows >=
-                            WEFAX_CONFIRM_BLACK_ROWS
-                        ) {
-                            decoder->apt_fax_confirmed = true;
-                            decoder->apt_start_windows = 0;
-                            decoder->apt_stop_windows = 0;
-                            decoder->apt_restart_candidate = false;
-                            decoder->apt_restart_black_rows = 0;
-
-                            printf(
-                                "WEFAX AUTO: FAX CONFIRMED\n"
-                            );
-
-                            phase_begin(decoder);
-                        }
-                    }
-                    else {
-                        decoder->apt_black_rows = 0;
-                    }
-                }
-
-                /*
-                 * AUTO confirmed-fax restart confirmation.
-                 *
-                 * This deliberately uses the exact same completed-row
-                 * black criterion as the initial START above.  Until four
-                 * consecutive black rows are seen, the current fax remains
-                 * untouched.  A non-black row only resets the consecutive
-                 * black-row count; it does NOT discard the START candidate.
-                 */
-                if (
-                    decoder->mode == WEFAX_MODE_AUTO &&
-                    decoder->apt_fax_confirmed &&
-                    decoder->apt_restart_candidate
-                ) {
-                    unsigned int black_pixels = 0;
-
-                    for (
-                        unsigned int x = 0;
-                        x < WEFAX_WIDTH;
-                        x++
-                    ) {
-                        if (
-                            decoder->row[x] <
-                            WEFAX_CONFIRM_BLACK_THRESHOLD
-                        ) {
-                            black_pixels++;
-                        }
-                    }
-
-                    if (
-                        black_pixels * 100U >=
-                        WEFAX_WIDTH * WEFAX_CONFIRM_BLACK_PERCENT
-                    ) {
-                        decoder->apt_restart_black_rows++;
-
-                        if (
-                            decoder->apt_restart_black_rows >=
-                            WEFAX_CONFIRM_BLACK_ROWS
-                        ) {
-                            /* 1.0, not 0.0: the common end-of-row code
-                             * below subtracts 1.0, and a negative
-                             * line_position is converted to unsigned (UB). */
-                            decoder->line_position = 1.0;
-                            decoder->current_pixel = 0;
-                            decoder->pixel_sum = 0.0;
-                            decoder->pixel_samples = 0;
-                            decoder->row_count = 0;
-                            memset(
-                                decoder->row,
-                                0,
-                                sizeof(decoder->row)
-                            );
-
-                            decoder->apt_start_generation++;
-                            decoder->apt_restart_start_windows = 0;
-                            decoder->apt_stop_windows = 0;
-                            decoder->apt_restart_candidate = false;
-                            decoder->apt_restart_black_rows = 0;
-
-                            printf(
-                                "WEFAX AUTO: NEW APT START CONFIRMED - "
-                                "discarding current fax and restarting\n"
-                            );
-
-                            /* this row was blanked by the restart */
-                            phase_begin(decoder);
-                            decoder->phase_skip_row = true;
-                        }
-                    }
-                    else {
-                        decoder->apt_restart_black_rows = 0;
-                    }
-                }
-
-                int phase_shift = -1;
-
-                if (
-                    decoder->mode == WEFAX_MODE_AUTO &&
-                    decoder->apt_fax_confirmed &&
-                    decoder->phase_active
-                ) {
-                    phase_shift = phase_process_row(
-                        decoder,
-                        decoder->row
-                    );
-                }
-
-                if (
-                    decoder->row_callback
-                ) {
-
-                    decoder->row_callback(
-                        decoder->row,
-                        WEFAX_WIDTH,
-                        decoder->row_count,
-                        decoder->row_callback_data
-                    );
-                }
-
-
-                decoder->row_count++;
-
-
-                /*
-                 * Keep the fractional part.
-                 */
-                decoder->line_position -=
-                    1.0;
-
-
-                decoder->current_pixel =
-                    (unsigned int)(
-                        decoder->line_position *
-                        (double)WEFAX_WIDTH
-                    );
-
-
-                if (
-                    decoder->current_pixel >=
-                    WEFAX_WIDTH
-                ) {
-
-                    decoder->current_pixel =
-                        0;
-                }
-
-
-                decoder->pixel_sum =
-                    0.0;
-
-                decoder->pixel_samples =
-                    0;
-
-
-                memset(
-                    decoder->row,
-                    0,
-                    sizeof(decoder->row)
-                );
-
-                /*
-                 * Phasing alignment: the first pixel after the pulse is at
-                 * x=phase_shift in the current line grid.  Start the next
-                 * row at x = WIDTH - phase_shift: that (phasing) row ends
-                 * exactly after the pulse, and every following row starts
-                 * right after it, with the white bar on the right border.
-                 */
-                if (
-                    phase_shift > 1 &&
-                    phase_shift < (int)WEFAX_WIDTH - 1
-                ) {
-                    decoder->line_position +=
-                        (double)(WEFAX_WIDTH - phase_shift) /
-                        (double)WEFAX_WIDTH;
-
-                    if (decoder->line_position >= 1.0) {
-                        decoder->line_position -= 1.0;
-                    }
-
-                    decoder->current_pixel =
-                        (unsigned int)(
-                            decoder->line_position *
-                            (double)WEFAX_WIDTH
-                        );
-
-                    if (decoder->current_pixel >= WEFAX_WIDTH) {
-                        decoder->current_pixel = 0;
-                    }
-                }
-            }
+        if (d->primed) {
+            /* phase step from the last sample: 0 at the centre, +/- shift/2 at black and white */
+            float re = d->last_i * i + d->last_q * q;
+            float im = d->last_i * q - d->last_q * i;
+            float g  = 255.0f * (0.5f + GREY_PER_RAD * atan2f(im, re));
+            uint8_t grey = (uint8_t)((g < 0.0f ? 0.0f : g > 255.0f ? 255.0f : g) + 0.5f);
+
+            if (d->mode == WEFAX_MODE_AUTO)
+                auto_sample(d, grey);
+            if (d->mode != WEFAX_MODE_AUTO || d->started)
+                line_sample(d, grey);
         }
-
-
-        decoder->previous_i =
-            filtered_i;
-
-        decoder->previous_q =
-            filtered_q;
-
-        decoder->previous_valid =
-            true;
+        d->last_i = i;
+        d->last_q = q;
+        d->primed = true;
     }
-
-
-    decoder->sample_count +=
-        count;
-
-    decoder->block_count++;
-}
-
-
-uint64_t wefax_decoder_sample_count(
-    const wefax_decoder_t *decoder)
-{
-    if (!decoder) {
-        return 0;
-    }
-
-
-    return decoder->sample_count;
-}
-
-
-uint64_t wefax_decoder_block_count(
-    const wefax_decoder_t *decoder)
-{
-    if (!decoder) {
-        return 0;
-    }
-
-
-    return decoder->block_count;
-}
-
-
-uint32_t wefax_decoder_row_count(
-    const wefax_decoder_t *decoder)
-{
-    if (!decoder) {
-        return 0;
-    }
-
-
-    return decoder->row_count;
-}
-
-
-uint8_t wefax_decoder_gray_min(
-    const wefax_decoder_t *decoder)
-{
-    if (
-        !decoder ||
-        decoder->gray_count == 0
-    ) {
-
-        return 0;
-    }
-
-
-    return decoder->gray_min;
-}
-
-
-uint8_t wefax_decoder_gray_max(
-    const wefax_decoder_t *decoder)
-{
-    if (
-        !decoder ||
-        decoder->gray_count == 0
-    ) {
-
-        return 0;
-    }
-
-
-    return decoder->gray_max;
-}
-
-
-float wefax_decoder_gray_average(
-    const wefax_decoder_t *decoder)
-{
-    if (
-        !decoder ||
-        decoder->gray_count == 0
-    ) {
-
-        return 0.0f;
-    }
-
-
-    return
-        (float)(
-            decoder->gray_sum /
-            (double)
-                decoder->gray_count
-        );
-}
-
-
-bool wefax_decoder_auto_stop_detected(
-    const wefax_decoder_t *decoder)
-{
-    return decoder ? decoder->apt_stop_detected : false;
-}
-
-
-uint32_t wefax_decoder_auto_start_generation(
-    const wefax_decoder_t *decoder)
-{
-    return decoder ? decoder->apt_start_generation : 0;
-}
-
-
-bool wefax_decoder_auto_fax_confirmed(
-    const wefax_decoder_t *decoder)
-{
-    return decoder ? decoder->apt_fax_confirmed : false;
 }

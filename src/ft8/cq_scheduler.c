@@ -32,7 +32,11 @@ void cq_make_message(const char *callsign,
     if (rc != FTX_MESSAGE_RC_OK) {
         LV_LOG_USER("Error: %d while encoding message: '%s'", rc, buf);
     }
-    rc = ftx_message_decode(&msg, NULL, buf);
+    /* Decode into a scratch buffer: the decoded text spells the modifier
+     * "CQ POTA ...", and re-encoding that at TX time packs a type-4
+     * "CQ POTA" with no call and grid. Keep "CQ_POTA" in 'out'. */
+    char check[FTX_MAX_MESSAGE_LENGTH];
+    rc = ftx_message_decode(&msg, NULL, check);
     if (rc != FTX_MESSAGE_RC_OK) {
         LV_LOG_USER("Error: %d while decoding message: '%s'", rc, buf);
     }

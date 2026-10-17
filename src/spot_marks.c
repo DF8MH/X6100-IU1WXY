@@ -6,10 +6,13 @@
 
 #include "cluster/client.h"
 #include "cluster_column.h"
+#include "dxcc.h"
+#include "flags.h"
 #include "cfg/cfg_api.h"
 #include "remote_server.h"
 #include "styles.h"
 #include "theme.h"
+#include "fonts/font_select.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +26,8 @@
 #define GAP      6      /* between labels of a row */
 #define LINE_W   4      /* the line from a call to its frequency */
 #define SPOT_COLOR theme_hex(TC_spot)
-#define SPOT_FONT  sony_22   /* line height 17: fits ROW_H */
+/* line height 17: fits ROW_H; VISION: the size of the other themes, its bigger one ran the two rows into each other */
+#define SPOT_FONT  (*(theme_shape.vision ? font_down(&sony_22, VISION_FONT_STEPS) : &sony_22))
 #define REMOTE_SPOTS 100        /* newest first, for X6100 Link */
 #define REMOTE_S     10         /* resent this often: a phone that connects gets them soon */
 
@@ -140,7 +144,9 @@ static void redraw(void) {
 }
 
 /* The spots that pass the radio's filters, newest first, to the remote clients:
- * {"t":"cluster","spots":[[Hz,"call","mode",age min,alert 0/1],...]} */
+ * {"t":"cluster","spots":[[Hz,"call","mode",age min,alert 0/1,"spotter","comment","country","iso"],...]}:
+ * spotter, comment and country (cty.dat, shortened as dxcc_lookup gives it) only on an alert's row, "" on the others;
+ * iso (the flag's ISO 3166 code, lower case; "" when unknown) on every row */
 static void send_remote(uint16_t now) {
     static const char *mode[] = {"CW", "LSB", "USB", "DIG", "AM", "FM"};   /* cluster_mode_t */
     const cluster_filter_t *flt = cluster_filter();
@@ -162,7 +168,22 @@ static void send_remote(uint16_t now) {
         cJSON_AddItemToArray(r, cJSON_CreateString(s->dx));
         cJSON_AddItemToArray(r, cJSON_CreateString(mode[cluster_guess_mode(s)]));
         cJSON_AddItemToArray(r, cJSON_CreateNumber(cluster_age_min(s->utc_min, now)));
-        cJSON_AddItemToArray(r, cJSON_CreateNumber(cluster_alert_match(flt, s) >= 0));
+        bool alert = cluster_alert_match(flt, s) >= 0;
+        cJSON_AddItemToArray(r, cJSON_CreateNumber(alert));
+        /* cty.dat is read on the first lookup (about 0.1 s, once), as js8_map does */
+        const char *name = "", *prefix = NULL, *iso = "";
+        if (dxcc_lookup(s->dx, &name, &prefix)) {
+            for (size_t k = 0; k < sizeof(flag_of) / sizeof(flag_of[0]); k++)
+                if (!strcmp(flag_of[k].prefix, prefix)) {
+                    iso = flag_iso[flag_of[k].flag];
+                    break;
+                }
+        }
+        /* spotter, comment and country for the phone's notification; the flag for every row */
+        cJSON_AddItemToArray(r, cJSON_CreateString(alert ? s->spotter : ""));
+        cJSON_AddItemToArray(r, cJSON_CreateString(alert ? s->comment : ""));
+        cJSON_AddItemToArray(r, cJSON_CreateString(alert ? name : ""));
+        cJSON_AddItemToArray(r, cJSON_CreateString(iso));
         cJSON_AddItemToArray(a, r);
         n++;
     }

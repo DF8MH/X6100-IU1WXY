@@ -115,7 +115,9 @@ const convert = async function(x, progress, warn) {
   if (pcm) { let o = 0; avi.audio.forEach(function(a) { pcm.set(a, o); o += a.length; }); }
   let acfg = null, arate = avi.rate;
   if (pcm && typeof AudioEncoder !== "undefined" && avi.channels == 1) {
+    // From 0.127 the AVI carries the measured rate (e.g. 44365 Hz), which AAC may not take
     const list = [{codec: "mp4a.40.2", sampleRate: arate, numberOfChannels: 1, bitrate: 64000, name: "aac"},
+                  {codec: "mp4a.40.2", sampleRate: 44100, numberOfChannels: 1, bitrate: 64000, name: "aac"},
                   {codec: "opus", sampleRate: 48000, numberOfChannels: 1, bitrate: 48000, name: "opus"}];
     for (const c of list) {
       if ((await AudioEncoder.isConfigSupported(c)).supported) { acfg = c; break; }

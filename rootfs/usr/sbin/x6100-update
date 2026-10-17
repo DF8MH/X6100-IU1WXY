@@ -1,0 +1,655 @@
+#!/usr/bin/env python3
+# App update: replaces only the radio applications (GUI, web server, helpers, data), no reflash, no reboot.
+#
+#   x6100-update check FILE    verify a package (ed25519 signature, sha256 of every file, min_system) and
+#                              unpack it to the stage; status "uploaded" or "error"
+#   x6100-update install       install the staged package, restart GUI + web server, watch the GUI for 2 min,
+#                              roll back by itself if it keeps crashing
+#   x6100-update boot          from the init script, before the GUI: roll back an install cut by a power loss,
+#                              then install the packages copied by hand into /mnt/update/
+#   x6100-update health        the 2 min watch alone (started by "boot" after a /mnt/update install)
+#   x6100-update latest        asks x6100-link.it for the newest package (for Settings > Info): one line
+#                              "<new|uptodate|image|none|offline|error><TAB><version or message>"
+#   x6100-update get           downloads that package (resumes on a weak link), checks and installs it
+#   x6100-update remote ON IDLE  an update asked for this radio by the site (ping answer saved by the GUI):
+#                              refused when ON is 0, else downloaded and checked, installed at a later ping
+#                              with IDLE 1; the outcome goes back to the site. Log in remote.log
+#
+# Package x6100-app-<version>.tar.gz: manifest.json {version, min_system, files: [{path, sha256, mode}]},
+# manifest.sig (ed25519 over manifest.json, key /etc/x6100/update.pub) and files/<path>.
+# The status for the web server is in /mnt/.x6100-update/status.json.
+
+import base64
+import ctypes
+import errno
+import fcntl
+import hashlib
+import http.client
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+WORK = "/mnt/.x6100-update"
+STAGE = WORK + "/stage"                 # files/<path> + manifest.json of the checked package
+BACKUP = WORK + "/backup.tar"           # the files replaced, with their modes
+JOURNAL = WORK + "/journal.json"        # present from the backup until the new apps are healthy
+STATUS = WORK + "/status.json"
+NOTICE = WORK + "/notice"               # one line the GUI shows at start
+DROP = "/mnt/update"                    # packages copied by hand, installed at boot
+PUBKEY = "/etc/x6100/update.pub"
+SYSTEM = "/etc/x6100-system-version"
+APP_VERSION = "/usr/share/x6100/app-version"
+INSTALLED = "usr/share/x6100/app-manifest.json"   # manifest of the installed package (relative to /)
+GUI_INIT = "/etc/init.d/S95gui"
+WEB_INIT = "/etc/init.d/S96webserver"
+HEALTH_S = 120
+LATEST_URL = "https://x6100-link.it/updates/latest.json"
+LATEST = WORK + "/latest.json"
+DOWNLOAD = WORK + "/download.tar.gz"
+MAX_BYTES = 64 * 1024 * 1024
+REPORT_URL = "https://x6100-link.it/api/update_report.php"
+DEVICE_ID = "/mnt/device_id"            # the radio id the GUI sends with the ping
+PING = WORK + "/ping.json"              # last ping answer with an update request, written by the GUI
+REMOTE = WORK + "/remote.json"          # the request in hand and how far it got
+REMOTE_PENDING = WORK + "/remote.pending"   # while present the GUI calls "remote" at every ping
+REMOTE_PKG = WORK + "/remote.tar.gz"
+REMOTE_LOG = WORK + "/remote.log"
+REMOTE_EXPIRE_S = 24 * 3600
+# Only application files; this updater and the boot hook come with the full image
+ALLOWED = re.compile(r"^(usr/sbin/(?!x6100-update$)[\w.+-]+|usr/bin/x6100_webserver|usr/lib/liblv(gl|_drivers)\.so"
+                     r"|usr/share/x6100/[\w ./+-]+|usr/lib/python3\.\d+/site-packages/x6100_webserver[\w.-]*/[\w ./+-]+)$")
+
+
+class Refused(Exception):
+    pass
+
+
+# What the user reads (status, web page, X6100 Link, radio notice, /mnt/update/failed): plain words, what to do
+M_SIG = "This file is not an official update. Download it again from x6100-link.it."
+M_DAMAGED = "The update file is damaged. Download it again."
+M_IMAGE = "This update needs a new microSD image. Please update by flashing the microSD card."
+M_SPACE = "Not enough space on the radio for the update."
+M_ROLLBACK = "The update did not start correctly. The previous version has been restored."
+M_INTERRUPTED = "The update was interrupted. The previous version has been restored."
+M_STOPPED = "The update was interrupted. Nothing was changed. Please try again."
+M_FAILED = "The update could not be installed. The previous version has been restored."
+M_BUSY = "Another update is in progress. Please wait."
+M_NOTHING = "Choose an update file first."
+M_DONE = "Update installed: version %s"
+M_OFFLINE = "No internet connection. Connect the radio to WiFi or Ethernet."
+M_NONE = "No update available."
+M_UPTODATE = "Up to date."
+M_SERVER = "The update server did not answer. Please try again later."
+M_DOWNLOAD = "The download did not finish. Check the connection and try again."
+
+
+def write_atomic(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def read(path, default=""):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return default
+
+
+def status(state, version="", progress=0, message=""):
+    write_atomic(STATUS, json.dumps({"state": state, "version": version, "progress": progress, "message": message}))
+
+
+def notice(text):
+    write_atomic(NOTICE, text + "\n")
+
+
+def ed25519_ok(pub, sig, msg):
+    try:
+        c = ctypes.CDLL("libcrypto.so.1.1")
+    except OSError:   # OpenSSL 3 (the tests on the PC)
+        c = ctypes.CDLL("libcrypto.so.3")
+    c.EVP_PKEY_new_raw_public_key.restype = ctypes.c_void_p
+    c.EVP_PKEY_new_raw_public_key.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t]
+    c.EVP_MD_CTX_new.restype = ctypes.c_void_p
+    c.EVP_DigestVerifyInit.argtypes = [ctypes.c_void_p] * 5
+    c.EVP_DigestVerify.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_size_t]
+    c.EVP_MD_CTX_free.argtypes = [ctypes.c_void_p]
+    c.EVP_PKEY_free.argtypes = [ctypes.c_void_p]
+    key = c.EVP_PKEY_new_raw_public_key(1087, None, pub, len(pub))   # EVP_PKEY_ED25519
+    ctx = c.EVP_MD_CTX_new()
+    try:
+        return bool(key and ctx and c.EVP_DigestVerifyInit(ctx, None, None, None, key) == 1
+                    and c.EVP_DigestVerify(ctx, sig, len(sig), msg, len(msg)) == 1)
+    finally:
+        c.EVP_MD_CTX_free(ctx)
+        c.EVP_PKEY_free(key)
+
+
+def public_key(path=PUBKEY):
+    """Raw 32 bytes from the PEM (the last bytes of the DER)."""
+    return base64.b64decode("".join(read(path).split("-----")[2].split()))[-32:]
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def check_manifest(data, sig, pub, system):
+    """The manifest dict when signed by our key and installable on this system."""
+    if not ed25519_ok(pub, sig, data):
+        raise Refused(M_SIG)
+    m = json.loads(data)
+    if not isinstance(m.get("version"), str) or not isinstance(m.get("files"), list) or not m["files"]:
+        raise Refused(M_DAMAGED)
+    need = int(m.get("min_system", 1))
+    if need > system:
+        raise Refused(M_IMAGE)
+    for f in m["files"]:
+        if not ALLOWED.match(f.get("path", "")) or ".." in f["path"].split("/"):
+            raise Refused(M_IMAGE)
+    return m
+
+
+def check(pkg, stage=STAGE, pub=None, system=None):
+    """Verify pkg and unpack its files into stage. Returns the manifest."""
+    pub = public_key() if pub is None else pub
+    system = int(read(SYSTEM, "0") or 0) if system is None else system
+    shutil.rmtree(stage, ignore_errors=True)
+    os.makedirs(stage)
+    try:
+        with tarfile.open(pkg, "r:gz") as t:
+            def member(name):
+                try:
+                    i = t.getmember(name)
+                except KeyError:
+                    i = None
+                if i is None or not i.isfile():
+                    raise Refused(M_DAMAGED)
+                return t.extractfile(i).read() if not name.startswith("files/") else i
+            data = member("manifest.json")
+            m = check_manifest(data, member("manifest.sig"), pub, system)
+            for f in m["files"]:
+                i = member("files/" + f["path"])
+                dst = os.path.join(stage, "files", f["path"])
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                with t.extractfile(i) as src, open(dst, "wb") as out:
+                    shutil.copyfileobj(src, out)
+                if sha256(dst) != f["sha256"]:
+                    raise Refused(M_DAMAGED)
+    except (tarfile.TarError, OSError, EOFError, ValueError) as e:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise Refused(M_SPACE if getattr(e, "errno", 0) == errno.ENOSPC else M_DAMAGED)
+    except Refused:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
+    with open(os.path.join(stage, "manifest.json"), "wb") as f:
+        f.write(data)
+    return m
+
+
+def rootfs_rw():
+    if not os.access("/usr/sbin", os.W_OK):
+        subprocess.run(["mount", "-o", "remount,rw", "/"], check=False)
+
+
+def put(src, dst, mode):
+    """New file next to the old one, then rename into place."""
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    tmp = dst + ".x6100new"
+    shutil.copyfile(src, tmp)
+    os.chmod(tmp, mode)
+    with open(tmp, "rb") as f:
+        os.fsync(f.fileno())
+    os.replace(tmp, dst)
+
+
+def install_files(m, root="/"):
+    """Backup + journal, then the new files. The journal stays until the new apps proved healthy."""
+    paths = [f["path"] for f in m["files"]]
+    # Files of the installed version that the new one no longer has: removed (the backup keeps them).
+    # Known only after a first app update: the image has no list.
+    listed = os.path.join(root, INSTALLED)
+    prev = json.loads(read(listed, "{}") or "{}").get("files", [])
+    gone = [f["path"] for f in prev if f["path"] not in paths and ALLOWED.match(f["path"])
+            and os.path.isfile(os.path.join(root, f["path"]))]
+    old = [p for p in paths + [INSTALLED] if os.path.isfile(os.path.join(root, p))]
+    with tarfile.open(BACKUP + ".tmp", "w") as t:
+        for p in old + gone:
+            t.add(os.path.join(root, p), arcname=p)
+    os.replace(BACKUP + ".tmp", BACKUP)
+    write_atomic(JOURNAL, json.dumps({"version": m["version"], "from": read(os.path.join(root, APP_VERSION[1:])),
+                                      "new": [p for p in paths + [INSTALLED] if p not in old]}))
+    for n, f in enumerate(m["files"]):
+        put(os.path.join(STAGE, "files", f["path"]), os.path.join(root, f["path"]), int(f["mode"], 8) & 0o7777)
+        status("installing", m["version"], 10 + 70 * (n + 1) // len(paths))
+    for p in gone:
+        os.remove(os.path.join(root, p))
+    put(os.path.join(STAGE, "manifest.json"), listed, 0o644)
+    os.sync()
+
+
+def rollback(reason, message=M_ROLLBACK, root="/"):
+    """Old files back from the backup, files that did not exist removed. reason goes to rollback.log."""
+    j = json.loads(read(JOURNAL, "{}") or "{}")
+    with tarfile.open(BACKUP) as t:
+        for i in t.getmembers():
+            dst = os.path.join(root, i.name)
+            tmp = dst + ".x6100new"
+            with t.extractfile(i) as src, open(tmp, "wb") as out:
+                shutil.copyfileobj(src, out)
+                out.flush()
+                os.fsync(out.fileno())
+            os.chmod(tmp, i.mode)
+            os.replace(tmp, dst)
+    for p in j.get("new", []):
+        try:
+            os.remove(os.path.join(root, p))
+        except OSError:
+            pass
+    os.sync()
+    os.remove(JOURNAL)
+    with open(WORK + "/rollback.log", "a") as f:
+        f.write("%s v%s: %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), j.get("version", "?"), reason))
+    status("rolled_back", j.get("version", ""), 100, message)
+    notice(message)
+
+
+def restart_apps():
+    for init in (GUI_INIT, WEB_INIT):
+        subprocess.run([init, "restart"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=60, check=False)
+
+
+def gui_pid():
+    r = subprocess.run(["pidof", "x6100_gui"], capture_output=True, text=True)
+    return r.stdout.split()[0] if r.stdout.split() else None
+
+
+def web_ok():
+    try:
+        with urllib.request.urlopen("http://127.0.0.1/link/v2/info", timeout=5) as r:
+            return r.status == 200
+    except OSError:
+        return False
+
+
+def healthy(version, wait_start=False):
+    """Watch the GUI for HEALTH_S seconds: None when fine, else why not."""
+    if wait_start:   # at boot the GUI is not started yet
+        for _ in range(90):
+            if gui_pid():
+                break
+            time.sleep(2)
+    pids, end = set(), time.time() + HEALTH_S
+    while time.time() < end:
+        p = gui_pid()
+        if p:
+            pids.add(p)
+        if len(pids) > 2:
+            return "the GUI crashed %d times" % (len(pids) - 1)
+        status("restarting", version, 90 + int(10 * (HEALTH_S - (end - time.time())) // HEALTH_S))
+        time.sleep(2)
+    if not gui_pid():
+        return "the GUI does not start"
+    if not web_ok():
+        return "the web server does not answer"
+    return None
+
+
+def finish(m, restart):
+    why = healthy(m["version"], wait_start=not restart)
+    if why:
+        rollback(why)
+        if restart:
+            restart_apps()
+        return False
+    os.remove(JOURNAL)
+    os.remove(BACKUP)
+    shutil.rmtree(STAGE, ignore_errors=True)
+    status("done", m["version"], 100, "")
+    return True
+
+
+def cmd_install():
+    m = json.loads(read(os.path.join(STAGE, "manifest.json"), "{}") or "{}")
+    if not m.get("files"):
+        status("error", "", 0, M_NOTHING)
+        return 1
+    status("installing", m["version"], 5)
+    rootfs_rw()
+    try:
+        install_files(m)
+    except OSError as e:
+        if os.path.exists(JOURNAL):
+            rollback("install failed (%s)" % e, M_SPACE if e.errno == errno.ENOSPC else M_FAILED)
+            restart_apps()
+        else:
+            status("error", m["version"], 0, M_SPACE if e.errno == errno.ENOSPC else M_FAILED)
+        return 1
+    notice(M_DONE % m["version"])
+    status("restarting", m["version"], 85)
+    restart_apps()
+    return 0 if finish(m, restart=True) else 1
+
+
+def system_version():
+    return int(read(SYSTEM, "0") or 0)
+
+
+def newer(a, b):
+    """'0.127.1' > '0.127': number by number."""
+    num = lambda v: [int(x) for x in re.findall(r"\d+", v)]
+    return num(a) > num(b)
+
+
+def cmd_latest():
+    try:
+        with urllib.request.urlopen(LATEST_URL, timeout=20) as r:
+            data = r.read(65536)
+        j = json.loads(data)
+        ver = str(j["version"])
+    except urllib.error.HTTPError as e:
+        print("none\t" + M_NONE if e.code == 404 else "error\t" + M_SERVER)
+        return 0
+    except (urllib.error.URLError, OSError):
+        print("offline\t" + M_OFFLINE)
+        return 0
+    except (ValueError, KeyError):
+        print("error\t" + M_SERVER)
+        return 0
+    if not newer(ver, read(APP_VERSION)):
+        print("uptodate\t" + M_UPTODATE)
+    elif int(j.get("min_system", 1)) > system_version():
+        print("image\t" + M_IMAGE)
+    else:
+        write_atomic(LATEST, data.decode())
+        print("new\t" + ver)
+    return 0
+
+
+def download(url, size, ver, dest=None, show=True):
+    """Into dest (DOWNLOAD), going on from the byte reached after a drop (HTTP Range). True when complete."""
+    dest = dest or DOWNLOAD
+    last = 0
+    for _ in range(30):
+        have = os.path.getsize(dest) if os.path.exists(dest) else 0
+        if have >= size:
+            return have == size
+        try:
+            req = urllib.request.Request(url, headers={"Range": "bytes=%d-" % have} if have else {})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                with open(dest, "ab" if have and r.status == 206 else "wb") as f:
+                    have = f.tell()
+                    for chunk in iter(lambda: r.read(65536), b""):
+                        f.write(chunk)
+                        have += len(chunk)
+                        if have > size:
+                            return False
+                        if show and time.time() - last > 1:
+                            last = time.time()
+                            status("verifying", ver, 100 * have // size, "Downloading %.1f of %.1f MB"
+                                   % (have / 1e6, size / 1e6))
+        except urllib.error.HTTPError as e:
+            if e.code in (404, 410):
+                return False
+            time.sleep(5)
+        except (OSError, http.client.HTTPException):   # dropped link: go on from the byte reached
+            time.sleep(5)
+    return False
+
+
+def cmd_get():
+    j = json.loads(read(LATEST, "{}") or "{}")
+    ver, size = str(j.get("version", "")), int(j.get("size", 0))
+    if not ver or not 0 < size <= MAX_BYTES:
+        status("error", "", 0, M_NOTHING)
+        return 1
+    status("verifying", ver, 0, "Downloading")
+    if os.path.exists(DOWNLOAD) and os.path.getsize(DOWNLOAD) > size:
+        os.remove(DOWNLOAD)
+    if not download(j["url"], size, ver):
+        status("error", ver, 0, M_DOWNLOAD)
+        return 1
+    if sha256(DOWNLOAD) != j.get("sha256"):
+        os.remove(DOWNLOAD)
+        status("error", ver, 0, M_DAMAGED)
+        return 1
+    status("verifying", ver, 100, "")
+    try:
+        m = check(DOWNLOAD)
+    except Refused as e:
+        status("error", ver, 0, str(e))
+        return 1
+    finally:
+        os.remove(DOWNLOAD)
+    status("uploaded", m["version"], 100)
+    return cmd_install()
+
+
+REMOTE_FINAL = ("installed", "rolled_back", "error", "refused")
+
+
+def rlog(text):
+    with open(REMOTE_LOG, "a") as f:
+        f.write("%s %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), text))
+
+
+def remote_request():
+    """The request in the ping answer the GUI saved (then removed), checked field by field; else None."""
+    data = read(PING)
+    if not data:
+        return None
+    os.remove(PING)
+    try:
+        u = json.loads(data)["update"]
+        r = {"request": int(u["request"]), "version": str(u["version"]), "url": str(u["url"]),
+             "sha256": str(u["sha256"]).lower(), "size": int(u["size"]), "min_system": int(u.get("min_system", 1))}
+    except (ValueError, TypeError, KeyError):
+        rlog("ping answer not understood: %.200s" % data)
+        return None
+    if not (re.fullmatch(r"[0-9a-f]{64}", r["sha256"]) and 0 < r["size"] <= MAX_BYTES
+            and re.match(r"https?://", r["url"]) and re.fullmatch(r"[\w.+-]{1,32}", r["version"])):
+        r["bad"] = True
+    return r
+
+
+def report(r):
+    """The outcome to the site. The HTTP code, None when it did not get there (sent again at the next ping)."""
+    body = urllib.parse.urlencode({"id": read(DEVICE_ID), "request": r["request"], "status": r["state"],
+                                   "message": r.get("message", "")[:300]}).encode()
+    try:
+        with urllib.request.urlopen(REPORT_URL, body, timeout=20) as resp:
+            code = resp.status
+    except urllib.error.HTTPError as e:
+        code = e.code
+    except (OSError, http.client.HTTPException) as e:
+        rlog("request %d: report %s not sent (%s)" % (r["request"], r["state"], e))
+        return None
+    rlog("request %d: report %s -> %d" % (r["request"], r["state"], code))
+    return code
+
+
+def cmd_remote(enabled, idle):
+    r = json.loads(read(REMOTE, "{}") or "{}")
+    new = remote_request()
+    if new and new["request"] != r.get("request"):
+        if r and r["state"] not in REMOTE_FINAL:
+            rlog("request %d replaced" % r["request"])
+        if os.path.exists(REMOTE_PKG):
+            os.remove(REMOTE_PKG)
+        r = dict(new, first=time.time(), state="pending", message="", sent=True)
+        rlog("request %d: version %s from %s" % (r["request"], r["version"], r["url"]))
+    if not r:
+        return 0
+
+    def final(state, message):
+        r.update(state=state, message=message, sent=False)
+        rlog("request %d: %s %s" % (r["request"], state, message))
+
+    if r["state"] == "installing":   # cut by a power loss: the status says how it ended
+        s = json.loads(read(STATUS, "{}") or "{}")
+        if s.get("state") == "done" and s.get("version") == r["version"]:
+            final("installed", "")
+        else:
+            final("rolled_back", s.get("message") or M_INTERRUPTED)
+    if r["state"] not in REMOTE_FINAL:
+        if r.get("bad"):
+            final("error", "The request from the site is not valid.")
+        elif not enabled:
+            final("refused", "Remote updates are turned off on the radio.")
+        elif time.time() - r["first"] > REMOTE_EXPIRE_S:
+            final("error", "expired: radio was never idle")
+        elif r["min_system"] > system_version():
+            final("error", M_IMAGE)
+        elif r["version"] == read(APP_VERSION):
+            final("installed", "The radio already runs this version.")
+        elif r["state"] == "pending":
+            if os.path.exists(REMOTE_PKG) and os.path.getsize(REMOTE_PKG) > r["size"]:
+                os.remove(REMOTE_PKG)
+            if not download(r["url"], r["size"], r["version"], REMOTE_PKG, show=False):
+                rlog("request %d: download not finished, again at the next ping" % r["request"])
+            elif sha256(REMOTE_PKG) != r["sha256"]:
+                final("error", M_DAMAGED)
+            else:
+                try:
+                    m = check(REMOTE_PKG, WORK + "/remote_stage")
+                    if m["version"] != r["version"]:
+                        raise Refused(M_DAMAGED)
+                    r.update(state="downloaded", message="", sent=False)
+                    rlog("request %d: downloaded and checked" % r["request"])
+                except Refused as e:
+                    final("error", str(e))
+                shutil.rmtree(WORK + "/remote_stage", ignore_errors=True)
+        elif not idle:   # downloaded: installed only at a ping with the radio idle
+            rlog("request %d: radio busy, install at a later ping" % r["request"])
+        else:
+            try:
+                m = check(REMOTE_PKG, STAGE)
+            except Refused as e:
+                final("error", str(e))
+            else:
+                r["state"] = "installing"
+                write_atomic(REMOTE, json.dumps(r))
+                status("uploaded", m["version"], 100)
+                rlog("request %d: installing" % r["request"])
+                cmd_install()
+                s = json.loads(read(STATUS, "{}") or "{}")
+                if s.get("state") == "done":
+                    final("installed", "")
+                else:
+                    final("rolled_back" if s.get("state") == "rolled_back" else "error", s.get("message", ""))
+    if r["state"] in REMOTE_FINAL and os.path.exists(REMOTE_PKG):
+        os.remove(REMOTE_PKG)
+    if not r["sent"]:
+        code = report(r)
+        if code == 404 and r["state"] not in REMOTE_FINAL:   # cancelled on the site
+            r.update(state="error", message="cancelled by the site")
+            rlog("request %d: cancelled by the site" % r["request"])
+            if os.path.exists(REMOTE_PKG):
+                os.remove(REMOTE_PKG)
+        r["sent"] = code is not None
+    write_atomic(REMOTE, json.dumps(r))
+    if r["state"] in REMOTE_FINAL and r["sent"]:
+        if os.path.exists(REMOTE_PENDING):
+            os.remove(REMOTE_PENDING)
+    else:
+        write_atomic(REMOTE_PENDING, "")
+    return 0
+
+
+def cmd_boot():
+    if os.path.exists(JOURNAL):
+        rootfs_rw()
+        rollback("the install was interrupted", M_INTERRUPTED)
+    elif json.loads(read(STATUS, "{}") or "{}").get("state") in ("verifying", "installing", "restarting"):
+        status("error", "", 0, M_STOPPED)   # stopped before any file was replaced
+    if not os.path.exists(JOURNAL):
+        for p in (BACKUP + ".tmp", BACKUP):
+            if os.path.exists(p):
+                os.remove(p)
+        shutil.rmtree(STAGE, ignore_errors=True)
+    pkgs = sorted(n for n in os.listdir(DROP) if n.endswith(".tar.gz")) if os.path.isdir(DROP) else []
+    for n in pkgs:
+        src, ok = os.path.join(DROP, n), True
+        try:
+            m = check(src)
+            rootfs_rw()
+            status("installing", m["version"], 5)
+            install_files(m)
+            notice(M_DONE % m["version"])
+            status("restarting", m["version"], 85)
+        except (Refused, OSError) as e:
+            ok = False
+            msg = str(e) if isinstance(e, Refused) else M_SPACE if e.errno == errno.ENOSPC else M_FAILED
+            if os.path.exists(JOURNAL):
+                rollback("install failed (%s)" % e, msg)
+            else:
+                status("error", "", 0, msg)
+            os.makedirs(DROP + "/failed", exist_ok=True)
+            write_atomic(DROP + "/failed/" + n + ".reason", msg + "\n")
+        os.makedirs(DROP + ("/done" if ok else "/failed"), exist_ok=True)
+        os.replace(src, os.path.join(DROP, "done" if ok else "failed", n))
+        if ok:   # the GUI starts after us: watch it in the background
+            subprocess.Popen([sys.argv[0], "health"], start_new_session=True, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            break   # one package per boot
+    return 0
+
+
+def main():
+    os.makedirs(WORK, exist_ok=True)
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    lock = open(WORK + "/lock", "w")
+    if cmd == "latest":
+        return cmd_latest()
+    if cmd != "health":
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if cmd != "boot" else 0))
+        except OSError:
+            print(json.dumps({"state": "error", "message": M_BUSY}))
+            return 1
+    if cmd == "check" and len(sys.argv) == 3:
+        status("verifying", "", 50)
+        try:
+            m = check(sys.argv[2])
+            status("uploaded", m["version"], 100)
+        except Refused as e:
+            status("error", "", 0, str(e))
+        print(read(STATUS))
+        return 0 if json.loads(read(STATUS))["state"] == "uploaded" else 1
+    if cmd == "install":
+        return cmd_install()
+    if cmd == "get":
+        return cmd_get()
+    if cmd == "boot":
+        return cmd_boot()
+    if cmd == "remote" and len(sys.argv) == 4:
+        return cmd_remote(sys.argv[2] == "1", sys.argv[3] == "1")
+    if cmd == "health":
+        time.sleep(1)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        m = json.loads(read(JOURNAL, "{}") or "{}")
+        return 0 if not m or finish(m, restart=False) else 1
+    print(__doc__ or "usage: x6100-update check FILE | install | boot | health")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

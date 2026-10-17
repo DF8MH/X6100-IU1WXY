@@ -99,66 +99,37 @@ static int _3_update_spectrum_peak_hold() {
     return 0;
 }
 
-/* Migrations array */
-static int _4_add_js8_presets() {
-    int rc;
-    char *query;
-    /* JS8Call's default dial frequencies (its FrequencyList.cpp), USB-D like
-     * the FT8/FT4 rows. OR IGNORE keeps rows a fresh params.db already has. */
-    rc = asprintf(&query,
-        "INSERT OR IGNORE INTO digital_modes(label, freq, mode, type) "
-        "SELECT column1, column2, 3, %u FROM (VALUES "
-            "('JS8 160m', 1842000),"
-            "('JS8 80m', 3578000),"
-            "('JS8 40m', 7078000),"
-            "('JS8 30m', 10130000),"
-            "('JS8 20m', 14078000),"
-            "('JS8 17m', 18104000),"
-            "('JS8 15m', 21078000),"
-            "('JS8 12m', 24922000),"
-            "('JS8 10m', 28078000),"
-            "('JS8 6m', 50318000)"
-        ")",
-        CFG_DIG_TYPE_JS8
-    );
-    if (rc == -1) {
-        printf("Cannot allocate SQL query\n");
-        return 1;
+/* Dial frequency presets of one type, added to an older params.db (a new one has them from
+ * sql/params.sql: OR IGNORE leaves those rows alone). rows: "('label', Hz), ..." */
+static int add_dial_presets(cfg_digital_type_t type, const char *rows, const char *what) {
+    char *sql = NULL;
+    int   err = 1;
+
+    if (asprintf(&sql, "INSERT OR IGNORE INTO digital_modes(label, freq, mode, type) "
+                       "SELECT column1, column2, 3, %u FROM (VALUES %s)", type, rows) < 0) {
+        puts("Cannot allocate SQL query");
+    } else if (sqlite3_exec(db, sql, NULL, NULL, NULL) != SQLITE_OK) {
+        printf("Cannot add %s presets: %s\n", what, sqlite3_errmsg(db));
+        free(sql);
+    } else {
+        err = 0;
+        free(sql);
     }
-    rc = sqlite3_exec(db, query, NULL, NULL, NULL);
-    free(query);
-    if (rc != SQLITE_OK) {
-        printf("Cannot add JS8 presets: %s\n", sqlite3_errmsg(db));
-        return 1;
-    }
-    return 0;
+    return err;
 }
 
-/* GhostNet's JS8 nets (s2underground/GhostNet, version 1.5): 7.107 MHz is
- * the main one, 14.107 and 3.575 MHz the others. */
-static int _5_add_ghostnet_presets() {
-    int rc;
-    char *query;
-    rc = asprintf(&query,
-        "INSERT OR IGNORE INTO digital_modes(label, freq, mode, type) "
-        "SELECT column1, column2, 3, %u FROM (VALUES "
-            "('GhostNet 80m', 3575000),"
-            "('GhostNet 40m', 7107000),"
-            "('GhostNet 20m', 14107000)"
-        ")",
-        CFG_DIG_TYPE_JS8_GHOSTNET
-    );
-    if (rc == -1) {
-        printf("Cannot allocate SQL query\n");
-        return 1;
-    }
-    rc = sqlite3_exec(db, query, NULL, NULL, NULL);
-    free(query);
-    if (rc != SQLITE_OK) {
-        printf("Cannot add GhostNet presets: %s\n", sqlite3_errmsg(db));
-        return 1;
-    }
-    return 0;
+/* JS8Call's default dial frequencies (FrequencyList.cpp), USB-D */
+static int _4_js8_dial_freqs() {
+    return add_dial_presets(CFG_DIG_TYPE_JS8,
+        "('JS8 160m', 1842000), ('JS8 80m', 3578000), ('JS8 40m', 7078000), ('JS8 30m', 10130000), "
+        "('JS8 20m', 14078000), ('JS8 17m', 18104000), ('JS8 15m', 21078000), ('JS8 12m', 24922000), "
+        "('JS8 10m', 28078000), ('JS8 6m', 50318000)", "JS8");
+}
+
+/* The JS8 nets of GhostNet 1.5 (s2underground): 7.107 MHz first, then 14.107 and 3.575 */
+static int _5_ghostnet_dial_freqs() {
+    return add_dial_presets(CFG_DIG_TYPE_JS8_GHOSTNET,
+        "('GhostNet 80m', 3575000), ('GhostNet 40m', 7107000), ('GhostNet 20m', 14107000)", "GhostNet");
 }
 
 /* WSPR dial frequencies (WSJT-X's defaults) */
@@ -229,15 +200,29 @@ static int _7_add_ft2_presets() {
     return 0;
 }
 
+/* Compressor threshold and makeup offsets, 0.100 to 0.126: Settings saved the dB value
+ * itself instead of twice it, read back halved after a restart. Only a half-dB value is
+ * unambiguous (stored as a real; correct rows are always integers): 3.5 becomes 7. */
+static int _8_fix_comp_offsets() {
+    if (sqlite3_exec(db, "UPDATE params SET val = CAST(round(val * 2) AS INTEGER) "
+                         "WHERE name IN ('comp_threshold_offset', 'comp_makeup_offset') AND typeof(val) = 'real'",
+                     NULL, NULL, NULL) != SQLITE_OK) {
+        printf("Cannot fix compressor offsets: %s\n", sqlite3_errmsg(db));
+        return 1;
+    }
+    return 0;
+}
+
 static int (*migrations[])() = {
     _0_init_migrations,
     _1_create_ftx_table,
     _2_update_atu_freq,
     _3_update_spectrum_peak_hold,
-    _4_add_js8_presets,
-    _5_add_ghostnet_presets,
+    _4_js8_dial_freqs,
+    _5_ghostnet_dial_freqs,
     _6_add_wspr_presets,
     _7_add_ft2_presets,
+    _8_fix_comp_offsets,
 };
 
 int migrations_apply(void) {

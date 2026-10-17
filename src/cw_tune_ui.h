@@ -1,21 +1,2 @@
-/*
- *  SPDX-License-Identifier: LGPL-2.1-or-later
- *
- *  Xiegu X6100 LVGL GUI
- *
- *  Copyright (c) 2024 Georgy Dyuldin aka R2RFE
- */
-
-#pragma once
-#include <stdbool.h>
-#include <lvgl/lvgl.h>
-
-void cw_tune_init(lv_obj_t * parent);
-
-// bool cw_tune_toggle(int16_t diff);
-
-void cw_tune_set_freq(float hz);
-
-/* Any thread: the last offset (Hz, key tone minus the received tone) when it came in the
- * last second, for the remote clients */
-bool cw_tune_recent(int *hz);
+/* Old name of cw_tune_view.h, for the files that still include it */
+#include "cw_tune_view.h"

@@ -18,5 +18,7 @@ typedef struct avi_t avi_t;
 avi_t * avi_open(const char *path, uint16_t width, uint16_t height, uint16_t fps, uint32_t rate);
 bool    avi_write_video(avi_t *avi, const uint8_t *jpeg, size_t size);
 bool    avi_write_audio(avi_t *avi, const int16_t *samples, size_t nsamples);
+/* Bytes written so far */
+uint32_t avi_size(avi_t *avi);
 /* Writes the index, fixes the headers, closes the file. false: a write failed (disk full) */
 bool    avi_close(avi_t *avi);

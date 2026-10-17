@@ -3,10 +3,13 @@
 # user has read them on the screen and pressed Send.
 #   x6100-diag collect VERSION BASEBAND   writes /tmp/x6100-diag.txt
 #   x6100-diag send                       posts it to x6100-link.it, prints the code
-# Bluetooth, base I2C and system state only: no WiFi networks, no positions, no logbook.
+# Bluetooth, base I2C, storage, power, GUI restarts and WiFi link state only: no WiFi network
+# names or addresses, no positions, no logbook.
 
 OUT=/tmp/x6100-diag.txt
 MAX=60000
+
+mask() { sed -E 's/([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/xx:xx:xx:xx:xx:xx/g'; }   # no WiFi or BT addresses in the new sections
 
 collect() {
 	{
@@ -29,8 +32,39 @@ collect() {
 		echo "== Input devices"
 		grep -E "^(N|H|B: EV)" /proc/bus/input/devices 2>/dev/null
 		echo
-		echo "== Kernel messages (Bluetooth, HID, USB)"
-		dmesg 2>/dev/null | grep -i -E "bluetooth|hci|rtl|hid|input|usb" | tail -n 80
+		echo "== Kernel messages (Bluetooth, HID, USB, WiFi)"
+		# without the WiFi chip's efuse dump: 64 lines of hex that pushed everything else out
+		dmesg 2>/dev/null | grep -i -E "bluetooth|hci|rtl|wlan|hid|input|usb" |
+			grep -v -i -E "dumping efuse|: [0-9a-f]{2,3}: ([0-9a-f]{2} ){7}[0-9a-f]{2}$" | tail -n 70 | mask
+		echo
+		echo "== Storage"
+		awk '$2 == "/" || $2 == "/mnt" {split($4, o, ","); print $2, $3, o[1]}' /proc/mounts
+		df -k / /mnt 2>/dev/null | awk 'NR > 1 {printf "%s %d MB free of %d MB\n", $6, $4 / 1024, $2 / 1024}'
+		dmesg 2>/dev/null | grep -i -E "mmc|fat-fs|ext4|blk" | grep -i -E "error|corrupt|fsck|read-only|timeout|crc" | grep -v "read-only switch" | tail -n 20
+		grep "Log write failed" /tmp/x6100_log.txt 2>/dev/null | tail -n 5
+		echo
+		echo "== Power (last lines of the battery log)"
+		tail -n 5 /mnt/battery_log.csv 2>/dev/null
+		dmesg 2>/dev/null | grep -i -E "under-?voltage|brown|low battery" | tail -n 10
+		echo
+		echo "== GUI restarts"
+		# x6100_daemon keeps a log in /mnt/app_logs each time the GUI stops (crash or restart)
+		since=$(date -d "@$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))" +%Y-%m-%d_%H-%M-%S)
+		last=$(ls /mnt/app_logs 2>/dev/null | grep "^x6100_log_" | tail -n 1)
+		echo "since boot: $(ls /mnt/app_logs 2>/dev/null | awk -v s="x6100_log_$since" '/^x6100_log_/ && $0 > s' | wc -l), last stop: ${last:-none}"
+		[ -n "$last" ] && tail -n 6 "/mnt/app_logs/$last" | grep .   # grep ends its last line, often cut short
+		dmesg 2>/dev/null | grep -i -E "segfault|oom|killed process" | tail -n 5
+		echo
+		echo "== WiFi"
+		iw dev wlan0 link 2>&1 | grep -E "Connected|Not connected|freq|signal|bitrate" | sed 's/ to .*//'
+		cat /var/log/messages.0 /var/log/messages 2>/dev/null | awk '
+			NR == 1 {first = $1 " " $2 " " $3}
+			/device \(wlan0\): state change: .* -> activated/ {up++}
+			/device \(wlan0\): state change: activated -> / {down++}
+			END {printf "since %s: connected %d times, lost %d times\n", first, up, down}'
+		grep -h -E "device \(wlan0\): state change: (activated -> |.* -> (activated|failed|disconnected|unavailable))|CTRL-EVENT-DISCONNECTED" \
+			/var/log/messages.0 /var/log/messages 2>/dev/null | grep -v -i ssid |
+			sed 's/^\(.\{15\}\).*\(state change\)/\1 \2/; s/, sys-iface-state.*/)/' | tail -n 8 | mask
 		echo
 		echo "== Base I2C (write errors, resends, stuck TX)"
 		cat /mnt/base_i2c.log.1 /mnt/base_i2c.log 2>/dev/null | tail -n 40
@@ -42,17 +76,38 @@ collect() {
 
 send() {
 	[ -s $OUT ] || { echo "Nothing to send"; exit 1; }
-	# the code, or CLOSED (IU1WXY has not asked for them) or LIMIT (too many today)
+	# prints the code (exit 0); CLOSED (IU1WXY has not asked for them), LIMIT (too many today)
+	# or ERROR (exit 2); OFFLINE when the site could not be reached (exit 1); MAYBE when it was
+	# uploaded but no answer came back (exit 3): the site mails IU1WXY before it answers, so it
+	# has it most likely, and it must not be sent again
 	python3 -c "
-import sys, urllib.request as u, urllib.error as e
+import sys, http.client as h
 d = open('$OUT', 'rb').read()
+c = h.HTTPSConnection('x6100-link.it', timeout=20)
 try:
-    r = u.urlopen(u.Request('https://x6100-link.it/api/diag.php?id=$(cat /mnt/device_id 2>/dev/null | tr -cd 'A-Za-z0-9-')', data=d, headers={'Content-Type': 'text/plain'}), timeout=20)
-    print(r.read().decode().strip())
-except e.HTTPError as x:
-    print({403: 'CLOSED', 429: 'LIMIT'}.get(x.code, 'ERROR')); sys.exit(2)
-" 2>/dev/null || exit 1
-	rm -f $OUT
+    c.connect()
+except Exception:
+    print('OFFLINE'); sys.exit(1)
+try:
+    c.request('POST', '/api/diag.php?id=$(cat /mnt/device_id 2>/dev/null | tr -cd 'A-Za-z0-9-')', d, {'Content-Type': 'text/plain'})
+except Exception:
+    print('OFFLINE'); sys.exit(1)
+try:
+    c.sock.settimeout(60)
+    r = c.getresponse()
+    body = r.read().decode(errors='replace').strip()
+except Exception:
+    print('MAYBE'); sys.exit(3)
+if r.status == 200 and body:
+    print(body)
+elif r.status >= 500:
+    print('MAYBE'); sys.exit(3)
+else:
+    print({403: 'CLOSED', 429: 'LIMIT'}.get(r.status, 'ERROR')); sys.exit(2)
+" 2>/dev/null
+	rc=$?
+	[ $rc -eq 0 ] || [ $rc -eq 3 ] && rm -f $OUT
+	exit $rc
 }
 
 case "$1" in

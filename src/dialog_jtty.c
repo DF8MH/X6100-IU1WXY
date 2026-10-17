@@ -17,7 +17,7 @@
  *
  *  Typing on a USB or Bluetooth keyboard goes into the TX line, Enter
  *  sends it; a line sent while another is on the air follows it without a
- *  gap. F1-F8 are the WSJT-X JTTY function keys (CQ %M CQ, %H %E, ...),
+ *  gap. F1-F8 are macros, by default the WSJT-X JTTY function keys (CQ %M CQ, %H %E, ...),
  *  packed with the contest exchange forms, so "599 001" takes one frame.
  */
 
@@ -141,6 +141,21 @@ static bool        spec_ok = false;
 static float       sp_edge_lo = 200.0f;
 static float       sp_edge_hi = 2800.0f;
 
+/* F1-F8 are a macro list, as the PSK and Olivia ones: /mnt/jtty_macros.txt, one
+ * "name<TAB>text" line per key in order. A missing file is written with the WSJT-X
+ * keys; keys past the end of the list are empty. Read at every opening. */
+#define JTTY_MACROS_PATH "/mnt/jtty_macros.txt"
+#define FKEYS           8
+#define FKEY_NAME       24
+
+static char        fkey_name[FKEYS][FKEY_NAME];
+static char        fkey_text[FKEYS][JTTY_MSG_LEN + 1];
+static char        fkey_label[FKEYS][FKEY_NAME + 4];
+static int         fkey_count = 0;
+static int         edit_key = -1;
+static char        edit_name[FKEY_NAME];
+static lv_timer_t *editor_timer = NULL;
+
 /* ---- Buttons ---------------------------------------------------------- */
 
 static const char *status_label_getter(void);
@@ -177,21 +192,27 @@ static button_data_t btn_status = {
     .type = BTN_TEXT_FN, .label_fn = status_label_getter, .press = status_press_cb, .hold = status_hold_cb,
 };
 
-/* The function keys: press sends, as F1..F8 on a keyboard */
-#define FKEY_BTN(n, text)                                                                        \
+/* The function keys: press sends, as F1..F8 on a keyboard; hold edits */
+static void fkey_hold(int n);
+#define FKEY_BTN(n)                                                                              \
     static void fkey##n##_cb(button_data_t *b) { (void)b; fkey(n); }                             \
-    static button_data_t btn_f##n = {.type = BTN_TEXT, .label = text, .press = fkey##n##_cb};
+    static void fkey##n##_hold_cb(button_data_t *b) { (void)b; fkey_hold(n); }                   \
+    static button_data_t btn_f##n = {                                                            \
+        .type = BTN_TEXT, .label = fkey_label[n - 1], .press = fkey##n##_cb, .hold = fkey##n##_hold_cb};
 
-FKEY_BTN(1, "F1\nCQ")
-FKEY_BTN(2, "F2\nCall 599")
-FKEY_BTN(3, "F3\nTU CQ")
-FKEY_BTN(4, "F4\nMy call")
-FKEY_BTN(5, "F5\nHis call")
-FKEY_BTN(6, "F6\nTU NOW")
-FKEY_BTN(7, "F7\nAGN?")
-FKEY_BTN(8, "F8\n599 Nr")
+FKEY_BTN(1)
+FKEY_BTN(2)
+FKEY_BTN(3)
+FKEY_BTN(4)
+FKEY_BTN(5)
+FKEY_BTN(6)
+FKEY_BTN(7)
+FKEY_BTN(8)
 
 #undef FKEY_BTN
+
+static button_data_t *const fkey_btns[FKEYS] = {&btn_f1, &btn_f2, &btn_f3, &btn_f4,
+                                                 &btn_f5, &btn_f6, &btn_f7, &btn_f8};
 
 static button_data_t btn_p2 = {
     .type = BTN_TEXT, .label = "(JTTY 2:4)",
@@ -742,7 +763,7 @@ static bool input_cancel_cb(void)
 
 static void textarea_set_copy(const char *text)
 {
-    static char buf[32];
+    static char buf[JTTY_MSG_LEN + 1];
 
     snprintf(buf, sizeof(buf), "%s", text ? text : "");
     textarea_window_set(buf);
@@ -776,28 +797,186 @@ static void send_draft(void)
     draft_dirty = true;
 }
 
-/* WSJT-X's JTTY function keys; %Q (the next caller) is the DX call here */
-static void fkey(int n)
+/* ---- F1-F8 macros ------------------------------------------------------ */
+
+/* Copy with truncation; tabs and line breaks would break the file */
+static void fkey_copy(char *dst, size_t sz, const char *src)
 {
-    static const char *const tpl[9] = {
-        NULL, "CQ %M CQ", "%H %E", "%H TU CQ %M CQ", "%M", "%H", "TU NOW %H %E", "%H AGN?", "%E",
-    };
-    char out[JTTY_MSG_LEN + 1] = "", exch[16];
-    const char *dx = digi_qso_dx(), *my = params.callsign.x;
     size_t o = 0;
 
-    if (input_active || n < 1 || n > 8)
+    for (; src && *src && o + 1 < sz; src++)
+        dst[o++] = (*src == '\t' || *src == '\r' || *src == '\n') ? ' ' : *src;
+    dst[o] = '\0';
+}
+
+static void fkey_set(int i, const char *name, const char *text)
+{
+    fkey_copy(fkey_name[i], sizeof(fkey_name[i]), name);
+    fkey_copy(fkey_text[i], sizeof(fkey_text[i]), text);
+}
+
+static void fkey_labels(void)
+{
+    for (int i = 0; i < FKEYS; i++) {
+        if (i < fkey_count)
+            snprintf(fkey_label[i], sizeof(fkey_label[i]), "F%d\n%s", i + 1, fkey_name[i]);
+        else
+            snprintf(fkey_label[i], sizeof(fkey_label[i]), "F%d", i + 1);
+        refresh_btn(fkey_btns[i]);
+    }
+}
+
+static bool fkeys_save(void)
+{
+    FILE *f = fopen(JTTY_MACROS_PATH, "w");
+    bool  ok;
+
+    if (!f)
+        return false;
+    for (int i = 0; i < fkey_count; i++)
+        fprintf(f, "%s\t%s\n", fkey_name[i], fkey_text[i]);
+    ok = (fflush(f) == 0);
+    if (ok)
+        fsync(fileno(f));       /* /mnt is FAT on the SD card */
+    if (fclose(f) != 0)
+        ok = false;
+    return ok;
+}
+
+/* WSJT-X's JTTY function keys are the defaults; %Q (the next caller) is the DX call here */
+static void fkeys_load(void)
+{
+    static const char *const def[FKEYS][2] = {
+        {"CQ", "CQ %M CQ"}, {"Call 599", "%H %E"}, {"TU CQ", "%H TU CQ %M CQ"}, {"My call", "%M"},
+        {"His call", "%H"}, {"TU NOW", "TU NOW %H %E"}, {"AGN?", "%H AGN?"}, {"599 Nr", "%E"},
+    };
+    char  line[FKEY_NAME + JTTY_MSG_LEN + 8];
+    FILE *f = fopen(JTTY_MACROS_PATH, "r");
+
+    fkey_count = 0;
+    if (!f) {
+        for (; fkey_count < FKEYS; fkey_count++)
+            fkey_set(fkey_count, def[fkey_count][0], def[fkey_count][1]);
+        fkeys_save();
+    } else {
+        while (fkey_count < FKEYS && fgets(line, sizeof(line), f)) {
+            char *tab;
+
+            line[strcspn(line, "\r\n")] = '\0';
+            tab = strchr(line, '\t');
+            if (!tab)
+                continue;
+            *tab = '\0';
+            fkey_set(fkey_count++, line, tab + 1);
+        }
+        fclose(f);
+    }
+    fkey_labels();
+}
+
+/* Editor, as PSK's: name, then text. An empty text deletes the key's macro
+ * and the ones after it move up. */
+static bool fkey_text_ok_cb(void)
+{
+    const char *t = textarea_window_get();
+
+    if (!alive || edit_key < 0) {
+        input_end();
+        return true;
+    }
+    if (!t || !*t) {
+        if (edit_key < fkey_count) {
+            for (int i = edit_key; i < fkey_count - 1; i++)
+                fkey_set(i, fkey_name[i + 1], fkey_text[i + 1]);
+            fkey_count--;
+            msg_update_text_fmt("Macro deleted");
+        }
+    } else {
+        fkey_set(edit_key, edit_name, t);
+        if (edit_key == fkey_count)
+            fkey_count++;
+        msg_update_text_fmt("Macro saved");
+    }
+    if (!fkeys_save())
+        msg_update_text_fmt("#%06x Could not write %s#", theme_hex(TC_err), JTTY_MACROS_PATH);
+    fkey_labels();
+    edit_key = -1;
+    input_end();
+    return true;
+}
+
+static void editor_timer_cb(lv_timer_t *t)
+{
+    (void)t;
+    editor_timer = NULL;
+    if (!alive) {
+        input_active = false;
         return;
-    if (strstr(tpl[n], "%H") && !(dx && *dx)) {
+    }
+    textarea_window_open_w_label(fkey_text_ok_cb, input_cancel_cb, "Text (%M %H %E):");
+    lv_textarea_set_max_length(textarea_window_text(), JTTY_MSG_LEN);
+    if (edit_key < fkey_count)
+        textarea_set_copy(fkey_text[edit_key]);
+}
+
+static bool fkey_name_ok_cb(void)
+{
+    const char *t = textarea_window_get();
+
+    if (!alive) {
+        input_end();
+        return true;
+    }
+    if (t && *t)
+        snprintf(edit_name, sizeof(edit_name), "%s", t);
+    else if (edit_key < fkey_count)
+        snprintf(edit_name, sizeof(edit_name), "%s", fkey_name[edit_key]);
+    else
+        snprintf(edit_name, sizeof(edit_name), "M%d", edit_key + 1);
+
+    /* Let this window close before the next one opens (as PSK) */
+    if (!editor_timer) {
+        editor_timer = lv_timer_create(editor_timer_cb, 50, NULL);
+        lv_timer_set_repeat_count(editor_timer, 1);
+    }
+    return true;
+}
+
+static void fkey_hold(int n)
+{
+    if (input_active || n < 1 || n > FKEYS)
+        return;
+    edit_key = n - 1 < fkey_count ? n - 1 : fkey_count;     /* an empty key: the next free one */
+    input_begin();
+    textarea_window_open_w_label(fkey_name_ok_cb, input_cancel_cb, "Macro name:");
+    lv_textarea_set_max_length(textarea_window_text(), FKEY_NAME - 1);
+    if (edit_key < fkey_count)
+        textarea_set_copy(fkey_name[edit_key]);
+}
+
+static void fkey(int n)
+{
+    char out[JTTY_MSG_LEN + 1] = "", exch[16];
+    const char *dx = digi_qso_dx(), *my = params.callsign.x, *tpl;
+    size_t o = 0;
+
+    if (input_active || n < 1 || n > FKEYS)
+        return;
+    if (n > fkey_count) {
+        msg_update_text_fmt("F%d is empty - hold to set it", n);
+        return;
+    }
+    tpl = fkey_text[n - 1];
+    if (strstr(tpl, "%H") && !(dx && *dx)) {
         msg_update_text_fmt("#%06x No DX call - set it on page 1#", theme_hex(TC_err));
         return;
     }
-    if (strstr(tpl[n], "%M") && !(my && *my)) {
+    if (strstr(tpl, "%M") && !(my && *my)) {
         msg_update_text_fmt("#%06x No callsign - set it in Settings#", theme_hex(TC_err));
         return;
     }
     snprintf(exch, sizeof(exch), "599 %03d", serial);
-    for (const char *p = tpl[n]; *p && o < JTTY_MSG_LEN; p++) {
+    for (const char *p = tpl; *p && o < JTTY_MSG_LEN; p++) {
         const char *v = NULL;
         if (*p == '%' && p[1]) {
             v = p[1] == 'M' ? my : p[1] == 'H' ? dx : p[1] == 'E' ? exch : NULL;
@@ -1096,6 +1275,7 @@ static void construct_cb(lv_obj_t *parent)
     lv_group_focus_obj(text_box);
     lv_group_set_editing(keyboard_group, true);
 
+    fkeys_load();
     load_band(0);
     main_screen_lock_ab(true);
     main_screen_lock_mode(true);
@@ -1136,6 +1316,7 @@ static void destruct_cb(void)
     del_timer(&status_timer);
     del_timer(&text_timer);
     del_timer(&focus_timer);
+    del_timer(&editor_timer);
     del_timer(&knob_timer);
     knob_dial = false;
     btn_dial.mark = false;

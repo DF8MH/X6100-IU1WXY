@@ -9,14 +9,14 @@
 #include <array>
 #include <cstddef>
 
-#include "cw_receiver.h" // first: <complex> before liquid.h
+#include "receiver.h" // first: <complex> before liquid.h
 
 #include <liquid/liquid.h>
 
 namespace cw {
 
-// Feeds a CwReceiver from an audio stream at another rate (the app's DSP
-// gives 11025 Hz): arbitrary-rate resampling to CwReceiver::SAMPLE_RATE.
+// Feeds a Receiver from an audio stream at another rate (the app's DSP
+// gives 11025 Hz): arbitrary-rate resampling to Receiver::RATE.
 class AudioResampler {
     static constexpr size_t CHUNK = 128;
 
@@ -24,19 +24,19 @@ class AudioResampler {
     std::array<float, CHUNK> out_;
 
   public:
-    explicit AudioResampler(float in_rate) : q_(msresamp_rrrf_create(CwReceiver::SAMPLE_RATE / in_rate, 60.0f)) {}
+    explicit AudioResampler(float in_rate) : q_(msresamp_rrrf_create(Receiver::RATE / in_rate, 60.0f)) {}
     ~AudioResampler() { msresamp_rrrf_destroy(q_); }
 
     AudioResampler(const AudioResampler &)            = delete;
     AudioResampler &operator=(const AudioResampler &) = delete;
 
     // Only downsampling is supported: CHUNK inputs give at most CHUNK outputs.
-    void process(size_t n, float *samples, CwReceiver &rx) {
+    void process(size_t n, float *samples, Receiver &rx) {
         while (n > 0) {
             unsigned int nx = n < CHUNK ? n : CHUNK;
             unsigned int ny = 0;
             msresamp_rrrf_execute(q_, samples, nx, out_.data(), &ny);
-            rx.process_audio_frame(ny, out_.data());
+            rx.feed(out_.data(), ny);
             samples += nx;
             n -= nx;
         }

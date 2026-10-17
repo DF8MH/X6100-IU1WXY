@@ -3,29 +3,27 @@
  *
  *  Xiegu X6100 LVGL GUI
  *
- *  Copyright (c) 2022-2023 Belousov Oleg aka R1CBU
- *
- *  CW decoding with the receiver ported from upstream x6100_gui
- *  (src/cw_decoder/): FFT tone search, coherent tone tracker, adaptive
- *  detector, histogram timing and Morse tree.
+ *  CW receive: RX audio -> cw::Receiver (src/cw_decoder/) -> squelch -> panel,
+ *  trainer or remote clients; the locked tone drives the tuning indicator.
  */
 
-// First: the decoder headers include <complex>, which liquid.h (via cw.h)
-// needs to see to use std::complex.
+// First: the decoder headers bring <complex>, which liquid.h must see before
+// it is included anywhere else
 #include "cw_decoder/audio_resampler.h"
 
 #include "cw.h"
+#include "dsp.h"
 
 #include "cfg/settings_manager.h"
 
 #include <algorithm>
 #include <array>
-#include <string>
 #include <atomic>
 #include <cmath>
+#include <string>
 
 extern "C" {
-    #include "lvgl/lvgl.h"
+    #include "audio.h"
     #include "cw_decoder.h"
     #include "cw_tune_ui.h"
     #include "remote_server.h"
@@ -34,15 +32,15 @@ extern "C" {
 /* Frames (8 ms) between updates of the tune indicator */
 #define TUNE_UPDATE_FRAMES  12
 
-static bool ready = false;
+static std::atomic<bool> started{false};
 
-/* Written on the LVGL thread, read on the audio thread */
-static bool    trainer = false;
-static bool    cw_decoder;
-static bool    cw_tune;
+/* Settings: written by the LVGL thread (subscriptions), read by the audio thread */
+static std::atomic<bool> decode_on{false};
+static std::atomic<bool> tune_on{false};
+static std::atomic<bool> trainer{false};
 static int32_t key_tone = 0;
-static int32_t filter_low;
-static int32_t filter_high;
+static int32_t band_lo;
+static int32_t band_hi;
 
 /* Receiver settings: stored by the subscriptions (LVGL thread), applied by
  * the audio thread before the next block */
@@ -55,7 +53,7 @@ static std::atomic<float> rx_peak_q;
 static std::atomic<bool>  rx_dirty{false};
 
 /* Audio thread */
-static cw::CwReceiver     *receiver;
+static cw::Receiver       *receiver;
 static cw::AudioResampler *resampler;
 static bool                keyed = false;
 static float               tone_freq;
@@ -84,7 +82,7 @@ static bool        sq_open = false;
 static int         sq_good, sq_bad;
 static std::string sq_pending;
 
-static void on_val_bool_change(Subject *subj, void *user_data);
+static void on_flag(Subject *subj, void *user_data);
 static void on_rx_param_change(Subject *subj, void *user_data);
 static void on_freq_change(Subject *subj, void *user_data);
 
@@ -92,9 +90,9 @@ static void on_text(const char *text);
 static void on_keyed(bool on);
 static void on_frame();
 
-void cw_init() {
-    cfg_sm.p_cw_decoder.subscribe_and_notify(on_val_bool_change, (void*)&cw_decoder);
-    cfg_sm.p_cw_tune.subscribe_and_notify(on_val_bool_change, (void*)&cw_tune);
+void cw_init(void) {
+    cfg_sm.p_cw_decoder.subscribe_and_notify(on_flag, &decode_on);
+    cfg_sm.p_cw_tune.subscribe_and_notify(on_flag, &tune_on);
 
     cfg_sm.p_key_tone.subscribe(on_rx_param_change);
     cfg_sm.p_cw_decoder_snr.subscribe(on_rx_param_change);
@@ -106,10 +104,9 @@ void cw_init() {
     cfg_sm.cp_fg_freq.subscribe(on_freq_change);
     tone_freq = key_tone;
 
-    receiver = new cw::CwReceiver(on_text, on_keyed, on_frame);
+    receiver  = new cw::Receiver(on_text, on_keyed, on_frame);
     resampler = new cw::AudioResampler((float)AUDIO_CAPTURE_RATE / AUDIO_DECIM);
-
-    ready = true;
+    started   = true;
 }
 
 /* The tone moves in the audio as the VFO turns: CW is the upper sideband (a higher
@@ -133,7 +130,7 @@ static void apply_rx_params() {
 
     float shift = rx_shift.exchange(0.0f);
     if (shift != 0.0f) {
-        receiver->shift_lock(shift);
+        receiver->follow_vfo(shift);
         tone_freq += shift;
         for (auto &f : freq_hist) f += shift;
     }
@@ -141,27 +138,24 @@ static void apply_rx_params() {
     if (!rx_dirty.exchange(false)) {
         return;
     }
-    receiver->change_threshold(rx_threshold);
-    receiver->change_hpf_hz(rx_hpf);
-    receiver->change_lpf_hz(rx_lpf);
+    receiver->set_floor_db(rx_threshold);
+    receiver->set_band(rx_hpf, rx_lpf);
 
     /* Changing the peak filter re-seeds the noise floor: only on a change */
     if (peak_on != rx_peak_on || peak_tone != rx_peak_tone || peak_q != rx_peak_q) {
         peak_on = rx_peak_on;
         peak_tone = rx_peak_tone;
         peak_q = rx_peak_q;
-        receiver->change_peak_filter(peak_on, peak_tone, peak_q);
+        receiver->set_apf(peak_on, peak_tone, peak_q);
     }
 }
 
 void cw_put_audio_samples(unsigned int n, float *samples) {
-    if (!ready) {
-        return;
-    }
     /* X6100 Link shows the tuning indicator on its own */
-    if ((!cw_decoder) && (!cw_tune) && (!trainer) && !remote_subscribed()) {
+    bool wanted = decode_on || tune_on || trainer || remote_subscribed();
+
+    if (!started || !wanted)
         return;
-    }
     apply_rx_params();
     resampler->process(n, samples, *receiver);
 }
@@ -226,15 +220,13 @@ static bool squelch(const char *text) {
 }
 
 static void on_text(const char *text) {
-    if ((!cw_decoder) && (!trainer)) {
+    if (!decode_on && !trainer)
         return;
-    }
-    if (!trainer && !squelch(text)) {
+    if (!trainer && !squelch(text))
         return;
-    }
     cw_decoder_text(text);
 
-    int wpm = lroundf(receiver->get_measured_wpm());
+    int wpm = lroundf(receiver->wpm());
     if (wpm != wpm_sent) {
         wpm_sent = wpm;
         cw_decoder_wpm(wpm);
@@ -251,11 +243,11 @@ static void on_keyed(bool on) {
  * coherently: noise that keys the detector (the Es of an empty band) does not
  * light the indicator. */
 static void on_frame() {
-    bool tuned = keyed && receiver->is_locked();
+    bool tuned = keyed && receiver->locked();
 
     if (keyed) {
         sq_keyed++;
-        sq_snr += receiver->get_snr_db();
+        sq_snr += receiver->snr_db();
         sq_idle = 0;
     } else if (++sq_idle >= SQ_IDLE_FRAMES && (sq_open || !sq_pending.empty())) {
         sq_open = false;
@@ -264,8 +256,8 @@ static void on_frame() {
     }
 
     if (tuned) {
-        float freq = receiver->get_lock_freq();
-        if ((freq >= filter_low) && (freq <= filter_high)) {
+        float freq = receiver->lock_hz();
+        if ((freq >= band_lo) && (freq <= band_hi)) {
             freq_hist[freq_hist_w] = freq;
             freq_hist_w = (freq_hist_w + 1) % freq_hist.size();
             if (freq_hist_n < freq_hist.size()) {
@@ -301,18 +293,20 @@ int cw_get_wpm(void) {
     return wpm_sent;
 }
 
-static void on_val_bool_change(Subject *subj, void *user_data) {
-    *(bool*)user_data = static_cast<SubjectT<int32_t>*>(subj)->get();
+static void on_flag(Subject *subj, void *user_data) {
+    auto *flag = static_cast<std::atomic<bool> *>(user_data);
+
+    *flag = static_cast<SubjectT<int32_t> *>(subj)->get() != 0;
 }
 
 static void on_rx_param_change(Subject *subj, void *user_data) {
     key_tone = cfg_sm.p_key_tone.get();
-    filter_low = cfg_sm.cp_cur_filter_low.get();
-    filter_high = cfg_sm.cp_cur_filter_high.get();
+    band_lo  = cfg_sm.cp_cur_filter_low.get();
+    band_hi  = cfg_sm.cp_cur_filter_high.get();
 
     rx_threshold = cfg_sm.p_cw_decoder_snr.get();
-    rx_hpf = filter_low;
-    rx_lpf = filter_high;
+    rx_hpf = band_lo;
+    rx_lpf = band_hi;
     rx_peak_on = cfg_sm.p_cw_peak_on.get();
     rx_peak_tone = key_tone;
     rx_peak_q = cfg_sm.p_cw_peak_q.get();

@@ -1,56 +1,44 @@
-# X6100 LVGL GUI
+# Notes from the upstream x6100_gui README
 
-This is part of an alternative firmware for X6100 using the LVGL library
+The upstream project is the LVGL GUI for the Xiegu X6100 by R1CBU, carried on
+by Georgy Dyuldin (gdyuldin/x6100_gui). These are the parts of its README that
+still apply here, in our words, with the build steps written for this
+repository.
 
-## Installing
+## Putting the image on a card
 
-Open [Releases](https://github.com/gdyuldin/x6100_gui/releases/latest) page and download `sdcard.img` file (in Assets section). With balenaEtcher or Rufus
-burn img file to microSD card. Insert card to the transceiver and boot it.
+Each release has an `sdcard.img` in its Assets. Write it to a microSD card
+with balenaEtcher or Rufus, put the card in the radio and power it on.
 
-## Importing ADI log
+## Bringing in an ADI log
 
-Application could mark already worked callsign in the UI.
-To load information about previous QSOs - copy your ADI log to the `DATA` partition and rename it to `incoming_log.adi`.
-Application will import records to own log on the next boot and will rename `incoming_log.adi` to `incoming_log.adi.bak`.
+Callsigns already worked are marked in the UI. To bring in the QSOs of an
+older log, copy the ADI file to the `DATA` partition of the card as
+`incoming_log.adi`. At the next start its records go into the radio's own log
+and the file is renamed `incoming_log.adi.bak`.
 
-*Note*: `DATA` partition will be created after first launch transceiver with inserted SD card.
+The `DATA` partition only exists after the radio has started once with the
+card in.
 
+## Taking the FT8/FT4 log out
 
-## Exporting ADI log
+FT8/FT4 QSOs are written to `ft_log.adi` on the `DATA` partition, ready to
+upload to an online log.
 
-Application stores FT8/FT4 QSOs to the `ft_log.adi` file on the `DATA` partition of SD card. This file might be used to load QSOs to online log.
+## Building on a PC
 
+Both trees side by side in one folder, with their submodules:
 
-## Building
+    mkdir x6100 && cd x6100
+    git clone --recurse-submodules https://github.com/gdyuldin/AetherX6100Buildroot
+    git clone --recurse-submodules https://github.com/IU1WXY/X6100-IU1WXY
 
+The buildroot tree first (long, the first time):
 
-* Clone repositories
+    cd AetherX6100Buildroot && ./br_config.sh
+    cd build && make && cd ../..
 
-```
-mkdir x6100
-cd x6100
-git clone https://github.com/gdyuldin/AetherX6100Buildroot
-git clone https://github.com/gdyuldin/x6100_gui
-```
+Then the GUI, with the compiler and libraries of that tree
+(`buildroot/README.md`):
 
-* Build buildroot
-
-```
-cd AetherX6100Buildroot
-git submodule init
-git submodule update
-./br_config.sh
-cd build
-make
-cd ../..
-```
-
-* Build app
-
-```
-cd x6100_gui
-git submodule init
-git submodule update
-cd buildroot
-./build.sh
-```
+    cd X6100-IU1WXY/buildroot && ./build.sh

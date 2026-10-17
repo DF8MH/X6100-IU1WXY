@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-#include "../tx_player.h" /* tx_abort_fn_t */
+#include "../tx_player.h"   /* tx_abort_fn_t, the caller's stop */
 
 /* Transmit tx_text. Returns true on normal completion (or no-op when
  * sample generation fails); returns false if the abort callback fired

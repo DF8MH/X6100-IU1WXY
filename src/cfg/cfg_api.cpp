@@ -18,8 +18,6 @@ SettingsManager cfg_sm;
 ParamInt         *cfg_volume              = nullptr;
 ParamInt         *cfg_squelch             = nullptr;
 ParamInt         *cfg_rfgain              = nullptr;
-ParamInt         *cfg_wefax_align         = nullptr;
-ParamInt         *cfg_wefax_tilt          = nullptr;
 ParamInt         *cfg_rit                 = nullptr;
 ParamInt         *cfg_xit                 = nullptr;
 ParamFloat       *cfg_pwr                 = nullptr;
@@ -28,6 +26,8 @@ ParamInt         *cfg_mic                 = nullptr;
 ParamInt         *cfg_hmic                = nullptr;
 ParamInt         *cfg_imic                = nullptr;
 ParamInt         *cfg_moni                = nullptr;
+ParamInt         *cfg_wefax_align         = nullptr;   // WEFAX app
+ParamInt         *cfg_wefax_tilt          = nullptr;
 ParamInt         *cfg_atu_enabled         = nullptr;
 ParamInt         *cfg_auto_level_enabled  = nullptr;
 ParamFloat       *cfg_auto_level_offset   = nullptr;
@@ -44,6 +44,7 @@ ParamInt         *cfg_band_plan           = nullptr;
 ParamInt         *cfg_smeter_needle       = nullptr;
 ParamInt         *cfg_smeter_color        = nullptr;
 ParamInt         *cfg_wf_palette          = nullptr;
+ParamInt         *cfg_filter_color        = nullptr;
 ParamInt         *cfg_spectrum_line_color = nullptr;
 ParamInt         *cfg_spectrum_fill_color = nullptr;
 ParamInt         *cfg_spectrum_fill_gradient = nullptr;
@@ -51,6 +52,7 @@ ParamInt         *cfg_smeter_bar_color = nullptr;
 ParamInt         *cfg_swr_color = nullptr;
 ParamInt         *cfg_swr_protect = nullptr;
 ParamInt         *cfg_smeter_lamp         = nullptr;
+ParamInt         *cfg_broadcast_name      = nullptr;
 ParamInt         *cfg_cluster_column      = nullptr;
 ParamInt         *cfg_cluster_order       = nullptr;
 ParamInt         *cfg_cluster_all_bands   = nullptr;
@@ -67,6 +69,7 @@ ParamInt         *cfg_ft8_show_all        = nullptr;
 ParamInt         *cfg_ft8_protocol        = nullptr;
 ParamInt         *cfg_ft8_auto            = nullptr;
 ParamInt         *cfg_ft8_hold_freq       = nullptr;
+ParamInt         *cfg_ft8_foryou          = nullptr;
 ParamInt         *cfg_wspr_tx_pct         = nullptr;
 ParamInt         *cfg_spot_snap_hold      = nullptr;
 ParamInt         *cfg_spot_snap_slow      = nullptr;
@@ -75,6 +78,7 @@ ParamInt         *cfg_wspr_tx_freq        = nullptr;
 ParamInt         *cfg_wspr_upload         = nullptr;
 ParamInt         *cfg_pskreporter         = nullptr;
 ParamInt         *cfg_field_boot          = nullptr;
+ParamInt         *cfg_field_respot        = nullptr;
 ParamInt         *cfg_voice_msg_gain      = nullptr;
 ParamInt         *cfg_ft8_max_repeats     = nullptr;
 ParamInt         *cfg_ft8_info            = nullptr;
@@ -92,8 +96,12 @@ ParamInt         *cfg_cw_peak_on          = nullptr;
 ParamInt         *cfg_cwt_level           = nullptr;
 ParamInt         *cfg_cwt_group           = nullptr;
 ParamInt         *cfg_cw_peak_q           = nullptr;
+ParamInt         *cfg_paddle_map[4]       = {};
+ParamInt         *cfg_paddle_swap         = nullptr;
+ParamInt         *cfg_paddle_serial       = nullptr;
 ParamInt         *cfg_cw_decoder          = nullptr;
 ParamInt         *cfg_cw_tune             = nullptr;
+ParamInt         *cfg_cw_live             = nullptr;
 ParamFloat       *cfg_cw_decoder_snr      = nullptr;
 ParamInt         *cfg_agc_hang            = nullptr;
 ParamInt         *cfg_agc_knee            = nullptr;
@@ -173,19 +181,19 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_volume           = &cfg_sm.p_volume;
     cfg_squelch          = &cfg_sm.p_squelch;
     cfg_rfgain           = &cfg_sm.p_rfgain;
-    cfg_wefax_align      = &cfg_sm.p_wefax_align;
-    cfg_wefax_tilt       = &cfg_sm.p_wefax_tilt;
     cfg_rit              = &cfg_sm.p_rit;
     cfg_xit              = &cfg_sm.p_xit;
-    cfg_pwr              = reinterpret_cast<ParamFloat *>(&cfg_sm.p_pwr);
+    cfg_pwr              = &cfg_sm.p_pwr;
     cfg_band_id          = &cfg_sm.p_band_id;
     cfg_mic              = &cfg_sm.p_mic;
+    cfg_wefax_tilt       = &cfg_sm.p_wefax_tilt;
+    cfg_wefax_align      = &cfg_sm.p_wefax_align;
     cfg_hmic             = &cfg_sm.p_hmic;
     cfg_imic             = &cfg_sm.p_imic;
     cfg_moni             = &cfg_sm.p_moni;
     cfg_atu_enabled      = &cfg_sm.p_atu_enabled;
     cfg_auto_level_enabled = &cfg_sm.p_auto_level_enabled;
-    cfg_auto_level_offset  = reinterpret_cast<ParamFloat *>(&cfg_sm.p_auto_level_offset);
+    cfg_auto_level_offset  = &cfg_sm.p_auto_level_offset;
     cfg_knob_info        = &cfg_sm.p_knob_info;
     cfg_spectrum_show    = &cfg_sm.p_spectrum_show;
     cfg_spectrum_height  = &cfg_sm.p_spectrum_height;
@@ -199,6 +207,7 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_smeter_needle    = &cfg_sm.p_smeter_needle;
     cfg_smeter_color     = &cfg_sm.p_smeter_color;
     cfg_wf_palette          = &cfg_sm.p_wf_palette;
+    cfg_filter_color        = &cfg_sm.p_filter_color;
     cfg_spectrum_line_color = &cfg_sm.p_spectrum_line_color;
     cfg_spectrum_fill_color = &cfg_sm.p_spectrum_fill_color;
     cfg_spectrum_fill_gradient = &cfg_sm.p_spectrum_fill_gradient;
@@ -206,11 +215,12 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_swr_color        = &cfg_sm.p_swr_color;
     cfg_swr_protect      = &cfg_sm.p_swr_protect;
     cfg_smeter_lamp      = &cfg_sm.p_smeter_lamp;
+    cfg_broadcast_name   = &cfg_sm.p_broadcast_name;
     cfg_cluster_column = &cfg_sm.p_cluster_column;
     cfg_cluster_order    = &cfg_sm.p_cluster_order;
     cfg_cluster_all_bands = &cfg_sm.p_cluster_all_bands;
     cfg_waterfall_ref    = &cfg_sm.p_waterfall_ref;
-    cfg_smeter_cal       = &cfg_sm.p_smeter_cal;
+    cfg_smeter_cal       = &cfg_sm.p_band_smeter_cal;
     cfg_waterfall_speed  = &cfg_sm.p_waterfall_speed;
     cfg_wf_mode          = &cfg_sm.p_wf_mode;
     cfg_encoder_bind     = &cfg_sm.p_encoder_bind;
@@ -222,6 +232,7 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_ft8_protocol     = &cfg_sm.p_ft8_protocol;
     cfg_ft8_auto         = &cfg_sm.p_ft8_auto;
     cfg_ft8_hold_freq    = &cfg_sm.p_ft8_hold_freq;
+    cfg_ft8_foryou       = &cfg_sm.p_ft8_foryou;
     cfg_wspr_tx_pct      = &cfg_sm.p_wspr_tx_pct;
     cfg_spot_snap_hold   = &cfg_sm.p_spot_snap_hold;
     cfg_spot_snap_slow   = &cfg_sm.p_spot_snap_slow;
@@ -230,6 +241,7 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_wspr_upload      = &cfg_sm.p_wspr_upload;
     cfg_pskreporter      = &cfg_sm.p_pskreporter;
     cfg_field_boot       = &cfg_sm.p_field_boot;
+    cfg_field_respot     = &cfg_sm.p_field_respot;
     cfg_voice_msg_gain   = &cfg_sm.p_voice_msg_gain;
     cfg_ft8_max_repeats  = &cfg_sm.p_ft8_max_repeats;
     cfg_ft8_info         = &cfg_sm.p_ft8_info;
@@ -242,14 +254,21 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_key_vol          = &cfg_sm.p_key_vol;
     cfg_key_train        = &cfg_sm.p_key_train;
     cfg_qsk_time         = &cfg_sm.p_qsk_time;
-    cfg_key_ratio        = reinterpret_cast<ParamFloat *>(&cfg_sm.p_key_ratio);
+    cfg_key_ratio        = &cfg_sm.p_key_ratio;
     cfg_cw_peak_on       = &cfg_sm.p_cw_peak_on;
     cfg_cwt_level        = &cfg_sm.p_cwt_level;
     cfg_cwt_group        = &cfg_sm.p_cwt_group;
     cfg_cw_peak_q        = &cfg_sm.p_cw_peak_q;
+    cfg_paddle_map[0]    = &cfg_sm.p_paddle_kbd;
+    cfg_paddle_map[1]    = &cfg_sm.p_paddle_btn;
+    cfg_paddle_map[2]    = &cfg_sm.p_paddle_midi;
+    cfg_paddle_map[3]    = &cfg_sm.p_paddle_ser;
+    cfg_paddle_swap      = &cfg_sm.p_paddle_swap;
+    cfg_paddle_serial    = &cfg_sm.p_paddle_serial;
     cfg_cw_decoder       = &cfg_sm.p_cw_decoder;
     cfg_cw_tune          = &cfg_sm.p_cw_tune;
-    cfg_cw_decoder_snr   = reinterpret_cast<ParamFloat *>(&cfg_sm.p_cw_decoder_snr);
+    cfg_cw_live          = &cfg_sm.p_cw_live;
+    cfg_cw_decoder_snr   = &cfg_sm.p_cw_decoder_snr;
     cfg_agc_hang         = &cfg_sm.p_agc_hang;
     cfg_agc_knee         = &cfg_sm.p_agc_knee;
     cfg_agc_slope        = &cfg_sm.p_agc_slope;
@@ -262,22 +281,22 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_nb_width         = &cfg_sm.p_nb_width;
     cfg_nr               = &cfg_sm.p_nr;
     cfg_nr_level         = &cfg_sm.p_nr_level;
-    cfg_output_gain      = reinterpret_cast<ParamFloat *>(&cfg_sm.p_output_gain);
+    cfg_output_gain      = &cfg_sm.p_output_gain;
     cfg_comp             = &cfg_sm.p_comp;
-    cfg_comp_threshold_offset = reinterpret_cast<ParamFloat *>(&cfg_sm.p_comp_threshold_offset);
-    cfg_comp_makeup_offset    = reinterpret_cast<ParamFloat *>(&cfg_sm.p_comp_makeup_offset);
+    cfg_comp_threshold_offset = &cfg_sm.p_comp_threshold_offset;
+    cfg_comp_makeup_offset    = &cfg_sm.p_comp_makeup_offset;
     cfg_fm_emphasis      = &cfg_sm.p_fm_emphasis;
     cfg_tx_filter_low    = &cfg_sm.p_tx_filter_low;
     cfg_tx_filter_high   = &cfg_sm.p_tx_filter_high;
     cfg_cessb_on         = &cfg_sm.p_cessb_on;
-    cfg_cessb_power_up   = reinterpret_cast<ParamFloat *>(&cfg_sm.p_cessb_power_up);
+    cfg_cessb_power_up   = &cfg_sm.p_cessb_power_up;
 
     // BAND
     cfg_band_current_vfo = &cfg_sm.p_band_current_vfo;
     cfg_band_if_shift    = &cfg_sm.p_band_if_shift;
     cfg_band_vfoa_freq   = &cfg_sm.p_band_vfoa_freq;
     cfg_band_vfob_freq   = &cfg_sm.p_band_vfob_freq;
-    cfg_band_dac_offset  = reinterpret_cast<ParamFloat *>(&cfg_sm.p_band_dac_offset);
+    cfg_band_dac_offset  = &cfg_sm.p_band_dac_offset;
     cfg_band_grid_min    = &cfg_sm.p_band_grid_min;
     cfg_band_grid_max    = &cfg_sm.p_band_grid_max;
     cfg_band_split       = &cfg_sm.p_band_split;
@@ -319,4 +338,17 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
 
     // Wire the ATU cache to the parameter sources and do the initial load.
     atu_cache_wire_subscriptions();
+}
+
+int cfg_smeter_cal_bands(int *start, char (*names)[16], int *vals, int max) {
+    int n = 0;
+
+    *start = cfg_sm.p_smeter_cal.get();
+    for (const auto &[name, val] : BandParamsTable::all_int("smeter_cal")) {
+        if (n >= max) break;
+        if (val == *start) continue;
+        snprintf(names[n], 16, "%s", name.c_str());
+        vals[n++] = val;
+    }
+    return n;
 }

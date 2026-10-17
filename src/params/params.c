@@ -31,18 +31,17 @@
 #define BAND_NOT_LOADED -10
 
 params_t params = {
-    .brightness_normal      = 5,
-    .brightness_idle        = 4,
-    .brightness_timeout     = 30,
+    .brightness_normal = 5, .brightness_idle = 4, .brightness_timeout = 30,
     .brightness_buttons     = BUTTONS_TEMPORARILY,
 
-    .spectrum_beta          = { .x = 85, .min = 0, .max = 90, .name = "spectrum_beta"},
+    .spectrum_beta          = { .name = "spectrum_beta", .x = 85, .min = 0, .max = 90 },
     .spectrum_filled        = { .x = true,  .name = "spectrum_filled"},
     .spectrum_peak          = { .x = true,  .name = "spectrum_peak"},
     .spectrum_peak_hold     = { .x = 5,  .min=1, .max=10, .name = "spectrum_peak_hold"},
     .spectrum_peak_speed    = { .x = 5,  .min=1, .max=30, .name = "spectrum_peak_speed"},
     .waterfall_smooth_scroll= { .x = false,  .name = "waterfall_smooth_scroll" },
     .update_alert           = { .x = true,   .name = "update_alert" },
+    .remote_update          = { .x = true,   .name = "remote_update" },
     .waterfall_center_line  = { .x = true,  .name = "waterfall_center_line" },
     .waterfall_zoom         = { .x = true,  .name = "waterfall_zoom" },
     .mag_freq               = { .x = false,  .name = "mag_freq" },
@@ -60,34 +59,33 @@ params_t params = {
     .line_out               = 10,
     .spmode                 = { .x = false,             .name = "spmode" },
     .freq_accel             = { .x = FREQ_ACCEL_LITE,   .name = "freq_accel" },
+    .screen_rec_split       = { .x = 0, .min = 0, .max = 4, .name = "screen_rec_split" },
 
     .cw_encoder_period      = 10,
     .voice_msg_period       = 10,
 
     .rtty_center            = 800,
-    .rtty_shift             = 450,
-    .rtty_rate              = 5000,
-    .rtty_reverse           = true,
+    .rtty_shift = 450, .rtty_rate = 5000, .rtty_reverse = true,
     .rtty_bits              = 5,
     .rtty_snr               = 3.0f,
 
     .ft8_tx_freq            = { .x = 1325,      .name = "ft8_tx_freq" },
-    .js8_tx_freq            = { .x = 1500,      .name = "js8_tx_freq" },
-    .js8_hold_offset        = { .x = false,     .name = "js8_hold_offset" },
-    .js8_auto               = { .x = false,     .name = "js8_auto" },
-    .js8_hb                 = { .x = false,     .name = "js8_hb" },
-    .js8_hb_ack             = { .x = false,     .name = "js8_hb_ack" },
-    .js8_relay              = { .x = true,      .name = "js8_relay" },
-    .js8_hb_interval        = { .x = 30,        .name = "js8_hb_interval" },
-    .js8_cq_interval        = { .x = 1,         .name = "js8_cq_interval" },
-    .js8_log_prompt         = { .x = true,      .name = "js8_log_prompt" },
-    .js8_log_activation     = { .x = 0, .min = 0, .max = 2, .name = "js8_log_activation" },
-    .js8_alerts             = { .x = 7, .min = 0, .max = 31, .name = "js8_alerts" }, /* beep, to me, inbox */
-    .js8_speed              = { .x = 0, .min = 0, .max = 3, .name = "js8_speed" },   /* Normal */
-    .js8_rx_all             = { .x = true,      .name = "js8_rx_all" },
-    .js8_ghostnet           = { .x = false,     .name = "js8_ghostnet" },
-    .js8_custom_on          = { .x = false,     .name = "js8_custom_on" },
-    .js8_custom_hz          = { .x = 0,         .name = "js8_custom_hz" },
+    .js8_tx_freq           = { .name = "js8_tx_freq", .x = 1500 },
+    .js8_hold_offset       = { .name = "js8_hold_offset", .x = false },
+    .js8_auto              = { .name = "js8_auto", .x = false },
+    .js8_hb                = { .name = "js8_hb", .x = false },
+    .js8_hb_ack            = { .name = "js8_hb_ack", .x = false },
+    .js8_relay             = { .name = "js8_relay", .x = true },
+    .js8_hb_interval       = { .name = "js8_hb_interval", .x = 30 },
+    .js8_cq_interval       = { .name = "js8_cq_interval", .x = 1 },
+    .js8_log_prompt        = { .name = "js8_log_prompt", .x = true },
+    .js8_log_activation    = { .name = "js8_log_activation", .x = 0, .min = 0, .max = 2 },
+    .js8_alerts            = { .name = "js8_alerts", .x = 7, .min = 0, .max = 31 }, /* beep, to me, inbox */
+    .js8_speed             = { .name = "js8_speed", .x = 0, .min = 0, .max = 3 },   /* Normal */
+    .js8_rx_all            = { .name = "js8_rx_all", .x = true },
+    .js8_ghostnet          = { .name = "js8_ghostnet", .x = false },
+    .js8_custom_on         = { .name = "js8_custom_on", .x = false },
+    .js8_custom_hz         = { .name = "js8_custom_hz", .x = 0 },
     .ft8_custom_on          = { .x = false,     .name = "ft8_custom_on" },
     .ft8_custom_hz          = { .x = 0,         .name = "ft8_custom_hz" },
     .ft8_output_gain_offset = { .x = 0.0f,      .name = "ft8_output_gain_offset" },
@@ -150,13 +148,31 @@ static bool params_load_uint16(params_uint16_t *var, const char *name, const int
     return false;
 }
 
-static bool params_load_int32(params_int32_t *var, const char *name, const int32_t x) {
-    if (strcmp(name, var->name) == 0) {
-        var->x = x;
-        return true;
-    }
+static bool params_load_int32(params_int32_t *p, const char *name, int32_t value) {
+    bool match = strcmp(name, p->name) == 0;
 
-    return false;
+    if (match) p->x = value;
+    return match;
+}
+
+/* The JS8 window's settings, one row of the params table */
+static bool params_load_js8(params_t *p, const char *name, int32_t i) {
+    return params_load_bool(&p->js8_hold_offset, name, i) ||
+        params_load_bool(&p->js8_auto, name, i) ||
+        params_load_bool(&p->js8_hb, name, i) ||
+        params_load_bool(&p->js8_hb_ack, name, i) ||
+        params_load_bool(&p->js8_relay, name, i) ||
+        params_load_uint16(&p->js8_hb_interval, name, i) ||
+        params_load_uint16(&p->js8_cq_interval, name, i) ||
+        params_load_bool(&p->js8_log_prompt, name, i) ||
+        params_load_uint8(&p->js8_log_activation, name, i) ||
+        params_load_uint8(&p->js8_alerts, name, i) ||
+        params_load_uint8(&p->js8_speed, name, i) ||
+        params_load_bool(&p->js8_rx_all, name, i) ||
+        params_load_bool(&p->js8_ghostnet, name, i) ||
+        params_load_bool(&p->js8_custom_on, name, i) ||
+        params_load_int32(&p->js8_custom_hz, name, i) ||
+        params_load_uint16(&p->js8_tx_freq, name, i);
 }
 
 static bool params_load_float(params_float_t *var, const char *name, float x) {
@@ -253,22 +269,8 @@ static bool params_load() {
 
         if (params_load_uint8(&params.charger, name, i)) continue;
         if (params_load_bool(&params.mag_freq, name, i)) continue;
-        if (params_load_bool(&params.js8_hold_offset, name, i)) continue;
-        if (params_load_bool(&params.js8_auto, name, i)) continue;
-        if (params_load_bool(&params.js8_hb, name, i)) continue;
-        if (params_load_bool(&params.js8_hb_ack, name, i)) continue;
-        if (params_load_bool(&params.js8_relay, name, i)) continue;
-        if (params_load_uint16(&params.js8_hb_interval, name, i)) continue;
-        if (params_load_uint16(&params.js8_cq_interval, name, i)) continue;
-        if (params_load_bool(&params.js8_log_prompt, name, i)) continue;
-        if (params_load_uint8(&params.js8_log_activation, name, i)) continue;
-        if (params_load_uint8(&params.js8_alerts, name, i)) continue;
-        if (params_load_uint8(&params.js8_speed, name, i)) continue;
-        if (params_load_bool(&params.js8_rx_all, name, i)) continue;
-        if (params_load_bool(&params.js8_ghostnet, name, i)) continue;
+        if (params_load_js8(&params, name, i)) continue;
         if (params_load_bool(&params.sstv_denoise, name, i)) continue;
-        if (params_load_bool(&params.js8_custom_on, name, i)) continue;
-        if (params_load_int32(&params.js8_custom_hz, name, i)) continue;
         if (params_load_bool(&params.ft8_custom_on, name, i)) continue;
         if (params_load_int32(&params.ft8_custom_hz, name, i)) continue;
         if (params_load_bool(&params.mag_info, name, i)) continue;
@@ -280,6 +282,7 @@ static bool params_load() {
         if (params_load_bool(&params.spectrum_peak, name, i)) continue;
         if (params_load_bool(&params.waterfall_smooth_scroll, name, i)) continue;
         if (params_load_bool(&params.update_alert, name, i)) continue;
+        if (params_load_bool(&params.remote_update, name, i)) continue;
         if (params_load_bool(&params.waterfall_center_line, name, i)) continue;
         if (params_load_bool(&params.waterfall_zoom, name, i)) continue;
         if (params_load_bool(&params.spmode, name, i)) continue;
@@ -287,9 +290,9 @@ static bool params_load() {
         if (params_load_str(&params.ft8_cq_modifier, name, t)) continue;
 
         if (params_load_uint8(&params.freq_accel, name, i)) continue;
+        if (params_load_uint8(&params.screen_rec_split, name, i)) continue;
 
         if (params_load_uint16(&params.ft8_tx_freq, name, i)) continue;
-        if (params_load_uint16(&params.js8_tx_freq, name, i)) continue;
 
         if (params_load_str(&params.qth, name, t)) continue;
 
@@ -322,10 +325,28 @@ static void params_save_uint16(params_uint16_t *var) {
     }
 }
 
-static void params_save_int32(params_int32_t *var) {
-    if (var->dirty) {
-        params_write_int(var->name, var->x, &var->dirty);
-    }
+static void params_save_int32(params_int32_t *p) {
+    if (p->dirty)
+        params_write_int(p->name, p->x, &p->dirty);
+}
+
+static void params_save_js8(params_t *p) {
+    params_save_bool(&p->js8_hold_offset);
+    params_save_bool(&p->js8_auto);
+    params_save_bool(&p->js8_hb);
+    params_save_bool(&p->js8_hb_ack);
+    params_save_bool(&p->js8_relay);
+    params_save_uint16(&p->js8_hb_interval);
+    params_save_uint16(&p->js8_cq_interval);
+    params_save_bool(&p->js8_log_prompt);
+    params_save_uint8(&p->js8_log_activation);
+    params_save_uint8(&p->js8_alerts);
+    params_save_uint8(&p->js8_speed);
+    params_save_bool(&p->js8_rx_all);
+    params_save_bool(&p->js8_ghostnet);
+    params_save_bool(&p->js8_custom_on);
+    params_save_int32(&p->js8_custom_hz);
+    params_save_uint16(&p->js8_tx_freq);
 }
 
 static void params_save_float(params_float_t *var) {
@@ -382,28 +403,14 @@ static void params_save() {
     params_save_float(&params.rec_gain_db_f);
 
     params_save_uint8(&params.freq_accel);
+    params_save_uint8(&params.screen_rec_split);
 
     params_save_uint16(&params.ft8_tx_freq);
-    params_save_uint16(&params.js8_tx_freq);
 
     params_save_uint8(&params.charger);
     params_save_bool(&params.mag_freq);
-    params_save_bool(&params.js8_hold_offset);
-    params_save_bool(&params.js8_auto);
-    params_save_bool(&params.js8_hb);
-    params_save_bool(&params.js8_hb_ack);
-    params_save_bool(&params.js8_relay);
-    params_save_uint16(&params.js8_hb_interval);
-    params_save_uint16(&params.js8_cq_interval);
-    params_save_bool(&params.js8_log_prompt);
-    params_save_uint8(&params.js8_log_activation);
-    params_save_uint8(&params.js8_alerts);
-    params_save_uint8(&params.js8_speed);
-    params_save_bool(&params.js8_rx_all);
-    params_save_bool(&params.js8_ghostnet);
+    params_save_js8(&params);
     params_save_bool(&params.sstv_denoise);
-    params_save_bool(&params.js8_custom_on);
-    params_save_int32(&params.js8_custom_hz);
     params_save_bool(&params.ft8_custom_on);
     params_save_int32(&params.ft8_custom_hz);
     params_save_bool(&params.mag_info);
@@ -415,6 +422,7 @@ static void params_save() {
     params_save_bool(&params.spectrum_peak);
     params_save_bool(&params.waterfall_smooth_scroll);
     params_save_bool(&params.update_alert);
+    params_save_bool(&params.remote_update);
     params_save_bool(&params.waterfall_center_line);
     params_save_bool(&params.waterfall_zoom);
     params_save_bool(&params.spmode);
@@ -583,10 +591,8 @@ void params_uint16_set(params_uint16_t *var, uint16_t x) {
     params_unlock(&var->dirty);
 }
 
-void params_int32_set(params_int32_t *var, int32_t x) {
-    params_lock();
-    var->x = x;
-    params_unlock(&var->dirty);
+void params_int32_set(params_int32_t *p, int32_t value) {
+    params_lock(); p->x = value; params_unlock(&p->dirty);
 }
 
 void params_float_set(params_float_t *var, float x) {

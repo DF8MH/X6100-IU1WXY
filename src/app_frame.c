@@ -41,6 +41,7 @@ void app_frame_create(app_frame_t *f, lv_obj_t *dialog_obj) {
     f->status = make_label(dialog_obj, &sony_20, APP_FRAME_DIM);
     lv_obj_set_pos(f->status, 18, DIALOG_H - APP_FRAME_STATUS_H - 4);
     lv_obj_set_width(f->status, 760);
+    lv_label_set_long_mode(f->status, LV_LABEL_LONG_SCROLL_CIRCULAR);   /* one line: a long one scrolls, never under the buttons */
 }
 
 void app_frame_body(lv_obj_t *obj) {

@@ -78,7 +78,7 @@ transmits by itself.
   CQ POTA, and Auto answers a POTA activator first.
 - **JS8**: JS8Call compatible, all four speeds decoded at once, inbox,
   relays, heartbeats, ADIF log with POTA/SOTA, **APRS** (position, spots,
-  SMS, email). Messages up to 500 characters (from randal007's x6100-js8).
+  SMS, email). Messages up to 500 characters.
 - **JTTY**: the keyboard mode of WSJT-X 3.2 (K1JT and the WSJT-X team), laid
   out like RTTY and PSK, F1-F8 contest macros, spots to PSK Reporter.
 - **WSPR**: decode every cycle, random beacon (TX %), upload to WSPRnet.
@@ -251,7 +251,7 @@ app of its own (APP page 3 → **Bands**), in the same look as the other apps.
   (pairing is refused outside it), the device list with headphones, keyboards
   (also the ones that send no name) and phones tagged, Forget with a
   confirmation, headphone audio and CAT clients. One pair of headphones at a
-  time. Based on SP2KMO's and randal007's upstream work.
+  time. Based on SP2KMO's upstream work.
 - **Ethernet**: a USB Ethernet adapter with DHCP or a fixed IP, netmask,
   gateway and DNS, in Settings → Wireless and on the web page System →
   Ethernet. WiFi keeps working alongside.
@@ -337,7 +337,7 @@ output gain), and a battery percentage from a measured X6100 discharge curve.
 - **[Manual](docs/MANUAL.md)**: every app and setting, the web pages, CAT commands, files, building
 - [Themes](docs/THEMES.md): make your own
 
-## Credits
+## Credits and thanks
 
 **Giovanni Ricciardi IU1WXY** designed and wrote this firmware:
 
@@ -363,7 +363,7 @@ whose CW receiver, CW tune indicator, DRM/KMS display output, direct spectrum
 rendering and main knob handling (detents timed in their own thread) are
 imported here,
 **1KO125** by Hany El Imam / TheMurusTeam (WeFax, NavTex, SSTV decoders),
-**JS8** by randal007 on the JS8Call engine (Jordan Sherer KN4CRD), **wsprd**
+**JS8** on the JS8Call engine (Jordan Sherer KN4CRD, JS8Call-improved), **wsprd**
 from WSJT-X (K1JT, K9AN), **JTTY** from WSJT-X 3.2 (K1JT and the WSJT-X team). Libraries: LVGL, cJSON, FFTW, liquid-dsp, libpng,
 bottle, PulseAudio, BlueZ. Fonts: Roboto, DejaVu, Arial, Sony Sketch.
 Hardware: Xiegu.
@@ -371,6 +371,10 @@ Hardware: Xiegu.
 Skimmer spots in Field Ops > Bands come from the **Reverse Beacon Network**
 ([reversebeacon.net](https://www.reversebeacon.net)), thanks to its skimmer
 operators.
+
+The broadcast schedule of the SWL panel is the **EiBi** list by Eike Bierwirth
+([eibispace.de](http://www.eibispace.de)); the radio refreshes it from there
+with `x6100-broadcast-update`.
 
 ## Privacy and disclaimer
 
@@ -391,9 +395,15 @@ The app and the radio contact the x6100-link.it server to check for updates. Eve
 Everything else (settings, logs, pictures) stays on the SD card. Full notice, website included:
 [x6100-link.it/privacy.php](https://x6100-link.it/privacy.php).
 
-## License
+## Licenses
 
 The GUI is LGPL-2.1-or-later ([LICENSE](LICENSE)); the vendored js8core and
 wsprd, and JTTY (ported from WSJT-X by K1JT and the WSJT-X team, `src/jtty*`),
 are GPLv3, so the firmware image is GPLv3. The web server has its own
 license ([webserver/LICENSE](webserver/LICENSE)).
+
+What is not covered by those licenses: the X6100 Link app (closed source, published
+only as the app), the x6100-link.it services (reports, diagnostics, updates without
+the microSD, remote updates), the signing key of the updates, and the names
+"X6100 IU1WXY" and "X6100 Link". A modified copy of the firmware must use its own
+name and cannot use those services or that update channel.

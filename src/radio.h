@@ -61,12 +61,11 @@ void radio_vol_refresh();
 void radio_set_pwr(float d);
 /* While a digital app is open the radio never goes above TX_PLAYER_MAX_PWR_W */
 void radio_set_digi_cap(bool on);
-/* Radio only, not saved: settings keep cfg_tx_filter_low/high. */
-void radio_set_tx_filter(uint16_t low, uint16_t high);
-/* Noise reduction, noise blanker, notch and auto-notch off (the base
- * applies them in every mode, DIGI included), or back to the settings.
- * Radio only, not saved. */
-void radio_set_rx_dsp_off(bool off);
+/* TX audio filter of the baseband, Hz. Not saved: cfg_tx_filter_low/high stay as they are */
+void radio_set_tx_filter(uint16_t from_hz, uint16_t to_hz);
+/* true: NR, NB, DNF and auto DNF off in the baseband (it uses them in DIGI modes too);
+ * false: back to what the settings say. Not saved */
+void radio_set_rx_dsp_off(bool all_off);
 
 void radio_set_charger(bool on);
 
@@ -83,10 +82,9 @@ void radio_set_mic_override(int mic);
 int radio_get_mic(void);
 void radio_set_modem(bool tx);
 bool radio_get_modem(void);   /* the TX audio from the GUI (apps, recordings), not the mic */
-/* The base plays this app's audio on the speaker (as voice prompts and the
- * recorder do) - and while it does, the audio it sends us isn't the
- * receiver's. Off puts the mics back. */
-void radio_speaker_play(bool on);
+/* true: the baseband sends our audio to the speaker, the path of voice prompts and the
+ * recorder (meanwhile its audio to us is not the receiver); false: the mics again */
+void radio_speaker_play(bool speaker);
 /* audio_set_play_mode() with the radio lock: use this one */
 void radio_set_play_mode(audio_play_mode_t mode);
 
@@ -100,3 +98,6 @@ void radio_set_qsk_time(uint16_t ms);
 void radio_set_rec_moni(bool on);
 
 int8_t radio_get_audio_in_lvl();
+
+/* The battery % as on the screen, -1 on external power or before the base measured it. Any thread. */
+int radio_get_battery();

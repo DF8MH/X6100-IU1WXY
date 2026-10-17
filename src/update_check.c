@@ -50,6 +50,39 @@ static bool grid_ok(const char *g) {
     return true;
 }
 
+/* Battery and S-meter calibration for the ping: "&batk=1.08&bath=42&batc=3" (pack factor, hours
+ * and charges learned; left out while nothing is learned), then "&smg=<start>&smcal=160m:-18,40m_CW:-25"
+ * (bands never calibrated take start; names cut to letters, digits and _ to stay URL-safe; smcal
+ * left out when no band has its own value, cut when the bands do not fit) */
+static void ping_extra(char *out, size_t size, int start, char (*names)[16], const int *vals, int n,
+                       float bat_k, int bat_h, int bat_c) {
+    size_t len = 0;
+
+    out[0] = '\0';
+    if (bat_h > 0 || bat_c > 0)
+        len = (size_t)snprintf(out, size, "&batk=%.2f&bath=%d&batc=%d", bat_k, bat_h, bat_c);
+    len += (size_t)snprintf(out + len, size - len, "&smg=%d", start);
+
+    for (int i = 0; i < n && len + 24 < size; i++) {
+        len += (size_t)snprintf(out + len, size - len, "%s", i ? "," : "&smcal=");
+        for (const char *c = names[i]; *c && len + 20 < size; c++)
+            if (isalnum((unsigned char)*c) || *c == ' ' || *c == '_') out[len++] = *c == ' ' ? '_' : *c;
+        len += (size_t)snprintf(out + len, size - len, ":%d", vals[i]);
+    }
+}
+
+/* The baseband version for the ping ("V1.1.9 Nov 27 2025" -> "V1.1.9_Nov_27_2025"): spaces to _,
+ * only [A-Za-z0-9._-], at most 32 characters; "" when there is none */
+static void ping_bb(char *bb, size_t size, const char *ver) {
+    size_t n = 0;
+
+    for (; ver && *ver && n + 1 < size && n < 32; ver++) {
+        char c = *ver == ' ' ? '_' : *ver;
+        if (isalnum((unsigned char)c) || c == '.' || c == '_' || c == '-') bb[n++] = c;
+    }
+    bb[n] = '\0';
+}
+
 #ifdef UPDATE_CHECK_TEST
 #include <assert.h>
 int main(void) {
@@ -60,6 +93,26 @@ int main(void) {
     assert(update_newer("v1.0", "v0.200"));
     assert(grid_ok("JN35") && grid_ok("jn35sc") && grid_ok("JN35SC12"));
     assert(!grid_ok("") && !grid_ok("JN3") && !grid_ok("ZZ35") && !grid_ok("JN35SZ") && !grid_ok("35JN"));
+
+    char x[560], nm[40][16] = {"160m", "40m CW", "CB/A'\"&"};
+    int  v[40] = {-18, -25, 3};
+    ping_extra(x, sizeof(x), -22, nm, v, 0, 1, 0, 0);
+    assert(!strcmp(x, "&smg=-22"));
+    ping_extra(x, sizeof(x), -22, nm, v, 3, 1.083f, 42, 3);
+    puts(x);
+    char bb[40];
+    ping_bb(bb, sizeof(bb), "V1.1.9 Nov 27 2025");
+    assert(!strcmp(bb, "V1.1.9_Nov_27_2025"));
+    ping_bb(bb, sizeof(bb), NULL);
+    assert(!bb[0]);
+    ping_bb(bb, sizeof(bb), "a'b\"c&d/e\n0123456789012345678901234567890123456789");
+    assert(!strcmp(bb, "abcde012345678901234567890123456"));
+    assert(!strcmp(x, "&batk=1.08&bath=42&batc=3&smg=-22&smcal=160m:-18,40m_CW:-25,CBA:3"));
+    for (int i = 0; i < 40; i++) { snprintf(nm[i], 16, "Broadcast %dm", i); v[i] = -40; }
+    ping_extra(x, 300, -22, nm, v, 40, 1, 1, 0);    /* too many: cut, never past the buffer */
+    assert(strlen(x) < 300);
+    ping_extra(x, sizeof(x), -22, nm, v, 40, 1, 1, 0);
+    assert(strlen(x) < sizeof(x) && strstr(x, "&batk=1.00&bath=1&batc=0"));
     puts("ok");
     return 0;
 }
@@ -70,6 +123,11 @@ int main(void) {
 #include "msg.h"
 #include "params/params.h"
 #include "station.h"
+#include "radio.h"
+#include "dialog.h"
+#include "cfg/cfg_api.h"
+#include "bat_est.h"
+#include <aether_radio/x6100_control/low/control.h>
 
 #define FETCH "python3 -c \"import urllib.request as u;" \
               "print(u.urlopen('https://x6100-link.it/api/latest.json',timeout=15).read().decode())\" 2>/dev/null"
@@ -187,8 +245,33 @@ static void ping_hw(char *hw, size_t size) {
     (void)size;
 }
 
+/* Remote update (x6100-update remote): the ping answer with a request for this radio goes to the
+ * updater, and again at every ping while one is in hand. Installed only with the radio idle:
+ * receiving, no app or menu open, not in walkie mode. */
+#define UPD_WORK    "/mnt/.x6100-update"
+
+static void remote_update(const char *answer) {
+    char cmd[96];
+    bool idle = radio_get_state() == RADIO_RX && !dialog_is_run() && !param_i_get(cfg_walkie);
+
+    if (strstr(answer, "\"update\"")) {
+        FILE *f = fopen(UPD_WORK "/ping.json.tmp", "w");
+        if (!f) return;
+        fputs(answer, f);
+        fclose(f);
+        rename(UPD_WORK "/ping.json.tmp", UPD_WORK "/ping.json");
+    } else if (access(UPD_WORK "/remote.pending", F_OK)) {
+        return;
+    }
+    snprintf(cmd, sizeof(cmd), "setsid /usr/sbin/x6100-update remote %d %d </dev/null >/dev/null 2>&1 &",
+             params.remote_update.x ? 1 : 0, idle ? 1 : 0);
+    if (system(cmd) == -1) { /* tried again at the next ping */ }
+}
+
 static void *ping_thread(void *arg) {
-    char id[40], qth[16], call[20], sd[36], hw[20], cmd[460];
+    char id[40], qth[16], call[20], sd[36], hw[20], sys_v[8] = "", cmd[1100], answer[2048];
+    char extra[560], sm_names[40][16], bb[40];
+    int  sm_vals[40], sm_start, bat_h, bat_c;
     bool was_up = false;
     int  wait = 0;
 
@@ -196,18 +279,35 @@ static void *ping_thread(void *arg) {
     device_id(id, sizeof(id));
     ping_sd(sd, sizeof(sd));
     ping_hw(hw, sizeof(hw));
+    ping_bb(bb, sizeof(bb), x6100_control_get_fw_version_str());   /* read once at start by the control lib */
+    FILE *sf = fopen("/etc/x6100-system-version", "r");
+    if (sf) {
+        if (fscanf(sf, "%7[0-9]", sys_v) != 1) sys_v[0] = 0;
+        fclose(sf);
+    }
     while (1) {
         bool up = net_up();
 
         if (up && (!was_up || wait <= 0)) {
             snprintf(qth, sizeof(qth), "%s", station_qth());
             ping_call(call, sizeof(call));
+            int sm_n = cfg_smeter_cal_bands(&sm_start, sm_names, sm_vals, 40);
+            bat_est_learned(&bat_h, &bat_c);
+            ping_extra(extra, sizeof(extra), sm_start, sm_names, sm_vals, sm_n, bat_est_factor(), bat_h, bat_c);
             snprintf(cmd, sizeof(cmd),
-                     "python3 -c \"import urllib.request as u;u.urlopen('https://x6100-link.it/api/ping.php"
-                     "?id=%s&kind=radio&ver=%s%s%s%s%s%s%s%s%s',timeout=15)\" >/dev/null 2>&1",
+                     "python3 -c \"import urllib.request as u;print(u.urlopen('https://x6100-link.it/api/ping.php"
+                     "?id=%s&kind=radio&ver=%s%s%s%s%s%s%s%s%s%s%s%s%s%s',timeout=15).read(2000).decode())\" 2>/dev/null",
                      id, strrchr(VERSION, ' ') + 1, grid_ok(qth) ? "&qth=" : "", grid_ok(qth) ? qth : "",
-                     call[0] ? "&call=" : "", call, sd[0] ? "&sd=" : "", sd, hw[0] ? "&hw=" : "", hw);
-            if (system(cmd) == -1) { /* nothing to do: the next round tries again */ }
+                     call[0] ? "&call=" : "", call, sd[0] ? "&sd=" : "", sd, hw[0] ? "&hw=" : "", hw,
+                     sys_v[0] ? "&sys=" : "", sys_v, bb[0] ? "&bb=" : "", bb, extra);
+            FILE  *p = popen(cmd, "r");
+            size_t n = 0;
+            if (p) {   /* a failure waits for the next round */
+                n = fread(answer, 1, sizeof(answer) - 1, p);
+                pclose(p);
+            }
+            answer[n] = 0;
+            remote_update(answer);
             wait = 300;
         }
         was_up = up;

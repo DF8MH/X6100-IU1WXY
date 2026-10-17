@@ -10,18 +10,19 @@ Settings. Button and option names are written as the radio shows them.
 ## Contents
 
 - [Getting started](#getting-started): [first steps](#first-steps), [buttons and knobs](#buttons-and-knobs)
-- [Main screen](#main-screen): [status bar](#status-bar), [S-meter](#s-meter), [waterfall](#waterfall), [screen recording](#screen-recording), [Walkie Talkie](#walkie-talkie-mode)
-- [Settings](#settings): [General](#general-tab), [Display](#display-tab), [Audio](#audio-tab), [Wireless](#wireless-tab), [Bluetooth](#bluetooth-tab), [Keys](#keys-tab), [Cluster](#cluster-tab), [TX Cal](#tx-cal-tab), [Info](#info-tab), [Walkie](#walkie-tab)
-- [Transmitting](#transmitting): [digital-mode TX level](#digital-mode-tx-level), [recording voice messages](#recording-voice-messages)
+- [Updating the firmware](#updating-the-firmware)
+- [Main screen](#main-screen): [low battery](#low-battery), [battery time](#battery-time), [status bar](#status-bar), [S-meter](#s-meter), [waterfall](#waterfall), [screen recording](#screen-recording), [Walkie Talkie](#walkie-talkie-mode)
+- [Settings](#settings): [General](#general-tab), [Display](#display-tab), [Audio](#audio-tab), [Wireless](#wireless-tab), [Bluetooth](#bluetooth-tab), [Keys](#keys-tab), [Cluster](#cluster-tab), [TX Cal](#tx-cal-tab), [Info](#info-tab), [Update](#update-tab), [Walkie](#walkie-tab)
+- [Transmitting](#transmitting): [digital-mode TX level](#digital-mode-tx-level), [recording voice messages](#recording-voice-messages), [ALC in CW](#alc-in-cw)
 - [Digital modes](#digital-modes): [opening a mode](#opening-a-mode), [FT8 and FT4](#ft8-and-ft4), [JS8](#js8), [WSPR](#wspr), [SSTV, WeFax and NavTex](#sstv-wefax-and-navtex), [PSK31, PSK63 and Olivia](#psk31-psk63-and-olivia), [JTTY](#jtty), [RTTY and WeFax TX](#rtty-and-wefax-tx)
-- [CW](#cw): [CW decoder](#cw-decoder), [CW from the keyboard](#cw-from-the-keyboard), [CW messages](#cw-messages), [CW Trainer](#cw-trainer)
-- [Apps](#apps): [DX Cluster](#dx-cluster), [Field Ops (SOTA / POTA)](#field-ops-sota--pota), [Bands](#bands)
+- [CW](#cw): [CW decoder](#cw-decoder), [CW from the keyboard](#cw-from-the-keyboard), [USB paddle](#usb-paddle), [CW messages](#cw-messages), [CW Trainer](#cw-trainer)
+- [Apps](#apps): [DX Cluster](#dx-cluster), [Field Ops (SOTA / POTA)](#field-ops-sota--pota), [Bands](#bands), [Channels](#channels)
 - [Bluetooth](#bluetooth): [headphones](#bluetooth-headphones), [CAT](#bluetooth-cat)
 - [Themes](#themes)
 - [Web configurator](#web-configurator)
 - [X6100 Link app](#x6100-link-app)
 - [wfview server](#wfview-server)
-- [Ethernet](#ethernet)
+- [Ethernet](#ethernet): [USB tethering](#usb-tethering)
 - [Troubleshooting and FAQ](#troubleshooting-and-faq)
 - [Reference](#reference): [Bluetooth CAT connection](#bluetooth-cat-connection), [CI-V commands](#supported-ci-v-commands), [btcat-ctl](#btcat-ctl), [btaudio-ctl](#btaudio-ctl), [files on /mnt](#files-on-mnt)
 - [Build](#build)
@@ -49,13 +50,15 @@ The APP button opens three pages of apps and tools:
 | Page | Buttons |
 |---|---|
 | APP 1:3 | Modes, Cluster, SWR Scan, RX Recorder |
-| APP 2:3 | Settings, CW Trainer, Field Ops |
+| APP 2:3 | Settings, CW Trainer, Field Ops, Channels |
 | APP 3:3 | Bands, GPS, Screen rec |
 
 - Each app has its own button pages, named like `(JS8 1:7)`. The first
   button goes to the next page.
 - The MFK walks the items of an app or a list; a press chooses.
 - ESC closes popups and apps.
+- A press of VOL does not close menus or apps, and in a text field it types
+  nothing; on the main screen it still works as ESC.
 
 Long press. Each button group (GEN, APP, KEY, MSG, DFN, DFL) has a
 long-press action.
@@ -65,7 +68,7 @@ Where: Settings > Keys > FRONT KEYS, LONG PRESS.
 |---|---|
 | Quick | none, screenshot, RX recorder on/off, screen rec on/off, mute, WF mode, ATT on/off, PRE on/off, tuner on/off, tuner tune (transmits a carrier) |
 | Digital modes | RTTY, FT8, WSPR, JS8, SSTV, WeFax, NavTex |
-| Tools | Cluster, CW Trainer, Field Ops, Bands, RX recorder, SWR Scan, GPS, QTH grid, Settings |
+| Tools | Cluster, CW Trainer, Field Ops, Bands, Channels, RX recorder, SWR Scan, GPS, QTH grid, Settings |
 
 The hand mic F1 and F2 keys (short and long press) are set in the same tab.
 Where: Settings > Keys > HAND MIC KEYS.
@@ -73,8 +76,164 @@ The hand mic MODE key steps LSB, USB, CW, CW-R, AM, NFM; a long press turns
 DIG on or off in SSB, like a long press of the front SSB key.
 The hand mic FIL key works as the front DFL key: the filter pages, and the
 DFL long press action.
+The hand mic V/M key opens the [CHANNELS](#channels) window; UP and DOWN
+step through the channels (a long press changes band).
+
+## Updating the firmware
+
+> **Experimental.** The update without the microSD is new and EXPERIMENTAL.
+> It does not replace the microSD: the normal way to install the firmware is
+> still writing the image to the microSD. It only means rewriting the card
+> less often. If an update without the microSD ever gives a problem,
+> rewriting the microSD the usual way always fixes it.
+
+From v0.127 a new version comes in one of two ways. The
+[versions page](https://x6100-link.it/versions.php) says which one each
+version needs.
+
+- Full image, the normal way. The microSD is rewritten with the image, as in
+  [first steps](#first-steps). A version that also changes the system
+  underneath (kernel, drivers, libraries), like 0.127, can only be installed
+  this way, and the update without the microSD says so.
+- App update, no flashing. Only when a version changes just the radio's
+  interface and apps, not the system underneath. They come in a signed
+  package `x6100-app-<version>.tar.gz`. The radio stays on, its screen
+  restarts once for 10-20 seconds, and settings, logs, memories and pictures
+  stay as they are. If the new version doesn't start, the radio goes back to
+  the previous one by itself.
+
+Settings > Update shows the firmware version and, next to it, the system
+("System 1"). The system changes only when a version needs the card
+rewritten. App updates need v0.127 or later on the radio: an older radio
+takes the full image once.
+
+Four ways to install a package. The radio is on; for the app and the web
+configurator, on the same network as the phone or computer.
+
+1. X6100 Link app: SET > Update > Radio app update. The top line shows the
+   version on the radio ("On the radio: 0.127"). CHECK looks for a new
+   version on x6100-link.it; DOWNLOAD saves the package in the phone's
+   Download folder ("x6100-app-<version> ready"); INSTALL sends it to the
+   radio and follows it: "Sending to the radio…", "The radio is checking the
+   package…", "Installing…", "The radio's interface is restarting…", then
+   "Done: the radio now runs X". If the version needs a new image the button
+   becomes DOWNLOAD IMAGE and opens the versions page. FROM FILE is only for
+   a package you got some other way.
+
+   ![X6100 Link: version available, DOWNLOAD](screenshots/update/install_ota_app.png)
+
+   ![X6100 Link: package ready, INSTALL](screenshots/update/install_ota_app_ready.png)
+
+2. From the radio itself, when it is on the internet (WiFi or Ethernet):
+   Settings > Update, App update line. Check asks x6100-link.it; with a new
+   version the line says "Version X available: press Install." and the button
+   becomes Install. Install shows "Downloading 3.1 of 7.7 MB", then the
+   screen restarts once and the line says "Checking the new version...
+   (2 min)", then "Version X installed.". Over WiFi the download can take a
+   few minutes, with the Ethernet cable it is quicker.
+
+   ![Settings > Update: v0.127 System 1, App update with Install](screenshots/update/install_ota_settings.png)
+
+3. Web configurator (`http://<radio IP>/`), Update section: choose the
+   package and press Install. The status line shows what the radio is doing.
+
+   ![Web configurator: Update section](screenshots/update/install_ota_web.png)
+
+4. By hand: copy the package (from the versions page, or the one the app
+   saved in the phone's Download folder) into the `update` folder of the microSD data
+   partition (`/mnt/update/` on the radio) and switch on. At start the radio
+   checks it, installs it and moves it to `/mnt/update/done/`, or to
+   `/mnt/update/failed/` with a short text file that says why.
+
+
+When it's done the radio shows "Update installed: version X". If the power
+goes off during an install, or the new version doesn't start, the radio
+restores the previous one and says so: "The update was interrupted. The
+previous version has been restored." Nothing is lost.
+
+![Update installed: version 0.127.6](screenshots/update/install_ota_notice.png)
+
+Messages and what to do:
+
+| Message | What to do |
+|---|---|
+| This update needs a new microSD image. Please update by flashing the microSD card. | The version changes the system: rewrite the microSD, backup first |
+| This radio can't update itself yet: flash image 0.127 or newer first | The radio is older than 0.127: rewrite the microSD once |
+| The update did not start correctly / was interrupted / could not be installed. The previous version has been restored. | Nothing is lost: try again; if it happens again, rewrite the microSD and report it |
+| This file is not an official update. Download it again from x6100-link.it. | Download the package again from the versions page |
+| The update file is damaged. Download it again. | Download the package again |
+| This file is not an update for the radio. / Choose an update file first. | Choose the `x6100-app-…tar.gz` file, not the SD image |
+| Not enough space on the radio for the update. | Delete some recordings from the web configurator's Gallery |
+| The radio stopped answering while the file was sent. | Check the radio is on and on the phone's network, then try again |
+| Another update is in progress. Please wait. | Wait for the running update to finish |
+| The upload was interrupted. / The update could not be checked. Please try again. | Try again; if it keeps happening, switch the radio off and on |
+
+Rewriting the microSD always works, whatever the version, and it fixes any
+problem the experimental update without the microSD might ever leave: by
+choice, or when
+an update gives trouble (the radio stays stuck, an update fails more than
+once, the radio no longer connects). It starts clean and erases the whole
+card, settings and logs included: download the Backup from the web
+configurator first if the radio still works.
 
 ## Main screen
+
+### Low battery
+
+On battery, at 10% or less the radio shows a message every minute: "Battery
+8%: about 15 min left" (the minutes when it knows them), and from 5%
+"Battery 5%: connect power". At 6.0 V it shows "Low battery! Turning off in
+30s" and switches itself off to protect the battery. As a guide, on my radio
+receiving with WiFi and Bluetooth on, 10% left about 22 minutes and 5% about
+12.
+
+![Battery 8%: about 15 min left](screenshots/low_battery.png)
+
+### Battery time
+
+> **Experimental.** The time left is an estimate, not a measurement. The radio
+> learns it by itself from how you use it, and it gets more precise over time.
+> A "~" in front of the time means it is still learning.
+
+At the top right the radio shows the charge and the time left:
+- On battery: "45%  2h07", that is 45% of charge and about 2 hours and 7
+  minutes before the battery is empty, if you keep using the radio the way you
+  are using it now. While the radio is still learning, the time has a "~" in
+  front: "~4h28".
+- Charging: the lightning sign with "66%  ~3h05", the time still needed to
+  reach a full charge.
+- Charged and still on the external supply: "99%" with the power sign.
+- External supply only, no battery fitted: the external voltage, "12.1v".
+
+The "~" stays until the radio has seen at least 2 hours of discharge or 2 full
+charges. Until then take the time as a rough guess.
+
+<!-- IMG battery_estimate_main.png: top right, "45%  2h07" -->
+
+How the radio works it out: there is no fixed table, it learns from how you
+really use it. It weighs what draws current:
+- receiving;
+- transmitting, by watts and by seconds on the air;
+- WiFi and Bluetooth;
+- headphones;
+- screen brightness.
+
+The time shown follows what you did in the last 20 minutes. Every 20 minutes the
+radio works its model out again and saves it on the microSD, so it is not lost
+when you switch off. The more you use the radio, the closer the time gets to the
+real one.
+
+Limits:
+- If you start transmitting much more than usual, the time drops fast. That is
+  correct: the battery really is going down faster.
+- While charging the time is less precise, because the base reports the charge
+  in uneven steps while it charges.
+- A battery that is getting old loses capacity. The radio follows the change
+  after a few discharges, not at once.
+
+The voltage is no longer at the top: read it in the POWER box of the
+[Info tab](#info-tab). The battery log stays on the radio's microSD and is not
+sent anywhere; if you send the diagnostics, they hold its last 5 lines.
 
 ### Status bar
 
@@ -100,10 +259,8 @@ yet, in colour when working:
 | Arrow | green GPS position (fix in the last 10 s); grey GPS on, no fix |
 | DX | green DX cluster connected; grey connecting or retrying; dark stopped |
 
-In the middle is the [S-meter](#s-meter). On the right: the local time, the
-battery (icon and voltage) and the external supply voltage. The plug turns
-into a lightning bolt while charging. On battery only, the supply voltage is
-replaced by the battery percentage.
+In the middle is the [S-meter](#s-meter). On the right: the local time and the
+charge with the time left (see [battery time](#battery-time)).
 
 ### S-meter
 
@@ -120,11 +277,17 @@ Display page).
 
 The VISION theme always uses bars.
 
-S-meter calibration. The reading can be shifted in dB. The default, -22 dB,
-matches an IC-7300. Change it only while reading the same signal on a
-calibrated reference (a radio or a generator); the radio shows this warning
-when you start editing it.
-Where: Settings > General > CONTROLS > S-meter cal.
+Per band S-meter calibration. Each band has its own correction, -40 to
++40 dB in 1 dB steps; the value shown is the one of the band the radio is on.
+Where: Settings > General > CONTROLS > Per band S-meter cal.
+
+- When you start editing it, a panel "S-METER CALIBRATION" says for 5 s:
+  "For this band only. Feed -73 dBm and set the reading to S9 on each band you
+  use. -22 dB matches an IC-7300."
+- Change it only while reading a known signal: -73 dBm (S9) from a generator,
+  or the same signal on a calibrated radio.
+- A band never calibrated starts at -22 dB, or at the single S-meter cal value
+  set before.
 
 ### Waterfall
 
@@ -148,9 +311,18 @@ Over the waterfall. Where: Settings > Display > MAIN SCREEN.
 | Cluster column | the spot list in a box on the right |
 
 Spectrum. Where: Settings > Display > SPECTRUM (off by default; the screen
-restarts to lay it out). Fill: the area under the trace filled. Peaks: the
-peaks held for a moment. The band plan and the cluster spots stay at the top
-of the waterfall.
+restarts to lay it out). The band plan and the cluster spots stay at the top
+of the waterfall. With Spectrum on, the card has:
+
+| Option | What it does |
+|---|---|
+| Fill | the area under the trace filled |
+| Peaks | the peaks held for a moment |
+| Fill gradient | the fill fades from its colour at the trace to the background at the bottom |
+| Filter colour | the filter passband on the spectrum and the waterfall: Theme (default), Blue, Cyan, Green, Yellow, Orange, Red, Violet, White |
+| Height | the height of the spectrum, 60-160 px |
+
+![Settings > Display > SPECTRUM with Filter colour, and the coloured passband](screenshots/display_filter_colour.png)
 
 Colours, on the web configurator's Display page:
 
@@ -172,7 +344,16 @@ Records the screen and the audio to an AVI file (MJPEG video, 800x480,
 - While recording, the monitor level is raised (to at least 30) so your
   transmitted voice is recorded too. Your monitor setting comes back when the
   recording stops.
-- It needs the SD card and 50 MB free ("Screen rec: no SD card", "Disk full").
+- File length: Settings > Audio > SCREEN REC > File length, 1 hour (default),
+  45, 30, 15 or 5 minutes. When a file reaches that length it is closed and
+  the recording goes on in a new file, named with the time it starts. Stop
+  says how many files were saved. An hour takes about 2.5 GB.
+- It needs the SD card and 50 MB free ("Screen rec: no SD card", "SD card
+  full"). With less than 10 minutes of space left the radio shows "SD card:
+  about N min left", again every minute; at 50 MB it stops by itself and closes the
+  file properly ("SD card full, recording saved").
+
+![REC 02:15 under the frequency strip while recording](screenshots/screen_rec_label.png)
 
 ### Walkie Talkie mode
 
@@ -189,15 +370,10 @@ Where: Settings > Walkie > WALKIE TALKIE > Walkie Talkie (or Settings >
 General > CONTROLS > Walkie Talkie). The screen turns to portrait at once, no
 restart.
 
-> **How to leave Walkie Talkie mode (EN)**
+> **How to leave Walkie Talkie mode**
 > 1. Press **APP**: the walkie buttons appear on the left edge, the first one reads "(WLK 1:4)".
 > 2. **Hold** that first button "(WLK 1:4)" (or press it three times): it goes to "(WLK 4:4)".
 > 3. **Hold** the button **"Exit hold"** for a second. The radio goes back to the normal landscape screen.
->
-> **Come uscire dal modo Walkie Talkie (IT)**
-> 1. Premi **APP**: sul bordo sinistro compaiono i tasti del walkie, il primo dice "(WLK 1:4)".
-> 2. **Tieni premuto** quel primo tasto "(WLK 1:4)" (oppure premilo tre volte): passa a "(WLK 4:4)".
-> 3. **Tieni premuto** per un secondo il tasto **"Exit hold"**. La radio torna alla schermata normale orizzontale.
 
 - PTT: the PTT key on the side of the radio. It transmits with the built-in
   microphone (Settings > Walkie > Microphone); the border turns red and the
@@ -236,7 +412,7 @@ restart.
 
 APP (page 2) > Settings. The tabs are on three button pages: General, Display,
 Audio, Wireless (page 1); Bluetooth, Keys, Cluster, TX Cal (page 2); Info,
-Walkie (page 3).
+Update, Walkie (page 3).
 
 The MFK walks the controls and stops at the first and last one. There the
 page shows its top or its end, so status rows below the last control are
@@ -250,7 +426,7 @@ base is too old.
 |---|---|
 | STATION | callsign, QTH locator |
 | DATE / TIME | date, time, time zone |
-| CONTROLS | Freq acceleration, Accel. onset, Charger (Off, On, Shadow), S-meter cal, Walkie Talkie (see [Walkie Talkie mode](#walkie-talkie-mode)) |
+| CONTROLS | Freq acceleration, Accel. onset, Charger (Off, On, Shadow), Per band S-meter cal, Walkie Talkie (see [Walkie Talkie mode](#walkie-talkie-mode)) |
 | TRANSVERTERS | two transverters: from, to, shift |
 | WFVIEW SERVER | on/off, user, password, server port and status, connected client |
 
@@ -265,7 +441,19 @@ acceleration.
 - Accel. onset (1-5, default 3) sets how soon it starts: 1 only when turned
   fast, 5 already when turned gently.
 
-S-meter cal: see [S-meter](#s-meter). WFVIEW SERVER: see
+Zone. Where: Settings > General > DATE / TIME > Zone. The change applies at
+once; summer time follows by itself where the zone has it. 24 zones, UTC then
+west to east: UTC, Pacific/Honolulu (HST), America/Anchorage (AKST/AKDT),
+America/Los_Angeles (PST/PDT), America/Denver (MST/MDT), America/Chicago
+(CST/CDT), America/New_York (EST/EDT), America/Sao_Paulo (BRT),
+America/Buenos_Aires (ART), Europe/London (GMT/BST), Europe/Lisbon, Canary
+(WET/WEST), Europe/Rome (CET/CEST), Europe/Athens (EET/EEST),
+Africa/Johannesburg (SAST), Europe/Moscow (MSK), Asia/Kolkata (IST),
+Asia/Singapore (SGT), Asia/Shanghai (CST), Australia/Perth (AWST), Asia/Seoul
+(KST), Asia/Tokyo (JST), Australia/Brisbane (AEST), Australia/Sydney
+(AEST/AEDT), Pacific/Auckland (NZST/NZDT).
+
+Per band S-meter cal: see [S-meter](#s-meter). WFVIEW SERVER: see
 [wfview server](#wfview-server).
 
 ### Display tab
@@ -273,9 +461,9 @@ S-meter cal: see [S-meter](#s-meter). WFVIEW SERVER: see
 | Card | Options |
 |---|---|
 | BACKLIGHT | timeout and brightness, buttons brightness (Always Off, Always On, Temporarily On) |
-| SPECTRUM | Spectrum, Fill, Peaks (see [Waterfall](#waterfall)) |
+| SPECTRUM | Spectrum; with it on Fill, Peaks, Fill gradient, Filter colour, Height (see [Waterfall](#waterfall)) |
 | WATERFALL | see [Waterfall](#waterfall) |
-| MAIN SCREEN | Band plan, Cluster spots, Cluster column, S-meter type, S-meter colours, Needle lamp |
+| MAIN SCREEN | Band plan, Cluster spots, Cluster column, Broadcast names, S-meter type, S-meter colours, Needle lamp |
 | INTERFACE | Popups Freq/Info/ALC, Knob info, Theme, Font, FT8/FT4 info |
 
 - Popups Freq/Info/ALC: a big frequency while tuning, a big value of the
@@ -284,6 +472,10 @@ S-meter cal: see [S-meter](#s-meter). WFVIEW SERVER: see
 - Theme: see [Themes](#themes). A new theme applies at once, without a restart.
 - Font: Sony Sketch, Roboto or DejaVu (default). A new font applies at once.
   Themes with their own font (RS, Black Metal, Total Black) keep it.
+- Broadcast names (from v0.127): tuned to a broadcast station on the air,
+  the frequency strip shows "BC <station name>" in a light blue box instead
+  of the band name. The names come from the broadcast list (see the
+  [Update tab](#update-tab)).
 
 All these options are also on the web configurator's Display page.
 
@@ -291,11 +483,13 @@ All these options are also on the web configurator's Display page.
 
 | Card | Options |
 |---|---|
-| RX AUDIO | Speaker mode, Line-in / Line-out, Play / Rec gain |
+| RX AUDIO | Speaker mode, Line-in / Line-out, Play / Rec gain, Boot sound (CQ CQ in CW with the boot logo, quiet; at volume 28 when your VOL is lower; off by default) |
 | TX AUDIO | compressor (threshold, makeup), TX filter, FM pre/de-emphasis |
 | MICROPHONE | Input (Built-in, Hand, Auto), Hand mic gain, Built-in gain |
 | VOX | On, Gain, Anti-VOX, Delay |
 | AGC | Hang, Knee, Slope |
+
+![Settings > Audio: Boot sound and SCREEN REC > File length](screenshots/settings_audio.png)
 
 ### Wireless tab
 
@@ -338,21 +532,13 @@ it off, Bluetooth is off too. Bluetooth has its own tab.
   keyboard and a CAT phone stay connected.
 - Details: [Bluetooth headphones](#bluetooth-headphones), [Bluetooth CAT](#bluetooth-cat).
 
-> **Scheda Bluetooth (IT)**
-> Impostazioni > Bluetooth (seconda pagina dei tasti). Il WiFi resta in Wireless.
-> - **ADAPTER**: Bluetooth acceso/spento; Status (*on* e nascosta, *pairing* con la finestra di accoppiamento aperta, *off*; dice anche se il chip WiFi/BT è spento da Wireless o se il servizio Bluetooth della radio si è fermato); Address, l'indirizzo della radio; Pairing (3 min), visibile e accoppiabile per 3 minuti col conto alla rovescia. Fuori dalla finestra ogni richiesta di accoppiamento è rifiutata.
-> - **DEVICES**: Scan cerca cuffie e tastiere per 16 s. Activity dice cosa sta facendo: il codice da scrivere sulla tastiera (poi Invio) o "not found - is it in pairing mode?". Nella lista prima i dispositivi accoppiati, poi quelli trovati; etichette *headphones*, *keyboard*, *phone*, *CAT*, *new*, *connected*. Se la lista si riordina durante la ricerca, la MFK resta sul dispositivo scelto. Una tastiera che non manda il suo nome compare come *Keyboard* e indirizzo.
-> - Pressione MFK su un dispositivo *new*: accoppia e connette. Su uno accoppiato: menu con Connect o Disconnect, Connect at startup (cuffie) e Forget, che chiede conferma (Cancel per primo); dopo va accoppiato di nuovo.
-> - Una cuffia alla volta: connetterne una scollega le altre. Tastiera e telefono CAT restano connessi.
-> - **HEADPHONES**: RX to headphones, Volume, Mute speaker (prima erano in Audio).
-> - **BLUETOOTH CAT**: quanti client CAT sono connessi, e la porta (SPP, canale 1).
-
 ### Keys tab
 
 | Card | Options |
 |---|---|
 | FRONT KEYS, LONG PRESS | the long-press action of GEN, APP, KEY, MSG, DFN, DFL (see [Buttons and knobs](#buttons-and-knobs)) |
 | HAND MIC KEYS | F1, F2, F1 long, F2 long |
+| PADDLE | USB paddles: Connected, the dit/dah of each kind, Learn dit and dah, Swap dit and dah, Serial port (see [USB paddle](#usb-paddle)) |
 
 ### Cluster tab
 
@@ -385,13 +571,33 @@ SWR protection. Where: Settings > TX Cal > TX PROTECTION > SWR protection.
   hand mic, VOX and the radio's own CW keyer may key again at once: let go
   and check the antenna.
 
+Stuck TX. Now and then a command from the radio to its base (the board that
+transmits) does not get through, and a lost PTT off could leave the radio
+keyed. The radio watches for it; there is nothing to set.
+
+- If the base is still in TX 2 s after PTT off, and a command to it failed in
+  the 10 s before, the radio sets the TX power to 0. Your power comes back as
+  soon as the base is back in RX.
+- A PTT held on the hand mic and VOX are never cut: the base keys them itself.
+- Each case goes into the base log, which is part of the
+  [diagnostics](#info-tab):
+  - "write to register N failed: N resent OK, N lost; resending all
+    registers"
+  - "base still in TX 1000 ms after an un-key or write error, nothing keying it
+    from the GUI: PTT off resent"
+  - "base still in TX 2000 ms after PTT off and a write error: TX power set to
+    0 (vext 13.8 V, vbat 8.2 V)"
+  - "base back in RX: TX power 5.0 W restored (vext 13.8 V, vbat 8.2 V)"
+  - "base silent for N ms, battery 8.2 V, external 13.8 V": the base sent
+    nothing for more than 0.3 s. Not in the first 10 s after start, at most
+    one line every 10 s.
+
 ### Info tab
 
-The FIRMWARE card: the firmware version, the author, the baseband version and:
-
-- Update alert: a message at start when a newer release is out.
-- Diagnostics, Send...: sends a diagnostics text to IU1WXY to help with a
-  problem.
+The FIRMWARE card: the author, the baseband version and Diagnostics, Send...,
+which sends a diagnostics text to IU1WXY to help with a problem, and the
+factory reset (below). The firmware version and the update options are in the
+[Update tab](#update-tab).
 
 Diagnostics. Where: Settings > Info > FIRMWARE > Diagnostics.
 
@@ -402,18 +608,82 @@ Diagnostics. Where: Settings > Info > FIRMWARE > Diagnostics.
 3. After sending, the row shows a code. Tell IU1WXY that code.
 
 The text has the versions, uptime and memory, the Bluetooth controller and
-devices, the last pairing log, the input devices and the kernel messages
-about Bluetooth, HID, USB, I2C and the clock, and the
-base I2C error log. It has no WiFi networks, no position and no
-logbook. The first time, a short note explains what it is for: it is read
+devices, the last pairing log, the input devices, the kernel messages about
+Bluetooth, HID, USB and WiFi, and:
+
+- Storage: free space on the card and its errors.
+- Power: the last 5 lines of the battery log.
+- GUI restarts since the radio was switched on.
+- WiFi link: signal, speed, how many times it connected and dropped; no
+  network names, and the addresses masked.
+- The base log (write errors, resends, stuck TX: see
+  [TX Cal](#tx-cal-tab)).
+
+It has no position and no logbook. The first time, a short note explains what it is for: it is read
 only by IU1WXY and deleted within 90 days.
 
 | Message | Meaning |
 |---|---|
+| sending... | the radio is sending the text |
 | sent, code XXXXXX | received; tell IU1WXY the code |
 | not accepted now: ask IU1WXY first | reception is closed |
 | too many today, try tomorrow | the daily limit is reached |
-| not sent: no internet? | the radio could not reach the site |
+| probably sent, don't resend | the text went out but the answer did not come back. For 6 s the radio also says "Probably sent. Don't send it again; we'll get back to you." |
+| refused by the site, try later | the site did not take it |
+| no internet, check WiFi | the radio could not reach the site |
+
+Factory reset (from v0.127). Where: Settings > Info > FIRMWARE > Factory
+reset, Reset.... A panel lists what goes and what stays; hold the MFK down for
+3 seconds to confirm, ESC cancels ("Released: reset cancelled"). A press or a
+turn of the knob does nothing. Then the radio software restarts (a few
+seconds of dark screen); the radio does not reboot.
+
+> **There is no undo.** Download the Backup from the web configurator first,
+> so you can put your settings back.
+
+- Reset: all the settings in params.db (band memory and CW messages
+  included), app frequencies, DX cluster, FT8 UDP, PSK squelch, wfview, time
+  zone, headphone volume, Bluetooth CAT.
+- Kept: logs (ADIF, QSO, field), memory channels, PSK/Olivia macros, JS8
+  texts, voice messages, pictures, recordings, themes, CW trainer progress,
+  Bluetooth pairings and autoconnect list.
+
+POWER, below Factory reset, has three lines:
+- Battery: voltage and charge, for example "7.9 V  66%", or "not fitted".
+- External: the external supply and whether it is charging, for example
+  "12.1 V  charging", or "none".
+- Time left: what the [battery time](#battery-time) is based on, "learned from
+  N h on battery, M charges", or "starting values, learning" while it has
+  nothing of its own yet.
+
+<!-- IMG settings_power.png: Settings > Info, POWER box -->
+
+### Update tab
+
+- Version: the firmware version and, next to it, the system ("System 1").
+- Update alert: a message at start when a newer release is out.
+- App update: Check asks x6100-link.it for a new version; when there is one
+  the button becomes Install. The line below says what the radio is doing.
+  See [updating the firmware](#updating-the-firmware).
+- Remote updates (on by default): to fix a problem on a specific radio, the
+  developer can send it a signed update. The radio installs it only when it is
+  idle (receiving, no app or menu open, not in walkie mode) and shows a notice.
+  Turn Remote updates off if you don't want this.
+- Broadcast list, Update: the timetable of the broadcast stations (EiBi,
+  eibispace.de) for the current season: A from the end of March to the end of
+  October, B for the rest of the year; if the new season is not out yet the
+  previous one is used. The note below shows the list in use ("In use: season
+  A26, updated 2026-10-17, 9,593 stations."). Update downloads it over WiFi or
+  Ethernet ("Downloading 0.3 of 0.5 MB") and says "Broadcast list updated:
+  9,593 stations, season A26."; with no connection, "No internet connection.
+  Connect the radio to WiFi or Ethernet."; if the download fails, "The
+  download failed, the old list is still in use." The old list stays as a
+  spare copy. The SWL panel (GENE key of the hand mic) and the station name on
+  the frequency strip use the new list at once, without a restart.
+
+![Settings > Update: Broadcast list updated, 9,593 stations, season A26](screenshots/update/install_bc_update.png)
+
+![Settings > Update: v0.127 System 1, App update with Install](screenshots/update/install_ota_settings.png)
 
 ### Walkie tab
 
@@ -427,19 +697,6 @@ only by IU1WXY and deleted within 90 days.
   instead of tuning. The same as the MEM/VFO button on WLK 1.
 - Microphone: the input used while the walkie screen is up (Built-in, Hand,
   Auto; default Built-in). The Audio tab's input is not changed.
-
-> **Scheda Walkie (IT)**
-> Impostazioni > Walkie > WALKIE TALKIE.
-> - **Walkie Talkie**: accende lo schermo verticale. Le Impostazioni si chiudono e compare lo schermo walkie.
-> - **Main knob steps channels**: la manopola principale scorre i canali walkie invece di sintonizzare. È lo stesso del tasto MEM/VFO su WLK 1.
-> - **Microphone**: l'ingresso microfono usato con lo schermo walkie (Built-in, Hand, Auto; di serie Built-in). L'ingresso della scheda Audio non cambia.
->
-> **Canali walkie (IT)**: 32 canali propri, separati dalle memorie (Channel Memory). Ognuno tiene frequenza, modo, AGC, PRE e ATT.
-> - **MEM**: la manopola principale scorre i canali 1-32, anche quelli vuoti. Il pannello mostra "CH 05 - nome", "CH 05" o "CH 05 - empty". Un canale salvato sintonizza la radio, uno vuoto la lascia dov'è.
-> - **Store** (WLK 4): frequenza e modo attuali vanno nel canale mostrato, e la manopola passa a MEM.
-> - **Clear** (WLK 4, tenuto premuto): svuota il canale mostrato.
-> - Sono salvati in /mnt/walkie_channels.json, stesso formato di channels.json con il numero del canale in "ch". Lì si può scrivere un nome, la radio lo mostra.
-> - Uscendo dal modo walkie la manopola VOL torna alla funzione di prima e torna il microfono scelto in Audio.
 
 ## Transmitting
 
@@ -461,6 +718,15 @@ TX power while a digital app is open:
   ("Power is limited to 7W"), and the setting comes back when you close it.
 - The Power button in the apps sets the power: 0.5, 1, 2, 3, 5, 7 W.
 - Digital apps reopen on their last frequency and mode.
+
+### ALC in CW
+
+In CW and CW-R the ALC bar of the TX panel is grey. In CW the base makes the
+carrier itself and its own ALC brings it down to the power set, so the bar
+only shows how much it turned it down. Readings around 5 on a dummy load are
+normal; there is nothing to adjust.
+
+![TX panel in CW, the ALC bar grey](screenshots/tx_panel_cw_alc.png)
 
 ### Recording voice messages
 
@@ -503,7 +769,7 @@ Buttons:
 | 1 | Show: All / CQ, Mode: FT8 / FT4 / FT2, TX CQ, TX Call |
 | 2 | Hold Freq, Auto, Force QSO save, Power |
 | 3 | CQ Modifier, Time Sync, Log Map, Live Map |
-| 4 | Freq: Preset / 14.091, Hound: Off / On, Retries |
+| 4 | Freq: Preset / 14.091, Hound: Off / On, Retries, For you |
 
 - Show: CQ shows the CQs and the messages to you; All shows all traffic.
 - TX CQ calls CQ. TX Call allows or stops transmitting; stopping cuts a
@@ -537,16 +803,6 @@ A POTA tag after the message marks a station spotted on POTA right now, and
 any `CQ POTA`. The spots are the ones the cluster already fetches from
 pota.app; with no spots there is no tag.
 
-Auto, Retries, POTA (IT). Auto risponde da solo a chi ti chiama, anche mentre
-chiami CQ, e porta avanti il QSO (in altri programmi si chiama "Res"); non
-chiama mai un CQ di sua iniziativa. Se nello stesso slot ti chiamano più
-stazioni e una è un attivatore POTA, risponde prima a lei. Pagina 4 > Retries:
-quante volte un messaggio parte senza risposta prima di lasciare il QSO; ogni
-pressione passa a 3, 4, 5, 6, 8, 10, 12, 15 e torna a 3 (6 di serie). Il tag
-POTA dopo il messaggio segna una stazione spottata ora su POTA e ogni
-`CQ POTA`. Gli spot sono quelli che il cluster già scarica da pota.app: senza
-spot non c'è tag.
-
 Replying. Turn the MFK onto a row and press it. The radio
 answers that station, moves your TX offset there (unless Hold Freq is on) and
 turns TX Call on. A press while transmitting stops TX.
@@ -560,6 +816,8 @@ list, so they do not scroll away.
 - An MFK press on a row replies, as in the list.
 - With the MFK: down past the last row of the list enters the strip; up from
   its first row goes back to the list.
+- For you (page 4) turns the strip off: no pinned rows, the calls to you stay
+  in the list only, in red as before. On by default.
 - The strip has no title: a line in the "to you" colour sits on top of it.
   It is hidden when empty.
 
@@ -580,16 +838,6 @@ where it would cover another. A band change empties it. Your own position is
 the centre of your 4-character square, the red dot. ESC or Live Map closes it;
 the map is a snapshot, open it again to refresh.
 
-Live Map (IT). Pagina 3 > Live Map mette sulla stessa mappa ogni stazione
-decodificata negli ultimi 15 minuti che ha mandato un locatore (un CQ o una
-risposta con il quadrato a 4 caratteri). Il colore del punto è la distanza dal
-tuo quadrato: verde sotto 1000 km, blu sotto 3000, arancio sotto 8000, rosa
-oltre. Chi è stato sentito nell'ultimo minuto ha il punto più grande, cerchiato,
-e il nominativo per primo; un nominativo che coprirebbe un altro resta fuori.
-Cambiando banda si svuota. La tua posizione è il centro del tuo quadrato a 4
-caratteri, il punto rosso. ESC o Live Map la chiudono; è una fotografia, per
-aggiornarla si riapre.
-
 PSK Reporter. Settings > Cluster > PSK REPORTER > Report decodes (on by default)
 sends what you decode in FT8, FT4, FT2 and JS8 to pskreporter.info, the way
 WSJT-X does: UDP to report.pskreporter.info:4739, batched about every 5 minutes
@@ -604,20 +852,6 @@ In PSK31, PSK63 and Olivia the text is free, so a station is reported when the
 decoder reads "DE <call>" (as in "CQ CQ DE IK1ABC"), with no grid and 0 dB SNR,
 because these modes give no S/N figure.
 
-PSK Reporter (IT). Settings > Cluster > PSK REPORTER > Report decodes (acceso
-di fabbrica) manda a pskreporter.info quello che decodifichi in FT8, FT4, FT2 e
-JS8, come fa WSJT-X: UDP a report.pskreporter.info:4739, a gruppi circa ogni 5
-minuti (fino a 30 s prima o dopo, a caso), ogni nominativo una volta per
-banda in 5 minuti. Con il tuo nominativo va il quadrato QTH tagliato a 4
-caratteri (JN35, mai il locatore a 6) e "X6100 IU1WXY v0.xxx" come software;
-ogni spot porta nominativo, locatore se il messaggio lo aveva, frequenza dial +
-audio, SNR e modo. Le tue trasmissioni non vengono mai riportate. Senza rete il
-gruppo si perde in silenzio; niente resta in attesa, la decodifica continua.
-Cerca il tuo nominativo su pskreporter.info per vedere gli spot dopo qualche
-minuto. In PSK31, PSK63 e Olivia il testo è libero: una stazione viene riportata
-quando il decoder legge "DE <nominativo>" (come in "CQ CQ DE IK1ABC"), senza
-locatore e con SNR 0 dB, perché questi modi non danno una misura di S/N.
-
 FT2. FT2 (IU8LMC, 2026) is FT4 at twice the speed: 41.67 Bd, 103 symbols in
 2.47 s, 167 Hz wide, 3.75 s slots. Mode cycles FT8 > FT4 > FT2; the band keys
 step through the FT2 frequencies (1.843, 3.568, 5.360, 7.062, 10.144, 14.084,
@@ -626,15 +860,6 @@ first 0.8 s of its slot, so that it ends inside it; the "RX" line comes every
 4th slot (15 s). QSOs are logged as ADIF MFSK / FT2. From SP2KMO's upstream
 port. The knob moves the TX offset 5 or 10 Hz a click when turned fast again
 (4 or more clicks in 30 ms), from randal007's upstream fix.
-
-FT2 (IT). FT2 (IU8LMC, 2026) è FT4 a velocità doppia: 41,67 Bd, 103 simboli in
-2,47 s, 167 Hz di banda, slot di 3,75 s. Mode passa FT8 > FT4 > FT2; i tasti
-BAND scorrono le frequenze FT2 (1,843, 3,568, 5,360, 7,062, 10,144, 14,084,
-18,108, 21,144, 24,923, 28,184, 50,316 MHz). Una trasmissione parte solo nei
-primi 0,8 s dello slot, così finisce dentro; la riga "RX" arriva ogni 4 slot
-(15 s). I QSO vanno nel log come ADIF MFSK / FT2. Dal port upstream di SP2KMO.
-La manopola sposta di nuovo l'offset TX di 5 o 10 Hz a scatto quando gira
-veloce (4 o più scatti in 30 ms), dalla correzione upstream di randal007.
 
 WSJT-X UDP output. While the app is open the radio sends WSJT-X compatible
 UDP messages (heartbeat, status, decodes, logged QSOs), so GridTracker or
@@ -650,15 +875,6 @@ one with the knob and press. Hold Freq for the keyboard: type the dial frequency
 rows say "RX FT8 Custom 14.091" and the button shows 14.091. It is kept for
 the next time. An empty entry, a band key or a Mode change goes back to the
 preset list. Range 1800 - 54000 kHz. The web remote's "base" reports it.
-
-Custom frequency (IT). Le DXpedition lavorano spesso fuori da 14.074, per
-esempio H49A su 14.091. Pagina 4 > Freq elenca le frequenze preset del modo,
-una per banda: scegli con la manopola e premi. Tieni premuto Freq per la
-tastiera: scrivi la frequenza
-dial in kHz (14091) o MHz (14.091) e premi Invio. La radio ci va in USB-D, le
-righe dicono "RX FT8 Custom 14.091" e il tasto mostra 14.091. Resta per la
-volta dopo. Un campo vuoto, un tasto BAND o un cambio di Mode tornano alla
-lista dei preset. Da 1800 a 54000 kHz. Il "base" del web remote la riporta.
 
 Hound mode. For an FT8 DXpedition in Fox and Hound mode (FT8 only). Page 4 >
 Hound: On, then select the Fox's CQ and press. The rules are WSJT-X's (K1JT
@@ -679,43 +895,15 @@ and the WSJT-X team, GPL v3):
 The multi-stream messages are now decoded in any FT8 session (ft8_lib left
 them out); the Fox's call shows as `<...>` until its CQ has been heard.
 
-Hound mode (IT). Per una DXpedition FT8 in modalità Fox and Hound (solo FT8).
-Pagina 4 > Hound: On, poi seleziona il CQ della Fox e premi. Le regole sono
-quelle di WSJT-X (K1JT e il team WSJT-X, GPL v3):
-
-- Chiami "FOX TUONOMINATIVO LOCATORE" nel secondo periodo (:15 e :45). Sotto
-  1000 Hz c'è la Fox: se il tuo offset è più basso salta a caso tra 1000 e
-  3000 Hz. La chiamata si ferma dopo 2 minuti; ripremi il CQ per continuare.
-- La Fox risponde da sola o dentro un messaggio multi-stream, per esempio
-  "K1ABC RR73; TUONOMINATIVO <H49A> -12". Mandi "FOX TUONOMINATIVO R-xx" con
-  l'SNR della Fox, prima sull'offset della Fox, poi a 300 Hz da lì. Si ferma
-  dopo 11 periodi (165 s) senza RR73.
-- L'RR73 della Fox ("TUONOMINATIVO RR73; ..." o "TUONOMINATIVO FOX RR73")
-  mette il QSO nel log e ferma la TX. Le decodifiche del secondo periodo (gli
-  altri Hound) sono ignorate.
-- TX CQ e Hold Freq non agiscono in Hound. Le righe RX mostrano lo stato, per
-  esempio "Hound: calling H49A". Hound è spento ogni volta che l'app si apre.
-
-I messaggi multi-stream ora vengono decodificati in ogni sessione FT8
-(ft8_lib li lasciava fuori); il nominativo della Fox appare come `<...>`
-finché non si è sentito il suo CQ.
-
 SuperFox. Not supported. The SuperFox signal (WSJT-X 2.7) is a 1500 Hz wide
 polar-coded waveform. Its code tables in WSJT-X are licensed for WSJT-X only
 ("NOT free software ... no derived work" without IV3NWV's written
 permission), so they cannot go into this firmware, and the Fox check is a
 one-time code verified on an internet server. Old-style Fox and Hound works.
 
-SuperFox (IT). Non supportato. Il segnale SuperFox (WSJT-X 2.7) è largo
-1500 Hz con un codice polare. Le sue tabelle in WSJT-X hanno una licenza solo
-per WSJT-X (niente opere derivate senza il permesso scritto di IV3NWV), quindi
-non possono entrare in questo firmware, e la verifica della Fox è un codice
-monouso controllato su un server internet. Il Fox and Hound classico funziona.
-
 ### JS8
 
-Beta 3 of randal007's [X6100 JS8](https://github.com/randal007/x6100-js8):
-a JS8Call-compatible decoder and keyboard in the radio, with all four speeds
+A JS8Call-compatible decoder and keyboard in the radio, with all four speeds
 (Normal, Fast, Turbo, Slow) decoded at once.
 
 First steps:
@@ -764,13 +952,25 @@ What it does:
 - Rows in the list: blue sent by you, red to you, green a CQ, dark blue to a
   group, purple an alert word.
 
+The @X6100 group, for stations running this firmware. It is in Groups by
+default, and everyone is free to take it out:
+
+- Messages to @X6100 show in red like those to you, also under Show: No HB
+  and Directed. In Show Stations, a station heard sending to @X6100 gets a
+  small X6100 tag at the end of its row. While you are in the group, a MSG
+  to @X6100 goes in the Inbox.
+- The radio never transmits to the group by itself: no automatic answers,
+  heartbeat acks, ACKs or relays for @X6100 traffic, with AUTO on or off,
+  in the group or not. Only what you send yourself goes out.
+- To leave it: page 4, Settings..., Groups: @X6100. Delete @X6100 from the
+  text and confirm; the radio shows "No groups" (or your other groups). It
+  stays out after that, also after a restart or an update. To join again,
+  type @X6100 there.
+
 Known limits: relays, store and forward, and most APRS items are not yet
 proven on the air (only the grid spot and SMS are). The main screen's
 waterfall stands still while JS8 is open.
 
-Design notes: [docs/RESEARCH.md](RESEARCH.md),
-[docs/TX_PLAN.md](TX_PLAN.md), [docs/T6_PLAN.md](T6_PLAN.md),
-[docs/SPOTS_PLAN.md](SPOTS_PLAN.md).
 
 ### WSPR
 
@@ -791,7 +991,7 @@ or NTP).
 - The main knob moves the TX audio offset (1410-1590 Hz).
 - Upload: the spots of each cycle go to WSPRnet (plain HTTP over WiFi). The
   status line counts what was sent and what failed.
-- Power: on page 2.
+- Page 2: Power and TX n%, the same 0, 10, 20, 33, 50 steps as on page 1.
 
 ### SSTV, WeFax and NavTex
 
@@ -819,13 +1019,22 @@ frequency and the receiver state. Leaving the app gives the VFO back.
   the decoding progress in the thin bar under the header. The decoder is
   TheMurusTeam's 1KO125 beta8 one, with a tolerant VIS detection.
 
+WeFax buttons. WeFax opens in RX Auto: it waits for the start tone of a fax.
+
+| Page | Buttons |
+|---|---|
+| 1 | Freq., RX Auto / Cont, Clear, Close |
+| 2 | Align, Tilt, View, Save |
+| 3 | Fax Browser, Fix Align, Fix Tilt, Done |
+| 4 | Power |
+
 SSTV buttons:
 
 | Page | Buttons |
 |---|---|
 | 1 | Start Auto RX, Start Manual RX, RX Mode (Manual RX), TX |
 | 2 | Freq., RX Pics Browser, Delete picture, Auto RX Restart (on: a new VIS during a picture starts a new one) |
-| 3 | Test RX, Power, Denoise (ON/OFF), Close (ESC also closes) |
+| 3 | Power, Denoise (ON/OFF), Close (ESC also closes) |
 
 Denoise. SSTV 3:3 > Denoise, on by default. When a picture is complete the
 radio saves it as it came off the air (`sstv-20261016-143205.png`), cleans
@@ -839,19 +1048,6 @@ in Robot 36/72 a colour dash covers two lines, so it stays. It takes about
 the raw one. With Denoise OFF only the original is saved. In the RX Pics
 Browser, the web Gallery and the X6100 Link app both files are listed, the
 `_dn` one first with the original right below it; delete either one on its own.
-
-Denoise (IT). SSTV 3:3 > Denoise, acceso di serie. A immagine completa la
-radio la salva com'è arrivata (`sstv-20261016-143205.png`), la pulisce e salva
-la copia pulita accanto (`sstv-20261016-143205_dn.png`); sullo schermo resta
-quella pulita. La pulizia toglie i trattini colorati che QRM e fading lasciano
-lungo una riga e i singoli punti sbagliati, poi uniforma un po' la grana
-senza ammorbidire i bordi. Un'immagine senza disturbi esce uguale. Due limiti:
-una linea alta 1 pixel sparisce insieme al rumore, e in Robot 36/72 un
-trattino di colore copre due righe e quindi resta. Costa circa 0,1 s per
-immagine, dopo la decodifica; durante la ricezione si vede l'immagine grezza.
-Con Denoise OFF si salva solo l'originale. Nel RX Pics Browser, nella Gallery
-web e nell'app X6100 Link compaiono tutti e due i file, prima il `_dn` e
-subito sotto l'originale; si cancellano uno per uno.
 
 SSTV TX. TX opens the TX menu (turn the MFK, press to choose):
 
@@ -913,20 +1109,7 @@ others. Frequency and mode come back when the app closes.
   levelling, SWR protection, the TX strip.
 - Files: `/mnt/psk_macros.txt`, `/mnt/olivia_macros.txt`, `/mnt/psk.conf`
   (squelch).
-
-**In italiano.** Modi tastiera-tastiera, dal lavoro di SP2KMO su OpenX6100
-(merge di randal007). APP > Modes > PSK31, PSK63 o Olivia: la radio va sulla
-frequenza standard più vicina in USB-D, i tasti BAND passano alle altre; alla
-chiusura tornano frequenza e modo di prima. Il testo ricevuto sta nel riquadro
-sotto il waterfall. La manopola principale sposta la
-banda di ascolto sul waterfall (in PSK si aggancia al segnale quando si
-ferma), l'MFK la regola fine. Mode: PSK31 o PSK63, Olivia 8/250 (predefinito),
-16/500, 32/1000. Lo squelch PSK (pagina 2, SQL) guarda la qualità della
-demodulazione (Q): parte acceso a 68, col solo rumore (Q intorno a 50) non
-scrive nulla; si regola con l'MFK, 0 lo spegne. Olivia scrive solo
-dopo l'aggancio. In TX: Free Text o le macro (pagine 3-5, premere invia,
-tenere premuto modifica); la potenza resta a 7 W al massimo, con ALC e
-protezione SWR come in FT8. All'apertura non trasmette mai.
+- The macros can also be edited on the web configurator's Macros page.
 
 ### JTTY
 
@@ -934,16 +1117,13 @@ The keyboard mode added in WSJT-X 3.2 by K1JT and the WSJT-X team (ported
 from WSJT-X, GPLv3). APP > Modes > JTTY. The radio goes to the JTTY dial
 frequency of the band in USB-D (14.090 on 20 m). The layout is the same as
 RTTY and PSK: received text in the panel under the waterfall, sent text in
-the TX colour. F1-F8 are contest macros. Decoded stations go to PSK Reporter
-when it is on. TX goes through the same path as FT8 (7 W cap, ALC, SWR
+the TX colour. F1-F8 (pages 2 and 3) are macros: press sends, hold edits
+the name and then the text (an empty text deletes, the ones after move up).
+By default they are the WSJT-X contest keys. In the text, `%M` is your call,
+`%H` the DX call, `%E` "599" and the serial number, sent as one frame. Up to
+80 characters, kept in `/mnt/jtty_macros.txt`, also on the web configurator's
+Macros page. Decoded stations go to PSK Reporter when it is on. TX goes through the same path as FT8 (7 W cap, ALC, SWR
 protection). I haven't made a QSO with it yet, so reports are welcome.
-
-**In italiano.** Il modo da tastiera arrivato con WSJT-X 3.2 di K1JT e del
-team WSJT-X (portato da WSJT-X, GPLv3). APP > Modes > JTTY: la radio va sulla
-frequenza JTTY della banda in USB-D (14.090 sui 20 m). Stessa impostazione di
-RTTY e PSK, macro contest su F1-F8, le stazioni decodificate vanno su PSK
-Reporter se è acceso. In TX stesso percorso di FT8 (massimo 7 W, ALC,
-protezione SWR).
 
 ### RTTY and WeFax TX
 
@@ -993,20 +1173,6 @@ and prosigns are dimmer, RST (599, 5NN) in the heading colour. A call
 already on the panel decides a doubtful split: with W1AW sent before,
 "DEW1AWK" reads DE W1AW K. Parse Off gives the text exactly as decoded.
 
-Parse (IT). Dove: CW 2:2 > Parse (acceso di serie). Con la spaziatura
-stretta il decoder attacca le parole: "CQCQDEIU1WXYK". Con Parse acceso ogni
-parola finita viene separata sulle parole CW consuete e sui nominativi: "CQ
-CQ DE IU1WXY K", "UR 5NN 5NN", "TU 73 <SK>", "NAME GIO". Aggiunge solo
-spazi, non cambia mai una lettera, e lascia com'è una parola che non si
-legge in modo pulito (ANTENNA resta ANTENNA). I nominativi prendono il
-colore di accento del tema quando sono confermati: dopo o prima di DE,
-ripetuti due volte, o trovati su QRZ da X6100 Link. Una parola con la forma
-di un nominativo sentita una volta sola (spesso rumore) resta normale.
-Abbreviazioni e prosegni sono più tenui, l'RST (599, 5NN) nel colore dei
-titoli. Un nominativo già sul pannello decide una separazione dubbia: con
-W1AW già passato, "DEW1AWK" diventa DE W1AW K. Con Parse spento il testo è
-esattamente quello decodificato.
-
 ### CW from the keyboard
 
 With a USB or Bluetooth keyboard you key CW straight from the main screen.
@@ -1036,6 +1202,20 @@ The X6100 Link app's CW tab uses the same keyer. Its F1-F5 buttons show
 the start of the same five messages: a tap keys one with `{CALL}` filled in,
 a long press edits it.
 
+Live mode. The CW Keyboard app (opened from X6100 Link) has a switch on its
+last page, "Live: On" / "Live: Off", off by default. The same setting drives
+the CW line of the main screen.
+
+- Live on: each letter is keyed as you type it, no Enter needed; a space is
+  the word gap. The empty field reads "Live: keyed as typed".
+- Backspace removes the last letter not keyed yet; a letter already on the
+  air stays.
+- Limits: there can be up to about 0.1 s of extra space between letters, and
+  with a short QSK time the relay may click between them. Not yet tried on
+  the air.
+
+![CW Keyboard app with Live: On](screenshots/cw_kbd_live.png)
+
 ### TinyMIDI / Bluetooth paddle
 
 The N6ARA TinyMIDI paddle works as a Bluetooth keyboard.
@@ -1051,6 +1231,35 @@ The N6ARA TinyMIDI paddle works as a Bluetooth keyboard.
 - A touch of the paddle stops a CW message or line on the air, as a break.
 - The touch paddle goes up to 30 WPM, a paddle on its 3.5 mm jack up to 40.
   Any USB keyboard's [ and ] keys do the same.
+
+### USB paddle
+
+USB paddle interfaces plug into the radio's USB port. The radio reads four
+kinds:
+
+- Keyboard type: the adapter sends keys. Default Left Ctrl = dit, Right
+  Ctrl = dah (the Vail adapter); [ and ] always work too.
+- Mouse type: the paddle shows up as a mouse, default left button = dit,
+  right button = dah. An ordinary mouse is not taken for a paddle.
+- USB MIDI (highly experimental): notes, default 1 = dit, 2 = dah.
+- USB serial (CH340, FTDI, CP210x, PL2303, CDC ACM): the paddle on the
+  modem lines, default CTS = dit, DSR = dah. Off by default: turn on Serial
+  port. The first ttyUSB or ttyACM port is read; the radio's own ports are
+  never touched.
+
+In CW or CW-R the contacts key the radio; out of CW they do nothing. The
+keyer follows the KEY buttons in CW (mode, iambic A/B, speed, ratio).
+
+SET > KEYS > PADDLE shows what is connected and the dit/dah of each kind.
+Learn dit and dah > Start, then press the dit contact and the dah contact:
+whatever comes in (a key, a mouse button, a MIDI note, a serial line) is
+saved for that kind. Each press has 10 seconds. Swap dit and dah exchanges
+them for all the USB paddles.
+
+![Settings > Keys > PADDLE with a paddle connected](screenshots/settings_keys_paddle.png)
+
+A keyboard-type paddle press stops a CW message on the air; the other kinds
+do not.
 
 ### CW messages
 
@@ -1186,7 +1395,12 @@ or a long-press action. GEN or Radio goes back to the normal screen.
   were on) is kept on the SD card in `/mnt/field`. Coming back, or a restart
   in the middle of an activation, finds it as it was.
 - Start here (home screen) opens Field Ops at power on.
+- Re-spot (home screen, on by default): the automatic spot after a QSY. Off,
+  the radio spots only when the activation starts, when you press Spot and
+  the QRT at End.
 - The main knob still tunes; the MFK chooses.
+
+![Field Ops home with Re-spot On](screenshots/field_respot.png)
 
 | Home | SOTA, before the activation |
 |---|---|
@@ -1194,8 +1408,8 @@ or a long-press action. GEN or Radio goes back to the normal screen.
 | **Activation** | **Bands** |
 | ![Activation](screenshots/field_activation.png) | ![Band overview](screenshots/field_bands.png) |
 
-Home: the SOTA, POTA, WWBOTA, HOTA and Bands tiles. MFK to choose, a press
-opens.
+Home: six tiles, SOTA, POTA, WWBOTA, HOTA, Bands and LOG. MFK to choose, a
+press opens.
 
 SOTA / POTA, before the activation:
 
@@ -1206,9 +1420,15 @@ SOTA / POTA, before the activation:
 - The position comes from the radio's GPS, else from the phone (the X6100
   Link app sends it), else from the QTH locator. The dot in the header is
   green for a real position (GPS, phone), yellow for the locator.
-- Update list (page 2) downloads the parks (POTA) and summits (SOTA), about
-  35 MB once, in about 3 minutes; then it works offline. Also from the web
-  configurator's Field Ops page.
+- Update list (page 2) downloads the parks (POTA) and summits (SOTA); then it
+  works offline. Also from the web configurator's Field Ops page. The radio
+  says "Downloading the reference lists: up to 10 minutes on a slow WiFi",
+  then each list with its progress, "Updating <list> (1/4): x.x / y.y MB",
+  and "reading it..." once it is downloaded. A download that stops goes on
+  from where it stopped, up to 5 tries ("retry 2 of 5"). At the end:
+  "Reference list: N parks, N summits, N bunkers, N HOTA".
+
+  ![Field Ops while the reference lists download](screenshots/fieldops_list_progress.png)
 - Start begins the activation and its ADIF log.
 
 SOTA / POTA, during the activation: the band, the frequency and the mode,
@@ -1226,14 +1446,21 @@ the start and the last call.
   `/mnt/field/logs/<date>-<time>_<ref>.adi` with `MY_SOTA_REF` or
   `MY_SIG POTA` / `MY_POTA_REF`. The logs can be downloaded from the web
   configurator's Field Ops page.
+- If a QSO can't be written to the microSD the radio says "QSO not saved: "
+  and why: "the microSD has an error and is read-only. Restart the radio; if
+  it happens again, back up and rewrite the microSD", "the microSD is full",
+  "the microSD gave a write error. Restart the radio; if it happens again,
+  back up and rewrite the microSD" or "the microSD could not be written.
+  Restart the radio; if it happens again, send the diagnostics (Settings >
+  Info)". The same goes for the day's log outside Field Ops.
 - The mode logged is FT8 or FT4 when the radio is on an FT8/FT4 frequency,
   also in USB.
 - Spot: a POTA self-spot on pota.app with the frequency and mode of the radio
   (WiFi needed). The first press shows what will be posted and the button
   reads Spot?; press again within 4 s to post.
 - In POTA the radio also spots by itself: when the activation starts, and
-  after a QSY (1 kHz or more away, or another mode) once you have stayed
-  there a minute. At most one automatic spot in 5 minutes; pota.app keeps
+  after a QSY (1 kHz or more away, or another mode) once you have transmitted
+  there and stayed a minute. Tuning around and listening doesn't spot. At most one automatic spot in 5 minutes; pota.app keeps
   only your latest spot, so the old frequency goes away. These QSY spots go
   to pota.app only: a DX cluster spot can't be withdrawn.
 - SOTAwatch spots are not available yet (they need an API client approved by
@@ -1251,6 +1478,28 @@ is on. With a QRZ.com login (SET > QRZ.com) the app looks up the call as you
 type it and shows name, QTH, grid and country under the entry; LOG puts them
 in the ADIF (NAME, QTH, GRIDSQUARE, COUNTRY). The full record needs a QRZ XML
 subscription.
+With firmware v0.126 or newer the page has four buttons, SOTA, POTA, BOTA
+(WWBOTA) and HOTA; with an older firmware only SOTA and POTA.
+
+![X6100 Link Field page with SOTA, POTA, BOTA, HOTA](screenshots/link_field_bota_hota.png)
+
+Lists from the phone (firmware 0.127): LISTS on the app's Field page opens a
+small window. SEND downloads the SOTA, POTA, WWBOTA and HOTA lists on the
+phone, over the phone's own connection, and sends the radio only the
+references within 50, 100 or 300 km (100 by default) of the radio's Field Ops
+position (GPS, phone or QTH locator, shown as a 4-character locator). The
+first time the phone downloads about 38 MB; it keeps the lists and later
+downloads only the ones that changed. The radio gets a few hundred kB at most
+instead of 38 MB over its WiFi. The radio's list changes only once the whole
+upload has arrived: if it stops halfway, the old list stays. A list the phone
+could not download stays on the radio as it was.
+Away from the area the radio knows no references: send the lists again from
+the new place, or use RADIO DOWNLOAD in the same window (the same as Update
+list on the radio) for the whole world. Update list on the radio works as
+before and brings back the whole lists.
+With an Ethernet adapter and WiFi on the same network, connect the app to the
+cable's address: in that setup big uploads over the radio's WiFi stalled in
+my tests.
 
 Bands screen: for each band the cluster spots of the last 30 minutes, the
 Reverse Beacon Network skimmer spots of the last 15 and the skimmers that
@@ -1264,6 +1513,23 @@ HIGH / GOOD / FAIR / POOR, the best band marked.
   counts); it needs WiFi and the callsign.
 - The skimmer data comes from the Reverse Beacon Network
   (reversebeacon.net), thanks to its skimmer operators.
+
+LOG tile. The page title is "<program> LOGBOOK <reference>" with a red TEST:
+the page and its QRZ upload are experimental. It lists the QSOs of the
+activation log (N, TIME, CALL, BAND, MODE, RST S / R). Buttons: Log QSO,
+Upload QRZ, Back.
+
+- Upload QRZ (experimental) sends the whole activation log to your QRZ.com
+  logbook. QSOs already there are counted, not sent again: "QRZ: 5 sent, 2
+  already there".
+- It needs your QRZ Logbook API key, pasted on the Field Ops page of the web
+  configurator.
+- Uploading to QRZ needs a QRZ.com Logbook API key, which QRZ.com only gives
+  with a paid QRZ.com subscription (XML level or higher).
+- Other messages: "Uploading the log to QRZ...", "No log to upload", "No QRZ key:
+  add it on the web page, Field Ops", or "QRZ: " with the reason QRZ gave and how many went before it.
+
+![Field Ops LOG page after Upload QRZ](screenshots/fieldops_log_upload_qrz.png)
 
 Start and Spot also post the spot on the DX cluster (`POTA IT-0123 SSB`,
 `SOTA I/LO-123 CW`); the QSY spots don't.
@@ -1286,21 +1552,6 @@ like POTA, with their own tile.
   key, then paste it in the web configurator's Field Ops page. Without the
   key HOTA spots go to the DX cluster only, and the message says so.
 
-**In italiano.** WWBOTA (bunker) e HOTA (luoghi storici) funzionano come POTA,
-ognuno con la sua casella. Update list scarica anche i bunker (wwbota.org) e
-le referenze HOTA (cqhota.app); una lista che non è cambiata non si scarica di
-nuovo. La schermata dell'attivazione mostra cosa serve: `QSOs / 25` in WWBOTA
-(`/ 10` per i bunker S5 e Z3), `CALLS / 5` in HOTA (nominativi diversi, stesso
-giorno UTC, entro 500 m). Il log ha `MY_SIG WWBOTA` o `MY_SIG HOTA` e
-`MY_SIG_INFO` con la referenza. Gli spot seguono le regole di POTA (Start,
-Spot, dopo un QSY, QRT con End): WWBOTA va su wwbota.org senza account, HOTA
-va su cqhota.app con la tua chiave (su cqhota.app: My account > Integration
-API key, da incollare nella pagina Field Ops del configuratore web). Senza
-chiave lo spot HOTA va solo sul DX cluster e il messaggio lo dice. Nel
-Cluster i filtri di attività sono POTA, SOTA, WWBOTA e HOTA (nessuno acceso =
-tutti gli spot); la radio legge anche gli spot di pota.app, wwbota.org e
-cqhota.app.
-
 ### Bands
 
 The band overview of Field Ops as an app of its own, in the look of the other
@@ -1314,6 +1565,32 @@ apps: APP (page 3) > Bands, or a long-press action.
   (CW or phone, as the radio's mode).
 - Test beacon sends `TEST DE <call>` in CW. ESC closes.
 - The numbers are the same as in Field Ops.
+
+### Channels
+
+A list of named frequencies: APP (page 2) > Channels, the long-press action
+APP Channels, or the V/M key of the hand mic.
+
+![the CHANNELS window with the default list](screenshots/channels_window.png)
+
+- The CHANNELS window has a row for each channel: the name on the left, the
+  frequency and the mode on the right. A channel with no name shows as
+  "CHANNEL n".
+- The MFK moves along the list; a press tunes the channel (frequency, mode,
+  AGC, PRE, ATT) and closes the window.
+- Close closes it. Add stores the current VFO (frequency, mode, AGC, PRE, ATT)
+  as a new channel at the end of the list. Delete removes the channel under
+  the cursor. Edit renames it (the keyboard opens, "Channel name").
+- Drag picks the channel up and the button becomes Drop: the MFK carries the
+  channel up and down, Drop saves the new order.
+- Hand mic: V/M opens the window (not over WeFax, NavTex, SSTV, JS8, PSK,
+  Olivia or JTTY); UP and DOWN tune the channel before or after the last one
+  tuned and show its name for a moment, without opening the window.
+- Up to 100 channels. They are the same as on the web configurator's Memories
+  page and in the MEMORIES tab of X6100 Link; a change made there shows on the
+  radio within a few seconds, unless the window is open.
+- The first list has NAVTEX MF and HF, SHANNON VOLMET, the DWD RTTY stations
+  and the DWD and GYA WeFax stations.
 
 ## Bluetooth
 
@@ -1341,6 +1618,9 @@ pairing and connection in DEVICES, the audio switches in HEADPHONES.
   (`rootfs/etc/pulse/system.pa.d/btaudio.pa`). The same file stops PulseAudio
   from looping a phone or tablet that connects for CAT (it also appears as an
   A2DP source) into the radio TX audio.
+- The headphones get mono audio, like the radio's, with about 0.4 s of delay;
+  it can grow to 0.7 s when the link is busy.
+- WiFi runs at 20 MHz only, so it leaves more of the band to the headphones.
 - Bluetooth keyboards (for [CW from the keyboard](#cw-from-the-keyboard)) are paired the
   same way: Scan also finds keyboards, marked *keyboard* in the list (one
   that never sends its name shows as *Keyboard* and its address). After the
@@ -1349,6 +1629,12 @@ pairing and connection in DEVICES, the audio switches in HEADPHONES.
   that takes a new address at each pairing is found again by its name.
 - Pairings are kept in a backup on `/mnt` and restored at boot
   (`S39btpairings`), so a new image does not forget them.
+
+> **WiFi and Bluetooth share one chip.** With both on, the headphone audio can
+> skip, WiFi slows down and the chip sometimes resets. The built-in WiFi is
+> weak anyway: for X6100 Link and the web configurator a cable works better, a
+> USB Ethernet adapter ([Ethernet](#ethernet)) or a phone on
+> [USB tethering](#usb-tethering).
 
 ### Bluetooth CAT
 
@@ -1431,23 +1717,36 @@ The menu has General and four groups:
 |---|---|---|
 | | General | index of the pages |
 | Frequencies | Bands | band edges and default modes |
-| | Digital modes | add, edit and delete the FT8/FT4 and JS8 frequencies |
-| | Memories | MEM 1-9 slots and the named channel list |
+| | Digital modes | add, edit and delete the FT8/FT4, JS8, WSPR and FT2 frequencies |
+| | Memories | MEM 1-9 slots and the named channel list ([Channels](#channels)) |
 | Operating | Remote | tune the radio from the browser: frequency, mode, band, filter, RF gain, PRE/ATT/AGC/NB/NR, live spectrum and waterfall (click or drag to tune), RX audio (HTTPS page, one listener). Receive only (no PTT); transmitting remotely is done by the [X6100 Link app](#x6100-link-app) |
 | | Cluster | DX cluster servers, filters and alerts (writes `/mnt/cluster.conf`) |
 | | Field Ops | QRZ Logbook API key and upload, HOTA key, update the reference lists, download the activation logs |
 | | CW messages | the MSG > CW messages: add, edit, delete (1-64 characters) |
+| | Macros | the PSK31, Olivia and JTTY macros (add, edit, move up, delete) and the JS8 INFO and STATUS answers (see below) |
 | | Logs | every QSO on the radio, day by day: edit, delete, export as ADIF or CSV |
 | Files | Files | browse and download `/mnt` |
 | | Gallery | screen recordings, voice recordings, screenshots, SSTV and WeFax pictures (see below) |
 | | Backup | download settings, memories, cluster, wfview, QSO log, voice messages (optionally CW trainer and WiFi) as one file, and restore the parts you choose |
 | System | Display | every display option of the radio (see below) |
-| | Time | local and server time, NTP sync, timezone |
+| | Time | local and server time; Sync sets the radio clock from the browser's, in the radio's timezone; NTP sync; timezone |
 | | Ethernet | the USB Ethernet adapter: state, DHCP or static address (see [Ethernet](#ethernet)) |
 | | wfview | enable the wfview server, set user and password |
 
 Gallery: a folder per kind (screen recordings, voice recordings, screenshots,
 SSTV and WeFax received and to send) with count and size.
+
+Macros page (Operating > Macros): the macro buttons of the PSK31 and Olivia
+windows (up to 12 each, name up to 23 characters, text up to 199, tokens
+`<MYCALL>`, `<CALL>`, `<RST>`, `<RSTR>`), the JTTY F1-F8 keys (text up to 80,
+tokens `%M`, `%H`, `%E`) and the JS8 answers to INFO? and STATUS? (up to 64
+characters each). Plain ASCII only. It writes `/mnt/psk_macros.txt`,
+`/mnt/olivia_macros.txt`, `/mnt/jtty_macros.txt` and the INFO and STATUS lines
+of `/mnt/js8_texts.txt`. The radio reads them when the window opens, so close
+and reopen the window to see the changes. RTTY sends only from X6100 Link,
+which has its own macros.
+
+![Web configurator: Macros page](screenshots/web/macros_desktop.png)
 
 - Multi-select (tap, checkbox, shift for a range, all/none); delete the
   selection with one confirmation or download it as a ZIP.
@@ -1518,15 +1817,66 @@ What it has:
   list for 2 minutes (in FT8 a caller also leaves after your 73 or RR73). A
   tap replies.
 
+Phone screen. The radio panel has one RX/TX lamp, a block with the mode and the
+band, and the reading inside the dial; P.AMP, ATT, NB, NR and AGC are buttons,
+PWR is on the filter row. SET > Display > Filter colour colours the filter on
+the app's spectrum and waterfall: Theme, Blue, Sky blue, Green, Yellow,
+Orange, Red, Purple, White (the radio has its own, see
+[Waterfall](#waterfall)). SET > DX CLUSTER > Column transparency sets how much
+the waterfall shows through the cluster column, 25% by default.
+
+SET has its sections on the left in three groups: Look (Theme, Display,
+Language), Radio (DX CLUSTER, PADDLE, PTT, Update) and Account and privacy
+(QRZ.COM, Phone position). It opens on the section used last.
+
+![X6100 Link SET with the Look, Radio and Account and privacy groups](screenshots/link_set_groups.png)
+
 Logging a DX cluster spot. Tap a spot in the app's cluster column, or tune a
 spot with the MFK on the radio: the app tunes it and opens the logger with
 the call filled in, the RST at 59 (599 in CW) and, with a QRZ.com login, the
 QRZ data. Nothing is logged until you tap LOG.
 
+Upload to QRZ.com. QRZ in the LOG tab sends today's QSOs that are not on
+QRZ.com yet. The key goes in SET > QRZ.COM, "Logbook API key": it is on QRZ.com
+under My Logbook, Settings, and it is not your password. Without the key the
+button reads "QRZ upload off: tap here to add the logbook API key". Messages:
+"QRZ: 3 sent, 1 already there", "QRZ: nothing new to send", or "QRZ: " with the
+reason, after those already sent.
+
+Uploading to QRZ needs a QRZ.com Logbook API key, which QRZ.com only gives
+with a paid QRZ.com subscription (XML level or higher).
+
+![X6100 Link LOG tab with the QRZ button](screenshots/link_log_qrz.png)
+
+Cluster alerts on the phone: when a spot matches one of your alerts (SET > DX CLUSTER), the phone shows a notification with call, frequency, mode, spotter and comment, also with the app in the background; a tap opens the app. The same call on the same band is notified once every 10 minutes. Turn it off with Phone notification, next to the alerts. Inside the app an alert spot shows as a banner at the top for 15 s; a tap tunes it. In SET > DX CLUSTER an alert removed by mistake comes back with UNDO for 5 s.
+
+![phone notification of a cluster alert](screenshots/link_alert_notification.png)
+
+DX spot from the phone (firmware v0.127 or newer): DX SPOT in the logger opens a small window with the VFO in kHz, the call (CW LOG call, last confirmed CW call or FT8 caller tapped) and a comment starting with the mode. Send posts it through the radio's cluster connection; an error from the radio shows in the window.
+
+![the DX SPOT window of X6100 Link](screenshots/link_dx_spot.png)
+
 Transmitting from the phone: the app's TX commands (CQ, reply, send...) work
 as soon as the app is open on the radio. Stop always works. When an app
 opened from the phone changed the mode (CW, or USB for SSTV/WeFax/NavTex),
 the mode comes back when the app closes.
+
+Voice from the phone (firmware v0.127 or newer). A red PTT sits under the log:
+hold it and talk into the phone. It works only in LSB, USB, AM and FM; the
+first time Android asks for the microphone, and leaving the app lets PTT go.
+
+- SET > PTT > Mic gain: the phone's microphone level, -30 to +20 dB. Watch
+  the ALC while you talk: it should move, not sit at the top.
+- TX stops after 0.5 s without audio from the phone, and after 3 minutes.
+- On the radio: "Phone PTT: voice only in LSB, USB, AM and FM", "Phone PTT:
+  the radio is already transmitting", "Another device is transmitting",
+  "Phone PTT: TX stopped, no audio from the phone", "Phone PTT: TX stopped
+  after 3 minutes", "Phone PTT: TX stopped by the radio".
+- In the app: "TX stopped after 3 minutes: release PTT", "PTT: microphone or
+  network not available", "PTT needs the microphone: allow it in the app
+  permissions".
+
+![X6100 Link with the red PTT under the log](screenshots/link_ptt.png)
 
 Memories (MEMORIES, next to LOG/DIGITAL/CW). The radio's MEM slots M1-M9 and
 its named channels, the same ones as on the radio and on the web
@@ -1536,13 +1886,32 @@ AGC, P.AMP and ATT in that slot, CLEAR empties it; a channel can be renamed,
 moved up or down, or deleted (asked once more). Type a name and SAVE VFO to
 add the VFO as a new channel. Needs firmware v0.125 or newer.
 
-**In italiano.** Memorie (MEMORIE, accanto a LOG/DIGITALE/CW): gli slot MEM
-M1-M9 e i canali con nome della radio, gli stessi della radio e della pagina
-Memories del configuratore web. Un tocco sintonizza (frequenza, poi modo).
-Tenendo premuto compaiono le azioni: SALVA VFO mette nello slot frequenza,
-modo, AGC, P.AMP e ATT della radio, SVUOTA lo libera; un canale si rinomina,
-si sposta su o giù, si elimina (con conferma). Scrivi un nome e SALVA VFO per
-aggiungere il VFO come nuovo canale. Serve il firmware v0.125 o successivo.
+USB paddle on the CW tab. The paddle plugs into the phone or tablet through
+an OTG adapter and can be any of three kinds: one that shows up as a USB mouse
+(dit = left button, dah = right), a keyboard adapter such as the Vail adapter
+(Left Ctrl = dit, Right Ctrl = dah; [ and ] work too), or a USB MIDI device
+(highly experimental; note on/off; notes 1 and 2 by default, as the Vail adapter in MIDI mode).
+Other buttons, keys or notes are set in SET > PADDLE with LEARN: press the
+dit, then the dah, and the app keeps what arrived for that kind of input;
+RESET goes back to the defaults. Turn on PADDLE: the app takes the mouse
+pointer, so the buttons no longer click the screen, and the mapped keys no
+longer type in any field. SET > PADDLE also has the keyer: iambic B (default),
+iambic A (letting go of a squeeze stops after the element being sent),
+straight key (either contact keys the tone, dit or dah decided by its length)
+or bug (dits automatic, dahs by hand); SWAP, also on the CW tab, exchanges dit
+and dah. Speed is the radio's TX WPM or a value of your own. The sidetone on
+the phone can be turned off; its pitch is the CW filter centre (AUTO) or a
+fixed value, its volume the app's audio volume (AUDIO) or a fixed level. A gap
+of 3 dits ends a character, 7 dits a word (keyed by hand: 2 and 6). What you
+key goes to the radio as text and the radio keys it at its own speed, as with
+the text to send, so it goes out only in CW: on firmware v0.127 each letter
+as soon as it is decoded, before that a word at a time. The line next to
+PADDLE shows the word being formed; a pattern that is no character is dropped
+and shows a red ?. PADDLE turns off when the app leaves the screen, the CW tab
+or SET opens. A paddle on a USB serial adapter (DTR/DSR/CTS) is not
+supported.
+
+![X6100 Link SET > PADDLE](screenshots/link_paddle_settings.png)
 
 <table>
   <tr>
@@ -1555,6 +1924,15 @@ aggiungere il VFO come nuovo canale. Serve il firmware v0.125 o successivo.
     App screenshots taken on an emulator against a mock radio (fake data).</sub></td>
   </tr>
 </table>
+
+### Log export, eQSL, LoTW
+- ADIF (LOG tab): all the radio's logs in one file, to any app from the share sheet (mail, Drive, Files).
+- EQSL (LOG tab): today's QSOs not yet on eQSL.cc. Login in SET > EQSL / LOTW; it stays on the phone and goes only to eQSL.cc.
+- LoTW: the phone can't sign for LoTW. Export with ADIF, then sign and upload with TQSL on a computer.
+### Alerts and quick controls
+- SET > Alerts: battery 10% and 5% (once each, again after charging), SWR protection stop, recording saved. They need a radio with firmware 0.127.
+- Quick controls: switch on "Controls in the notification". The notification shows frequency, mode, band and volume, and up to 4 keys: tap a slot under the switch to pick its key, left to right, or "—" to leave it empty. BAND-/BAND+ change band as the radio's keys, VOL-/VOL+ move the volume by 2, MODE steps LSB, USB, CW, AM, NFM, AGC steps its modes, ATT, P.AMP, NB and NR switch on and off. Defaults: BAND-, BAND+, VOL-, VOL+.
+- Keeping the alerts on keeps the "Connected to the radio" notification while the app is connected.
 
 ## wfview server
 
@@ -1605,18 +1983,19 @@ the cable and WiFi stays connected for its own network. Leave the gateway
 empty and the cable reaches only its subnet, while internet stays on WiFi.
 Changing Ethernet never touches the WiFi settings.
 
-> **Ethernet (IT)**
-> Un adattatore Ethernet USB nella porta USB della radio le dà una connessione via cavo accanto al WiFi. Funzionano gli adattatori con i chip più comuni (ASIX, Realtek RTL8152/8153, CDC Ethernet/NCM). Si può collegare in qualsiasi momento.
-> Dove: Impostazioni > Wireless > ETHERNET, oppure la pagina Ethernet del configuratore web (System > Ethernet). Le due mostrano le stesse impostazioni. La scheda ETHERNET c'è solo con un adattatore collegato: compare e sparisce con l'adattatore, anche a pagina aperta. Senza adattatore la pagina web scrive "No Ethernet adapter connected".
-> - **Status**: connesso, senza cavo, in connessione o non connesso, e il nome dell'adattatore (eth0).
-> - **Address in use / Gateway in use**: quello che l'adattatore ha adesso.
-> - **Mode**: DHCP (di serie, l'indirizzo lo dà la rete) o Static.
-> - **IP address, Netmask, Gateway, DNS**: usati in modo Static. La netmask si scrive 255.255.255.0 oppure /24. Gateway e DNS possono restare vuoti.
-> - **Apply**: controlla tutti i campi e li salva. Fino ad Apply non cambia niente.
->
-> Sulla radio si va sul campo con il MFK e lo si preme: si apre la tastiera per quel campo (il tasto 1# dà le cifre). OK tiene il valore solo se è un indirizzo valido.
-> Apply rifiuta un indirizzo che non sia nella forma a.b.c.d, una netmask non valida, l'indirizzo di rete o di broadcast della sottorete e un gateway fuori dalla sottorete. L'impostazione resta dopo il riavvio e vale per la porta, non per un adattatore: un altro adattatore prende lo stesso indirizzo.
-> WiFi ed Ethernet insieme: con il gateway impostato il traffico internet passa dal cavo e il WiFi resta connesso per la sua rete. Con il gateway vuoto il cavo raggiunge solo la sua sottorete e internet resta sul WiFi. Cambiare Ethernet non tocca mai le impostazioni WiFi.
+### USB tethering
+
+> **Experimental.**
+
+An Android phone or tablet with USB tethering can sit on a cable in the
+radio's USB-A port. Turn on USB tethering on the phone: the phone gives the
+radio an address, and the two reach each other over the cable. The radio's
+internet stays on WiFi or Ethernet.
+
+- There is no screen for it on the radio, and it does not show on the
+  ETHERNET card.
+- iPhone is not supported.
+- Not tried with many phones yet.
 
 ## Troubleshooting and FAQ
 
@@ -1629,6 +2008,11 @@ second. WiFi (NTP) or GPS sets it. FT8 and JS8 also have Time Sync.
 
 No. The TX level settles with the ALC working a little, with the power at the
 setting. It comes down by itself over 3. See [Digital-mode TX level](#digital-mode-tx-level).
+
+#### The ALC reads about 5 in CW. Is it too high?
+
+No. In CW the base sets the power with its own ALC, and the bar is grey for
+that reason. See [ALC in CW](#alc-in-cw).
 
 #### I can't record a voice message with the built-in microphone
 

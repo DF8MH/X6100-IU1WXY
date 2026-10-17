@@ -1,21 +1,16 @@
+[project]
+name = "x6100-webserver"
+description = "Web configurator of the X6100 IU1WXY firmware and the API of X6100 Link"
+authors = [{name = "Giovanni Ricciardi IU1WXY", email = "info@x6100-link.it"}]
+dynamic = ["version"]
+dependencies = ["bottle", "bottle-sqlite"]   # both third-party, used as they are
+
+[project.scripts]
+x6100_webserver = "x6100_webserver:__main__"   # the radio starts it from /etc/init.d/S96webserver
+
+[tool.flit.sdist]
+include = ["src/x6100_webserver/static/", "src/x6100_webserver/views/"]
+
 [build-system]
 requires = ["flit_core >= 3.4"]
 build-backend = "flit_core.buildapi"
-
-[project]
-name = "x6100-webserver"
-authors = [
-  {name = "Georgy Dyuldin", email = "g.dyuldin@gmail.com"},
-]
-description = "X6100 webserver for transceiver configuration"
-dynamic = ["version"]
-dependencies = [
-  "bottle",
-  "bottle-sqlite",
-]
-
-[project.scripts]
-x6100_webserver = "x6100_webserver:__main__"
-
-[tool.flit.sdist]
-include = ["src/s6100_webserver/static/", "src/s6100_webserver/views/"]

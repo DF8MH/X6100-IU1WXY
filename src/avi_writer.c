@@ -29,6 +29,8 @@ struct avi_t {
     uint32_t    movi;               /* offset of the "movi" fourcc */
     uint32_t    frames, samples, max_chunk;
     uint32_t    p_riff, p_frames, p_vlen, p_alen, p_movi, p_buf;    /* fields to patch */
+    uint32_t    p_arate, p_fmt_rate;    /* audio rate in strh and in WAVEFORMATEX */
+    uint16_t    fps;
     idx_t       *idx;
     size_t      idx_n, idx_cap;
 };
@@ -81,8 +83,11 @@ static uint32_t build_header(avi_t *a, uint8_t *hdr, uint16_t w, uint16_t h, uin
 
     put_list("strl", 4 + 64 + 26);
     put_strh("auds", "\0\0\0\0", rate, 2, 0, 0, &a->p_alen);
+    a->p_arate = a->p_alen - 8;
     put4("strf"); put32(18);                /* WAVEFORMATEX */
-    put16(1); put16(1); put32(rate); put32(rate * 2); put16(2); put16(16); put16(0);
+    put16(1); put16(1);
+    a->p_fmt_rate = hp - hdr;
+    put32(rate); put32(rate * 2); put16(2); put16(16); put16(0);
 
     a->p_movi = hp - hdr + 4;
     put_list("movi", 4);
@@ -122,6 +127,7 @@ avi_t * avi_open(const char *path, uint16_t width, uint16_t height, uint16_t fps
     }
 
     setvbuf(a->f, NULL, _IOFBF, 64 * 1024);
+    a->fps = fps;
     wr(a, hdr, build_header(a, hdr, width, height, fps, rate));
 
     if (a->err) {
@@ -180,6 +186,10 @@ bool avi_write_audio(avi_t *a, const int16_t *samples, size_t nsamples) {
     return !a->err;
 }
 
+uint32_t avi_size(avi_t *a) {
+    return a->pos;
+}
+
 bool avi_close(avi_t *a) {
     uint32_t    movi_end = a->pos;
     uint8_t     h[8] = { 'i', 'd', 'x', '1' };
@@ -202,6 +212,16 @@ bool avi_close(avi_t *a) {
         patch32(a, a->p_buf, a->max_chunk);
         patch32(a, a->p_vlen, a->frames);
         patch32(a, a->p_alen, a->samples);
+
+        /* The codec clock is not exactly the nominal rate (+0.6% measured): the rate
+         * that fits the video length keeps sound and picture together to the end */
+        if (a->frames >= a->fps * 10) {
+            uint32_t rate = ((uint64_t) a->samples * a->fps + a->frames / 2) / a->frames;
+
+            patch32(a, a->p_arate, rate);
+            patch32(a, a->p_fmt_rate, rate);
+            patch32(a, a->p_fmt_rate + 4, rate * 2);
+        }
     }
 
     bool ok = !a->err;

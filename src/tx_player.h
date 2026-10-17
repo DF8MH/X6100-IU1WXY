@@ -1,63 +1,49 @@
-/*
- *  SPDX-License-Identifier: LGPL-2.1-or-later
- *
- *  Xiegu X6100 LVGL GUI - digital-mode TX player
- *
- *  Plays a prepared TX waveform with the radio keyed, correcting the audio
- *  gain from the radio's ALC and power readback as it goes. Shared by the
- *  FT8 and JS8 apps; moved here unchanged from src/ft8/tx_worker.c.
- *
- *  The waveform is synthesised around TX_PLAYER_AUDIO_HZ; while it plays
- *  the VFO is shifted so the signal lands at the requested audio offset,
- *  and restored afterwards. Blocks for the length of the waveform, so call
- *  it from a worker thread.
- */
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//
+// Xiegu X6100 LVGL GUI - digital-mode TX player (tx_player.c)
+//
+// Keys the radio and sends a waveform made by an app (FT8, JS8, PSK, Olivia, JTTY, WSPR,
+// RTTY, SSTV, WEFAX), steering the audio level from the ALC and power the radio reads back.
+// The waveform is made on TX_PLAYER_AUDIO_HZ: the VFO is moved for the length of the
+// transmission so that it goes out at the offset the app asked for. Both calls block until
+// the end: use them from a worker thread.
+//
+// Copyright (c) 2026 Giovanni Ricciardi IU1WXY, own code of the IU1WXY firmware
 
-#pragma once
+#ifndef X6100_TX_PLAYER_H
+#define X6100_TX_PLAYER_H
 
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
+#include <stdint.h>     /* int16_t, int32_t */
+#include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#if defined(__cplusplus)
+extern "C" {     /* the C++ apps include it too */
+#endif /* extern "C" */
 
-/* Audio tone the waveform is centred on. */
-#define TX_PLAYER_AUDIO_HZ 1325
+#define TX_PLAYER_AUDIO_HZ      1325    /* audio frequency the apps synthesise on */
+#define TX_PLAYER_MAX_PWR_W     7.0f    /* power cap of the digital modes */
 
-/* Digital modes are capped at this power. */
-#define TX_PLAYER_MAX_PWR_W 7.0f
+/* Polled once per audio block: true stops the transmission there */
+typedef bool (*tx_abort_fn_t)(void *arg);
 
-/* Abort-check callback. Return true to stop TX after the current block. */
-typedef bool (*tx_abort_fn_t)(void *ctx);
-
-/* Starting gain offset (dB) for the radio's firmware and power setting. */
-float tx_player_base_gain_offset(void);
-
-/* Fill callback for tx_player_stream: write up to n samples into buf and
- * return how many; 0 ends the transmission. */
+/* Gives the next audio: up to n samples into buf, returns how many, 0 at the end */
 typedef size_t (*tx_fill_fn_t)(int16_t *buf, size_t n, void *ctx);
 
-/* Key the radio and play n_samples of int16 audio at AUDIO_PLAY_RATE,
- * shifted to tx_offset_hz. The samples are left unchanged. Returns false if
- * abort_check stopped it early. */
-bool tx_player_play(int16_t      *samples,
-                    uint32_t      n_samples,
-                    int32_t       tx_offset_hz,
-                    float         base_gain_offset,
-                    tx_abort_fn_t abort_check,
-                    void         *abort_check_ctx);
+float tx_player_base_gain_offset(void);   /* dB to start with: base firmware and power set */
 
-/* As tx_player_play, with the audio generated block by block by fill (for
- * waveforms too long to hold in memory, e.g. WeFax). */
-bool tx_player_stream(tx_fill_fn_t  fill,
-                      void         *fill_ctx,
-                      int32_t       tx_offset_hz,
-                      float         base_gain_offset,
-                      tx_abort_fn_t abort_check,
-                      void         *abort_check_ctx);
+/* Send count samples (AUDIO_PLAY_RATE, not modified) at offset_hz. False when abort
+ * stopped it before the end */
+bool tx_player_play(int16_t *samples, uint32_t count, int32_t offset_hz, float base_gain,
+                    tx_abort_fn_t abort, void *abort_ctx);
 
-#ifdef __cplusplus
+/* The same with the audio asked block by block from fill, for transmissions too long to
+ * keep in memory (WEFAX) */
+bool tx_player_stream(tx_fill_fn_t fill, void *fill_ctx, int32_t offset_hz, float base_gain,
+                      tx_abort_fn_t abort, void *abort_ctx);
+
+#if defined(__cplusplus)
 }
-#endif
+#endif /* __cplusplus */
+
+#endif /* X6100_TX_PLAYER_H */

@@ -1,4 +1,4 @@
-% rebase('base.html', title='Main Page')
+% rebase("base.html", title="Main Page")
 <h2><svg class="i"><use href="#i-home"/></svg>General</h2>
 <p class="sub">Everything the configurator can change on the radio.</p>
 <div class="tiles">
@@ -23,3 +23,44 @@
   <a class="tile" href="/time"><span class="dp-ico"><svg class="i"><use href="#i-clock"/></svg></span>
     <div><b>Time editor</b><span>Shows the radio clock and sets it by hand, by NTP or by timezone.</span></div></a>
 </div>
+
+<section class="dp-card" style="margin-top:18px">
+<div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-upload"/></svg></span><div><h3>Update</h3><p>Installs a new app package (x6100-app-&lt;version&gt;.tar.gz) without reflashing the SD card</p></div></div>
+<div class="dp-body">
+<input type="file" id="upd_file" accept=".gz,application/gzip">
+<div class="actions">
+  <button id="upd_install" class="primary" disabled><svg class="i"><use href="#i-upload"/></svg>Install</button>
+  <span class="status" id="upd_status"></span>
+</div>
+</div>
+</section>
+
+<script>
+function updShow(r) {
+  const t = {idle: "Apps v" + r.current_version, uploaded: "Ready to install v" + r.version + " (now v" + r.current_version + ")",
+    verifying: "Checking the package…", installing: "Installing v" + r.version + "… " + r.progress + "%",
+    restarting: "Restarting and checking the radio apps… " + r.progress + "%", done: "Updated to v" + r.version,
+    rolled_back: r.message, error: r.message}[r.state] || r.state;
+  $("#upd_status").text(t).toggleClass("error", r.state === "error" || r.state === "rolled_back");
+  $("#upd_install").prop("disabled", r.state !== "uploaded");
+  if (["installing", "restarting", "verifying"].includes(r.state)) setTimeout(updPoll, 2000);
+}
+function updPoll() {
+  $.ajax({url: "/link/v2/update/status", dataType: "json", success: updShow,
+          error: function() { $("#upd_status").text("Waiting for the radio…"); setTimeout(updPoll, 2000); }});
+}
+$("#upd_file").on("change", function() {
+  const file = this.files[0];
+  if (!file) return;
+  $("#upd_status").text("Uploading " + file.name + "…");
+  $.ajax({url: "/link/v2/update/upload", type: "POST", data: file, processData: false,
+          contentType: "application/octet-stream", dataType: "json", success: updShow,
+          error: function(xhr) { xhr.responseJSON ? updShow(xhr.responseJSON) : $("#upd_status").text("Upload failed"); }});
+});
+$("#upd_install").on("click", function() {
+  $(this).prop("disabled", true);
+  $.ajax({url: "/link/v2/update/install", type: "POST", dataType: "json", success: updShow,
+          error: function(xhr) { xhr.responseJSON ? updShow(xhr.responseJSON) : updPoll(); }});
+});
+updPoll();
+</script>

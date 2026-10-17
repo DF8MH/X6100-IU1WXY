@@ -1,36 +1,32 @@
-from datetime import datetime, timezone, timedelta
-from importlib import resources
-try:
-    import gzip
-except ImportError:   # images built before python3-zlib was selected
-    gzip = None
+from datetime import datetime
 try:
     import zlib
-except ImportError:
+except ImportError:   # images built before python3-zlib was selected
     zlib = None
 import csv
+import fcntl
 import io
 import json
 import os
-import pathlib
 import re
 import select
 import shutil
 import socket
 import sqlite3
+import struct
 import subprocess
 import tarfile
 import tempfile
+import termios
 import threading
 import time
 import zipfile
 
 import bottle
 
-from . import models
 from . import settings
 
-app = bottle.Bottle()
+app = bottle.Bottle()   # the configurator pages, their API and X6100 Link's (under LINK)
 
 
 @app.hook('before_request')
@@ -52,11 +48,8 @@ def page_scheme():
     bottle.redirect("%s://%s%s%s%s" % (scheme, host, "" if port == std else ":%d" % port, bottle.request.path,
                                        query), 302)
 
-bottle.TEMPLATE_PATH += [
-    resources.files('x6100_webserver').joinpath('views'),
-]
-
-STATIC_PATH = resources.files('x6100_webserver').joinpath('static')
+PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+bottle.TEMPLATE_PATH.append(os.path.join(PACKAGE_DIR, "views"))
 
 
 def read_callsign():
@@ -74,93 +67,6 @@ def read_callsign():
 
 bottle.BaseTemplate.defaults.update(callsign=read_callsign, request=bottle.request)
 
-
-# Bands API
-
-@app.get('/api/bands')
-def get_bands(dbcon):
-    bands = models.read_bands(dbcon)
-    bottle.response.content_type = 'application/json'
-    return json.dumps([x.asdict() for x in bands])
-
-
-@app.put('/api/bands')
-def add_band(dbcon):
-    data = bottle.request.json
-    try:
-        band_param = models.BandParams(**data)
-        models.add_band(dbcon, band_param)
-        bottle.response.status = 201
-        return {"status": "OK"}
-    except ValueError as e:
-        bottle.response.status = 400
-        return {"status": "error", "msg": str(e)}
-
-
-@app.post('/api/bands/<band_id:int>')
-def update_band(band_id, dbcon):
-    data = bottle.request.json
-    try:
-        band_param = models.BandParams(id=band_id, **data)
-        models.update_band(dbcon, band_param)
-        return {"status": "OK"}
-    except ValueError as e:
-        bottle.response.status = 400
-        return {"status": "error", "msg": str(e)}
-
-
-@app.delete('/api/bands/<band_id:int>')
-def delete_band(band_id, dbcon):
-    try:
-        models.delete_band(dbcon, band_id)
-        return {"status": "OK"}
-    except ValueError as e:
-        bottle.response.status = 400
-        return {"status": "error", "msg": str(e)}
-
-
-# Digital modes routes
-
-@app.get('/api/digital_modes')
-def get_digital_modes(dbcon):
-    d_modes = models.read_digital_modes(dbcon)
-    bottle.response.content_type = 'application/json'
-    return json.dumps([x.asdict() for x in d_modes])
-
-
-@app.put('/api/digital_modes')
-def add_digital_mode(dbcon):
-    data = bottle.request.json
-    try:
-        d_mode = models.DigitalMode(**data)
-        models.add_digital_mode(dbcon, d_mode)
-        bottle.response.status = 201
-        return {"status": "OK"}
-    except ValueError as e:
-        bottle.response.status = 400
-        return {"status": "error", "msg": str(e)}
-
-
-@app.post('/api/digital_modes/<mode_id:int>')
-def update_digital_mode(mode_id, dbcon):
-    data = bottle.request.json
-    try:
-        d_mode = models.DigitalMode(id=mode_id, **data)
-        models.update_digital_mode(dbcon, d_mode)
-        return {"status": "OK"}
-    except ValueError as e:
-        bottle.response.status = 400
-        return {"status": "error", "msg": str(e)}
-
-
-@app.delete('/api/digital_modes/<mode_id:int>')
-def delete_digital_mode(mode_id, dbcon):
-    try:
-        models.delete_digital_mode(dbcon, mode_id)
-        return {"status": "OK"}
-    except ValueError as e:
-        bottle.response.status = 400
-        return {"status": "error", "msg": str(e)}
 
 # DX cluster routes
 #
@@ -436,7 +342,7 @@ def field_logs():
 def run_field_update():
     env = dict(os.environ, X6100_FIELD_DIR=settings.FIELD_DIR, X6100_CALL=read_callsign())
     try:
-        r = subprocess.run([settings.FIELD_CMD, "update"], capture_output=True, text=True, timeout=600, env=env)
+        r = subprocess.run([settings.FIELD_CMD, "update"], capture_output=True, text=True, timeout=1800, env=env)
         lines = r.stdout.strip().splitlines()
         result = lines[-1] if lines else f"error exit code {r.returncode}"
     except (OSError, subprocess.SubprocessError) as e:
@@ -454,6 +360,15 @@ def field():
 def get_field():
     with field_lock:
         update = dict(field_update)
+    if update["running"]:   # "<list n> <lists> <bytes> <total> <retry> <name>", written by x6100-field
+        try:
+            with open(field_path(".update.progress")) as f:
+                n, lists, done, total, retry, name = f.read().split()
+            update["progress"] = f"{name} ({n}/{lists}): {int(done) / 1e6:.1f}" + \
+                (" MB, reading the list" if done == total != "0" else f" / {int(total) / 1e6:.1f} MB" if int(total) else " MB") + \
+                (f", retry {retry} of 5" if retry != "0" else "")
+        except (OSError, ValueError):
+            pass
     return {"qrz_key": key_set("qrz.conf"), "hota_key": key_set("hota.conf"), "update": update, "refs": field_refs(),
             "logs": field_logs()}
 
@@ -713,7 +628,7 @@ def export_logs():
 
 
 # Web remote: control and spectrum through the GUI's local socket (src/remote_server.cpp,
-# one JSON object per line), RX audio from PulseAudio. No PTT: only the apps transmit
+# one JSON object per line), RX audio from PulseAudio. The phone voice (PTT) goes to the GUI by UDP (src/voice_tx.c)
 # (X6100 Link).
 
 REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", "rfgain", "sql", "filter", "pwr",
@@ -725,13 +640,28 @@ REMOTE_CMDS = {"freq", "tune", "mode", "band", "pre", "att", "agc", "nb", "nr", 
                "jtty_freq", "jtty_send", "jtty_stop",
                "cw_send", "cw_stop", "cw_wpm", "cw_dec", "cw_clear", "cw_calls", "navtex_mode", "location",
                "field_screen", "field_ref", "field_start", "field_end", "field_log", "field_spot", "field_update",
-               "qso_log", "nb_level", "nb_width", "nr_level", "agc_mode"}
+               "qso_log", "nb_level", "nb_width", "nr_level", "agc_mode", "cluster_spot", "voice_open",
+               "band_step", "vol_step"}
+# A command's text; a JS8 message may be longer (the GUI's JS8_TEXT_MAX, remote_server.cpp)
+REMOTE_TEXT_MAX = {"js8_send": 500}
 # The radio RX audio as the GUI's decoders get it (src/audio.c), 16 bit mono
-REMOTE_AUDIO_CMD = ["parec", "--device=alsa_input.platform-sound.stereo-fallback", "--format=s16le",
-                    "--rate=12000", "--channels=1", "--latency-msec=100",
+REMOTE_AUDIO_CMD = ["parec", "--device=alsa_input.platform-sound.stereo-fallback", "--channels=1", "--latency-msec=100",
                     "--client-name=X6100 web remote", "--stream-name=Web remote RX"]
+# format: (parec options, bytes per second). ulaw is G.711 mu-law at 8 kHz, a third of the raw stream for a weak WiFi
+REMOTE_AUDIO_FMTS = {"s16": (["--format=s16le", "--rate=12000"], 24000), "ulaw": (["--format=ulaw", "--rate=8000"], 8000)}
+# Bytes the phone may leave unacknowledged before the events drop spectrum lines: on a slow link the kernel
+# would queue seconds of them (tcp_wmem up to 4 MB) and the state lines would wait behind
+REMOTE_SPEC_BACKLOG = 16384
 remote_audio_lock = threading.Lock()
 remote_audio_busy = False
+
+
+def send_backlog(sock):
+    """Bytes in the client socket's send queue not yet acknowledged (SIOCOUTQ); 0 when unknown."""
+    try:
+        return struct.unpack("i", fcntl.ioctl(sock.fileno(), termios.TIOCOUTQ, b"\0\0\0\0"))[0]
+    except (AttributeError, OSError):   # no socket in the environ (another WSGI server)
+        return 0
 
 
 def remote_connect(timeout):
@@ -763,6 +693,84 @@ def remote_gone(rest=None):
     return api_error(410, OLD_APP)
 
 
+# X6100 Link downloads the lists on the phone and sends only the references around the radio, refs.tsv lines
+# as x6100-field writes them. ?kinds= says which lists the body has (P parks, S summits, B bunkers, H HOTA):
+# their lines replace those of refs.tsv, the other lists stay. All or nothing: refs.tsv changes only once the
+# whole body has arrived and every line is valid.
+FIELD_REFS_MAX = 8 * 1024 * 1024   # 2000 km around central Europe is about 6 MB
+FIELD_REF_LINE = re.compile(rb'([PSBH])\t[A-Za-z0-9/-]{1,15}\t[^\t\r\n]*\t-?\d{1,2}\.\d{5}\t-?\d{1,3}\.\d{5}\t(-?\d{1,5})?\t(\d{1,3})?\n')
+
+
+@app.post(LINK + '/field/refs')
+def put_field_refs():
+    kinds = bottle.request.query.get("kinds", "")
+    if not kinds or not set(kinds) <= set("PSBH"):
+        return api_error(400, "No list to replace")
+    length = bottle.request.content_length
+    if length < 0 or length > FIELD_REFS_MAX:   # 0: no reference in the area
+        return api_error(413, "Too many references for the radio: choose a smaller distance")
+    try:   # bottle keeps it in a temporary file; a short body (the phone went away) is not an error for bottle
+        body = bottle.request.body
+        complete = body.seek(0, 2) == length
+        body.seek(0)
+    except OSError:
+        complete = False
+    if not complete:
+        return api_error(400, "The upload stopped before the end: nothing changed, try again")
+    if bottle.request.get_header("Content-Encoding", "") == "gzip":   # the radio's WiFi is slow: a third of the bytes
+        try:
+            unz = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            data = unz.decompress(body.read(), FIELD_REFS_MAX + 1)
+        except (AttributeError, zlib.error):   # AttributeError: no zlib in this image
+            return api_error(400, "The list from the phone is damaged: nothing changed")
+        if len(data) > FIELD_REFS_MAX:
+            return api_error(413, "Too many references for the radio: choose a smaller distance")
+        if not unz.eof:
+            return api_error(400, "The list from the phone is damaged: nothing changed")
+        body = io.BytesIO(data)
+    os.makedirs(settings.FIELD_DIR, exist_ok=True)
+    path = field_path("refs.tsv")
+    tmp = path + ".link"
+    with open(field_path(".update.lock"), "w") as lock:   # x6100-field's: not while the radio downloads them
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return api_error(409, "The radio is downloading the lists itself: try again when it has finished")
+        counts = dict.fromkeys(kinds, 0)
+        try:
+            with open(tmp, "wb") as out:
+                for n, line in enumerate(body, 1):
+                    m = FIELD_REF_LINE.fullmatch(line)
+                    if not m or len(line) > 255 or m.group(1).decode() not in kinds:   # the GUI reads 255 bytes a line
+                        return api_error(400, f"The list from the phone is damaged (line {n}): nothing changed")
+                    line.decode("utf-8")
+                    out.write(line)
+                    counts[m.group(1).decode()] += 1
+                try:
+                    with open(path, "rb") as old:
+                        for line in old:
+                            if line[:1].decode(errors="replace") not in kinds:
+                                out.write(line)
+                except FileNotFoundError:
+                    pass
+                out.flush()
+                os.fsync(out.fileno())
+            os.replace(tmp, path)
+            try:   # its ETags are of the whole lists: the radio's next update downloads them again
+                os.remove(field_path("refs.etag"))
+            except FileNotFoundError:
+                pass
+        except UnicodeDecodeError:
+            return api_error(400, "The list from the phone is damaged: nothing changed")
+        except OSError as e:
+            return api_error(500, f"The radio could not save the list ({e.strerror}): nothing changed")
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+    return {"status": "OK", "parks": counts.get("P"), "summits": counts.get("S"), "bunkers": counts.get("B"),
+            "hota": counts.get("H")}
+
+
 @app.post(LINK + '/cmd')
 def remote_command():
     try:
@@ -776,7 +784,7 @@ def remote_command():
     if not (val is None or (isinstance(val, int) and not isinstance(val, bool)) or (isinstance(val, str) and len(val) <= 8)):
         return api_error(400, "Invalid value")
     text = data.get("text")
-    if not (text is None or (isinstance(text, str) and len(text) <= 200 and text.isascii() and text.isprintable())):
+    if not (text is None or (isinstance(text, str) and len(text) <= REMOTE_TEXT_MAX.get(data["cmd"], 200) and text.isascii() and text.isprintable())):
         return api_error(400, "Invalid text")
     cmd = {"cmd": data["cmd"], "val": val}
     if text is not None:
@@ -792,6 +800,97 @@ def remote_command():
     return {"status": "OK"}
 
 
+# App update (rootfs/usr/sbin/x6100-update does the work; API in the app docs)
+UPDATE_WORK = "/mnt/.x6100-update"
+UPDATE_MAX_BYTES = 64 * 1024 * 1024
+UPDATE_BUSY = ("verifying", "installing", "restarting")
+
+
+def update_status():
+    try:
+        with open(os.path.join(UPDATE_WORK, "status.json")) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        st = {"state": "idle", "version": "", "progress": 0, "message": ""}
+    if st.get("state") in UPDATE_BUSY:   # x6100-update holds the lock while it runs: free lock = it was stopped
+        try:
+            with open(os.path.join(UPDATE_WORK, "lock"), "a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            st.update(state="error", progress=0, message="The update was interrupted. Please try again.")
+        except OSError:
+            pass
+    try:
+        with open("/usr/share/x6100/app-version") as f:
+            st["current_version"] = f.read().strip()
+    except OSError:
+        st["current_version"] = ""
+    try:
+        with open("/etc/x6100-system-version") as f:
+            st["system"] = int(f.read().strip())
+    except (OSError, ValueError):
+        st["system"] = 0
+    return st
+
+
+def update_reply(code, **change):
+    bottle.response.status = code
+    return dict(update_status(), **change)
+
+
+@app.get(LINK + '/update/status')
+def update_get_status():
+    return update_status()
+
+
+@app.post(LINK + '/update/upload')
+def update_upload():
+    if update_status()["state"] in UPDATE_BUSY:
+        return update_reply(409, message="Another update is in progress. Please wait.")
+    req = bottle.request
+    length = req.content_length
+    if length <= 0 or length > UPDATE_MAX_BYTES:
+        return update_reply(413, state="error", message="This file is not an update for the radio.")
+    os.makedirs(UPDATE_WORK, exist_ok=True)
+    pkg = os.path.join(UPDATE_WORK, "upload.tar.gz")
+    try:
+        if req.content_type.startswith("multipart/"):
+            up = req.files.get("file")
+            if not up:
+                return update_reply(400, state="error", message="Choose an update file first.")
+            up.save(pkg, overwrite=True)
+        else:
+            with open(pkg, "wb") as f:
+                left, src = length, req.environ["wsgi.input"]
+                while left > 0:
+                    chunk = src.read(min(left, 65536))
+                    if not chunk:
+                        return update_reply(400, state="error", message="The upload was interrupted. Please try again.")
+                    f.write(chunk)
+                    left -= len(chunk)
+        r = subprocess.run(["x6100-update", "check", pkg], capture_output=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return update_reply(500, state="error", message="The update could not be checked. Please try again.")
+    finally:
+        try:
+            os.remove(pkg)
+        except OSError:
+            pass
+    st = update_status()
+    return update_reply(200 if st["state"] == "uploaded" else 409 if r.returncode and st["state"] in UPDATE_BUSY else 400)
+
+
+@app.post(LINK + '/update/install')
+def update_install():
+    state = update_status()["state"]
+    if state != "uploaded":
+        return update_reply(409, message="Another update is in progress. Please wait." if state in UPDATE_BUSY
+                            else "Choose an update file first.")
+    # Own session: the updater restarts this web server and must survive it
+    subprocess.Popen(["x6100-update", "install"], start_new_session=True, stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return update_reply(202, state="installing", progress=0, message="")
+
+
 @app.get(LINK + '/info')
 def remote_info():
     """Discovery for the phone app"""
@@ -803,6 +902,7 @@ def remote_stream():
     """Server-sent events: the GUI's state and spectrum lines, until the page is closed."""
     bottle.response.content_type = 'text/event-stream'
     bottle.response.set_header('Cache-Control', 'no-cache')
+    client = bottle.request.environ.get("x6100.socket")
 
     def events():
         try:
@@ -815,6 +915,9 @@ def remote_stream():
             sock.sendall(b'{"cmd":"sub"}\n')
             yield b"retry: 3000\n\n"
             for line in sock.makefile("rb"):
+                # A link that can't keep up loses spectrum lines (the waterfall slows), never state or events
+                if line.startswith(b'{"t":"spec"') and send_backlog(client) > REMOTE_SPEC_BACKLOG:
+                    continue
                 yield b"data: " + line.rstrip(b"\n") + b"\n\n"
         except OSError:   # GUI gone or silent for 5 s: the browser reconnects
             pass
@@ -826,9 +929,14 @@ def remote_stream():
 
 @app.get(LINK + '/audio')
 def remote_audio():
-    """Raw s16le mono 12 kHz. One listener; parec is killed when the page stops listening."""
+    """Raw s16le mono 12 kHz, or ?fmt=ulaw mu-law 8 kHz. One listener; parec is killed when the page stops listening."""
+    fmt = REMOTE_AUDIO_FMTS.get(bottle.request.query.fmt or "s16")
+    if not fmt:
+        return api_error(400, "Unknown audio format")
+    opts, rate = fmt
     bottle.response.content_type = 'application/octet-stream'
     bottle.response.set_header('Cache-Control', 'no-store')
+    client = bottle.request.environ.get("x6100.socket")
 
     def pcm():
         global remote_audio_busy
@@ -841,18 +949,26 @@ def remote_audio():
             env = dict(os.environ)
             env.setdefault("PULSE_SERVER", "unix:/var/run/pulse/native")
             try:
-                proc = subprocess.Popen(REMOTE_AUDIO_CMD, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
+                proc = subprocess.Popen(REMOTE_AUDIO_CMD + opts, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
             except OSError:
                 raise bottle.HTTPError(503, "parec is not available")
             fd, first = proc.stdout.fileno(), True
+            sent_at = time.monotonic()
             while True:
-                data = os.read(fd, 4800) if select.select([fd], [], [], 5)[0] else b""
+                data = os.read(fd, rate // 5) if select.select([fd], [], [], 5)[0] else b""
                 if not data:   # parec failed or stalled
                     if first:
                         raise bottle.HTTPError(503, "No audio from the radio")
                     break
                 first = False
-                yield data
+                # Over a second still on its way: drop rather than let the audio fall seconds behind (a read can be 0.6 s of mu-law)
+                if send_backlog(client) <= rate:
+                    sent_at = time.monotonic()
+                    yield data
+                # Nothing acknowledged for 10 s: the phone is gone (WiFi dropped), and a stream that only
+                # drops never writes, so it would never notice and keep the one listener's place for good
+                elif time.monotonic() - sent_at > 10:
+                    break
         finally:
             if proc:
                 proc.kill()
@@ -1121,6 +1237,172 @@ def delete_cw_message(dbcon, id):
     return read_cw_messages(dbcon)
 
 
+# Macros of the PSK31, Olivia and JTTY windows: one "name<TAB>text" line each, as src/psk_macro.c,
+# olivia_macro.c and jtty_macro.c read and write them. The GUI reads the file when the window opens.
+# (count, name, text): PSK_MACRO_MAX, _NAME_LEN - 1, _TEXT_LEN - 1 and the JTTY ones
+MACRO_LIMITS = {"psk": (12, 23, 199), "olivia": (12, 23, 199), "jtty": (8, 23, 80)}
+
+
+@app.route('/macros')
+def macros_page():
+    return bottle.template('macros')
+
+
+def read_macros(mode):
+    """The macros the GUI would load: lines without a tab skipped, at most the mode's count."""
+    most, name_max, text_max = MACRO_LIMITS[mode]
+    items = []
+    try:
+        with open(settings.MACRO_FILES[mode], encoding="latin-1") as f:
+            for line in f:
+                name, tab, text = line.rstrip("\r\n").partition("\t")
+                if tab and len(items) < most:
+                    items.append({"name": name[:name_max], "text": text[:text_max]})
+    except FileNotFoundError:
+        pass
+    return items
+
+
+def macros_state(mode):
+    most, name_max, text_max = MACRO_LIMITS[mode]
+    return {"macros": [dict(m, id=i) for i, m in enumerate(read_macros(mode))],
+            "max": most, "name_max": name_max, "text_max": text_max}
+
+
+def write_macros(mode, items):
+    path = settings.MACRO_FILES[mode]
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="latin-1") as f:
+        f.write("".join("%s\t%s\n" % (m["name"], m["text"]) for m in items))
+        f.flush()
+        os.fsync(f.fileno())   # /mnt is FAT on the SD card, as the GUI does
+    os.replace(tmp, path)
+
+
+def macro_entry(mode):
+    """Name and text of the request: printable ASCII, not empty, within the GUI's lengths."""
+    _, name_max, text_max = MACRO_LIMITS[mode]
+    data = bottle.request.json
+    if not isinstance(data, dict):
+        raise ValueError("Invalid request")
+    name, text = str(data.get("name", "")).strip(), str(data.get("text", "")).strip()
+    for what, value, most in (("Name", name, name_max), ("Text", text, text_max)):
+        if not value or len(value) > most or not all(" " <= c <= "~" for c in value):
+            raise ValueError("%s: 1 to %d characters, letters, digits and symbols only" % (what, most))
+    return {"name": name, "text": text}
+
+
+def change_macros(mode, fn):
+    """Read the file, let fn change the list (ValueError: refused), write it back."""
+    if mode not in settings.MACRO_FILES:
+        return api_error(404, "No such mode")
+    try:
+        items = read_macros(mode)
+        fn(items)
+        write_macros(mode, items)
+    except ValueError as ex:
+        return api_error(400, str(ex))
+    except OSError as ex:
+        return api_error(500, f"Can't save: {ex}")
+    return macros_state(mode)
+
+
+def macro_index(items, id):
+    if not 0 <= id < len(items):
+        raise ValueError("That macro is gone, reload the page")
+    return id
+
+
+@app.get('/api/macros/<mode>')
+def get_macros(mode):
+    if mode not in settings.MACRO_FILES:
+        return api_error(404, "No such mode")
+    return macros_state(mode)
+
+
+@app.post('/api/macros/<mode>')
+def add_macro(mode):
+    def add(items):
+        if len(items) >= MACRO_LIMITS[mode][0]:
+            raise ValueError("All %d macros are used, delete one first" % MACRO_LIMITS[mode][0])
+        items.append(macro_entry(mode))
+    return change_macros(mode, add)
+
+
+@app.put('/api/macros/<mode>/<id:int>')
+def set_macro(mode, id):
+    def put(items):
+        items[macro_index(items, id)] = macro_entry(mode)
+    return change_macros(mode, put)
+
+
+@app.delete('/api/macros/<mode>/<id:int>')
+def delete_macro(mode, id):
+    return change_macros(mode, lambda items: items.pop(macro_index(items, id)))
+
+
+@app.post('/api/macros/<mode>/<id:int>/up')
+def move_macro_up(mode, id):
+    def up(items):
+        i = macro_index(items, id)
+        if i > 0:
+            items[i - 1], items[i] = items[i], items[i - 1]
+    return change_macros(mode, up)
+
+
+# JS8 INFO and STATUS answers: the INFO= and STATUS= lines of js8_texts.txt (src/dialog_js8.c, TEXT_MAX),
+# read when the JS8 window opens. The other lines (groups, alerts, spot form) are kept as they are.
+JS8_TEXT_MAX = 64
+
+
+def read_js8_texts():
+    texts = {"info": "", "status": ""}
+    try:
+        with open(settings.JS8_TEXTS_FILE, encoding="latin-1") as f:
+            for line in f:
+                key, eq, val = line.rstrip("\r\n").partition("=")
+                if eq and key in ("INFO", "STATUS"):
+                    texts[key.lower()] = val[:JS8_TEXT_MAX]   # a key given twice: the last, as the GUI
+    except FileNotFoundError:
+        pass
+    return dict(texts, max=JS8_TEXT_MAX)
+
+
+@app.get('/api/js8_texts')
+def get_js8_texts():
+    return read_js8_texts()
+
+
+@app.put('/api/js8_texts')
+def set_js8_texts():
+    data = bottle.request.json
+    if not isinstance(data, dict):
+        return api_error(400, "Invalid request")
+    new = {}
+    for key in ("info", "status"):
+        val = str(data.get(key, "")).strip()
+        if len(val) > JS8_TEXT_MAX or not all(" " <= c <= "~" for c in val):
+            return api_error(400, "%s: up to %d characters, letters, digits and symbols only"
+                             % (key.upper(), JS8_TEXT_MAX))
+        new[key] = val
+    path = settings.JS8_TEXTS_FILE
+    try:
+        try:
+            with open(path, encoding="latin-1", newline="") as f:
+                keep = [ln for ln in f if ln.partition("=")[0] not in ("INFO", "STATUS")]
+        except FileNotFoundError:
+            keep = []
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="latin-1", newline="") as f:
+            f.write("INFO=%s\nSTATUS=%s\n" % (new["info"], new["status"]) + "".join(keep))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except OSError as ex:
+        return api_error(500, f"Can't save: {ex}")
+    return read_js8_texts()
+
+
 def read_channels():
     """Valid channels from channels.json; invalid ones are skipped like the GUI does."""
     try:
@@ -1371,64 +1653,6 @@ def delete_cluster_server(index):
     del servers[index]
     return cluster_save(host, port, servers)
 
-
-# Main routes
-
-@app.route('/static/<filepath:path>')
-def server_static(filepath):
-    # The radio's WiFi is slow: send static files gzipped and let the browser keep them
-    response = bottle.static_file(filepath, root=STATIC_PATH)
-    if isinstance(response, bottle.HTTPError) or response.status_code != 200:
-        return response
-    response.set_header('Cache-Control', 'max-age=86400')
-    if gzip and 'gzip' in bottle.request.headers.get('Accept-Encoding', ''):
-        if filepath not in _gzip_cache:
-            with open(STATIC_PATH.joinpath(filepath), 'rb') as f:
-                _gzip_cache[filepath] = gzip.compress(f.read())
-        response.body.close()
-        response.body = _gzip_cache[filepath]
-        response.set_header('Content-Encoding', 'gzip')
-        response.set_header('Content-Length', str(len(response.body)))
-    return response
-
-
-_gzip_cache = {}
-
-
-@app.route('/')
-def home():
-    return bottle.template('index')
-
-
-@app.route('/bands')
-def bands():
-    return bottle.template('bands')
-
-
-@app.route('/digital_modes')
-def digital_modes():
-    return bottle.template('digital_modes')
-
-
-@app.route('/files/')
-@app.route('/files/<filepath:path>')
-@app.route('/files/<filepath:path>/')
-def files(filepath=""):
-    path = pathlib.Path(settings.FILEBROWSER_PATH) / filepath
-    if path.is_file():
-        os.sync()
-        response = bottle.static_file(str(path.relative_to(settings.FILEBROWSER_PATH)), root=settings.FILEBROWSER_PATH, download=True)
-        response.set_header("Cache-Control", "private, no-cache, no-store")
-        return response
-    else:
-        dirs = []
-        files = []
-        for item in sorted(path.iterdir()):
-            if item.is_dir():
-                dirs.append(item.relative_to(path))
-            else:
-                files.append(item.relative_to(path))
-        return bottle.template('files', dirs=dirs, files=files)
 
 # Gallery: screen recordings, audio recordings and screenshots
 
@@ -2108,109 +2332,5 @@ def restore_backup():
         backup_lock.release()
 
 
-# Timezone routes
-
-
-@app.route('/time')
-def time_editor():
-    return bottle.template('time')
-
-
-@app.get('/api/get_time')
-def get_time():
-    tz = timezone(timedelta())
-    server_time = datetime.now(tz).isoformat()
-    bottle.response.content_type = 'application/json'
-    return {"server_time": server_time}
-
-
-def update_time_by_ntp(server_address):
-    ntp_args = ["ntpdate", "-u", server_address]
-    p = subprocess.Popen(
-        ntp_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    try:
-        _, errs = p.communicate(timeout=20)
-    except subprocess.TimeoutExpired:
-        p.kill()
-        _, errs = p.communicate()
-        bottle.response.status = 500
-        return {"status": "error", "msg": "NTP update timeout"}
-
-    if p.returncode != 0:
-        bottle.response.status = 500
-        return {"status": "error", "msg": f"NTP update failed: {errs.decode()}"}
-
-    return {"status": "success", "msg": "NTP update successful"}
-
-
-@app.post('/api/update_time')
-def update_time():
-    data = bottle.request.json
-
-    update_mode = data.get("update_mode")
-    if not update_mode:
-        bottle.response.status = 400
-        return {"status": "error", "msg": "update_mode is required"}
-
-    if update_mode == "ntp":
-        server_address = data.get("server_address")
-        return update_time_by_ntp(server_address)
-
-    elif update_mode == "manual":
-        manual_time = data.get("manual_time")
-        if not manual_time:
-            bottle.response.status = 400
-            return {"status": "error", "msg": "manual_time is required"}
-
-        try:
-            # Update system time manually
-            manual_time = datetime.strptime(manual_time, "%Y-%m-%d %H:%M:%S")
-            subprocess.run(
-                ["date", "-s", manual_time.strftime("%Y-%m-%d %H:%M:%S")], check=True)
-            return {"status": "success", "msg": "Server time updated manually"}
-        except Exception as e:
-            bottle.response.status = 500
-            return {"status": "error", "msg": f"Failed to set manual time: {str(e)}"}
-
-    else:
-        bottle.response.status = 400
-        return {"status": "error", "msg": f"unknown update_mode: {update_mode}"}
-
-
-@app.get('/api/get_timezone')
-def get_timezone():
-    """Get the current server timezone."""
-    try:
-        p = subprocess.run(["realpath", "/etc/localtime"],
-                           stdout=subprocess.PIPE, check=True)
-        timezone_path = p.stdout.decode().strip()
-        tz_list = timezone_path.split("/posix/")
-        if len(tz_list) < 2:
-            tz_list = timezone_path.split("/zoneinfo/")
-        tz = tz_list[-1]
-        return {"timezone": tz}
-    except Exception as e:
-        bottle.response.status = 500
-        return {"status": "error", "msg": f"Failed to fetch timezone: {str(e)}"}
-
-
-@app.post('/api/set_timezone')
-def set_timezone():
-    """Set the server timezone."""
-    data = bottle.request.json
-    timezone = data.get("timezone")
-    if not timezone:
-        bottle.response.status = 400
-        return {"status": "error", "msg": "Timezone is required"}
-
-    target_tz = f"/usr/share/zoneinfo/{timezone}"
-    if not os.path.exists(target_tz):
-        bottle.response.status = 400
-        return {"status": "error", "msg": f"Invalid timezone: {timezone}"}
-
-    try:
-        subprocess.run(["ln", "-sf", target_tz, "/etc/localtime"], check=True)
-        return {"status": "success", "msg": "Timezone updated successfully"}
-    except subprocess.CalledProcessError as e:
-        bottle.response.status = 500
-        return {"status": "error", "msg": f"Failed to set timezone: {str(e)}"}
+# The Bands, Digital modes, Time and Files pages, static files: config_pages.py adds their routes to app
+from . import config_pages   # noqa: E402,F401  (last: it imports app and api_error from here)

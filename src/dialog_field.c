@@ -25,6 +25,7 @@
 #include "events.h"
 #include "field/bands.h"
 #include "field/flog.h"
+#include "field/qsy.h"
 #include "field/rbn.h"
 #include "field/refs.h"
 #include "gps.h"
@@ -44,6 +45,7 @@
 #include "vol.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdarg.h>
@@ -77,7 +79,7 @@
 #define STATUS_H    34
 #define MAX_NEAR    30
 #define MAX_QSO     200
-#define HOME_TILES  5       /* SOTA, POTA, WWBOTA, HOTA, Bands; 6 shows LOG again (hidden for now) */
+#define HOME_TILES  6       /* SOTA, POTA, WWBOTA, HOTA, Bands, Log (back in 0.127, its QRZ upload experimental) */
 #define GPS_MAX_AGE 600     /* s */
 #define PHONE_MAX_AGE 1800
 
@@ -132,6 +134,8 @@ static int         qsos_n;
 
 static atomic_bool busy;            /* an x6100-field job runs */
 static bool        updating;        /* the reference list downloads */
+static lv_timer_t *update_timer;    /* shows x6100-field's progress while updating */
+static char        update_text[96];
 static bool        end_armed;
 static bool        spotted;      /* this activation is on pota.app / wwbota.org / cqhota.app: End posts a QRT spot */
 static char        wwbota_id[48]; /* wwbota.org's id of this activation's spot: QSY and QRT update it */
@@ -139,13 +143,11 @@ static time_t      end_armed_at;
 static bool        spot_armed;   /* Spot asks before posting: a second press within 4 s sends */
 static time_t      spot_armed_at;
 /* POTA, WWBOTA and HOTA auto spot: at the start of the activation, and again after a QSY (frequency 1 kHz away
- * or another mode) once the new one has stayed for QSY_SETTLE_S */
-#define QSY_SETTLE_S   60       /* a minute on the new frequency: working there, not looking for a gap */
-#define QSY_MIN_GAP_S  300      /* at most one auto spot in 5 minutes: the spot sites are not flooded */
+ * or another mode) once we transmitted there and stayed QSY_SETTLE_S (field/qsy.c) */
 static lv_timer_t *qsy_timer;
 static int32_t     spot_hz;      /* where the last spot said we are */
 static char        spot_mode[8];
-static time_t      spot_at, qsy_at;
+static field_qsy_t qsy;
 
 /* The remote state, written on the LVGL thread, read by the remote server */
 static pthread_mutex_t remote_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -487,7 +489,15 @@ static void near_lookup(bool force) {
 
     if (!position(&lat, &lon, &src, &age))
         return;
-    /* Again when the program changed or we moved 300 m */
+    /* Again when the list was replaced (the radio's update, X6100 Link's upload), the program changed or we moved 300 m */
+    static time_t refs_mtime;
+    static ino_t  refs_ino;
+    struct stat   sb;
+    if (stat(REFS_PATH, &sb) == 0 && (sb.st_mtime != refs_mtime || sb.st_ino != refs_ino)) {
+        refs_mtime = sb.st_mtime;
+        refs_ino   = sb.st_ino;
+        force      = true;
+    }
     if (!force && near_prog == st.prog && near_n != -2 && fabs(lat - near_lat) < 0.003 && fabs(lon - near_lon) < 0.004)
         return;
     near_result_t *r = calloc(1, sizeof(*r));
@@ -652,6 +662,8 @@ static void list_select(int k) {
 static void page_cb(button_data_t *b);
 static void open_cb(button_data_t *b);
 static void boot_cb(button_data_t *b);
+static void respot_cb(button_data_t *b);
+static const char *respot_label(void);
 static void exit_cb(button_data_t *b);
 static void back_cb(button_data_t *b);
 static void activate_cb(button_data_t *b);
@@ -676,6 +688,7 @@ static button_data_t b_home   = {.type = BTN_TEXT, .label = "FIELD OPS"};
 static button_data_t b_reccq  = {.type = BTN_TEXT_FN, .label_fn = rec_cq_label, .press = rec_cq_cb};
 static button_data_t b_open   = {.type = BTN_TEXT, .label = "Select", .press = open_cb};
 static button_data_t b_boot   = {.type = BTN_TEXT_FN, .label_fn = boot_label, .press = boot_cb};
+static button_data_t b_respot = {.type = BTN_TEXT_FN, .label_fn = respot_label, .press = respot_cb};
 static button_data_t b_exit   = {.type = BTN_TEXT, .label = "Radio", .press = exit_cb};
 static button_data_t b_back   = {.type = BTN_TEXT, .label = "Back", .press = back_cb};
 static button_data_t b_ref1   = {.type = BTN_TEXT, .label = "(1:2)", .press = page_cb};
@@ -698,7 +711,7 @@ static button_data_t b_tune   = {.type = BTN_TEXT, .label = "Use\nband", .press 
 static button_data_t b_logpg  = {.type = BTN_TEXT, .label = "LOGBOOK"};
 static button_data_t b_qrz    = {.type = BTN_TEXT, .label = "Upload\nQRZ", .press = qrz_cb};
 
-static buttons_page_t page_home  = {.items = {&b_home, &b_open, &b_boot, NULL, &b_exit}};
+static buttons_page_t page_home  = {.items = {&b_home, &b_open, &b_boot, &b_respot, &b_exit}};
 static buttons_page_t page_ref1  = {.items = {&b_ref1, &b_act, &b_spot, &b_ref, &b_back}};
 static buttons_page_t page_ref2  = {.items = {&b_ref2, &b_update, &b_reccq, &b_cqlvl, &b_back}};
 static buttons_page_t page_act1  = {.items = {&b_act1, &b_cq, &b_log, &b_spot, &b_back}};
@@ -760,6 +773,16 @@ static void page_cb(button_data_t *b) {
 static void boot_cb(button_data_t *b) {
     param_i_set(cfg_field_boot, !param_i_get(cfg_field_boot));
     buttons_refresh(&b_boot);
+}
+
+/* POTA, WWBOTA, HOTA: spot again after a QSY once we transmitted there */
+static const char *respot_label(void) {
+    return param_i_get(cfg_field_respot) ? "Re-spot\nOn" : "Re-spot\nOff";
+}
+
+static void respot_cb(button_data_t *b) {
+    param_i_set(cfg_field_respot, !param_i_get(cfg_field_respot));
+    buttons_refresh(&b_respot);
 }
 
 static void exit_cb(button_data_t *b) {
@@ -852,7 +875,10 @@ static void build_home(void) {
         lv_obj_add_event_cb(t, tile_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)k);
 
         icon(t, tiles[k].icon, 96, (tw - 96) / 2 - 2, 24);
-        lv_obj_t *n = label(t, VF(32), accent(k), 0, 140, tw - 4);
+        const lv_font_t *nf = theme_shape.vision ? VF(28) : VF(32);   /* VISION: WWBOTA on one line */
+        if (lv_txt_get_width(tiles[k].name, strlen(tiles[k].name), nf, 0, LV_TEXT_FLAG_NONE) > tw - 4)
+            nf = VF(28);    /* six tiles: WWBOTA one size down, the others as they are */
+        lv_obj_t *n = label(t, nf, accent(k), 0, 140, tw - 4);
         lv_obj_t *s = label(t, VF(20), lv_color_mix(accent(k), TC(text), 160), 0, 186, tw - 4);
 
         lv_label_set_text(n, tiles[k].name);
@@ -860,7 +886,7 @@ static void build_home(void) {
         lv_obj_set_style_text_align(n, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_style_text_align(s, LV_TEXT_ALIGN_CENTER, 0);
     }
-    lv_label_set_text(status, "MFK: choose, press to open.   GEN: back to the radio, nothing is lost");
+    lv_label_set_text(status, "MFK: choose, press to open.   GEN: back to the radio");
     buttons_load_page(&page_home);
 }
 
@@ -934,7 +960,7 @@ static void build_ref(void) {
         list_select(sel);
     }
     prog_info_update();
-    lv_label_set_text(status, updating ? "Downloading the reference lists: about 3 minutes..."
+    lv_label_set_text(status, updating ? (update_text[0] ? update_text : "Downloading the reference lists...")
                               : near_n == -1 || (near_n == 0 && near_prog == st.prog)
                                   ? "No reference list yet: Update list (page 2), with WiFi"
                                   : "MFK: choose the reference, press to use it.  Start: begin the activation");
@@ -1118,11 +1144,13 @@ static void build_bands(void) {
 
 static void build_log(void) {
     static const lv_coord_t widths[] = {52, 90, 200, 80, 80, 140};
-    char                    row[120], t[48];
+    char                    row[120], t[80];   /* room for the reference and the red TEST */
     struct tm               tm;
 
-    snprintf(t, sizeof(t), "%s LOGBOOK  %s", st.have_ref ? prog_name_of(st.ref.type) : "",
+    /* TEST in red in the title: the page and its QRZ upload are experimental (0.127) */
+    snprintf(t, sizeof(t), "%s LOGBOOK  %s  #FF2020 TEST#", st.have_ref ? prog_name_of(st.ref.type) : "",
              st.have_ref ? st.ref.ref : "");
+    lv_label_set_recolor(title, true);
     head_set("log", t);
     list_create(body, 8, 36, W - 16, body_h - STATUS_H - 40, widths, 6);
     list_head("N\tTIME\tCALL\tBAND\tMODE\tRST S / R", 13, 6);
@@ -1298,18 +1326,15 @@ static bool spot_job(bool qrt) {
 }
 
 static void qsy_cb(lv_timer_t *t) {
-    time_t now = time(NULL);
-    bool   moved;
+    bool moved;
 
-    if (!st.active || st.ref.type == 'S' || !spot_at) {
+    if (!st.active || st.ref.type == 'S' || !qsy.spot_at) {
         return;
     }
     moved = abs(cparam_i_get(cfg_fg_freq) - spot_hz) >= 1000 || strcmp(adif_mode(), spot_mode);
-    if (!moved) {
-        qsy_at = 0;             /* back where the spot says */
-    } else if (!qsy_at) {
-        qsy_at = now;
-    } else if (now - qsy_at >= QSY_SETTLE_S && now - spot_at >= QSY_MIN_GAP_S && !atomic_load(&busy)) {
+    /* ponytail: TX polled every 500 ms, a shorter transmission is missed */
+    if (field_qsy_step(&qsy, param_i_get(cfg_field_respot), moved, radio_get_state() == RADIO_TX, time(NULL))
+        && !atomic_load(&busy)) {
         spot_to(false);         /* pota.app only: a cluster spot can't be withdrawn, the old one would stay */
     }
 }
@@ -1346,10 +1371,10 @@ static bool activation_start(void) {
     state_save();
     msg_update_text_fmt("Activation started: %s", st.ref.ref);
     refresh();
-    spot_at = 0;
+    qsy.spot_at = 0;
     if (st.ref.type != 'S') {
         spot_to(true);               /* auto spot; QSYs spot again (qsy_cb) */
-        if (!qsy_timer) qsy_timer = lv_timer_create(qsy_cb, 2000, NULL);
+        if (!qsy_timer) qsy_timer = lv_timer_create(qsy_cb, 500, NULL);
     }
     return true;
 }
@@ -1425,8 +1450,7 @@ static void spot_to(bool cluster) {
     const char *p = prog_name_of(st.ref.type);
     spot_hz = cparam_i_get(cfg_fg_freq);
     snprintf(spot_mode, sizeof(spot_mode), "%s", adif_mode());
-    spot_at = time(NULL);
-    qsy_at  = 0;
+    qsy.spot_at = time(NULL);
     snprintf(comment, sizeof(comment), "%s %s %s", p, st.ref.ref, adif_mode());
     if (cluster)
         cluster_client_send_spot(cparam_i_get(cfg_fg_freq) / 1000.0, my_call(), comment);   /* the DX clusters too */
@@ -1507,11 +1531,9 @@ static bool day_log_add(const field_qso_t *q, const char *me) {
     snprintf(sta.call, sizeof(sta.call), "%s", me);
     snprintf(sta.grid, sizeof(sta.grid), "%s", station_qth() ? station_qth() : "");
     gmtime_r(&q->t, &tm);
-    mkdir(FIELD_DIR, 0755);
-    mkdir(LOGS_DIR, 0755);
     snprintf(path, sizeof(path), "%s/%04d%02d%02d.adi", LOGS_DIR, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
     if (!field_log_add(path, q, &sta)) {
-        msg_update_text_fmt("Log: can't write %s", path);
+        msg_schedule_text_ms(9000, "QSO not saved: %s", field_log_error(errno));   /* long: it scrolls */
         return false;
     }
     return true;
@@ -1581,7 +1603,7 @@ static bool log_add(const char *call_in, const char *rst_s, const char *rst_r, c
     sta.prog = st.ref.type;
     snprintf(sta.ref, sizeof(sta.ref), "%s", st.ref.ref);
     if (!field_log_add(st.log, &q, &sta)) {
-        msg_update_text_fmt("Log: can't write %s", st.log);
+        msg_schedule_text_ms(9000, "QSO not saved: %s", field_log_error(errno));   /* long: it scrolls */
         return false;
     }
     qsos_n = field_log_read(st.log, qsos, MAX_QSO);
@@ -1664,8 +1686,45 @@ static void ref_cb(button_data_t *b) {
     textarea_window_open_w_label(ref_ok_cb, kbd_cancel, "Reference: ");
 }
 
+/* "<list n> <lists> <bytes> <total> <retry> <name>" in .update.progress (x6100-field) */
+static void update_timer_cb(lv_timer_t *t) {
+    FILE     *f = fopen(FIELD_DIR "/.update.progress", "r");
+    int       n, lists, retry, len;
+    long long done, total;
+    char      name[16], text[sizeof(update_text)];
+    bool      ok;
+
+    if (!f)
+        return;
+    ok = fscanf(f, "%d %d %lld %lld %d %15s", &n, &lists, &done, &total, &retry, name) == 6;
+    fclose(f);
+    if (!ok)
+        return;
+    len = snprintf(text, sizeof(text), "Updating %s (%d/%d)", name, n, lists);
+    if (done > 0 && done == total)   /* downloaded: x6100-field reads it (SOTA: about 2 minutes) */
+        len += snprintf(text + len, sizeof(text) - len, ": %.1f MB, reading it...", done / 1e6);
+    else if (done > 0 && total > 0)
+        len += snprintf(text + len, sizeof(text) - len, ": %.1f / %.1f MB", done / 1e6, total / 1e6);
+    else if (done > 0)
+        len += snprintf(text + len, sizeof(text) - len, ": %.1f MB", done / 1e6);
+    if (retry)
+        snprintf(text + len, sizeof(text) - len, ", retry %d of 5", retry);
+    if (!strcmp(text, update_text))
+        return;
+    strcpy(update_text, text);
+    if (dialog.run && st.screen == SCR_PROG && !st.active)
+        lv_label_set_text(status, text);
+    else
+        msg_update_text_fmt("%s", text);
+}
+
 static void update_done(const char *line) {
     updating = false;
+    if (update_timer) {
+        lv_timer_del(update_timer);
+        update_timer = NULL;
+    }
+    update_text[0] = 0;
     if (!strncmp(line, "ok", 2)) {
         int p = 0, s = 0, b = 0, h = 0;
         sscanf(line, "ok %d %d %d %d", &p, &s, &b, &h);
@@ -1681,9 +1740,11 @@ static void update_done(const char *line) {
 static void list_update(void) {
     if (job_start(update_done, HELPER " update --call %s", my_call()[0] ? my_call() : "unknown")) {
         updating = true;
-        msg_update_text_fmt("Downloading the reference lists: about 3 minutes");
+        msg_update_text_fmt("Downloading the reference lists: up to 10 minutes on a slow WiFi");
         if (dialog.run && st.screen == SCR_PROG && !st.active)
-            lv_label_set_text(status, "Downloading the reference lists: about 3 minutes...");
+            lv_label_set_text(status, "Downloading the reference lists...");
+        if (!update_timer)
+            update_timer = lv_timer_create(update_timer_cb, 1000, NULL);
     }
 }
 
@@ -1734,7 +1795,12 @@ static void qrz_done(const char *line) {
 
     if (sscanf(line, "ok %d %d", &sent, &dup) == 2)
         msg_update_text_fmt("QRZ: %d sent, %d already there", sent, dup);
-    else
+    else if (!strcmp(line, "error no QRZ key")) {
+        /* the message holds 127 characters: the notice goes in two steps */
+        msg_update_text_fmt("No QRZ key: add it on the web page, Field Ops");
+        msg_schedule_text_ms(8000, "Uploading needs a QRZ.com Logbook API key, which QRZ.com only gives with a paid "
+                                   "QRZ.com subscription (XML level or higher).");
+    } else
         msg_update_text_fmt("QRZ: %s", line);
 }
 
@@ -1810,7 +1876,8 @@ static void key_cb(lv_event_t *e) {
         }
     }
     switch (key) {
-        case LV_KEY_ESC:   /* the VOL press: as on the main screen (Back and Radio leave) */
+        case KEY_VOL_PRESS:
+        case LV_KEY_ESC:   /* as on the main screen (Back and Radio leave) */
             main_screen_vol_press();
             break;
         case LV_KEY_UP:
@@ -1968,6 +2035,7 @@ static void construct_cb(lv_obj_t *parent) {
     lv_obj_set_size(body, W, body_h);
     lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE);
     status = label(dialog.obj, VF(20), TC(text_dim), 14, h - STATUS_H + 4, W - 28);
+    lv_label_set_long_mode(status, LV_LABEL_LONG_SCROLL_CIRCULAR);   /* one line: a long hint scrolls, never under the buttons */
     chip_create(&chips[0], "VOL", h - STATUS_H + 1);
     chip_create(&chips[1], "MFK", h - STATUS_H + 1);
 
@@ -2009,7 +2077,7 @@ static void destruct_cb(void) {
 
 static void remote_update(void) {
     static const char *screens[] = {"HOME", "PROG", "BANDS", "LOG"};
-    char               buf[sizeof(remote_json)], name[64];
+    char               buf[sizeof(remote_json)], name[64], pos[32] = "";
     double             lat, lon;
     const char        *src;
     int                age, n;
@@ -2019,12 +2087,14 @@ static void remote_update(void) {
     for (char *p = name; *p; p++)
         if (*p == '"' || *p == '\\' || (unsigned char)*p < ' ')
             *p = ' ';
-    position(&lat, &lon, &src, &age);
+    /* pos: where the nearest are looked up from; X6100 Link sends the lists around it */
+    if (position(&lat, &lon, &src, &age))
+        snprintf(pos, sizeof(pos), "%.4f,%.4f", lat, lon);
     n = snprintf(buf, sizeof(buf),
-                 "{\"scr\":\"%s\",\"prog\":\"%s\",\"ref\":\"%s\",\"name\":\"%s\",\"alt\":%d,\"pts\":%d,\"src\":\"%s\","
+                 "{\"scr\":\"%s\",\"prog\":\"%s\",\"ref\":\"%s\",\"name\":\"%s\",\"alt\":%d,\"pts\":%d,\"src\":\"%s\",\"pos\":\"%s\","
                  "\"active\":%d,\"start\":%lld,\"qsos\":%d,\"last\":\"%s\",\"log\":\"%s\",\"busy\":%d,\"near\":[",
                  screens[st.screen], prog_name(), st.have_ref ? st.ref.ref : "", name,
-                 st.have_ref ? st.ref.alt_m : 0, st.have_ref ? st.ref.points : 0, src, st.active,
+                 st.have_ref ? st.ref.alt_m : 0, st.have_ref ? st.ref.points : 0, src, pos, st.active,
                  (long long)st.start, st.active ? qsos_n : 0, st.active && qsos_n ? qsos[qsos_n - 1].call : "",
                  st.log[0] ? strrchr(st.log, '/') + 1 : "", updating);
     for (int k = 0; k < near_n && k < 10 && near_prog == st.prog && n < (int)sizeof(buf) - 100; k++) {

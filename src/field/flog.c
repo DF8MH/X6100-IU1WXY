@@ -9,10 +9,12 @@
 #include "flog.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static const struct {
@@ -81,19 +83,56 @@ size_t field_adif_record(char *buf, size_t size, const field_qso_t *q, const fie
 }
 
 bool field_log_add(const char *path, const field_qso_t *q, const field_station_t *st) {
-    char  rec[768];
+    char  rec[768], dir[256];
+    int   mk = 0, err = 0;
+
+    /* its folders first: a new or rewritten microSD has none */
+    snprintf(dir, sizeof(dir), "%s", path);
+    for (char *p = strchr(dir + 1, '/'); p; p = strchr(p + 1, '/')) {
+        *p = 0;
+        if (mkdir(dir, 0755) != 0 && errno != EEXIST)
+            mk = errno;
+        *p = '/';
+    }
+
     bool  is_new = access(path, F_OK) != 0;
     FILE *f      = fopen(path, "a");
 
-    if (!f)
+    if (!f) {
+        err = errno == ENOENT && mk ? mk : errno;   /* a folder that could not be made says why */
+        fprintf(stderr, "Log write failed: %s: %s\n", path, strerror(err));
+        errno = err;
         return false;
+    }
     if (is_new)
         fprintf(f, "X6100 Field Ops log\n<ADIF_VER:5>3.1.4 <PROGRAMID:12>X6100-IU1WXY <eoh>\n");
     field_adif_record(rec, sizeof(rec), q, st);
-    bool ok = fputs(rec, f) >= 0;
-    fflush(f);
+    if (fputs(rec, f) < 0 || fflush(f) != 0)
+        err = errno;
     fsync(fileno(f));   /* a QSO is never lost to a power cut */
-    return fclose(f) == 0 && ok;
+    if (fclose(f) != 0 && !err)
+        err = errno;
+    if (err)
+        fprintf(stderr, "Log write failed: %s: %s\n", path, strerror(err));
+    errno = err;
+    return !err;
+}
+
+const char *field_log_error(int err) {
+    switch (err) {
+        case EROFS:
+            return "the microSD has an error and is read-only. Restart the radio; if it happens again, "
+                   "back up and rewrite the microSD";
+        case ENOSPC:
+        case EDQUOT:
+            return "the microSD is full";
+        case EIO:
+            return "the microSD gave a write error. Restart the radio; if it happens again, "
+                   "back up and rewrite the microSD";
+        default:
+            return "the microSD could not be written. Restart the radio; if it happens again, "
+                   "send the diagnostics (Settings > Info)";
+    }
 }
 
 /* The value of <tag:n> in the record, "" when missing */

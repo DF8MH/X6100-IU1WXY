@@ -77,10 +77,8 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_rfgain{"rfgain", 63, 0, 100,
         StorageType::GLOBAL, pending_writes_, &global_params_};
-    Parameter<int32_t> p_wefax_align{"wefax_align", 0, -1300, 1300,
-        StorageType::GLOBAL, pending_writes_, &global_params_};
-    Parameter<int32_t> p_wefax_tilt{"wefax_tilt", 0, -400, 400,
-        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_wefax_align{"wefax_align", 0, -1300, 1300, StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_wefax_tilt{"wefax_tilt", 0, -400, 400, StorageType::GLOBAL, pending_writes_, &global_params_};
 
     Parameter<int32_t> p_rit{"rit", 0, -1500, 1500,
         StorageType::GLOBAL, pending_writes_, &global_params_};
@@ -137,6 +135,9 @@ class SettingsManager {
     // Waterfall colours: 0 the theme's, then classic, gauss, grey, fire, ice, rainbow (theme.c)
     Parameter<int32_t> p_wf_palette{"wf_palette", 0, 0, 6,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Filter passband on the spectrum and waterfall: 0 the theme's, then the presets (theme_filter_color())
+    Parameter<int32_t> p_filter_color{"filter_color", 0, 0, 8,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     // Spectrum trace and fill: 0xRRGGBB, -1 the theme's (the fill: as the trace)
     Parameter<int32_t> p_spectrum_line_color{"spectrum_line_color", -1, -1, 0xffffff,
         StorageType::GLOBAL, pending_writes_, &global_params_};
@@ -161,6 +162,9 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_band_plan{"band_plan", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // The broadcast on air (EiBi) in the frequency strip, in place of the band
+    Parameter<int32_t> p_broadcast_name{"broadcast_name", true, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     // Tuning snap to the cluster spots on the waterfall: detents held on a
     // spot (0 = off) and the most detents per event that still snap (slow)
     Parameter<int32_t> p_spot_snap_hold{"spot_snap_hold", 2, 0, 5,
@@ -181,8 +185,9 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_waterfall_ref{"waterfall_ref", 0, -40, 20,
         StorageType::GLOBAL, pending_writes_, &global_params_};
-    // S-meter calibration, dB added to the reading (Settings only). -22: this radio against an
-    // IC-7300 on the same antenna. RF gain is compensated on its own (meter.c)
+    // S-meter calibration, dB added to the reading. -22: this radio against an IC-7300 on the
+    // same antenna. Now only the start value of p_band_smeter_cal on bands never calibrated.
+    // RF gain is compensated on its own (meter.c)
     Parameter<int32_t> p_smeter_cal{"smeter_cal", -22, -40, 20,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Waterfall lines/s: 1 = 5, 2 = 7.5 (frames averaged, less noisy),
@@ -201,6 +206,9 @@ class SettingsManager {
     // VOX
     Parameter<int32_t> p_vox_en{"vox_en", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Settings > Audio > Boot sound: "CQ CQ" in CW with the boot animation (bootanim/bootanim.c reads it from the DB)
+    Parameter<int32_t> p_boot_sound{"boot_sound", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_vox_gain{"vox_gain", 0, 0, 100,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_vox_ag{"vox_ag", 0, 0, 100,
@@ -216,6 +224,9 @@ class SettingsManager {
     Parameter<int32_t> p_ft8_auto{"ft8_auto", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_ft8_hold_freq{"ft8_hold_freq", true, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    /* "For you": the callers pinned under the list (off: the list only) */
+    Parameter<int32_t> p_ft8_foryou{"ft8_foryou", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_ft8_max_repeats{"ft8_max_repeats", 6, {},
         StorageType::GLOBAL, pending_writes_, {}, &global_params_};
@@ -237,6 +248,9 @@ class SettingsManager {
 
     // Field Ops: start in Field Ops at power on
     Parameter<int32_t> p_field_boot{"field_boot", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Field Ops: spot again after a QSY (once transmitted there), on by default
+    Parameter<int32_t> p_field_respot{"field_respot", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Voice messages (the Field Ops voice CQ too): playback level, dB
     Parameter<int32_t> p_voice_msg_gain{"voice_msg_gain", 0, -20, 10,
@@ -272,6 +286,20 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t>            p_cw_peak_q{"cw_peak_q", 1, 1, 16,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // USB paddle (paddle_keyer.c): per source the left code | the right one << 16
+    Parameter<int32_t> p_paddle_kbd{"paddle_kbd", 29 | 97 << 16, 0, INT32_MAX,        // Left Ctrl, Right Ctrl
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_paddle_btn{"paddle_btn", 0x110 | 0x111 << 16, 0, INT32_MAX,  // BTN_LEFT, BTN_RIGHT
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_paddle_midi{"paddle_midi", 1 | 2 << 16, 0, INT32_MAX,        // Vail adapter notes
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_paddle_ser{"paddle_ser", 0x020 | 0x100 << 16, 0, INT32_MAX,  // TIOCM_CTS, TIOCM_DSR
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    Parameter<int32_t> p_paddle_swap{"paddle_swap", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Off: a USB GPS on ttyUSB could hold CTS/DSR and key the radio
+    Parameter<int32_t> p_paddle_serial{"paddle_serial", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
 
     // CW trainer (Koch level = number of characters in use, 2 = K M)
     Parameter<int32_t> p_cwt_level{"cwt_level", 2, 2, 40,
@@ -290,6 +318,9 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Decoded words split and coloured: calls, abbreviations, RST (cw_parse.c)
     Parameter<int32_t> p_cw_parse{"cw_parse", true, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // CW keyboard and the main screen CW line: each letter keyed as typed
+    Parameter<int32_t> p_cw_live{"cw_live", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
 
     // AGC
@@ -359,6 +390,11 @@ class SettingsManager {
     // in the DB: 0.2 dB <-> 2).
     Parameter<float, int32_t, 10> p_band_dac_offset{"dac_offset", 0.0f, {},
         StorageType::BAND, pending_writes_, {}, &band_params_};
+    // S-meter calibration of this band, dB (Settings, S-meter cal): the baseband reads a
+    // different level on each band. A band never set takes the old global smeter_cal
+    Parameter<int32_t> p_band_smeter_cal{"smeter_cal", -22, [](int32_t v) { return clip(v, -40, 40); },
+        StorageType::BAND, pending_writes_, [this] { p_band_smeter_cal.set_quiet(p_smeter_cal.get()); },
+        &band_params_};
     // BAND VFO params (context_id = bands_id). These are NOT in the band
     // registry: load_band_vfo() loads them in explicit dependency order so the
     // DB restore/clamp rules can reference already-loaded siblings.

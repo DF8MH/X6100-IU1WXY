@@ -6,7 +6,7 @@
 
 #include "macros.hpp"
 
-#include "qsolog.hpp" // format_snr(): "+05", "-12", as desktop's Varicode::formatSNR()
+#include "qso_book.hpp" // format_snr(): "+05", "-12", as desktop's Varicode::formatSNR()
 
 #include <cctype>
 #include <cstdio>

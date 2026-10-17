@@ -61,9 +61,16 @@ const lv_font_t *font_down(const lv_font_t *f, int steps) {
 void fonts_scale(int steps) {
     static lv_font_t was[N_FONTS];
 
-    for (unsigned i = 0; i < N_FONTS; i++) was[i] = *sony[i];
+    for (unsigned i = 0; i < N_FONTS; i++) {
+        if (!saved) orig[i] = *sony[i];   /* without fonts_apply() first (the UI harness) */
+        was[i] = *sony[i];
+    }
+    saved = true;
     for (unsigned i = 0; i + 1 < N_FONTS; i++) {
         unsigned to = i + steps < N_FONTS - 1 ? i + steps : N_FONTS - 2;
         *sony[i]    = was[to];
+        /* what the bigger one lacks (the symbols: only Sony's 24 and 38 have them) from Sony's
+         * size the code asked for: an empty box otherwise (the knobs' arrows) */
+        sony[i]->fallback = &orig[i];
     }
 }

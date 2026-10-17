@@ -1,32 +1,42 @@
+# Builds the full SD card image on GitHub: this repository is the GUI package of
+# gdyuldin's AetherX6100Buildroot, built from the checkout instead of upstream.
+# Copyright (c) 2026 Giovanni Ricciardi IU1WXY
 name: Build image
-# By hand only (Actions > Build image > Run workflow): the releases are built locally with the image
-# attached, a run on every tag only added a second copy (and took 2 h, failing at times)
+
+# By hand only (Actions > Build image > Run workflow): releases are built
+# locally and the image attached by hand; building on every tag only made a
+# second copy, took 2 hours and failed now and then.
 on:
   workflow_dispatch:
 
-# The repo's default token is read-only; the Release step needs to create
-# the release and attach the image.
+# Write access for the Release step (the default token is read-only)
 permissions:
   contents: write
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
     defaults:
       run:
         shell: bash
 
+    env:
+      # buildroot external tree, package and config files patched below
+      # (X6CI_ prefix: these reach make too, no buildroot variable has it)
+      X6CI_BR_EXT: AetherX6100Buildroot/br2_external
+      X6CI_GUI_MK: AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
+      X6CI_WEB_MK: AetherX6100Buildroot/br2_external/package/x6100-webserver/x6100_webserver.mk
+      X6CI_DEFCONFIG: AetherX6100Buildroot/br2_external/configs/X6100_defconfig
+      X6CI_IMAGES: AetherX6100Buildroot/build/images
+      X6CI_IMG: sdcard.${{ github.ref_name }}.img
+
     steps:
+    # A full buildroot build needs more room than the runner leaves free:
+    # drop the SDKs we do not use (the tool cache and the big packages stay)
     - name: Free Disk Space (Ubuntu)
       uses: jlumbroso/free-disk-space@main
       with:
-        # this might remove tools that are actually needed,
-        # if set to "true" but frees about 6 GB
         tool-cache: false
-
-        # all of these default to true, but feel free to set to
-        # "false" if necessary for your workflow
         android: true
         dotnet: true
         haskell: true
@@ -37,7 +47,7 @@ jobs:
       run: |
         df -h
         pwd
-    # Checkout the repository to the GitHub Actions runner
+
     - name: Checkout GUI
       uses: actions/checkout@v4
       with:
@@ -51,43 +61,44 @@ jobs:
         repository: gdyuldin/AetherX6100Buildroot
         path: AetherX6100Buildroot
 
+    # Build the GUI package from the checkout above (local site, submodules
+    # already there) instead of cloning gdyuldin/x6100_gui
     - name: Patch GUI mk
       run: |
-        sed -i "s,https://github.com/gdyuldin/x6100_gui,${GITHUB_WORKSPACE}/x6100_gui,g" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
-        sed -i "s,^X6100_GUI_SITE_METHOD = git,X6100_GUI_SITE_METHOD = local,g" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
-        sed -i "s,^X6100_GUI_GIT_SUBMODULES,# X6100_GUI_GIT_SUBMODULES,g" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
+        sed -i "s,https://github.com/gdyuldin/x6100_gui,${GITHUB_WORKSPACE}/x6100_gui,g" $X6CI_GUI_MK
+        sed -i "s,^X6100_GUI_SITE_METHOD = git,X6100_GUI_SITE_METHOD = local,g" $X6CI_GUI_MK
+        sed -i "s,^X6100_GUI_GIT_SUBMODULES,# X6100_GUI_GIT_SUBMODULES,g" $X6CI_GUI_MK
 
     # Web configurator: build the copy vendored in webserver/ instead of
     # fetching gdyuldin/x6100_webserver from GitHub.
     - name: Patch webserver mk
       run: |
-        sed -i "s,^X6100_WEBSERVER_SITE = .*,X6100_WEBSERVER_SITE = ${GITHUB_WORKSPACE}/x6100_gui/webserver,g" AetherX6100Buildroot/br2_external/package/x6100-webserver/x6100_webserver.mk
-        sed -i "s,^X6100_WEBSERVER_SITE_METHOD = git,X6100_WEBSERVER_SITE_METHOD = local,g" AetherX6100Buildroot/br2_external/package/x6100-webserver/x6100_webserver.mk
-        grep "^X6100_WEBSERVER_SITE" AetherX6100Buildroot/br2_external/package/x6100-webserver/x6100_webserver.mk
+        sed -i "s,^X6100_WEBSERVER_SITE = .*,X6100_WEBSERVER_SITE = ${GITHUB_WORKSPACE}/x6100_gui/webserver,g" $X6CI_WEB_MK
+        sed -i "s,^X6100_WEBSERVER_SITE_METHOD = git,X6100_WEBSERVER_SITE_METHOD = local,g" $X6CI_WEB_MK
+        grep "^X6100_WEBSERVER_SITE" $X6CI_WEB_MK
 
-    # JS8 (third-party/js8core) needs Boost headers and single-precision FFTW
-    # (buildroot package fftw-single, already built for liquid-dsp). Boost
-    # with no libraries selected installs headers only.
+    # JS8 needs the Boost headers (Boost with no library selected installs
+    # only those) and single precision FFTW, already built for liquid-dsp.
+    # x6100-field talks HTTPS to POTA and QRZ: root certificates.
+    # The display runs on DRM (lv_drivers/display/drm.c): libdrm.
     - name: Enable JS8 dependencies
       run: |
-        sed -i "s,^X6100_GUI_DEPENDENCIES = \(.*\)$,X6100_GUI_DEPENDENCIES = \1 boost fftw-single," AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
-        echo "BR2_PACKAGE_BOOST=y" >> AetherX6100Buildroot/br2_external/configs/X6100_defconfig
-        # Root certificates: x6100-field talks HTTPS to POTA and QRZ
-        echo "BR2_PACKAGE_CA_CERTIFICATES=y" >> AetherX6100Buildroot/br2_external/configs/X6100_defconfig
-        # The display runs on DRM (lv_drivers/display/drm.c); libdrm is already in the defconfig
-        sed -i "/^X6100_GUI_DEPENDENCIES/s/$/ libdrm/" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
-        grep "^X6100_GUI_DEPENDENCIES" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
+        sed -i "s,^X6100_GUI_DEPENDENCIES = \(.*\)$,X6100_GUI_DEPENDENCIES = \1 boost fftw-single," $X6CI_GUI_MK
+        echo "BR2_PACKAGE_BOOST=y" >> $X6CI_DEFCONFIG
+        echo "BR2_PACKAGE_CA_CERTIFICATES=y" >> $X6CI_DEFCONFIG
+        sed -i "/^X6100_GUI_DEPENDENCIES/s/$/ libdrm/" $X6CI_GUI_MK
+        grep "^X6100_GUI_DEPENDENCIES" $X6CI_GUI_MK
 
-    # The GUI has no voice guidance (text-to-speech): drop RHVoice and its
-    # voices from the image. RHVoice was the only package pulling in
-    # PulseAudio, which the GUI still needs, so the GUI selects it instead.
+    # No voice guidance in this GUI: RHVoice and its voices leave the image.
+    # RHVoice was what brought in PulseAudio, which the GUI needs, so the GUI
+    # package selects PulseAudio itself.
     - name: Drop RHVoice
       run: |
-        sed -i "/^X6100_GUI_DEPENDENCIES/s/\brhvoice\b/pulseaudio/" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
-        sed -i "s/select BR2_PACKAGE_RHVOICE$/select BR2_PACKAGE_PULSEAUDIO/" AetherX6100Buildroot/br2_external/package/x6100-gui/Config.in
-        sed -i "/^BR2_PACKAGE_RHVOICE/d" AetherX6100Buildroot/br2_external/configs/X6100_defconfig
-        grep "^X6100_GUI_DEPENDENCIES" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk
-        ! grep -in "rhvoice" AetherX6100Buildroot/br2_external/package/x6100-gui/x6100_gui.mk AetherX6100Buildroot/br2_external/package/x6100-gui/Config.in AetherX6100Buildroot/br2_external/configs/X6100_defconfig
+        sed -i "/^X6100_GUI_DEPENDENCIES/s/\brhvoice\b/pulseaudio/" $X6CI_GUI_MK
+        sed -i "s/select BR2_PACKAGE_RHVOICE$/select BR2_PACKAGE_PULSEAUDIO/" $X6CI_BR_EXT/package/x6100-gui/Config.in
+        sed -i "/^BR2_PACKAGE_RHVOICE/d" $X6CI_DEFCONFIG
+        grep "^X6100_GUI_DEPENDENCIES" $X6CI_GUI_MK
+        ! grep -in "rhvoice" $X6CI_GUI_MK $X6CI_BR_EXT/package/x6100-gui/Config.in $X6CI_DEFCONFIG
 
     # System cleanup:
     # - firmware for PCI/PCIe network cards (the A33 has no PCIe); the USB
@@ -96,27 +107,30 @@ jobs:
     # - one Bluetooth setup: bt_start.sh (udev) defers to btcat-setup.
     - name: System cleanup
       run: |
-        B=AetherX6100Buildroot/br2_external
         for o in BROADCOM_TIGON3 BNX2X CXGB4_T4 CXGB4_T5 INTEL_E100 INTEL_ICE MICROCHIP_VSC85XX_PHY QLOGIC_4X RTL_8169; do
-          sed -i "/^BR2_PACKAGE_LINUX_FIRMWARE_${o}=y/d" $B/configs/X6100_defconfig
+          sed -i "/^BR2_PACKAGE_LINUX_FIRMWARE_${o}=y/d" $X6CI_DEFCONFIG
         done
-        sed -i "s/^default-sample-rate = 48000/default-sample-rate = 44100/" $B/board/X6100/linux/rootfs-overlay/etc/pulse/daemon.conf
-        cp x6100_gui/buildroot/bt_start.sh $B/board/X6100/linux/rootfs-overlay/usr/bin/bt_start.sh
-        grep "^BR2_PACKAGE_LINUX_FIRMWARE" $B/configs/X6100_defconfig
-        grep -q "^default-sample-rate = 44100" $B/board/X6100/linux/rootfs-overlay/etc/pulse/daemon.conf
+        sed -i "s/^default-sample-rate = 48000/default-sample-rate = 44100/" $X6CI_BR_EXT/board/X6100/linux/rootfs-overlay/etc/pulse/daemon.conf
+        cp x6100_gui/buildroot/bt_start.sh $X6CI_BR_EXT/board/X6100/linux/rootfs-overlay/usr/bin/bt_start.sh
+        grep "^BR2_PACKAGE_LINUX_FIRMWARE" $X6CI_DEFCONFIG
+        grep -q "^default-sample-rate = 44100" $X6CI_BR_EXT/board/X6100/linux/rootfs-overlay/etc/pulse/daemon.conf
+
+    # Kernel: UHID for Bluetooth Low Energy keyboards
+    - name: Kernel UHID (Bluetooth Low Energy keyboards)
+      run: |
+        D=$X6CI_BR_EXT/board/X6100/linux/sun8i-r16-x6100_defconfig
+        grep -q "^CONFIG_UHID=" $D || echo "CONFIG_UHID=m" >> $D
 
     # Boot logo: the kernel's framebuffer logo shown at power on (800x480,
     # reduced to 224 colours by buildroot).
-    - name: Kernel UHID (Bluetooth Low Energy keyboards)
-      run: |
-        D=AetherX6100Buildroot/br2_external/board/X6100/linux/sun8i-r16-x6100_defconfig
-        grep -q "^CONFIG_UHID=" $D || echo "CONFIG_UHID=m" >> $D
-
     - name: Custom boot logo
       run: |
-        cp x6100_gui/boot/logo.png AetherX6100Buildroot/br2_external/board/X6100/linux/logo.png
+        # Only the background: the kernel shows it as the first frame of the boot
+        # animation, x6100-bootanim (boot/logo.png) composes the logo over it.
+        cp x6100_gui/boot/kernel_logo.png $X6CI_BR_EXT/board/X6100/linux/logo.png
 
-    # Ccache
+    # ccache kept between runs. The cache key carries the time of the run,
+    # so every run saves a new one and restores the latest by prefix.
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
       shell: cmake -P {0}
@@ -134,12 +148,12 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-ccache-
 
-    # Configure
     - name: Configure
       run: |
         cd AetherX6100Buildroot && bash ./br_config.sh
 
-    # Build
+    # lame and mpg123 first, then libsndfile from scratch so that it is
+    # configured with them in place (MP3 support)
     - name: Build
       run: |
         cd AetherX6100Buildroot/build
@@ -154,17 +168,16 @@ jobs:
         path: ~/.buildroot-ccache
         key: ${{ runner.os }}-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
 
-    # Replace U-boot
+    # Our u-boot goes over the one buildroot wrote, 8 KB into the card
     - name: Replace u-boot
       run: |
-        dd if=x6100_gui/u-boot/u-boot-sunxi-with-spl.bin of=AetherX6100Buildroot/build/images/sdcard.img seek=8K bs=1 conv=notrunc
+        dd if=x6100_gui/u-boot/u-boot-sunxi-with-spl.bin of=$X6CI_IMAGES/sdcard.img seek=8K bs=1 conv=notrunc
 
-    # Compress image
     - name: Compress image
       run: |
-        cd AetherX6100Buildroot/build/images
-        mv sdcard.img sdcard.${{ github.ref_name }}.img
-        zip sdcard.${{ github.ref_name }}.img.zip sdcard.${{ github.ref_name }}.img
+        cd $X6CI_IMAGES
+        mv sdcard.img $X6CI_IMG
+        zip $X6CI_IMG.zip $X6CI_IMG
 
     # Always keep the image as a workflow artifact: branch runs have no
     # release to attach to, and on a tag it survives a failed Release step.
@@ -172,12 +185,12 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: sdcard.${{ github.ref_name }}.img.zip
-        path: AetherX6100Buildroot/build/images/sdcard.${{ github.ref_name }}.img.zip
+        path: ${{ env.X6CI_IMAGES }}/sdcard.${{ github.ref_name }}.img.zip
         retention-days: 30
 
-    # Create release
+    # On a tag: GitHub release with the image
     - name: Release
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: AetherX6100Buildroot/build/images/sdcard.${{ github.ref_name }}.img.zip
+        files: ${{ env.X6CI_IMAGES }}/sdcard.${{ github.ref_name }}.img.zip

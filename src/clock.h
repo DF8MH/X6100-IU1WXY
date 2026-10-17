@@ -21,6 +21,9 @@ typedef enum {
 lv_obj_t * clock_init(lv_obj_t * parent);
 void clock_update_power(float ext, float bat, uint8_t cap, bool charge);
 float clock_battery_volts(void);
+void clock_power_get(float *ext, float *bat, uint8_t *cap, bool *charge);
+/* Battery time left or to full from bat_est.c, -1 none; approx shows "~" */
+void clock_update_estimate(int minutes, bool approx);
 
 void clock_tz_init();
 void clock_tz_set(const char *posix);

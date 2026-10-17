@@ -1,4 +1,4 @@
-% rebase('base.html', title='File browser')
+% rebase("base.html", title="File browser")
 <h2><svg class="i"><use href="#i-sd"/></svg>Files</h2>
 <p class="sub">Download files from the DATA partition of the SD card (ADI log, screenshots, recordings, etc).
 A <code>params.db</code> downloaded while the radio writes it may come out damaged (the radio's copy is not touched): open it with any SQLite3 tool to check.</p>
@@ -6,11 +6,11 @@ A <code>params.db</code> downloaded while the radio writes it may come out damag
 <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-folder"/></svg></span><div><h3>{{request.path}}</h3><p>{{len(dirs)}} folders · {{len(files)}} files</p></div></div>
 <div class="dp-body tbl files">
 <a href=".."><svg class="i"><use href="#i-folder"/></svg> ..</a>
-% for item in dirs:
-<a href="{{item}}/"><svg class="i"><use href="#i-folder"/></svg> {{item}}</a>
+% for name in dirs:  # href(): '#', '?' or '%' in a name would cut the link
+<a href="{{href(name)}}/"><svg class="i"><use href="#i-folder"/></svg> {{name}}</a>
 % end
-% for item in files:
-<a href="{{item}}" download><svg class="i"><use href="#i-file"/></svg> {{item}}</a>
+% for name in files:
+<a href="{{href(name)}}" download><svg class="i"><use href="#i-file"/></svg> {{name}}</a>
 % end
 </div>
 </section>

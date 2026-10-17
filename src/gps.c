@@ -15,10 +15,10 @@
 #include "pubsub_ids.h"
 
 #include <errno.h>
-#include <math.h>
-#include <time.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <math.h>       /* isfinite */
+#include <time.h>
 
 static struct gps_data_t    gpsdata;
 static uint64_t             prev_time = 0;
@@ -27,10 +27,10 @@ static gps_status_t         status=GPS_STATUS_WAITING;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  cond = PTHREAD_COND_INITIALIZER;
 
-/* The latest 2D/3D fix, for apps that need a position (JS8's APRS spot). */
-static pthread_mutex_t fix_lock = PTHREAD_MUTEX_INITIALIZER;
-static double          fix_lat, fix_lon;
-static time_t          fix_when; /* 0: none yet */
+/* Positions handed to other threads: gpsd's last 2D/3D fix and the phone's (X6100 Link) */
+static pthread_mutex_t pos_lock = PTHREAD_MUTEX_INITIALIZER;
+static double          gpsd_lat, gpsd_lon;
+static time_t          gpsd_time;    /* when it came, 0 before the first */
 static double          phone_lat, phone_lon;
 static time_t          phone_when;
 
@@ -53,13 +53,14 @@ static void data_receive() {
                 continue;
             }
             status = GPS_STATUS_WORKING;
-            if (gpsdata.fix.mode >= MODE_2D && isfinite(gpsdata.fix.latitude) &&
-                isfinite(gpsdata.fix.longitude)) {
-                pthread_mutex_lock(&fix_lock);
-                fix_lat  = gpsdata.fix.latitude;
-                fix_lon  = gpsdata.fix.longitude;
-                fix_when = time(NULL);
-                pthread_mutex_unlock(&fix_lock);
+            bool have_pos = gpsdata.fix.mode >= MODE_2D;
+
+            if (have_pos && isfinite(gpsdata.fix.latitude) && isfinite(gpsdata.fix.longitude)) {
+                pthread_mutex_lock(&pos_lock);
+                gpsd_lat = gpsdata.fix.latitude;
+                gpsd_lon = gpsdata.fix.longitude;
+                gpsd_time = time(NULL);
+                pthread_mutex_unlock(&pos_lock);
             }
             if (dialog_gps->run) {
                 struct gps_data_t *msg = malloc(sizeof(struct gps_data_t));
@@ -113,40 +114,42 @@ gps_status_t gps_status() {
     return status;
 }
 
-bool gps_last_fix(double *lat, double *lon, int *age_s) {
-    pthread_mutex_lock(&fix_lock);
-    bool ok = fix_when != 0;
-    if (ok) {
-        *lat   = fix_lat;
-        *lon   = fix_lon;
-        *age_s = (int)(time(NULL) - fix_when);
+bool gps_last_fix(double *lat, double *lon, int *age) {
+    time_t when;
+
+    pthread_mutex_lock(&pos_lock);
+    when = gpsd_time;
+    if (when) {
+        *lat = gpsd_lat;
+        *lon = gpsd_lon;
+        *age = (int)(time(NULL) - when);
     }
-    pthread_mutex_unlock(&fix_lock);
-    return ok;
+    pthread_mutex_unlock(&pos_lock);
+    return when != 0;
 }
 
 void gps_phone_set(double lat, double lon) {
-    pthread_mutex_lock(&fix_lock);
+    pthread_mutex_lock(&pos_lock);
     phone_lat  = lat;
     phone_lon  = lon;
     phone_when = time(NULL);
-    pthread_mutex_unlock(&fix_lock);
+    pthread_mutex_unlock(&pos_lock);
 }
 
 void gps_phone_clear(void) {
-    pthread_mutex_lock(&fix_lock);
+    pthread_mutex_lock(&pos_lock);
     phone_when = 0;
-    pthread_mutex_unlock(&fix_lock);
+    pthread_mutex_unlock(&pos_lock);
 }
 
 bool gps_phone_fix(double *lat, double *lon, int *age_s) {
-    pthread_mutex_lock(&fix_lock);
+    pthread_mutex_lock(&pos_lock);
     bool ok = phone_when != 0;
     if (ok) {
         *lat   = phone_lat;
         *lon   = phone_lon;
         *age_s = (int)(time(NULL) - phone_when);
     }
-    pthread_mutex_unlock(&fix_lock);
+    pthread_mutex_unlock(&pos_lock);
     return ok;
 }

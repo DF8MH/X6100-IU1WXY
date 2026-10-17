@@ -80,10 +80,8 @@ typedef enum {
     CTRL_RTTY_CENTER,
     CTRL_RTTY_REVERSE,
 
-    /* WEFAX */
-    CTRL_WEFAX_ALIGN,
-    CTRL_WEFAX_TILT,
-
+    CTRL_WEFAX_ALIGN,     /* WEFAX app: picture shift */
+    CTRL_WEFAX_TILT,      /* and slant */
     CTRL_LAST,
 } cfg_ctrl_t;
 

@@ -3,7 +3,7 @@
 <p class="sub">POTA, SOTA, WWBOTA and HOTA portable operation: reference lists for the radio, QRZ Logbook upload, HOTA spots, activation logs.</p>
 
 <form class="dp-card" id="qrz">
-  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-key"/></svg></span><div><h3>QRZ Logbook</h3><p>API key from your QRZ Logbook settings. Key: <b id="key-state"></b></p></div></div>
+  <div class="dp-head"><span class="dp-ico"><svg class="i"><use href="#i-key"/></svg></span><div><h3>QRZ Logbook</h3><p>API key from your QRZ Logbook settings. Uploading needs a QRZ.com Logbook API key, which QRZ.com only gives with a paid QRZ.com subscription (XML level or higher). Key: <b id="key-state"></b></p></div></div>
   <div class="dp-row">
     <div class="dp-lbl"><label for="key"><b>API key</b></label><span>Empty = remove the key</span></div>
     <div class="dp-ctl"><input id="key" type="password" autocomplete="off" maxlength="64" placeholder="New key (empty = remove)"></div>
@@ -70,7 +70,7 @@ var render = function(data) {
   $("#refs").text(data.refs ? `${data.refs.parks} parks, ${data.refs.summits} summits, ${data.refs.bunkers} bunkers, ${data.refs.hota} HOTA · updated ${data.refs.date} · ${data.refs.size}` : "No list yet: press Update (needs internet on the radio).");
   $("#update").prop("disabled", data.update.running);
   if (data.update.running) {
-    showStatus("#ustatus", "Downloading… (about a minute)");
+    showStatus("#ustatus", data.update.progress ? "Downloading " + data.update.progress : "Downloading…");
   } else if (data.update.result) {
     showStatus("#ustatus", data.update.result, data.update.result.startsWith("error"));
   }
